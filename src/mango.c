@@ -5967,16 +5967,20 @@ void touchmotion(struct wl_listener *listener, void *data) {
 	double sx, sy;
 	struct wlr_surface *surface;
 	Client *c = NULL;
+	struct wlr_touch_point *p = wlr_seat_touch_get_point(seat, event->touch_id);
 
-	if (!wlr_seat_touch_get_point(seat, event->touch_id)) {
+	if (!p) {
 		return;
 	}
 
 	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
 										 event->y, &lx, &ly);
-	xytonode(lx, ly, &surface, &c, NULL, &sx, &sy);
+	surface = p->surface;
+	c = surface ? get_client_from_surface(surface) : NULL;
+	sx = lx - c->current.x;
+	sy = ly - c->current.y;
 
-	if (c != NULL && surface != NULL) {
+	if (c != NULL) {
 		if (sloppyfocus)
 			focusclient(c, 0);
 		wlr_seat_touch_point_focus(seat, surface, event->time_msec,
