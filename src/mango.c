@@ -6021,11 +6021,17 @@ void touchmotion(struct wl_listener *listener, void *data) {
 		return;
 	}
 
-	sx = lx - c->current.x;
-	sy = ly - c->current.y;
+	if (c->type == XDGShell || c->type == X11) {
+		sx = lx - c->current.x;
+		sy = ly - c->current.y;
+		if (sloppyfocus)
+			focusclient(c, 0);
+	} else {
+		LayerSurface *l = (LayerSurface *)c;
+		sx = lx - l->current.x;
+		sy = ly - l->current.y;
+	}
 
-	if (sloppyfocus)
-		focusclient(c, 0);
 	wlr_seat_touch_point_focus(seat, surface, event->time_msec, event->touch_id,
 							   sx, sy);
 	wlr_seat_touch_notify_motion(seat, event->time_msec, event->touch_id, sx,
