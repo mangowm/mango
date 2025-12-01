@@ -2098,7 +2098,11 @@ buttonpress(struct wl_listener *listener, void *data) {
 	struct wlr_surface *old_pointer_focus_surface =
 		seat->pointer_state.focused_surface;
 
-	handlecursoractivity();
+	if (!event->pointer ||
+		event->pointer->base.type != WLR_INPUT_DEVICE_TOUCH) {
+		handlecursoractivity();
+	}
+
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	if (check_trackpad_disabled(event->pointer)) {
@@ -4431,7 +4435,9 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		}
 
 		wlr_cursor_move(cursor, device, dx, dy);
-		handlecursoractivity();
+		if (!device || device->type != WLR_INPUT_DEVICE_TOUCH) {
+			handlecursoractivity();
+		}
 		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 		/* Update selmon (even while dragging a window) */
@@ -5887,6 +5893,10 @@ void touchdown(struct wl_listener *listener, void *data) {
 	Monitor *m;
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+
+	if (!cursor_hidden) {
+		hidecursor(NULL);
+	}
 
 	// Map the input to the appropriate output, to ensure that rotation is
 	// handled.
