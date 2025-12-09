@@ -290,6 +290,12 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 
 	if (tempSameMonitorFocusClients)
 		return tempSameMonitorFocusClients;
+	if (tempFocusClients) {
+		Monitor *tm = tempFocusClients->mon;
+		if (tm->sel && (tm->pertag->ltidxs[tm->pertag->curtag]->id == MONOCLE ||
+						tm->sel->isfullscreen))
+			return tm->sel;
+	}
 	return tempFocusClients;
 }
 
