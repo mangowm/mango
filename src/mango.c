@@ -1602,10 +1602,14 @@ void applyrules(Client *c) {
 
 		// set geometry of floating client
 
-		if (r->width > 0)
+		if (r->width > 1)
 			c->float_geom.width = r->width;
-		if (r->height > 0)
+		else if (r->width > 0 && r->width <= 1)
+			c->float_geom.width = round(mon->m.width * r->width);
+		if (r->height > 1)
 			c->float_geom.height = r->height;
+		else if (r->height > 0 && r->height <= 1)
+			c->float_geom.height = round(mon->m.height * r->height);
 
 		if (r->width > 0 || r->height > 0) {
 			c->iscustomsize = 1;
