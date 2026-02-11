@@ -78,6 +78,7 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
+	int32_t atstartup;
 	int32_t indleinhibit_when_focus;
 	char *monitor;
 	int32_t offsetx;
@@ -2039,6 +2040,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->isnosizehint = -1;
 		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
+		rule->atstartup = -1;
 		rule->allow_csd = -1;
 		rule->force_maximize = -1;
 		rule->force_tiled_state = -1;
@@ -2170,6 +2172,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->isfullscreen = atoi(val);
 				} else if (strcmp(key, "isfakefullscreen") == 0) {
 					rule->isfakefullscreen = atoi(val);
+				} else if (strcmp(key, "atstartup") == 0) {
+					rule->atstartup = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
