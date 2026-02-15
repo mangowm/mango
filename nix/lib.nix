@@ -6,6 +6,7 @@ let
     foldl
     generators
     partition
+    removeAttrs
     ;
 
   inherit (lib.strings)
@@ -136,6 +137,39 @@ let
     tagrule = id:2,layout_name:scroller
     ```
 
+    ## Using keymodes (submaps)
+
+    ```nix
+    let
+      config = {
+        bind = [
+          "SUPER,Q,killclient"
+          "ALT,R,setkeymode,resize"
+        ];
+        keymode = {
+          resize = {
+            bind = [
+              "NONE,Left,resizewin,-10,0"
+              "NONE,Right,resizewin,10,0"
+              "NONE,Escape,setkeymode,default"
+            ];
+          };
+        };
+      };
+    in lib.toMango {} config
+    ```
+
+    **Output:**
+    ```
+    bind = SUPER,Q,killclient
+    bind = ALT,R,setkeymode,resize
+
+    keymode = resize
+    bind = NONE,Left,resizewin,-10,0
+    bind = NONE,Right,resizewin,10,0
+    bind = NONE,Escape,setkeymode,default
+    ```
+
     :::
   */
   toMango =
@@ -156,9 +190,28 @@ let
             indent = ""; # No indent, since we don't have nesting
           };
 
+          # Extract keymode definitions if they exist
+          keymodes = attrs.keymode or { };
+          attrsWithoutKeymodes = removeAttrs attrs [ "keymode" ];
+
+          # Generate keymode blocks
+          # Format: keymode=name\nbind=...\nbind=...\n
+          mkKeymodeBlock =
+            name: modeAttrs:
+            let
+              modeCommands = flattenAttrs (p: k: "${p}_${k}") modeAttrs;
+            in
+            "keymode = ${name}\n${mkCommands modeCommands}";
+
+          keymodeBlocks =
+            if keymodes == { } then
+              ""
+            else
+              "\n" + concatMapStrings (name: mkKeymodeBlock name keymodes.${name} + "\n") (attrNames keymodes);
+
           # Flatten the attrset, combining keys in a "path" like `"a_b_c" = "x"`.
           # Uses `flattenAttrs` with an underscore separator.
-          commands = flattenAttrs (p: k: "${p}_${k}") attrs;
+          commands = flattenAttrs (p: k: "${p}_${k}") attrsWithoutKeymodes;
 
           # General filtering function to check if a key starts with any prefix in a given list.
           filterCommands = list: n: foldl (acc: prefix: acc || hasPrefix prefix n) false list;
@@ -174,11 +227,13 @@ let
           regularCommands = removeAttrs remainingCommands result2.right;
         in
         # Concatenate strings from mapping `mkCommands` over top, regular, and bottom commands.
+        # Keymodes are appended at the end.
         concatMapStrings mkCommands [
           topCommands
           regularCommands
           bottomCommands
-        ];
+        ]
+        + keymodeBlocks;
     in
     toMango' attrs;
 

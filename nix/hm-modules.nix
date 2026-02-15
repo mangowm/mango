@@ -107,6 +107,9 @@ in
           This option uses a structured format that is converted to Mango's
           configuration syntax. Nested attributes are flattened with underscore separators.
           For example: `animation.duration_open = 400` becomes `animation_duration_open = 400`
+
+          Keymodes (submaps) are supported via the special `keymode` attribute. Each keymode
+          is a nested attribute set under `keymode` that contains its own bindings.
           :::
         '';
         example = lib.literalExpression ''
@@ -139,12 +142,23 @@ in
               "SUPER,r,reload_config"
               "Alt,space,spawn,rofi -show drun"
               "Alt,Return,spawn,foot"
+              "ALT,R,setkeymode,resize"  # Enter resize mode
             ];
 
             tagrule = [
               "id:1,layout_name:tile"
               "id:2,layout_name:scroller"
             ];
+
+            # Keymodes (submaps) for modal keybindings
+            keymode = {
+              resize = {
+                bind = [
+                  "NONE,Left,resizewin,-10,0"
+                  "NONE,Escape,setkeymode,default"
+                ];
+              };
+            };
           }
         '';
       };
