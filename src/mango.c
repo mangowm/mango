@@ -1693,6 +1693,7 @@ void focuslayer(LayerSurface *l) {
 void reset_exclusive_layer(Monitor *m) {
 	LayerSurface *l = NULL;
 	int32_t i;
+	bool neet_change_focus_to_client = false;
 	uint32_t layers_above_shell[] = {
 		ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
 		ZWLR_LAYER_SHELL_V1_LAYER_TOP,
@@ -1706,13 +1707,19 @@ void reset_exclusive_layer(Monitor *m) {
 		wl_list_for_each_reverse(l, &m->layers[layers_above_shell[i]], link) {
 			if (l == exclusive_focus &&
 				l->layer_surface->current.keyboard_interactive !=
-					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE)
+					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
+
 				exclusive_focus = NULL;
+
+				neet_change_focus_to_client = true;
+			}
+
 			if (l->layer_surface->current.keyboard_interactive ==
 					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE &&
 				l->layer_surface->surface ==
-					seat->keyboard_state.focused_surface)
-				focusclient(focustop(selmon), 1);
+					seat->keyboard_state.focused_surface) {
+				neet_change_focus_to_client = true;
+			}
 
 			if (locked ||
 				l->layer_surface->current.keyboard_interactive !=
@@ -1724,6 +1731,10 @@ void reset_exclusive_layer(Monitor *m) {
 			focuslayer(l);
 			return;
 		}
+	}
+
+	if (neet_change_focus_to_client) {
+		focusclient(focustop(selmon), 1);
 	}
 }
 
@@ -2384,13 +2395,6 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	}
 	// 刷新布局，让窗口能感应到exclude_zone变化以及设置独占表面
 	arrangelayers(l->mon);
-
-	// 按需交互layer需要像正常窗口一样抢占非独占layer的焦点
-	if (!exclusive_focus &&
-		l->layer_surface->current.keyboard_interactive ==
-			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
-		focuslayer(l);
-	}
 }
 
 void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
@@ -2411,6 +2415,12 @@ void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
 		arrangelayers(l->mon);
 		l->layer_surface->current = old_state;
 
+		// 按需交互layer只在map之前设置焦点
+		if (!exclusive_focus &&
+			l->layer_surface->current.keyboard_interactive ==
+				ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
+			focuslayer(l);
+		}
 		return;
 	}
 
@@ -2454,11 +2464,6 @@ void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
 	}
 
 	layer_flush_blur_background(l);
-
-	if (layer_surface == exclusive_focus &&
-		layer_surface->current.keyboard_interactive !=
-			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE)
-		exclusive_focus = NULL;
 
 	if (layer_surface->current.committed == 0 &&
 		l->mapped == layer_surface->surface->mapped)
@@ -3335,7 +3340,6 @@ void destroylocksurface(struct wl_listener *listener, void *data) {
 
 	if (lock_surface->surface != seat->keyboard_state.focused_surface) {
 		if (exclusive_focus && !locked) {
-			exclusive_focus = NULL;
 			reset_exclusive_layer(m);
 		}
 		return;
@@ -3345,7 +3349,6 @@ void destroylocksurface(struct wl_listener *listener, void *data) {
 		surface = wl_container_of(cur_lock->surfaces.next, surface, link);
 		client_notify_enter(surface->surface, wlr_seat_get_keyboard(seat));
 	} else if (!locked) {
-		exclusive_focus = NULL;
 		reset_exclusive_layer(selmon);
 		focusclient(focustop(selmon), 1);
 	} else {

@@ -1,4 +1,4 @@
-(define-module (mangowc)
+(define-module (mangowm)
   #:use-module (guix download)
   #:use-module (guix git-download)
   #:use-module (guix gexp)
@@ -18,11 +18,11 @@
   #:use-module (guix licenses))
 
 
-(define-public mangowc-git
+(define-public mangowm-git
   (package
-    (name "mangowc")
+    (name "mangowm")
     (version "git")
-    (source (local-file "." "mangowc-checkout"
+    (source (local-file "." "mangowm-checkout"
                         #:recursive? #t
                         #:select? (or (git-predicate (current-source-directory))
                                       (const #t))))
@@ -55,10 +55,10 @@
                   wlroots
                   scenefx))
     (native-inputs (list pkg-config wayland-protocols))
-    (home-page "https://github.com/DreamMaoMao/mangowc")
+    (home-page "https://github.com/DreamMaoMao/mangowm")
     (synopsis "Wayland compositor based on wlroots and scenefx")
     (description "A Wayland compositor based on wlroots and scenefx,
 inspired by dwl but aiming to be more feature-rich.")
     (license gpl3)))
 
-mangowc-git
+mangowm-git
