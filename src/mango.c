@@ -2464,9 +2464,9 @@ void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
 					 ? layers[LyrTop]
 					 : scene_layer));
 		}
-
-		arrangelayers(l->mon);
 	}
+
+	arrangelayers(l->mon);
 
 	if (layer_surface->current.committed &
 		WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY) {
