@@ -918,7 +918,7 @@ struct dvec2 *baked_points_focus;
 struct dvec2 *baked_points_opafadein;
 struct dvec2 *baked_points_opafadeout;
 
-static struct wl_event_source *hide_source;
+static struct wl_event_source *hide_cursor_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
 static const char *cli_config_path = NULL;
@@ -5643,7 +5643,7 @@ void setup(void) {
 	cursor_shape_mgr = wlr_cursor_shape_manager_v1_create(dpy, 1);
 	wl_signal_add(&cursor_shape_mgr->events.request_set_shape,
 				  &request_set_cursor_shape);
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
 										  hidecursor, cursor);
 	/*
 	 * Configures a seat, which is a single "seat" at which a user sits and
@@ -5858,7 +5858,7 @@ void overview_restore(Client *c, const Arg *arg) {
 }
 
 void handlecursoractivity(void) {
-	wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+	wl_event_source_timer_update(hide_cursor_source, cursor_hide_timeout * 1000);
 
 	if (!cursor_hidden)
 		return;

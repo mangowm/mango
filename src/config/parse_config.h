@@ -3493,10 +3493,10 @@ void reapply_monitor_rules(void) {
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3527,12 +3527,12 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
 										  hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source, cursor_hide_timeout * 1000);
 	}
 }
 
