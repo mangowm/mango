@@ -78,6 +78,7 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
+	int32_t indleinhibit_when_focus;
 	const char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
@@ -2026,6 +2027,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
+		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
 		rule->force_maximize = -1;
@@ -2136,6 +2138,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
+				} else if (strcmp(key, "indleinhibit_when_focus") == 0) {
+					rule->indleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
@@ -3641,10 +3645,10 @@ void reapply_monitor_rules(void) {
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3675,12 +3679,13 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source,
+									 cursor_hide_timeout * 1000);
 	}
 }
 

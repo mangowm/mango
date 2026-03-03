@@ -347,7 +347,7 @@ struct Client {
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, isnosizehint,
-		ignore_maximize, ignore_minimize;
+		ignore_maximize, ignore_minimize, indleinhibit_when_focus;
 	int32_t ismaximizescreen;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
@@ -802,6 +802,8 @@ static Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 static bool match_monitor_spec(char *spec, Monitor *m);
 static void last_cursor_surface_destroy(struct wl_listener *listener,
 										void *data);
+static int32_t keep_idle_inhibit(void *data);
+static void check_keep_idle_inhibit(Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -898,7 +900,8 @@ struct dvec2 *baked_points_focus;
 struct dvec2 *baked_points_opafadein;
 struct dvec2 *baked_points_opafadeout;
 
-static struct wl_event_source *hide_source;
+static struct wl_event_source *hide_cursor_source;
+static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
 static const char *cli_config_path = NULL;
@@ -1335,6 +1338,7 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
 	APPLY_INT_PROP(c, r, isnosizehint);
+	APPLY_INT_PROP(c, r, indleinhibit_when_focus);
 	APPLY_INT_PROP(c, r, isunglobal);
 	APPLY_INT_PROP(c, r, noblur);
 	APPLY_INT_PROP(c, r, allow_shortcuts_inhibit);
@@ -2502,9 +2506,9 @@ void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
 					 ? layers[LyrTop]
 					 : scene_layer));
 		}
-
-		arrangelayers(l->mon);
 	}
+
+	arrangelayers(l->mon);
 
 	if (layer_surface->current.committed &
 		WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY) {
@@ -3482,6 +3486,8 @@ void focusclient(Client *c, int32_t lift) {
 		selmon->sel = c;
 		c->isfocusing = true;
 
+		check_keep_idle_inhibit(c);
+
 		if (last_focus_client && !last_focus_client->iskilling &&
 			last_focus_client != c) {
 			last_focus_client->isfocusing = false;
@@ -4029,6 +4035,7 @@ void init_client_properties(Client *c) {
 	c->force_tiled_state = 1;
 	c->force_tearing = 0;
 	c->allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
+	c->indleinhibit_when_focus = 0;
 	c->scroller_proportion_single = 0.0f;
 	c->float_geom.width = 0;
 	c->float_geom.height = 0;
@@ -5564,6 +5571,9 @@ void setup(void) {
 	idle_inhibit_mgr = wlr_idle_inhibit_v1_create(dpy);
 	wl_signal_add(&idle_inhibit_mgr->events.new_inhibitor, &new_idle_inhibitor);
 
+	keep_idle_inhibit_source = wl_event_loop_add_timer(
+		wl_display_get_event_loop(dpy), keep_idle_inhibit, NULL);
+
 	layer_shell = wlr_layer_shell_v1_create(dpy, 4);
 	wl_signal_add(&layer_shell->events.new_surface, &new_layer_surface);
 
@@ -5631,8 +5641,8 @@ void setup(void) {
 	cursor_shape_mgr = wlr_cursor_shape_manager_v1_create(dpy, 1);
 	wl_signal_add(&cursor_shape_mgr->events.request_set_shape,
 				  &request_set_cursor_shape);
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	/*
 	 * Configures a seat, which is a single "seat" at which a user sits and
 	 * operates the computer. This conceptually includes up to one keyboard,
@@ -5851,7 +5861,8 @@ void overview_restore(Client *c, const Arg *arg) {
 }
 
 void handlecursoractivity(void) {
-	wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+	wl_event_source_timer_update(hide_cursor_source,
+								 cursor_hide_timeout * 1000);
 
 	if (!cursor_hidden)
 		return;
@@ -5869,6 +5880,36 @@ void handlecursoractivity(void) {
 int32_t hidecursor(void *data) {
 	wlr_cursor_unset_image(cursor);
 	cursor_hidden = true;
+	return 1;
+}
+
+void check_keep_idle_inhibit(Client *c) {
+	if (c && c->indleinhibit_when_focus && keep_idle_inhibit_source) {
+		wl_event_source_timer_update(keep_idle_inhibit_source, 1000);
+	}
+}
+
+int32_t keep_idle_inhibit(void *data) {
+
+	if (!idle_inhibit_mgr) {
+		wl_event_source_timer_update(keep_idle_inhibit_source, 0);
+		return 1;
+	}
+
+	if (session && !session->active) {
+		wl_event_source_timer_update(keep_idle_inhibit_source, 0);
+		return 1;
+	}
+
+	if (!selmon || !selmon->sel || !selmon->sel->indleinhibit_when_focus) {
+		wl_event_source_timer_update(keep_idle_inhibit_source, 0);
+		return 1;
+	}
+
+	if (seat && idle_notifier) {
+		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+		wl_event_source_timer_update(keep_idle_inhibit_source, 1000);
+	}
 	return 1;
 }
 
