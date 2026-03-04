@@ -79,7 +79,7 @@ typedef struct {
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
 	int32_t indleinhibit_when_focus;
-	const char *monitor;
+	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
 	int32_t width;

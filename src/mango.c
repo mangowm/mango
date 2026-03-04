@@ -1443,7 +1443,7 @@ void applyrules(Client *c) {
 
 		// set monitor of client
 		wl_list_for_each(m, &mons, link) {
-			if (regex_match(r->monitor, m->wlr_output->name)) {
+			if (match_monitor_spec(r->monitor, m)) {
 				mon = m;
 			}
 		}
