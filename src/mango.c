@@ -919,7 +919,6 @@ static struct {
 	int32_t hotspot_y;
 } last_cursor;
 
-#include "client/client.h"
 #include "config/preset.h"
 
 struct Pertag {
@@ -988,12 +987,14 @@ static struct wl_listener new_xwayland_surface = {.notify = createnotifyx11};
 static struct wl_listener xwayland_ready = {.notify = xwaylandready};
 static struct wlr_xwayland *xwayland;
 static struct wl_event_source *sync_keymap;
+static xcb_atom_t atom_kde_net_wm_window_type_override;
 #endif
 
 #include "animation/client.h"
 #include "animation/common.h"
 #include "animation/layer.h"
 #include "animation/tag.h"
+#include "client/client.h"
 #include "config/parse_config.h"
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
@@ -6552,6 +6553,17 @@ void xwaylandready(struct wl_listener *listener, void *data) {
 	/* xwayland can't auto sync the keymap, so we do it manually
 	  and we need to wait the xwayland completely inited
 	*/
+
+	xcb_connection_t *xcb_conn =
+		xcb_connect(NULL, NULL); // 或从 wlr_xwayland 获取
+	xcb_intern_atom_cookie_t cookie =
+		xcb_intern_atom(xcb_conn, 0, strlen("_KDE_NET_WM_WINDOW_TYPE_OVERRIDE"),
+						"_KDE_NET_WM_WINDOW_TYPE_OVERRIDE");
+	xcb_intern_atom_reply_t *reply =
+		xcb_intern_atom_reply(xcb_conn, cookie, NULL);
+	atom_kde_net_wm_window_type_override = reply->atom;
+	free(reply);
+
 	wl_event_source_timer_update(sync_keymap, 500);
 }
 

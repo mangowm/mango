@@ -448,8 +448,23 @@ static inline int32_t client_should_overtop(Client *c) {
 	return 0;
 }
 
+static inline bool
+extra_xwayland_surface_has_window_type(struct wlr_xwayland_surface *surface,
+									   xcb_atom_t atom) {
+	for (size_t i = 0; i < surface->window_type_len; i++) {
+		if (surface->window_type[i] == atom)
+			return true;
+	}
+	return false;
+}
+
 static inline int32_t client_wants_focus(Client *c) {
 #ifdef XWAYLAND
+
+	if (extra_xwayland_surface_has_window_type(
+			c->surface.xwayland, atom_kde_net_wm_window_type_override))
+		return false;
+
 	return client_is_unmanaged(c) &&
 		   wlr_xwayland_surface_override_redirect_wants_focus(
 			   c->surface.xwayland) &&
