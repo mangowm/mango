@@ -1,10 +1,30 @@
+void save_old_size_per(Monitor *m) {
+	Client *c = NULL;
+
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			c->old_master_inner_per = c->master_inner_per;
+			c->old_stack_inner_per = c->stack_inner_per;
+		}
+	}
+}
+
 void restore_size_per(Monitor *m, Client *c) {
 	Client *fc = NULL;
-	double total_master_inner_per = 0;
-	double total_stack_inner_per = 0;
 
 	if (!m || !c)
 		return;
+
+	wl_list_for_each(fc, &clients, link) {
+		if (VISIBLEON(fc, m) && ISTILED(fc)) {
+			fc->old_ismaster = fc->ismaster;
+		}
+	}
+
+	c->old_master_inner_per = c->master_inner_per;
+	c->old_stack_inner_per = c->stack_inner_per;
+
+	pre_caculate_before_arrange(m, false, false, true);
 
 	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
 
@@ -15,7 +35,7 @@ void restore_size_per(Monitor *m, Client *c) {
 		return;
 	}
 
-	if (current_layout->id == CENTER_TILE || c->ismaster) {
+	if (current_layout->id == CENTER_TILE) {
 		wl_list_for_each(fc, &clients, link) {
 			if (VISIBLEON(fc, m) && ISTILED(fc) && !c->ismaster) {
 				set_size_per(m, fc);
@@ -24,19 +44,28 @@ void restore_size_per(Monitor *m, Client *c) {
 		return;
 	}
 
-	wl_list_for_each(fc, &clients, link) {
-		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c) {
-			if (fc->ismaster) {
-				total_master_inner_per += fc->master_inner_per;
-			} else {
-				total_stack_inner_per += fc->stack_inner_per;
-			}
-		}
+	if (!c->ismaster && c->old_stack_inner_per < 1.0 &&
+		c->stack_inner_per < 1.0) {
+		c->stack_inner_per = (1.0 - c->stack_inner_per) *
+							 c->old_stack_inner_per /
+							 (1.0 - c->old_stack_inner_per);
 	}
 
-	if (!c->ismaster && total_stack_inner_per) {
-		c->stack_inner_per = total_stack_inner_per * c->stack_inner_per /
-							 (1 - c->stack_inner_per);
+	if (c->ismaster && c->old_master_inner_per < 1.0 &&
+		c->master_inner_per < 1.0) {
+		c->master_inner_per = (1.0 - c->master_inner_per) *
+							  c->old_master_inner_per /
+							  (1.0 - c->old_master_inner_per);
+	}
+
+	wl_list_for_each(fc, &clients, link) {
+		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c && !fc->ismaster &&
+			fc->old_ismaster && fc->old_stack_inner_per < 1.0 &&
+			fc->stack_inner_per < 1.0) {
+			fc->stack_inner_per = (1.0 - fc->stack_inner_per) *
+								  fc->old_stack_inner_per /
+								  (1.0 - fc->old_stack_inner_per);
+		}
 	}
 }
 
@@ -705,8 +734,8 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 	}
 }
 
-void // 17
-arrange(Monitor *m, bool want_animation, bool from_view) {
+void pre_caculate_before_arrange(Monitor *m, bool want_animation,
+								 bool from_view, bool only_caculate) {
 	Client *c = NULL;
 	double total_stack_inner_percent = 0;
 	double total_master_inner_percent = 0;
@@ -795,14 +824,17 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 					i++;
 				}
 
-				set_arrange_visible(m, c, want_animation);
+				if (!only_caculate)
+					set_arrange_visible(m, c, want_animation);
 			} else {
-				set_arrange_hidden(m, c, want_animation);
+				if (!only_caculate)
+					set_arrange_hidden(m, c, want_animation);
 			}
 		}
 
-		if (c->mon == m && c->ismaximizescreen && !c->animation.tagouted &&
-			!c->animation.tagouting && VISIBLEON(c, m)) {
+		if (!only_caculate && c->mon == m && c->ismaximizescreen &&
+			!c->animation.tagouted && !c->animation.tagouting &&
+			VISIBLEON(c, m)) {
 			reset_maximizescreen_size(c);
 		}
 	}
@@ -811,6 +843,12 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		m, m->visible_tiling_clients, total_left_stack_hight_percent,
 		total_right_stack_hight_percent, total_stack_inner_percent,
 		total_master_inner_percent, master_num, stack_num);
+}
+
+void // 17
+arrange(Monitor *m, bool want_animation, bool from_view) {
+
+	pre_caculate_before_arrange(m, want_animation, from_view, false);
 
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
