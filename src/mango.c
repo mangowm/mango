@@ -2884,7 +2884,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	struct wlr_output *wlr_output = data;
 	const ConfigMonitorRule *r;
 	uint32_t i;
-	int32_t ji, vrr;
+	int32_t ji, vrr, custom;
 	struct wlr_output_state state;
 	Monitor *m = NULL;
 	struct wlr_output_mode *internal_mode = NULL;
@@ -2976,6 +2976,7 @@ void createmon(struct wl_listener *listener, void *data) {
 			m->m.x = r->x == INT32_MAX ? INT32_MAX : r->x;
 			m->m.y = r->y == INT32_MAX ? INT32_MAX : r->y;
 			vrr = r->vrr >= 0 ? r->vrr : 0;
+			custom = r->custom >= 0 ? r->custom : 0;
 			scale = r->scale;
 			rr = r->rr;
 
@@ -2985,7 +2986,7 @@ void createmon(struct wl_listener *listener, void *data) {
 				if (internal_mode) {
 					custom_monitor_mode = true;
 					wlr_output_state_set_mode(&state, internal_mode);
-				} else if (wlr_output_is_headless(m->wlr_output)) {
+				} else if (custom || wlr_output_is_headless(m->wlr_output)) {
 					custom_monitor_mode = true;
 					wlr_output_state_set_custom_mode(
 						&state, r->width, r->height,
