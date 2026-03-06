@@ -78,7 +78,8 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
-	const char *monitor;
+	int32_t indleinhibit_when_focus;
+	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
 	int32_t width;
@@ -111,6 +112,7 @@ typedef struct {
 	int32_t width, height;		 // Monitor resolution
 	float refresh;				 // Refresh rate
 	int32_t vrr;				 // variable refresh rate
+	int32_t custom;				 // enable custom mode
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -1795,6 +1797,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->height = -1;
 		rule->refresh = 0.0f;
 		rule->vrr = 0;
+		rule->custom = 0;
 
 		bool parse_error = false;
 		char *token = strtok(value, ",");
@@ -1832,6 +1835,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "custom") == 0) {
+					rule->custom = CLAMP_INT(atoi(val), 0, 1);
 				} else {
 					fprintf(stderr,
 							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
@@ -2022,6 +2027,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
+		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
 		rule->force_maximize = -1;
@@ -2132,6 +2138,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
+				} else if (strcmp(key, "indleinhibit_when_focus") == 0) {
+					rule->indleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
@@ -3551,7 +3559,7 @@ void reset_blur_params(void) {
 void reapply_monitor_rules(void) {
 	ConfigMonitorRule *mr;
 	Monitor *m = NULL;
-	int32_t ji, vrr;
+	int32_t ji, vrr, custom;
 	int32_t mx, my;
 	struct wlr_output_state state;
 	struct wlr_output_mode *internal_mode = NULL;
@@ -3605,13 +3613,15 @@ void reapply_monitor_rules(void) {
 				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
+				custom = mr->custom >= 0 ? mr->custom : 0;
 
 				if (mr->width > 0 && mr->height > 0 && mr->refresh > 0) {
 					internal_mode = get_nearest_output_mode(
 						m->wlr_output, mr->width, mr->height, mr->refresh);
 					if (internal_mode) {
 						wlr_output_state_set_mode(&state, internal_mode);
-					} else if (wlr_output_is_headless(m->wlr_output)) {
+					} else if (custom ||
+							   wlr_output_is_headless(m->wlr_output)) {
 						wlr_output_state_set_custom_mode(
 							&state, mr->width, mr->height,
 							(int32_t)roundf(mr->refresh * 1000));
@@ -3637,10 +3647,10 @@ void reapply_monitor_rules(void) {
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3671,12 +3681,13 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source,
+									 cursor_hide_timeout * 1000);
 	}
 }
 
