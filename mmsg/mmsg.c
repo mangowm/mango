@@ -85,9 +85,9 @@ static void noop_scale(void *data, struct wl_output *wl_output,
 static void noop_description(void *data, struct wl_output *wl_output,
 							 const char *description) {}
 
-// 将 n 转换为 9 位二进制字符串，结果存入 buf（至少长度 10）
-void bin_str_9bits(char *buf, uint32_t n) {
-	for (int32_t i = 8; i >= 0; i--) {
+// Convert n to an N-bit binary string, store result in buf (minimum length bits+1)
+void bin_str_nbits(char *buf, uint32_t n, int32_t bits) {
+	for (int32_t i = bits - 1; i >= 0; i--) {
 		*buf++ = ((n >> i) & 1) ? '1' : '0';
 	}
 	*buf = '\0'; // 字符串结尾
@@ -395,11 +395,11 @@ static void dwl_ipc_output_frame(void *data,
 
 			printf("%s clients %u\n", output_name, total_clients);
 
-			char occ_str[10], seltags_str[10], urg_str[10];
+			char occ_str[tagcount + 1], seltags_str[tagcount + 1], urg_str[tagcount + 1];
 
-			bin_str_9bits(occ_str, occ);
-			bin_str_9bits(seltags_str, seltags);
-			bin_str_9bits(urg_str, urg);
+			bin_str_nbits(occ_str, occ, tagcount);
+			bin_str_nbits(seltags_str, seltags, tagcount);
+			bin_str_nbits(urg_str, urg, tagcount);
 			printf("%s tags %u %u %u\n", output_name, occ, seltags, urg);
 			printf("%s tags %s %s %s\n", output_name, occ_str, seltags_str,
 				   urg_str);

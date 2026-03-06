@@ -69,10 +69,13 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 	wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
 }
 
-static const char *get_name_from_tag(uint32_t tag) {
-	static const char *names[] = {"overview", "1", "2", "3", "4",
-								  "5",		  "6", "7", "8", "9"};
-	return (tag < sizeof(names) / sizeof(names[0])) ? names[tag] : NULL;
+static const char *get_name_from_tag(uint32_t tag, char *buf, size_t len) {
+	if (tag == 0)
+		return "overview";
+	if (tag > (uint32_t)tag_count)
+		return NULL;
+	snprintf(buf, len, "%u", tag);
+	return buf;
 }
 
 void destroy_workspace(struct workspace *workspace) {
@@ -103,7 +106,8 @@ static void remove_workspace_by_tag(uint32_t tag, Monitor *m) {
 }
 
 static void add_workspace_by_tag(int32_t tag, Monitor *m) {
-	const char *name = get_name_from_tag(tag);
+	char name_buf[4];
+	const char *name = get_name_from_tag(tag, name_buf, sizeof(name_buf));
 
 	struct workspace *workspace = ecalloc(1, sizeof(*workspace));
 	wl_list_append(&workspaces, &workspace->link);
@@ -165,13 +169,13 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 	int32_t i;
 
 	if (m->isoverview) {
-		for (i = 1; i <= LENGTH(tags); i++) {
+		for (i = 1; i <= tag_count; i++) {
 			remove_workspace_by_tag(i, m);
 		}
 		add_workspace_by_tag(0, m);
 	} else {
 		remove_workspace_by_tag(0, m);
-		for (i = 1; i <= LENGTH(tags); i++) {
+		for (i = 1; i <= tag_count; i++) {
 			add_workspace_by_tag(i, m);
 		}
 	}
