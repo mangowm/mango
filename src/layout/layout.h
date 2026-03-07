@@ -29,6 +29,7 @@ enum {
 	VERTICAL_DECK,
 	RIGHT_TILE,
 	TGMIX,
+	FLOATING,
 };
 
 Layout layouts[] = {
@@ -47,4 +48,5 @@ Layout layouts[] = {
 	{"VG", vertical_grid, "vertical_grid", VERTICAL_GRID}, // 垂直格子布局
 	{"VK", vertical_deck, "vertical_deck", VERTICAL_DECK}, // 垂直卡片布局
 	{"TG", tgmix, "tgmix", TGMIX},						   // 混合布局
+	{"F", NULL, "floating", FLOATING},
 };
