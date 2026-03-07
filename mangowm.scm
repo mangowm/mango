@@ -61,4 +61,7 @@
 inspired by dwl but aiming to be more feature-rich.")
     (license gpl3)))
 
+(define-deprecated-package mangowc
+  mangowm-git)
+
 mangowm-git
