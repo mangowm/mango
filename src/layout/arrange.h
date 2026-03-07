@@ -271,11 +271,6 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 		float new_master_inner_per = grabc->old_master_inner_per + delta_y;
 		float new_stack_inner_per = grabc->old_stack_inner_per + delta_y;
 
-		// 应用限制，确保比例在合理范围内
-		new_master_mfact_per = fmaxf(0.1f, fminf(0.9f, new_master_mfact_per));
-		new_master_inner_per = fmaxf(0.1f, fminf(0.9f, new_master_inner_per));
-		new_stack_inner_per = fmaxf(0.1f, fminf(0.9f, new_stack_inner_per));
-
 		if (!isdrag) {
 			new_stack_inner_per =
 				new_stack_inner_per +
@@ -287,6 +282,11 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 				(new_master_inner_per - grabc->old_master_inner_per) /
 					((1 / new_master_inner_per) - 1);
 		}
+
+		// 应用限制，确保比例在合理范围内
+		new_master_mfact_per = fmaxf(0.1f, fminf(0.9f, new_master_mfact_per));
+		new_master_inner_per = fmaxf(0.1f, fminf(0.9f, new_master_inner_per));
+		new_stack_inner_per = fmaxf(0.1f, fminf(0.9f, new_stack_inner_per));
 
 		// 应用到所有平铺窗口
 		wl_list_for_each(tc, &clients, link) {
@@ -438,11 +438,6 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 		float new_stack_inner_per = grabc->old_stack_inner_per +
 									delta_x; // 垂直：delta_x调整栈区域内部宽度
 
-		// 应用限制，确保比例在合理范围内
-		new_master_mfact_per = fmaxf(0.1f, fminf(0.9f, new_master_mfact_per));
-		new_master_inner_per = fmaxf(0.1f, fminf(0.9f, new_master_inner_per));
-		new_stack_inner_per = fmaxf(0.1f, fminf(0.9f, new_stack_inner_per));
-
 		if (!isdrag) {
 			new_stack_inner_per =
 				new_stack_inner_per +
@@ -454,6 +449,11 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 				(new_master_inner_per - grabc->old_master_inner_per) /
 					((1 / new_master_inner_per) - 1);
 		}
+
+		// 应用限制，确保比例在合理范围内
+		new_master_mfact_per = fmaxf(0.1f, fminf(0.9f, new_master_mfact_per));
+		new_master_inner_per = fmaxf(0.1f, fminf(0.9f, new_master_inner_per));
+		new_stack_inner_per = fmaxf(0.1f, fminf(0.9f, new_stack_inner_per));
 
 		// 应用到所有平铺窗口
 		wl_list_for_each(tc, &clients, link) {
@@ -637,17 +637,17 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 			new_stack_proportion = grabc->old_stack_proportion + delta_y;
 		}
 
-		// 应用限制，确保比例在合理范围内
-		new_scroller_proportion =
-			fmaxf(0.1f, fminf(1.0f, new_scroller_proportion));
-		new_stack_proportion = fmaxf(0.1f, fminf(0.9f, new_stack_proportion));
-
 		if (!isdrag) {
 			new_stack_proportion =
 				new_stack_proportion +
 				(new_stack_proportion - grabc->old_stack_proportion) /
 					((1 / new_stack_proportion) - 1);
 		}
+
+		// 应用限制，确保比例在合理范围内
+		new_scroller_proportion =
+			fmaxf(0.1f, fminf(1.0f, new_scroller_proportion));
+		new_stack_proportion = fmaxf(0.1f, fminf(0.9f, new_stack_proportion));
 
 		grabc->stack_proportion = new_stack_proportion;
 
@@ -695,8 +695,8 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
-/* If there are no calculation omissions, 
-these two functions will never be triggered. 
+/* If there are no calculation omissions,
+these two functions will never be triggered.
 Just in case to facilitate the final investigation*/
 
 void check_size_per_valid(Client *c) {
