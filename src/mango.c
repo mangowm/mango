@@ -806,7 +806,6 @@ static int32_t keep_idle_inhibit(void *data);
 static void check_keep_idle_inhibit(Client *c);
 static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 										bool from_view, bool only_caculate);
-
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
 #include "layout/layout.h"
@@ -2878,6 +2877,49 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	}
 }
 
+bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
+	if (rule->name != NULL && !regex_match(rule->name, m->wlr_output->name))
+		return false;
+	if (rule->make != NULL && (m->wlr_output->make == NULL ||
+							   strcmp(rule->make, m->wlr_output->make) != 0))
+		return false;
+	if (rule->model != NULL && (m->wlr_output->model == NULL ||
+								strcmp(rule->model, m->wlr_output->model) != 0))
+		return false;
+	if (rule->serial != NULL &&
+		(m->wlr_output->serial == NULL ||
+		 strcmp(rule->serial, m->wlr_output->serial) != 0))
+		return false;
+	return true;
+}
+
+/* 将规则中的显示参数应用到 wlr_output_state 中，返回是否设置了自定义模式 */
+bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
+						 struct wlr_output_state *state, int vrr, int custom) {
+	bool mode_set = false;
+	if (rule->width > 0 && rule->height > 0 && rule->refresh > 0) {
+		struct wlr_output_mode *internal_mode = get_nearest_output_mode(
+			m->wlr_output, rule->width, rule->height, rule->refresh);
+		if (internal_mode) {
+			wlr_output_state_set_mode(state, internal_mode);
+			mode_set = true;
+		} else if (custom || wlr_output_is_headless(m->wlr_output)) {
+			wlr_output_state_set_custom_mode(
+				state, rule->width, rule->height,
+				(int32_t)roundf(rule->refresh * 1000));
+			mode_set = true;
+		}
+	}
+	if (vrr) {
+		enable_adaptive_sync(m, state);
+	} else {
+		wlr_output_state_set_adaptive_sync_enabled(state, false);
+	}
+	wlr_output_state_set_scale(state, rule->scale);
+	wlr_output_state_set_transform(state, rule->rr);
+	return mode_set;
+}
+
 void createmon(struct wl_listener *listener, void *data) {
 	/* This event is raised by the backend when a new output (aka a display or
 	 * monitor) becomes available. */
@@ -2887,9 +2929,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	int32_t ji, vrr, custom;
 	struct wlr_output_state state;
 	Monitor *m = NULL;
-	struct wlr_output_mode *internal_mode = NULL;
 	bool custom_monitor_mode = false;
-	bool match_rule = false;
 
 	if (!wlr_output_init_render(wlr_output, alloc, drw))
 		return;
@@ -2919,7 +2959,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	for (i = 0; i < LENGTH(m->layers); i++)
 		wl_list_init(&m->layers[i]);
 
-	wlr_output_state_init(&state);
 	/* Initialize monitor state using configured rules */
 	m->gappih = gappih;
 	m->gappiv = gappiv;
@@ -2932,6 +2971,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->m.y = INT32_MAX;
 	float scale = 1;
 	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
+
+	wlr_output_state_init(&state);
 	wlr_output_state_set_scale(&state, scale);
 	wlr_output_state_set_transform(&state, rr);
 
@@ -2941,38 +2982,7 @@ void createmon(struct wl_listener *listener, void *data) {
 
 		r = &config.monitor_rules[ji];
 
-		// 检查是否匹配的变量
-		match_rule = true;
-
-		// 检查四个标识字段的匹配
-		if (r->name != NULL) {
-			if (!regex_match(r->name, m->wlr_output->name)) {
-				match_rule = false;
-			}
-		}
-
-		if (r->make != NULL) {
-			if (m->wlr_output->make == NULL ||
-				strcmp(r->make, m->wlr_output->make) != 0) {
-				match_rule = false;
-			}
-		}
-
-		if (r->model != NULL) {
-			if (m->wlr_output->model == NULL ||
-				strcmp(r->model, m->wlr_output->model) != 0) {
-				match_rule = false;
-			}
-		}
-
-		if (r->serial != NULL) {
-			if (m->wlr_output->serial == NULL ||
-				strcmp(r->serial, m->wlr_output->serial) != 0) {
-				match_rule = false;
-			}
-		}
-
-		if (match_rule) {
+		if (monitor_matches_rule(m, r)) {
 			m->m.x = r->x == INT32_MAX ? INT32_MAX : r->x;
 			m->m.y = r->y == INT32_MAX ? INT32_MAX : r->y;
 			vrr = r->vrr >= 0 ? r->vrr : 0;
@@ -2980,36 +2990,13 @@ void createmon(struct wl_listener *listener, void *data) {
 			scale = r->scale;
 			rr = r->rr;
 
-			if (r->width > 0 && r->height > 0 && r->refresh > 0) {
-				internal_mode = get_nearest_output_mode(m->wlr_output, r->width,
-														r->height, r->refresh);
-				if (internal_mode) {
-					custom_monitor_mode = true;
-					wlr_output_state_set_mode(&state, internal_mode);
-				} else if (custom || wlr_output_is_headless(m->wlr_output)) {
-					custom_monitor_mode = true;
-					wlr_output_state_set_custom_mode(
-						&state, r->width, r->height,
-						(int32_t)roundf(r->refresh * 1000));
-				}
+			if (apply_rule_to_state(m, r, &state, vrr, custom)) {
+				custom_monitor_mode = true;
 			}
-
-			if (vrr) {
-				enable_adaptive_sync(m, &state);
-			} else {
-				wlr_output_state_set_adaptive_sync_enabled(&state, false);
-			}
-
-			wlr_output_state_set_scale(&state, r->scale);
-			wlr_output_state_set_transform(&state, r->rr);
-			break;
+			break; // 只应用第一个匹配规则
 		}
 	}
 
-	/* The mode is a tuple of (width, height, refresh rate), and each
-	 * monitor supports only a specific set of modes. We just pick the
-	 * monitor's preferred mode; a more sophisticated compositor would let
-	 * the user configure it. */
 	if (!custom_monitor_mode)
 		wlr_output_state_set_mode(&state,
 								  wlr_output_preferred_mode(wlr_output));
@@ -4026,9 +4013,9 @@ void init_client_properties(Client *c) {
 	c->master_mfact_per = 0.0f;
 	c->master_inner_per = 0.0f;
 	c->stack_inner_per = 0.0f;
-	c->old_stack_inner_per = 0.0f;
-	c->old_master_inner_per = 0.0f;
-	c->old_master_mfact_per = 0.0f;
+	c->old_stack_inner_per = 1.0f;
+	c->old_master_inner_per = 1.0f;
+	c->old_master_mfact_per = 1.0f;
 	c->isterm = 0;
 	c->allow_csd = 0;
 	c->force_maximize = 0;

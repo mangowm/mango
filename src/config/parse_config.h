@@ -356,6 +356,8 @@ typedef struct {
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
 	int32_t syncobj_enable;
+	float drag_tile_refresh_interval;
+	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
@@ -372,6 +374,9 @@ typedef int32_t (*FuncType)(const Arg *);
 Config config;
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
+bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
+						 struct wlr_output_state *state, int vrr, int custom);
+bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -947,6 +952,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).f = atof(arg_value);
 	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
 		func = switch_proportion_preset;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "viewtoleft") == 0) {
 		func = viewtoleft;
 		(*arg).i = atoi(arg_value);
@@ -1399,6 +1405,10 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->xwayland_persistence = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
+	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
+		config->drag_tile_refresh_interval = atof(value);
+	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
+		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
@@ -3149,6 +3159,13 @@ void override_config(void) {
 	// 杂项设置
 	xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
 	syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
+	drag_tile_refresh_interval =
+		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 1.0f, 16.0f);
+	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	allow_shortcuts_inhibit = CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	allow_lock_transparent = CLAMP_INT(config.allow_lock_transparent, 0, 1);
@@ -3337,6 +3354,8 @@ void set_value_default() {
 	config.single_scratchpad = single_scratchpad;
 	config.xwayland_persistence = xwayland_persistence;
 	config.syncobj_enable = syncobj_enable;
+	config.drag_tile_refresh_interval = drag_tile_refresh_interval;
+	config.drag_floating_refresh_interval = drag_floating_refresh_interval;
 	config.allow_tearing = allow_tearing;
 	config.allow_shortcuts_inhibit = allow_shortcuts_inhibit;
 	config.allow_lock_transparent = allow_lock_transparent;
@@ -3566,14 +3585,12 @@ void reapply_monitor_rules(void) {
 	int32_t ji, vrr, custom;
 	int32_t mx, my;
 	struct wlr_output_state state;
-	struct wlr_output_mode *internal_mode = NULL;
-	wlr_output_state_init(&state);
-	bool match_rule = false;
 
 	wl_list_for_each(m, &mons, link) {
-		if (!m->wlr_output->enabled) {
+		if (!m->wlr_output->enabled)
 			continue;
-		}
+
+		wlr_output_state_init(&state);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
@@ -3581,73 +3598,22 @@ void reapply_monitor_rules(void) {
 
 			mr = &config.monitor_rules[ji];
 
-			// 检查是否匹配的变量
-			match_rule = true;
-
-			// 检查四个标识字段的匹配
-			if (mr->name != NULL) {
-				if (!regex_match(mr->name, m->wlr_output->name)) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->make != NULL) {
-				if (m->wlr_output->make == NULL ||
-					strcmp(mr->make, m->wlr_output->make) != 0) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->model != NULL) {
-				if (m->wlr_output->model == NULL ||
-					strcmp(mr->model, m->wlr_output->model) != 0) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->serial != NULL) {
-				if (m->wlr_output->serial == NULL ||
-					strcmp(mr->serial, m->wlr_output->serial) != 0) {
-					match_rule = false;
-				}
-			}
-
-			// 只有当所有指定的标识都匹配时才应用规则
-			if (match_rule) {
+			if (monitor_matches_rule(m, mr)) {
 				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
 				custom = mr->custom >= 0 ? mr->custom : 0;
 
-				if (mr->width > 0 && mr->height > 0 && mr->refresh > 0) {
-					internal_mode = get_nearest_output_mode(
-						m->wlr_output, mr->width, mr->height, mr->refresh);
-					if (internal_mode) {
-						wlr_output_state_set_mode(&state, internal_mode);
-					} else if (custom ||
-							   wlr_output_is_headless(m->wlr_output)) {
-						wlr_output_state_set_custom_mode(
-							&state, mr->width, mr->height,
-							(int32_t)roundf(mr->refresh * 1000));
-					}
-				}
-
-				if (vrr) {
-					enable_adaptive_sync(m, &state);
-				} else {
-					wlr_output_state_set_adaptive_sync_enabled(&state, false);
-				}
-
-				wlr_output_state_set_scale(&state, mr->scale);
-				wlr_output_state_set_transform(&state, mr->rr);
+				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
+				wlr_output_commit_state(m->wlr_output, &state);
+				break;
 			}
 		}
 
-		wlr_output_commit_state(m->wlr_output, &state);
 		wlr_output_state_finish(&state);
-		updatemons(NULL, NULL);
 	}
+	updatemons(NULL, NULL);
 }
 
 void reapply_cursor_style(void) {
