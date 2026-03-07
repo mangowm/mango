@@ -695,6 +695,20 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
+/* If there are no calculation omissions, 
+these two functions will never be triggered. 
+Just in case to facilitate the final investigation*/
+
+void check_size_per_valid(Client *c) {
+	assert(c->stack_inner_per > 0.0f && c->stack_inner_per <= 1.0f);
+	assert(c->master_inner_per > 0.0f && c->master_inner_per <= 1.0f);
+}
+
+void check_size_per_too_small(Client *c) {
+	assert(c->stack_inner_per > 0.0f);
+	assert(c->master_inner_per > 0.0f);
+}
+
 void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 						double total_left_stack_hight_percent,
 						double total_right_stack_hight_percent,
@@ -710,6 +724,9 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISTILED(c)) {
+
+				check_size_per_too_small(c);
+
 				if (total_master_inner_percent > 0.0 && i < nmasters) {
 					c->ismaster = true;
 					c->stack_inner_per = stack_num ? 1.0f / stack_num : 1.0f;
@@ -725,11 +742,16 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 							: 1.0f;
 				}
 				i++;
+
+				check_size_per_valid(c);
 			}
 		}
 	} else {
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISTILED(c)) {
+
+				check_size_per_too_small(c);
+
 				if (total_master_inner_percent > 0.0 && i < nmasters) {
 					c->ismaster = true;
 					if ((stack_index % 2) ^ (tile_cilent_num % 2 == 0)) {
@@ -764,6 +786,8 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 					}
 				}
 				i++;
+
+				check_size_per_valid(c);
 			}
 		}
 	}
