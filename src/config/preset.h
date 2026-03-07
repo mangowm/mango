@@ -207,9 +207,7 @@ enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 /* If you want to use the windows key for MODKEY, use WLR_MODIFIER_LOGO */
 #define MODKEY WLR_MODIFIER_ALT
 
-static const char *tags[] = {
-	"1", "2", "3", "4", "5", "6", "7", "8", "9",
-};
+int32_t tag_count = 9;
 
 float focused_opacity = 1.0;
 float unfocused_opacity = 1.0;

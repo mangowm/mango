@@ -362,6 +362,8 @@ typedef struct {
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
 
+	int32_t tag_count;
+
 	struct xkb_rule_names xkb_rules;
 
 	char keymode[28];
@@ -1118,7 +1120,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 
 			while (token != NULL) {
 				int32_t num = atoi(token);
-				if (num > 0 && num <= LENGTH(tags)) {
+				if (num > 0 && num <= tag_count) {
 					mask |= (1 << (num - 1));
 				}
 				token = strtok_r(NULL, "|", &saveptr);
@@ -1584,6 +1586,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->default_mfact = atof(value);
 	} else if (strcmp(key, "default_nmaster") == 0) {
 		config->default_nmaster = atoi(value);
+	} else if (strcmp(key, "tag_count") == 0) {
+		config->tag_count = CLAMP_INT(atoi(value), 1, 32);
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
@@ -1907,7 +1911,7 @@ bool parse_option(Config *config, char *key, char *value) {
 				trim_whitespace(val);
 
 				if (strcmp(key, "id") == 0) {
-					rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
+					rule->id = CLAMP_INT(atoi(val), 0, tag_count);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -3309,6 +3313,7 @@ void set_value_default() {
 	config.new_is_master = new_is_master; // 新窗口是否插在头部
 	config.default_mfact = default_mfact; // master 窗口比例
 	config.default_nmaster = default_nmaster; // 默认master数量
+	config.tag_count = tag_count;
 	config.center_master_overspread =
 		center_master_overspread; // 中心master时是否铺满
 	config.center_when_single_stack =
@@ -3703,7 +3708,7 @@ void reapply_master(void) {
 
 	int32_t i;
 	Monitor *m = NULL;
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= tag_count; i++) {
 		wl_list_for_each(m, &mons, link) {
 			if (!m->wlr_output->enabled) {
 				continue;
@@ -3724,7 +3729,7 @@ void parse_tagrule(Monitor *m) {
 	Client *c = NULL;
 	bool match_rule = false;
 
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= tag_count; i++) {
 		m->pertag->nmasters[i] = default_nmaster;
 		m->pertag->mfacts[i] = default_mfact;
 	}
@@ -3782,7 +3787,7 @@ void parse_tagrule(Monitor *m) {
 		}
 	}
 
-	for (i = 1; i <= LENGTH(tags); i++) {
+	for (i = 1; i <= tag_count; i++) {
 		wl_list_for_each(c, &clients, link) {
 			if ((c->tags & (1 << (i - 1)) & TAGMASK) && ISTILED(c)) {
 				if (m->pertag->mfacts[i] > 0.0f)
