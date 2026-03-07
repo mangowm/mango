@@ -12,6 +12,11 @@ self: {
     ${lib.optionalString cfg.systemd.enable systemdActivation}
     ${cfg.autostart_sh}
   '';
+  validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
+    cp ${pkgs.writeText "mango-config.conf" cfg.settings} "$out"
+
+    ${cfg.package}/bin/mango -c "$out" -p || exit 1
+  '';
 in {
   options = {
     wayland.windowManager.mango = with lib; {
@@ -99,7 +104,7 @@ in {
     home.packages = [cfg.package];
     xdg.configFile = {
       "mango/config.conf" = lib.mkIf (cfg.settings != "") {
-        text = cfg.settings;
+        source = validatedConfig;
       };
       "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "") {
         source = autostart_sh;
