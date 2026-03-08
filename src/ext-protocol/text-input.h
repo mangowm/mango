@@ -77,15 +77,6 @@ Monitor *output_from_wlr_output(struct wlr_output *wlr_output) {
 	return NULL;
 }
 
-Monitor *output_nearest_to(int32_t lx, int32_t ly) {
-	double closest_x, closest_y;
-	wlr_output_layout_closest_point(output_layout, NULL, lx, ly, &closest_x,
-									&closest_y);
-
-	return output_from_wlr_output(
-		wlr_output_layout_output_at(output_layout, closest_x, closest_y));
-}
-
 bool output_is_usable(Monitor *m) { return m && m->wlr_output->enabled; }
 
 static bool
@@ -255,7 +246,7 @@ static void update_popup_position(struct dwl_input_method_popup *popup) {
 		cursor_rect = (struct wlr_box){0};
 	}
 
-	output = output_nearest_to(cursor_rect.x, cursor_rect.y);
+	output = get_monitor_nearest_to(cursor_rect.x, cursor_rect.y);
 	if (!output_is_usable(output)) {
 		return;
 	}

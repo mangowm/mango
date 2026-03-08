@@ -17,8 +17,8 @@ static void tgmix(Monitor *m);
 Layout overviewlayout = {"󰃇", overview, "overview"};
 
 enum {
-	SCROLLER,
 	TILE,
+	SCROLLER,
 	GRID,
 	MONOCLE,
 	DECK,
@@ -34,8 +34,8 @@ enum {
 Layout layouts[] = {
 	// 最少两个,不能删除少于两个
 	/* symbol     arrange function   name */
-	{"S", scroller, "scroller", SCROLLER},			 // 滚动布局
 	{"T", tile, "tile", TILE},						 // 平铺布局
+	{"S", scroller, "scroller", SCROLLER},			 // 滚动布局
 	{"G", grid, "grid", GRID},						 // 格子布局
 	{"M", monocle, "monocle", MONOCLE},				 // 单屏布局
 	{"K", deck, "deck", DECK},						 // 卡片布局

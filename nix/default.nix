@@ -11,7 +11,7 @@
   wayland,
   wayland-protocols,
   wayland-scanner,
-  xcbutilwm,
+  libxcb-wm,
   xwayland,
   meson,
   ninja,
@@ -57,7 +57,7 @@ stdenv.mkDerivation {
     ]
     ++ lib.optionals enableXWayland [
       libX11
-      xcbutilwm
+      libxcb-wm
       xwayland
     ];
 

@@ -1,3 +1,82 @@
+void save_old_size_per(Monitor *m) {
+	Client *c = NULL;
+
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			c->old_master_inner_per = c->master_inner_per;
+			c->old_stack_inner_per = c->stack_inner_per;
+		}
+	}
+}
+
+void restore_size_per(Monitor *m, Client *c) {
+	Client *fc = NULL;
+
+	if (!m || !c)
+		return;
+
+	wl_list_for_each(fc, &clients, link) {
+		if (VISIBLEON(fc, m) && ISTILED(fc)) {
+			fc->old_ismaster = fc->ismaster;
+		}
+	}
+
+	c->old_master_inner_per = c->master_inner_per;
+	c->old_stack_inner_per = c->stack_inner_per;
+
+	pre_caculate_before_arrange(m, false, false, true);
+
+	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+
+	if (current_layout->id == SCROLLER ||
+		current_layout->id == VERTICAL_SCROLLER || current_layout->id == GRID ||
+		current_layout->id == VERTICAL_GRID || current_layout->id == DECK ||
+		current_layout->id == VERTICAL_DECK || current_layout->id == MONOCLE) {
+		return;
+	}
+
+	if (current_layout->id == CENTER_TILE) {
+		wl_list_for_each(fc, &clients, link) {
+			if (VISIBLEON(fc, m) && ISTILED(fc) && !c->ismaster) {
+				set_size_per(m, fc);
+			}
+		}
+		return;
+	}
+
+	// it is possible that the current floating window is moved to another tag,
+	// but the tag has not executed save_old_size_per
+	// so it must be judged whether their old size values are initial values
+
+	if (!c->ismaster && c->old_stack_inner_per < 1.0 &&
+		c->old_stack_inner_per > 0.0f && c->stack_inner_per < 1.0 &&
+		c->stack_inner_per > 0.0f) {
+		c->stack_inner_per = (1.0 - c->stack_inner_per) *
+							 c->old_stack_inner_per /
+							 (1.0 - c->old_stack_inner_per);
+	}
+
+	if (c->ismaster && c->old_master_inner_per < 1.0 &&
+		c->old_master_inner_per > 0.0f && c->master_inner_per < 1.0 &&
+		c->master_inner_per > 0.0f) {
+		c->master_inner_per = (1.0 - c->master_inner_per) *
+							  c->old_master_inner_per /
+							  (1.0 - c->old_master_inner_per);
+	}
+
+	wl_list_for_each(fc, &clients, link) {
+		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c && !fc->ismaster &&
+			fc->old_ismaster && fc->old_stack_inner_per < 1.0 &&
+			fc->old_stack_inner_per > 0.0f && fc->stack_inner_per < 1.0 &&
+			fc->stack_inner_per > 0.0f) {
+			fc->stack_inner_per = (1.0 - fc->stack_inner_per) *
+								  fc->old_stack_inner_per /
+								  (1.0 - fc->old_stack_inner_per);
+			fc->old_ismaster = false;
+		}
+	}
+}
+
 void set_size_per(Monitor *m, Client *c) {
 	Client *fc = NULL;
 	bool found = false;
@@ -5,8 +84,13 @@ void set_size_per(Monitor *m, Client *c) {
 	if (!m || !c)
 		return;
 
+	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c) {
+			if (current_layout->id == CENTER_TILE &&
+				(fc->isleftstack ^ c->isleftstack))
+				continue;
 			c->master_mfact_per = fc->master_mfact_per;
 			c->master_inner_per = fc->master_inner_per;
 			c->stack_inner_per = fc->stack_inner_per;
@@ -43,8 +127,7 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 			break;
 		}
 
-		if (!begin_find_nextnext && VISIBLEON(tc, grabc->mon) &&
-			ISTILED(tc)) { // 根据你的实际字段名调整
+		if (!begin_find_nextnext && VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
 			next = tc;
 			begin_find_nextnext = true;
 			continue;
@@ -60,8 +143,7 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 			break;
 		}
 
-		if (!begin_find_prevprev && VISIBLEON(tc, grabc->mon) &&
-			ISTILED(tc)) { // 根据你的实际字段名调整
+		if (!begin_find_prevprev && VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
 			prev = tc;
 			begin_find_prevprev = true;
 			continue;
@@ -197,6 +279,23 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 		// 应用到所有平铺窗口
 		wl_list_for_each(tc, &clients, link) {
 			if (VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
+
+				if (!isdrag && tc != grabc) {
+					if (!tc->ismaster && new_stack_inner_per != 1.0f &&
+						grabc->old_stack_inner_per != 1.0f &&
+						(type != CENTER_TILE ||
+						 !(grabc->isleftstack ^ tc->isleftstack)))
+						tc->stack_inner_per = (1 - new_stack_inner_per) /
+											  (1 - grabc->old_stack_inner_per) *
+											  tc->stack_inner_per;
+					if (tc->ismaster && new_master_inner_per != 1.0f &&
+						grabc->old_master_inner_per != 1.0f)
+						tc->master_inner_per =
+							(1.0f - new_master_inner_per) /
+							(1.0f - grabc->old_master_inner_per) *
+							tc->master_inner_per;
+				}
+
 				tc->master_mfact_per = new_master_mfact_per;
 			}
 		}
@@ -210,7 +309,7 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_refresh_interval) {
+			time - last_apply_drap_time > drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -229,8 +328,7 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 	for (node = grabc->link.next; node != &clients; node = node->next) {
 		tc = wl_container_of(node, tc, link);
 
-		if (VISIBLEON(tc, grabc->mon) &&
-			ISTILED(tc)) { // 根据你的实际字段名调整
+		if (VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
 			next = tc;
 			break;
 		}
@@ -240,8 +338,7 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 	for (node = grabc->link.prev; node != &clients; node = node->prev) {
 		tc = wl_container_of(node, tc, link);
 
-		if (VISIBLEON(tc, grabc->mon) &&
-			ISTILED(tc)) { // 根据你的实际字段名调整
+		if (VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
 			prev = tc;
 			break;
 		}
@@ -354,6 +451,20 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 		// 应用到所有平铺窗口
 		wl_list_for_each(tc, &clients, link) {
 			if (VISIBLEON(tc, grabc->mon) && ISTILED(tc)) {
+				if (!isdrag && tc != grabc && type != CENTER_TILE) {
+					if (!tc->ismaster && new_stack_inner_per != 1.0f &&
+						grabc->old_stack_inner_per != 1.0f)
+						tc->stack_inner_per = (1 - new_stack_inner_per) /
+											  (1 - grabc->old_stack_inner_per) *
+											  tc->stack_inner_per;
+					if (tc->ismaster && new_master_inner_per != 1.0f &&
+						grabc->old_master_inner_per != 1.0f)
+						tc->master_inner_per =
+							(1.0f - new_master_inner_per) /
+							(1.0f - grabc->old_master_inner_per) *
+							tc->master_inner_per;
+				}
+
 				tc->master_mfact_per = new_master_mfact_per;
 			}
 		}
@@ -367,7 +478,7 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_refresh_interval) {
+			time - last_apply_drap_time > drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -376,8 +487,11 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
+	Client *tc = NULL;
 	float delta_x, delta_y;
 	float new_scroller_proportion;
+	float new_stack_proportion;
+	Client *stack_head = get_scroll_stack_head(grabc);
 
 	if (grabc && grabc->mon->visible_tiling_clients == 1 &&
 		!scroller_ignore_proportion_single)
@@ -389,7 +503,8 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		start_drag_window = true;
 
 		// 记录初始状态
-		grabc->old_scroller_pproportion = grabc->scroller_proportion;
+		stack_head->old_scroller_pproportion = stack_head->scroller_proportion;
+		grabc->old_stack_proportion = grabc->stack_proportion;
 
 		grabc->cursor_in_left_half =
 			cursor->x < grabc->geom.x + grabc->geom.width / 2;
@@ -409,15 +524,26 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 			grabc->old_master_inner_per = grabc->master_inner_per;
 			grabc->old_stack_inner_per = grabc->stack_inner_per;
 			grabc->drag_begin_geom = grabc->geom;
-			grabc->old_scroller_pproportion = grabc->scroller_proportion;
+			stack_head->old_scroller_pproportion =
+				stack_head->scroller_proportion;
+			grabc->old_stack_proportion = grabc->stack_proportion;
 			grabc->cursor_in_upper_half = false;
 			grabc->cursor_in_left_half = false;
 		}
 
-		delta_x = (float)(offsetx) * (grabc->old_scroller_pproportion) /
-				  grabc->drag_begin_geom.width;
-		delta_y = (float)(offsety) * (grabc->old_scroller_pproportion) /
-				  grabc->drag_begin_geom.height;
+		if (isvertical) {
+			delta_y = (float)(offsety) *
+					  (stack_head->old_scroller_pproportion) /
+					  grabc->drag_begin_geom.height;
+			delta_x = (float)(offsetx) * (grabc->old_stack_proportion) /
+					  grabc->drag_begin_geom.width;
+		} else {
+			delta_x = (float)(offsetx) *
+					  (stack_head->old_scroller_pproportion) /
+					  grabc->drag_begin_geom.width;
+			delta_y = (float)(offsety) * (grabc->old_stack_proportion) /
+					  grabc->drag_begin_geom.height;
+		}
 
 		bool moving_up;
 		bool moving_down;
@@ -452,18 +578,91 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 			delta_x = -fabsf(delta_x);
 		}
 
+		if (isvertical) {
+			if (!grabc->next_in_stack && grabc->prev_in_stack && !isdrag) {
+				delta_x = delta_x * -1.0f;
+			}
+			if (!grabc->next_in_stack && grabc->prev_in_stack && isdrag) {
+				if (moving_right) {
+					delta_x = -fabsf(delta_x);
+				} else {
+					delta_x = fabsf(delta_x);
+				}
+			}
+			if (!grabc->prev_in_stack && grabc->next_in_stack && isdrag) {
+				if (moving_left) {
+					delta_x = -fabsf(delta_x);
+				} else {
+					delta_x = fabsf(delta_x);
+				}
+			}
+
+			if (isdrag) {
+				if (moving_up) {
+					delta_y = -fabsf(delta_y);
+				} else {
+					delta_y = fabsf(delta_y);
+				}
+			}
+
+		} else {
+			if (!grabc->next_in_stack && grabc->prev_in_stack && !isdrag) {
+				delta_y = delta_y * -1.0f;
+			}
+			if (!grabc->next_in_stack && grabc->prev_in_stack && isdrag) {
+				if (moving_down) {
+					delta_y = -fabsf(delta_y);
+				} else {
+					delta_y = fabsf(delta_y);
+				}
+			}
+			if (!grabc->prev_in_stack && grabc->next_in_stack && isdrag) {
+				if (moving_up) {
+					delta_y = -fabsf(delta_y);
+				} else {
+					delta_y = fabsf(delta_y);
+				}
+			}
+
+			if (isdrag) {
+				if (moving_left) {
+					delta_x = -fabsf(delta_x);
+				} else {
+					delta_x = fabsf(delta_x);
+				}
+			}
+		}
+
 		// 直接设置新的比例，基于初始值 + 变化量
 		if (isvertical) {
-			new_scroller_proportion = grabc->old_scroller_pproportion + delta_y;
+			new_scroller_proportion =
+				stack_head->old_scroller_pproportion + delta_y;
+			new_stack_proportion = grabc->old_stack_proportion + delta_x;
+
 		} else {
-			new_scroller_proportion = grabc->old_scroller_pproportion + delta_x;
+			new_scroller_proportion =
+				stack_head->old_scroller_pproportion + delta_x;
+			new_stack_proportion = grabc->old_stack_proportion + delta_y;
 		}
 
 		// 应用限制，确保比例在合理范围内
 		new_scroller_proportion =
 			fmaxf(0.1f, fminf(1.0f, new_scroller_proportion));
+		new_stack_proportion = fmaxf(0.1f, fminf(0.9f, new_stack_proportion));
 
-		grabc->scroller_proportion = new_scroller_proportion;
+		grabc->stack_proportion = new_stack_proportion;
+
+		stack_head->scroller_proportion = new_scroller_proportion;
+
+		wl_list_for_each(tc, &clients, link) {
+			if (!isdrag && new_stack_proportion != 1.0f &&
+				grabc->old_stack_proportion != 1.0f && tc != grabc &&
+				ISTILED(tc) && get_scroll_stack_head(tc) == stack_head) {
+				tc->stack_proportion = (1.0f - new_stack_proportion) /
+									   (1.0f - grabc->old_stack_proportion) *
+									   tc->stack_proportion;
+			}
+		}
 
 		if (!isdrag) {
 			arrange(grabc->mon, false, false);
@@ -471,7 +670,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_refresh_interval) {
+			time - last_apply_drap_time > drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -507,6 +706,18 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
+/* If there are no calculation omissions,
+these two functions will never be triggered.
+Just in case to facilitate the final investigation*/
+
+void check_size_per_valid(Client *c) {
+	if (c->ismaster) {
+		assert(c->master_inner_per > 0.0f && c->master_inner_per <= 1.0f);
+	} else {
+		assert(c->stack_inner_per > 0.0f && c->stack_inner_per <= 1.0f);
+	}
+}
+
 void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 						double total_left_stack_hight_percent,
 						double total_right_stack_hight_percent,
@@ -522,6 +733,7 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISTILED(c)) {
+
 				if (total_master_inner_percent > 0.0 && i < nmasters) {
 					c->ismaster = true;
 					c->stack_inner_per = stack_num ? 1.0f / stack_num : 1.0f;
@@ -537,17 +749,20 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 							: 1.0f;
 				}
 				i++;
+
+				check_size_per_valid(c);
 			}
 		}
 	} else {
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISTILED(c)) {
+
 				if (total_master_inner_percent > 0.0 && i < nmasters) {
 					c->ismaster = true;
 					if ((stack_index % 2) ^ (tile_cilent_num % 2 == 0)) {
 						c->stack_inner_per =
-							stack_num > 1 ? 1.0f / ((stack_num - 1) / 2) : 1.0f;
-
+							stack_num > 1 ? 1.0f / ((stack_num - 1) / 2.0f)
+										  : 1.0f;
 					} else {
 						c->stack_inner_per =
 							stack_num > 1 ? 2.0f / stack_num : 1.0f;
@@ -576,13 +791,15 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 					}
 				}
 				i++;
+
+				check_size_per_valid(c);
 			}
 		}
 	}
 }
 
-void // 17
-arrange(Monitor *m, bool want_animation, bool from_view) {
+void pre_caculate_before_arrange(Monitor *m, bool want_animation,
+								 bool from_view, bool only_caculate) {
 	Client *c = NULL;
 	double total_stack_inner_percent = 0;
 	double total_master_inner_percent = 0;
@@ -605,14 +822,20 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 
 	wl_list_for_each(c, &clients, link) {
 
+		if (!client_only_in_one_tag(c) || c->isglobal || c->isunglobal) {
+			exit_scroller_stack(c);
+		}
+
 		if (from_view && (c->isglobal || c->isunglobal)) {
 			set_size_per(m, c);
 		}
 
 		if (c->mon == m && (c->isglobal || c->isunglobal)) {
 			c->tags = m->tagset[m->seltags];
-			if (c->mon->sel == NULL)
-				focusclient(c, 0);
+		}
+
+		if (from_view && m->sel == NULL && c->isglobal && VISIBLEON(c, m)) {
+			focusclient(c, 1);
 		}
 
 		if (VISIBLEON(c, m)) {
@@ -627,7 +850,7 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 				m->visible_tiling_clients++;
 			}
 
-			if (ISSCROLLTILED(c)) {
+			if (ISSCROLLTILED(c) && !c->prev_in_stack) {
 				m->visible_scroll_tiling_clients++;
 			}
 		}
@@ -665,14 +888,17 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 					i++;
 				}
 
-				set_arrange_visible(m, c, want_animation);
+				if (!only_caculate)
+					set_arrange_visible(m, c, want_animation);
 			} else {
-				set_arrange_hidden(m, c, want_animation);
+				if (!only_caculate)
+					set_arrange_hidden(m, c, want_animation);
 			}
 		}
 
-		if (c->mon == m && c->ismaximizescreen && !c->animation.tagouted &&
-			!c->animation.tagouting && VISIBLEON(c, m)) {
+		if (!only_caculate && c->mon == m && c->ismaximizescreen &&
+			!c->animation.tagouted && !c->animation.tagouting &&
+			VISIBLEON(c, m)) {
 			reset_maximizescreen_size(c);
 		}
 	}
@@ -681,6 +907,12 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		m, m->visible_tiling_clients, total_left_stack_hight_percent,
 		total_right_stack_hight_percent, total_stack_inner_percent,
 		total_master_inner_percent, master_num, stack_num);
+}
+
+void // 17
+arrange(Monitor *m, bool want_animation, bool from_view) {
+
+	pre_caculate_before_arrange(m, want_animation, from_view, false);
 
 	if (m->isoverview) {
 		overviewlayout.arrange(m);

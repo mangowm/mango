@@ -500,12 +500,48 @@ static const struct wl_registry_listener registry_listener = {
 
 static void usage(void) {
 	fprintf(stderr,
-			"usage:"
-			"\t%s [-OTLq]\n"
-			"\t%s [-o <output>] -s [-t <tags>] [-l <layout>] [-c <tags>] [-d "
+			"mmsg - MangoWM IPC\n"
+			"\n"
+			"SYNOPSIS:\n"
+			"\tmmsg [-OTLq]\n"
+			"\tmmsg [-o <output>] -s [-t <tags>] [-l <layout>] [-c <tags>] [-d "
 			"<cmd>,<arg1>,<arg2>,<arg3>,<arg4>,<arg5>]\n"
-			"\t%s [-o <output>] (-g | -w) [-OotlcvmfxekbA]\n",
-			argv0, argv0, argv0);
+			"\tmmsg [-o <output>] (-g | -w) [-OotlcvmfxekbA]\n"
+			"\n"
+			"OPERATION MODES:\n"
+			"\t-g           Get values (tags, layout, focused client)\n"
+			"\t-s           Set values (switch tags, layouts)\n"
+			"\t-w           Watch mode (stream events)\n"
+			"\n"
+			"GENERAL OPTIONS:\n"
+			"\t-O           Get all output (monitor) information\n"
+			"\t-T           Get number of tags\n"
+			"\t-L           Get all available layouts\n"
+			"\t-q           Quit mango\n"
+			"\t-o <output>  Select output (monitor)\n"
+			"\n"
+			"GET OPTIONS (used with -g or -w):\n"
+			"\t-O           Get output name\n"
+			"\t-o           Get output (monitor) focus information\n"
+			"\t-t           Get selected tags\n"
+			"\t-l           Get current layout\n"
+			"\t-c           Get title and appid of focused clients\n"
+			"\t-v           Get visibility of statusbar\n"
+			"\t-m           Get fullscreen status\n"
+			"\t-f           Get floating status\n"
+			"\t-x           Get focused client geometry\n"
+			"\t-e           Get name of last focused layer\n"
+			"\t-k           Get current keyboard layout\n"
+			"\t-b           Get current keybind mode\n"
+			"\t-A           Get scale factor of monitor\n"
+			"\n"
+			"SET OPTIONS (used with -s):\n"
+			"\t-o <output>         Select output (monitor)\n"
+			"\t-t <tags>           Set selected tags (can be used with [+-^.] "
+			"modifiers)\n"
+			"\t-l <layout>         Set current layout\n"
+			"\t-c <tags>           Get title and appid of focused client\n"
+			"\t-d <cmd>,<args...>  Dispatch internal command (max 5 args)\n");
 	exit(2);
 }
 

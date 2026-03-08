@@ -47,8 +47,9 @@ int32_t log_level = WLR_ERROR;
 uint32_t numlockon = 0; // 是否打开右边小键盘
 uint32_t capslock = 0;	// 是否启用快捷键
 
-uint32_t ov_tab_mode = 0;	 // alt tab切换模式
-uint32_t hotarea_size = 10;	 // 热区大小,10x10
+uint32_t ov_tab_mode = 0;	// alt tab切换模式
+uint32_t hotarea_size = 10; // 热区大小,10x10
+uint32_t hotarea_corner = BOTTOM_LEFT;
 uint32_t enable_hotarea = 1; // 是否启用鼠标热区
 int32_t smartgaps = 0; /* 1 means no outer gap when there is only one window */
 int32_t sloppyfocus = 1; /* focus follows mouse */
@@ -62,9 +63,10 @@ float scratchpad_height_ratio = 0.9;
 int32_t scroller_structs = 20;
 float scroller_default_proportion = 0.9;
 float scroller_default_proportion_single = 1.0;
-int32_t scroller_ignore_proportion_single = 0;
+int32_t scroller_ignore_proportion_single = 1;
 int32_t scroller_focus_center = 0;
 int32_t scroller_prefer_center = 0;
+int32_t scroller_prefer_overspread = 1;
 int32_t focus_cross_monitor = 0;
 int32_t focus_cross_tag = 0;
 int32_t exchange_cross_monitor = 0;
@@ -101,12 +103,14 @@ int32_t overviewgappo = 30; /* overview时 窗口与窗口 缝隙大小 */
  * behavior */
 float fullscreen_bg[] = {0.1, 0.1, 0.1, 1.0};
 
-int32_t warpcursor = 1;			  /* Warp cursor to focused client */
+int32_t warpcursor = 1;
+int32_t drag_corner = 3;
+int32_t drag_warp_cursor = 1;
 int32_t xwayland_persistence = 1; /* xwayland persistence */
 int32_t syncobj_enable = 0;
-int32_t adaptive_sync = 0;
 int32_t allow_lock_transparent = 0;
-double drag_refresh_interval = 16.0;
+double drag_tile_refresh_interval = 8.0;
+double drag_floating_refresh_interval = 8.0;
 int32_t allow_tearing = TEARING_DISABLED;
 int32_t allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 
@@ -233,4 +237,3 @@ double shadows_blur = 15;
 int32_t shadows_position_x = 0;
 int32_t shadows_position_y = 0;
 float shadowscolor[] = COLOR(0x000000ff);
-;

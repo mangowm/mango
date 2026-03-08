@@ -58,6 +58,7 @@ typedef struct {
 	uint32_t tags;
 	int32_t isfloating;
 	int32_t isfullscreen;
+	int32_t isfakefullscreen;
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
@@ -77,7 +78,8 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
-	const char *monitor;
+	int32_t indleinhibit_when_focus;
+	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
 	int32_t width;
@@ -89,6 +91,7 @@ typedef struct {
 	int32_t isterm;
 	int32_t allow_csd;
 	int32_t force_maximize;
+	int32_t force_tiled_state;
 	int32_t force_tearing;
 	int32_t noswallow;
 	int32_t noblur;
@@ -101,15 +104,15 @@ typedef struct {
 } ConfigWinRule;
 
 typedef struct {
-	const char *name;	   // 显示器名称
-	float mfact;		   // 主区域比例
-	int32_t nmaster;	   // 主区域窗口数量
-	const char *layout;	   // 布局名称（字符串）
-	int32_t rr;			   // 旋转和翻转（假设为整数）
-	float scale;		   // 显示器缩放比例
-	int32_t x, y;		   // 显示器位置
-	int32_t width, height; // 显示器分辨率
-	float refresh;		   // 刷新率
+	const char *name;			 // Monitor name
+	char *make, *model, *serial; // may be NULL
+	int32_t rr;					 // Rotate and flip (assume integer)
+	float scale;				 // Monitor scale factor
+	int32_t x, y;				 // Monitor position
+	int32_t width, height;		 // Monitor resolution
+	float refresh;				 // Refresh rate
+	int32_t vrr;				 // variable refresh rate
+	int32_t custom;				 // enable custom mode
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -156,9 +159,14 @@ typedef struct {
 } GestureBinding;
 
 typedef struct {
-	int32_t id;		   // 标签ID (1-9)
-	char *layout_name; // 布局名称
+	int32_t id;
+	char *layout_name;
 	char *monitor_name;
+	char *monitor_make;
+	char *monitor_model;
+	char *monitor_serial;
+	float mfact;
+	int32_t nmaster;
 	int32_t no_render_border;
 	int32_t no_hide;
 } ConfigTagRule;
@@ -205,6 +213,7 @@ typedef struct {
 	int32_t scroller_ignore_proportion_single;
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
+	int32_t scroller_prefer_overspread;
 	int32_t edge_scroller_pointer_focus;
 	int32_t focus_cross_monitor;
 	int32_t exchange_cross_monitor;
@@ -232,6 +241,7 @@ typedef struct {
 	int32_t center_when_single_stack;
 
 	uint32_t hotarea_size;
+	uint32_t hotarea_corner;
 	uint32_t enable_hotarea;
 	uint32_t ov_tab_mode;
 	int32_t overviewgappi;
@@ -243,6 +253,8 @@ typedef struct {
 	int32_t idleinhibit_ignore_visible;
 	int32_t sloppyfocus;
 	int32_t warpcursor;
+	int32_t drag_corner;
+	int32_t drag_warp_cursor;
 
 	/* keyboard */
 	int32_t repeat_rate;
@@ -344,7 +356,8 @@ typedef struct {
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
 	int32_t syncobj_enable;
-	int32_t adaptive_sync;
+	float drag_tile_refresh_interval;
+	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
@@ -360,7 +373,10 @@ typedef struct {
 typedef int32_t (*FuncType)(const Arg *);
 Config config;
 
-void parse_config_file(Config *config, const char *file_path);
+bool parse_config_file(Config *config, const char *file_path, bool must_exist);
+bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
+						 struct wlr_output_state *state, int vrr, int custom);
+bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -403,7 +419,10 @@ int32_t parse_double_array(const char *input, double *output,
 		char *endptr;
 		double val = strtod(token, &endptr);
 		if (endptr == token || *endptr != '\0') {
-			fprintf(stderr, "Error: Invalid number in array: %s\n", token);
+			fprintf(
+				stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Invalid number in array: %s\n",
+				token);
 			free(dup);
 			return -1;
 		}
@@ -455,7 +474,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 			kb->ispassapply = true;
 			break;
 		default:
-			// 忽略其他字符或可根据需要处理错误
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Unknown bind flag: %c\n",
+					suffix[i]);
 			break;
 		}
 	}
@@ -543,15 +564,58 @@ static bool starts_with_ignore_case(const char *str, const char *prefix) {
 	return true;
 }
 
+static char *combine_args_until_empty(char *values[], int count) {
+	// find the first empty string
+	int first_empty = count;
+	for (int i = 0; i < count; i++) {
+		// check if it's empty: empty string or only contains "0" (initialized)
+		if (values[i][0] == '\0' ||
+			(strlen(values[i]) == 1 && values[i][0] == '0')) {
+			first_empty = i;
+			break;
+		}
+	}
+
+	// 	if there are no valid parameters, return an empty string
+	if (first_empty == 0) {
+		return strdup("");
+	}
+
+	// 	calculate the total length
+	size_t total_len = 0;
+	for (int i = 0; i < first_empty; i++) {
+		total_len += strlen(values[i]);
+	}
+	// 	plus the number of commas (first_empty-1 commas)
+	total_len += (first_empty - 1);
+
+	// 	allocate memory and concatenate
+	char *combined = malloc(total_len + 1);
+	if (combined == NULL) {
+		return strdup("");
+	}
+
+	combined[0] = '\0';
+	for (int i = 0; i < first_empty; i++) {
+		if (i > 0) {
+			strcat(combined, ",");
+		}
+		strcat(combined, values[i]);
+	}
+
+	return combined;
+}
+
 uint32_t parse_mod(const char *mod_str) {
 	if (!mod_str || !*mod_str) {
-		return 0;
+		return UINT32_MAX;
 	}
 
 	uint32_t mod = 0;
 	char input_copy[256];
 	char *token;
 	char *saveptr = NULL;
+	bool match_success = false;
 
 	// 复制并转换为小写
 	strncpy(input_copy, mod_str, sizeof(input_copy) - 1);
@@ -589,33 +653,54 @@ uint32_t parse_mod(const char *mod_str) {
 				case 108:
 					mod |= WLR_MODIFIER_ALT;
 					break;
+				default:
+					fprintf(stderr,
+							"unknown modifier keycode: \033[1m\033[31m%s\n",
+							token);
+					break;
 				}
 			}
 		} else {
 			// 完整的 modifier 检查（保留原始所有检查项）
-			if (strstr(token, "super") || strstr(token, "super_l") ||
-				strstr(token, "super_r")) {
+			if (!strcmp(token, "super") || !strcmp(token, "super_l") ||
+				!strcmp(token, "super_r")) {
 				mod |= WLR_MODIFIER_LOGO;
+				match_success = true;
 			}
-			if (strstr(token, "ctrl") || strstr(token, "ctrl_l") ||
-				strstr(token, "ctrl_r")) {
+			if (!strcmp(token, "ctrl") || !strcmp(token, "ctrl_l") ||
+				!strcmp(token, "ctrl_r")) {
 				mod |= WLR_MODIFIER_CTRL;
+				match_success = true;
 			}
-			if (strstr(token, "shift") || strstr(token, "shift_l") ||
-				strstr(token, "shift_r")) {
+			if (!strcmp(token, "shift") || !strcmp(token, "shift_l") ||
+				!strcmp(token, "shift_r")) {
 				mod |= WLR_MODIFIER_SHIFT;
+				match_success = true;
 			}
-			if (strstr(token, "alt") || strstr(token, "alt_l") ||
-				strstr(token, "alt_r")) {
+			if (!strcmp(token, "alt") || !strcmp(token, "alt_l") ||
+				!strcmp(token, "alt_r")) {
 				mod |= WLR_MODIFIER_ALT;
+				match_success = true;
 			}
-			if (strstr(token, "hyper") || strstr(token, "hyper_l") ||
-				strstr(token, "hyper_r")) {
+			if (!strcmp(token, "hyper") || !strcmp(token, "hyper_l") ||
+				!strcmp(token, "hyper_r")) {
 				mod |= WLR_MODIFIER_MOD3;
+				match_success = true;
+			}
+			if (!strcmp(token, "none")) {
+				match_success = true;
 			}
 		}
 
 		token = strtok_r(NULL, "+", &saveptr);
+	}
+
+	if (!match_success) {
+		mod = UINT32_MAX;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown modifier: "
+				"\033[1m\033[31m%s\n",
+				mod_str);
 	}
 
 	return mod;
@@ -708,8 +793,9 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		return kc;
 	}
 
-	// 普通键名直接转换
-	xkb_keysym_t sym = xkb_keysym_from_name(key_str, XKB_KEYSYM_NO_FLAGS);
+	// change key string to keysym, case insensitive
+	xkb_keysym_t sym =
+		xkb_keysym_from_name(key_str, XKB_KEYSYM_CASE_INSENSITIVE);
 
 	if (isbindsym) {
 		kc.type = KEY_TYPE_SYM;
@@ -733,13 +819,17 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		// 无法解析的键名
 		kc.type = KEY_TYPE_SYM;
 		kc.keysym = XKB_KEY_NoSymbol;
+		fprintf(
+			stderr,
+			"\033[1m\033[31m[ERROR]:\033[33m Unknown key: \033[1m\033[31m%s\n",
+			key_str);
 		// keycode 字段保持为0
 	}
 
 	return kc;
 }
 
-int32_t parse_button(const char *str) {
+uint32_t parse_button(const char *str) {
 	// 将输入字符串转换为小写
 	char lowerStr[20];
 	int32_t i = 0;
@@ -767,7 +857,11 @@ int32_t parse_button(const char *str) {
 	} else if (strcmp(lowerStr, "btn_task") == 0) {
 		return BTN_TASK;
 	} else {
-		return 0;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown button: "
+				"\033[1m\033[31m%s\n",
+				str);
+		return UINT32_MAX;
 	}
 }
 
@@ -818,6 +912,12 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						 char *arg_value5) {
 
 	FuncType func = NULL;
+	(*arg).i = 0;
+	(*arg).i2 = 0;
+	(*arg).f = 0.0f;
+	(*arg).f2 = 0.0f;
+	(*arg).ui = 0;
+	(*arg).ui2 = 0;
 	(*arg).v = NULL;
 	(*arg).v2 = NULL;
 	(*arg).v3 = NULL;
@@ -852,6 +952,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).f = atof(arg_value);
 	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
 		func = switch_proportion_preset;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "viewtoleft") == 0) {
 		func = viewtoleft;
 		(*arg).i = atoi(arg_value);
@@ -924,6 +1025,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "switch_keyboard_layout") == 0) {
 		func = switch_keyboard_layout;
+		(*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
 	} else if (strcmp(func_name, "setlayout") == 0) {
 		func = setlayout;
 		(*arg).v = strdup(arg_value);
@@ -968,10 +1070,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).ui = atoi(arg_value);
 	} else if (strcmp(func_name, "spawn") == 0) {
 		func = spawn;
-		(*arg).v = strdup(arg_value);
+		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+						  arg_value5};
+		(*arg).v = combine_args_until_empty(values, 5);
 	} else if (strcmp(func_name, "spawn_shell") == 0) {
 		func = spawn_shell;
-		(*arg).v = strdup(arg_value);
+		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+						  arg_value5};
+		(*arg).v = combine_args_until_empty(values, 5);
 	} else if (strcmp(func_name, "spawn_on_empty") == 0) {
 		func = spawn_on_empty;
 		(*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
@@ -1080,6 +1186,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "toggle_monitor") == 0) {
 		func = toggle_monitor;
 		(*arg).v = strdup(arg_value);
+	} else if (strcmp(func_name, "scroller_stack") == 0) {
+		func = scroller_stack;
+		(*arg).i = parse_direction(arg_value);
 	} else {
 		return NULL;
 	}
@@ -1110,7 +1219,7 @@ void run_exec_once() {
 	}
 }
 
-void parse_option(Config *config, char *key, char *value) {
+bool parse_option(Config *config, char *key, char *value) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
 	} else if (strcmp(key, "animations") == 0) {
@@ -1161,53 +1270,70 @@ void parse_option(Config *config, char *key, char *value) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_move, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_move: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_move: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_open") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_open, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_open: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_open: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_tag") == 0) {
 		int32_t num = parse_double_array(value, config->animation_curve_tag, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_tag: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_tag: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_close") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_close, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_close: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_close: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_focus") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_focus, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_focus: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_focus: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_opafadein") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadein, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_opafadein: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_opafadein: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_opafadeout") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadeout, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_opafadeout: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_opafadeout: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "scroller_structs") == 0) {
 		config->scroller_structs = atoi(value);
@@ -1221,6 +1347,8 @@ void parse_option(Config *config, char *key, char *value) {
 		config->scroller_focus_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_center") == 0) {
 		config->scroller_prefer_center = atoi(value);
+	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
+		config->scroller_prefer_overspread = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
@@ -1273,8 +1401,10 @@ void parse_option(Config *config, char *key, char *value) {
 		config->xwayland_persistence = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
-	} else if (strcmp(key, "adaptive_sync") == 0) {
-		config->adaptive_sync = atoi(value);
+	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
+		config->drag_tile_refresh_interval = atof(value);
+	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
+		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
@@ -1330,8 +1460,9 @@ void parse_option(Config *config, char *key, char *value) {
 		config->scroller_proportion_preset =
 			(float *)malloc(float_count * sizeof(float));
 		if (!config->scroller_proportion_preset) {
-			fprintf(stderr, "Error: Memory allocation failed\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+							"allocation failed\n");
+			return false;
 		}
 
 		// 3. 解析 value 中的浮点数
@@ -1344,16 +1475,18 @@ void parse_option(Config *config, char *key, char *value) {
 		while (token != NULL && i < float_count) {
 			if (sscanf(token, "%f", &value_set) != 1) {
 				fprintf(stderr,
-						"Error: Invalid float value in "
+						"\033[1m\033[31m[ERROR]:\033[33m Invalid float "
+						"value in "
 						"scroller_proportion_preset: %s\n",
 						token);
 				free(value_copy);
 				free(config->scroller_proportion_preset);
 				config->scroller_proportion_preset = NULL;
-				return;
+				return false;
 			}
 
-			// Clamp the value between 0.0 and 1.0 (or your desired range)
+			// Clamp the value between 0.0 and 1.0 (or your desired
+			// range)
 			config->scroller_proportion_preset[i] =
 				CLAMP_FLOAT(value_set, 0.1f, 1.0f);
 
@@ -1364,13 +1497,14 @@ void parse_option(Config *config, char *key, char *value) {
 		// 4. 检查解析的浮点数数量是否匹配
 		if (i != float_count) {
 			fprintf(stderr,
-					"Error: Invalid scroller_proportion_preset format: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"scroller_proportion_preset format: %s\n",
 					value);
 			free(value_copy);
 			free(config->scroller_proportion_preset);  // 释放已分配的内存
 			config->scroller_proportion_preset = NULL; // 防止野指针
 			config->scroller_proportion_preset_count = 0;
-			return;
+			return false;
 		}
 		config->scroller_proportion_preset_count = float_count;
 
@@ -1389,8 +1523,9 @@ void parse_option(Config *config, char *key, char *value) {
 		config->circle_layout = (char **)malloc(string_count * sizeof(char *));
 		memset(config->circle_layout, 0, string_count * sizeof(char *));
 		if (!config->circle_layout) {
-			fprintf(stderr, "Error: Memory allocation failed\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+							"allocation failed\n");
+			return false;
 		}
 
 		// 3. 解析 value 中的字符串
@@ -1405,7 +1540,9 @@ void parse_option(Config *config, char *key, char *value) {
 			config->circle_layout[i] = strdup(cleaned_token);
 			if (!config->circle_layout[i]) {
 				fprintf(stderr,
-						"Error: Memory allocation failed for string: %s\n",
+						"\033[1m\033[31m[ERROR]:\033[33m Memory allocation "
+						"failed for "
+						"string: %s\n",
 						token);
 				// 释放之前分配的内存
 				for (int32_t j = 0; j < i; j++) {
@@ -1415,7 +1552,7 @@ void parse_option(Config *config, char *key, char *value) {
 				free(value_copy);
 				config->circle_layout = NULL; // 防止野指针
 				config->circle_layout_count = 0;
-				return;
+				return false;
 			}
 			token = strtok(NULL, ",");
 			i++;
@@ -1423,7 +1560,10 @@ void parse_option(Config *config, char *key, char *value) {
 
 		// 4. 检查解析的字符串数量是否匹配
 		if (i != string_count) {
-			fprintf(stderr, "Error: Invalid circle_layout format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid circle_layout "
+					"format: %s\n",
+					value);
 			// 释放之前分配的内存
 			for (int32_t j = 0; j < i; j++) {
 				free(config->circle_layout[j]);
@@ -1432,7 +1572,7 @@ void parse_option(Config *config, char *key, char *value) {
 			free(value_copy);
 			config->circle_layout = NULL; // 防止野指针
 			config->circle_layout_count = 0;
-			return;
+			return false;
 		}
 		config->circle_layout_count = string_count;
 
@@ -1450,6 +1590,8 @@ void parse_option(Config *config, char *key, char *value) {
 		config->center_when_single_stack = atoi(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
 		config->hotarea_size = atoi(value);
+	} else if (strcmp(key, "hotarea_corner") == 0) {
+		config->hotarea_corner = atoi(value);
 	} else if (strcmp(key, "enable_hotarea") == 0) {
 		config->enable_hotarea = atoi(value);
 	} else if (strcmp(key, "ov_tab_mode") == 0) {
@@ -1472,6 +1614,10 @@ void parse_option(Config *config, char *key, char *value) {
 		config->sloppyfocus = atoi(value);
 	} else if (strcmp(key, "warpcursor") == 0) {
 		config->warpcursor = atoi(value);
+	} else if (strcmp(key, "drag_corner") == 0) {
+		config->drag_corner = atoi(value);
+	} else if (strcmp(key, "drag_warp_cursor") == 0) {
+		config->drag_warp_cursor = atoi(value);
 	} else if (strcmp(key, "smartgaps") == 0) {
 		config->smartgaps = atoi(value);
 	} else if (strcmp(key, "repeat_rate") == 0) {
@@ -1533,7 +1679,12 @@ void parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid rootcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid rootcolor "
+					"format: "
+					"%s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->rootcolor, color);
 		}
@@ -1541,68 +1692,191 @@ void parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "shadowscolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid shadowscolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid shadowscolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->shadowscolor, color);
 		}
 	} else if (strcmp(key, "bordercolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid bordercolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bordercolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->bordercolor, color);
 		}
 	} else if (strcmp(key, "focuscolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid focuscolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid focuscolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->focuscolor, color);
 		}
 	} else if (strcmp(key, "maximizescreencolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid maximizescreencolor format: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"maximizescreencolor "
+					"format: %s\n",
 					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->maximizescreencolor, color);
 		}
 	} else if (strcmp(key, "urgentcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid urgentcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid urgentcolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->urgentcolor, color);
 		}
 	} else if (strcmp(key, "scratchpadcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid scratchpadcolor format: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"scratchpadcolor "
+					"format: %s\n",
 					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->scratchpadcolor, color);
 		}
 	} else if (strcmp(key, "globalcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid globalcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid globalcolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->globalcolor, color);
 		}
 	} else if (strcmp(key, "overlaycolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid overlaycolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid overlaycolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->overlaycolor, color);
 		}
+	} else if (strcmp(key, "monitorrule") == 0) {
+		config->monitor_rules =
+			realloc(config->monitor_rules, (config->monitor_rules_count + 1) *
+											   sizeof(ConfigMonitorRule));
+		if (!config->monitor_rules) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for monitor rules\n");
+			return false;
+		}
+
+		ConfigMonitorRule *rule =
+			&config->monitor_rules[config->monitor_rules_count];
+		memset(rule, 0, sizeof(ConfigMonitorRule));
+
+		// 设置默认值
+		rule->name = NULL;
+		rule->make = NULL;
+		rule->model = NULL;
+		rule->serial = NULL;
+		rule->rr = 0;
+		rule->scale = 1.0f;
+		rule->x = INT32_MAX;
+		rule->y = INT32_MAX;
+		rule->width = -1;
+		rule->height = -1;
+		rule->refresh = 0.0f;
+		rule->vrr = 0;
+		rule->custom = 0;
+
+		bool parse_error = false;
+		char *token = strtok(value, ",");
+		while (token != NULL) {
+			char *colon = strchr(token, ':');
+			if (colon != NULL) {
+				*colon = '\0';
+				char *key = token;
+				char *val = colon + 1;
+
+				trim_whitespace(key);
+				trim_whitespace(val);
+
+				if (strcmp(key, "name") == 0) {
+					rule->name = strdup(val);
+				} else if (strcmp(key, "make") == 0) {
+					rule->make = strdup(val);
+				} else if (strcmp(key, "model") == 0) {
+					rule->model = strdup(val);
+				} else if (strcmp(key, "serial") == 0) {
+					rule->serial = strdup(val);
+				} else if (strcmp(key, "rr") == 0) {
+					rule->rr = CLAMP_INT(atoi(val), 0, 7);
+				} else if (strcmp(key, "scale") == 0) {
+					rule->scale = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
+				} else if (strcmp(key, "x") == 0) {
+					rule->x = atoi(val);
+				} else if (strcmp(key, "y") == 0) {
+					rule->y = atoi(val);
+				} else if (strcmp(key, "width") == 0) {
+					rule->width = CLAMP_INT(atoi(val), 1, INT32_MAX);
+				} else if (strcmp(key, "height") == 0) {
+					rule->height = CLAMP_INT(atoi(val), 1, INT32_MAX);
+				} else if (strcmp(key, "refresh") == 0) {
+					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
+				} else if (strcmp(key, "vrr") == 0) {
+					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "custom") == 0) {
+					rule->custom = CLAMP_INT(atoi(val), 0, 1);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"monitor rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
+				}
+			}
+			token = strtok(NULL, ",");
+		}
+
+		if (!rule->name && !rule->make && !rule->model && !rule->serial) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Monitor rule "
+							"must have at least one of the following "
+							"options: name, make, model, serial\n");
+			return false;
+		}
+
+		config->monitor_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "tagrule") == 0) {
 		config->tag_rules =
 			realloc(config->tag_rules,
 					(config->tag_rules_count + 1) * sizeof(ConfigTagRule));
 		if (!config->tag_rules) {
-			fprintf(stderr, "Error: Failed to allocate memory for tag rules\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for tag rules\n");
+			return false;
 		}
 
 		ConfigTagRule *rule = &config->tag_rules[config->tag_rules_count];
@@ -1612,7 +1886,15 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->id = 0;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
+		rule->monitor_make = NULL;
+		rule->monitor_model = NULL;
+		rule->monitor_serial = NULL;
+		rule->nmaster = 0;
+		rule->mfact = 0.0f;
+		rule->no_render_border = 0;
+		rule->no_hide = 0;
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1630,24 +1912,43 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
 					rule->monitor_name = strdup(val);
+				} else if (strcmp(key, "monitor_make") == 0) {
+					rule->monitor_make = strdup(val);
+				} else if (strcmp(key, "monitor_model") == 0) {
+					rule->monitor_model = strdup(val);
+				} else if (strcmp(key, "monitor_serial") == 0) {
+					rule->monitor_serial = strdup(val);
 				} else if (strcmp(key, "no_render_border") == 0) {
 					rule->no_render_border = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "no_hide") == 0) {
 					rule->no_hide = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "nmaster") == 0) {
+					rule->nmaster = CLAMP_INT(atoi(val), 1, 99);
+				} else if (strcmp(key, "mfact") == 0) {
+					rule->mfact = CLAMP_FLOAT(atof(val), 0.1f, 0.9f);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"tag rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
 		}
 
 		config->tag_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "layerrule") == 0) {
 		config->layer_rules =
 			realloc(config->layer_rules,
 					(config->layer_rules_count + 1) * sizeof(ConfigLayerRule));
 		if (!config->layer_rules) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for layer rules\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for layer rules\n");
+			return false;
 		}
 
 		ConfigLayerRule *rule = &config->layer_rules[config->layer_rules_count];
@@ -1661,6 +1962,7 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->noanim = 0;
 		rule->noshadow = 0;
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1684,6 +1986,13 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->noanim = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noshadow") == 0) {
 					rule->noshadow = CLAMP_INT(atoi(val), 0, 1);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"layer rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
@@ -1695,14 +2004,16 @@ void parse_option(Config *config, char *key, char *value) {
 		}
 
 		config->layer_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "windowrule") == 0) {
 		config->window_rules =
 			realloc(config->window_rules,
 					(config->window_rules_count + 1) * sizeof(ConfigWinRule));
 		if (!config->window_rules) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for window rules\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for window rules\n");
+			return false;
 		}
 
 		ConfigWinRule *rule = &config->window_rules[config->window_rules_count];
@@ -1711,6 +2022,7 @@ void parse_option(Config *config, char *key, char *value) {
 		// int32_t rule value, relay to a client property
 		rule->isfloating = -1;
 		rule->isfullscreen = -1;
+		rule->isfakefullscreen = -1;
 		rule->isnoborder = -1;
 		rule->isnoshadow = -1;
 		rule->isnoradius = -1;
@@ -1725,9 +2037,11 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
+		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
 		rule->force_maximize = -1;
+		rule->force_tiled_state = -1;
 		rule->force_tearing = -1;
 		rule->noswallow = -1;
 		rule->noblur = -1;
@@ -1758,6 +2072,7 @@ void parse_option(Config *config, char *key, char *value) {
 
 		rule->globalkeybinding = (KeyBinding){0};
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1833,12 +2148,16 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
+				} else if (strcmp(key, "indleinhibit_when_focus") == 0) {
+					rule->indleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
 					rule->allow_csd = atoi(val);
 				} else if (strcmp(key, "force_maximize") == 0) {
 					rule->force_maximize = atoi(val);
+				} else if (strcmp(key, "force_tiled_state") == 0) {
+					rule->force_tiled_state = atoi(val);
 				} else if (strcmp(key, "force_tearing") == 0) {
 					rule->force_tearing = atoi(val);
 				} else if (strcmp(key, "noswallow") == 0) {
@@ -1849,6 +2168,8 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->scroller_proportion = atof(val);
 				} else if (strcmp(key, "isfullscreen") == 0) {
 					rule->isfullscreen = atoi(val);
+				} else if (strcmp(key, "isfakefullscreen") == 0) {
+					rule->isfakefullscreen = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
@@ -1857,86 +2178,37 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->globalkeybinding.mod = parse_mod(mod_str);
 					rule->globalkeybinding.keysymcode =
 						parse_key(keysym_str, false);
+					if (rule->globalkeybinding.mod == UINT32_MAX) {
+						return false;
+					}
+					if (rule->globalkeybinding.keysymcode.type ==
+							KEY_TYPE_SYM &&
+						rule->globalkeybinding.keysymcode.keysym ==
+							XKB_KEY_NoSymbol) {
+						return false;
+					}
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"window rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
 		}
 		config->window_rules_count++;
-	} else if (strcmp(key, "monitorrule") == 0) {
-		config->monitor_rules =
-			realloc(config->monitor_rules, (config->monitor_rules_count + 1) *
-											   sizeof(ConfigMonitorRule));
-		if (!config->monitor_rules) {
-			fprintf(stderr,
-					"Error: Failed to allocate memory for monitor rules\n");
-			return;
-		}
-
-		ConfigMonitorRule *rule =
-			&config->monitor_rules[config->monitor_rules_count];
-		memset(rule, 0, sizeof(ConfigMonitorRule));
-
-		// 临时存储每个字段的原始字符串
-		char raw_name[256], raw_layout[256];
-		char raw_mfact[256], raw_nmaster[256], raw_rr[256];
-		char raw_scale[256], raw_x[256], raw_y[256], raw_width[256],
-			raw_height[256], raw_refresh[256];
-
-		// 先读取所有字段为字符串
-		int32_t parsed =
-			sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
-				   "^,],%255[^,],%255[^,],%255[^,],%255[^,],%255s",
-				   raw_name, raw_mfact, raw_nmaster, raw_layout, raw_rr,
-				   raw_scale, raw_x, raw_y, raw_width, raw_height, raw_refresh);
-
-		if (parsed == 11) {
-			// 修剪每个字段的空格
-			trim_whitespace(raw_name);
-			trim_whitespace(raw_mfact);
-			trim_whitespace(raw_nmaster);
-			trim_whitespace(raw_layout);
-			trim_whitespace(raw_rr);
-			trim_whitespace(raw_scale);
-			trim_whitespace(raw_x);
-			trim_whitespace(raw_y);
-			trim_whitespace(raw_width);
-			trim_whitespace(raw_height);
-			trim_whitespace(raw_refresh);
-
-			// 转换修剪后的字符串为特定类型
-			rule->name = strdup(raw_name);
-			rule->layout = strdup(raw_layout);
-			rule->mfact = atof(raw_mfact);
-			rule->nmaster = atoi(raw_nmaster);
-			rule->rr = atoi(raw_rr);
-			rule->scale = atof(raw_scale);
-			rule->x = atoi(raw_x);
-			rule->y = atoi(raw_y);
-			rule->width = atoi(raw_width);
-			rule->height = atoi(raw_height);
-			rule->refresh = atof(raw_refresh);
-
-			if (!rule->name || !rule->layout) {
-				if (rule->name)
-					free((void *)rule->name);
-				if (rule->layout)
-					free((void *)rule->layout);
-				fprintf(stderr,
-						"Error: Failed to allocate memory for monitor rule\n");
-				return;
-			}
-
-			config->monitor_rules_count++;
-		} else {
-			fprintf(stderr, "Error: Invalid monitorrule format: %s\n", value);
-		}
+		return !parse_error;
 	} else if (strncmp(key, "env", 3) == 0) {
 
 		char env_type[256], env_value[256];
 		if (sscanf(value, "%255[^,],%255[^\n]", env_type, env_value) < 2) {
-			fprintf(stderr, "Error: Invalid bind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(env_type);
 		trim_whitespace(env_value);
@@ -1951,8 +2223,9 @@ void parse_option(Config *config, char *key, char *value) {
 			free(env->type);
 			free(env->value);
 			free(env);
-			fprintf(stderr, "Error: Failed to allocate memory for env\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"allocate memory for env\n");
+			return false;
 		}
 
 		config->env[config->env_count] = env;
@@ -1962,15 +2235,18 @@ void parse_option(Config *config, char *key, char *value) {
 		char **new_exec =
 			realloc(config->exec, (config->exec_count + 1) * sizeof(char *));
 		if (!new_exec) {
-			fprintf(stderr, "Error: Failed to allocate memory for exec\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec\n");
+			return false;
 		}
 		config->exec = new_exec;
 
 		config->exec[config->exec_count] = strdup(value);
 		if (!config->exec[config->exec_count]) {
-			fprintf(stderr, "Error: Failed to duplicate exec string\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"duplicate exec string\n");
+			return false;
 		}
 
 		config->exec_count++;
@@ -1980,15 +2256,19 @@ void parse_option(Config *config, char *key, char *value) {
 		char **new_exec_once = realloc(
 			config->exec_once, (config->exec_once_count + 1) * sizeof(char *));
 		if (!new_exec_once) {
-			fprintf(stderr, "Error: Failed to allocate memory for exec_once\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec_once\n");
+			return false;
 		}
 		config->exec_once = new_exec_once;
 
 		config->exec_once[config->exec_once_count] = strdup(value);
 		if (!config->exec_once[config->exec_once_count]) {
-			fprintf(stderr, "Error: Failed to duplicate exec_once string\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to duplicate "
+					"exec_once string\n");
+			return false;
 		}
 
 		config->exec_once_count++;
@@ -1999,8 +2279,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
 		if (!config->key_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for key bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for key bindings\n");
+			return false;
 		}
 
 		KeyBinding *binding = &config->key_bindings[config->key_bindings_count];
@@ -2011,12 +2292,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, keysym_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid bind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(mod_str);
 		trim_whitespace(keysym_str);
@@ -2043,13 +2328,21 @@ void parse_option(Config *config, char *key, char *value) {
 		binding->keysymcode =
 			parse_key(keysym_str, binding->keysymcode.type == KEY_TYPE_SYM);
 		binding->mod = parse_mod(mod_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX ||
+			(binding->keysymcode.type == KEY_TYPE_SYM &&
+			 binding->keysymcode.keysym == XKB_KEY_NoSymbol)) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2062,7 +2355,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in bind: %s\n", func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in bind: "
+						"\033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->key_bindings_count++;
 		}
@@ -2073,8 +2372,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->mouse_bindings_count + 1) * sizeof(MouseBinding));
 		if (!config->mouse_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for mouse bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for mouse bindings\n");
+			return false;
 		}
 
 		MouseBinding *binding =
@@ -2086,12 +2386,17 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, button_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid mousebind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid mousebind "
+					"format: "
+					"%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(mod_str);
 		trim_whitespace(button_str);
@@ -2104,13 +2409,31 @@ void parse_option(Config *config, char *key, char *value) {
 
 		binding->mod = parse_mod(mod_str);
 		binding->button = parse_button(button_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
+
+		// TODO: remove this in next version
+		if (binding->mod == 0 &&
+			(binding->button == BTN_LEFT || binding->button == BTN_RIGHT)) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m \033[31m%s\033[33m can't "
+					"bind to \033[31m%s\033[33m mod key\n",
+					button_str, mod_str);
+			return false;
+		}
+
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX ||
+			binding->button == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2123,8 +2446,14 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in mousebind: %s\n",
-					func_name);
+
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"mousebind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->mouse_bindings_count++;
 		}
@@ -2134,8 +2463,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->axis_bindings_count + 1) * sizeof(AxisBinding));
 		if (!config->axis_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for axis bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for axis bindings\n");
+			return false;
 		}
 
 		AxisBinding *binding =
@@ -2147,12 +2477,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, dir_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid axisbind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid axisbind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 
 		trim_whitespace(mod_str);
@@ -2173,7 +2507,7 @@ void parse_option(Config *config, char *key, char *value) {
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
 
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2186,8 +2520,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in axisbind: %s\n",
-					func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"axisbind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->axis_bindings_count++;
 		}
@@ -2198,8 +2537,9 @@ void parse_option(Config *config, char *key, char *value) {
 											  sizeof(SwitchBinding));
 		if (!config->switch_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for switch bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for switch bindings\n");
+			return false;
 		}
 
 		SwitchBinding *binding =
@@ -2211,12 +2551,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^\n]",
 				   fold_str, func_name, arg_value, arg_value2, arg_value3,
 				   arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid switchbind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid switchbind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(fold_str);
 		trim_whitespace(func_name);
@@ -2244,8 +2588,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in switchbind: %s\n",
+
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Unknown dispatch in "
+					"switchbind: "
+					"\033[1m\033[31m%s\n",
 					func_name);
+			return false;
 		} else {
 			config->switch_bindings_count++;
 		}
@@ -2256,8 +2605,9 @@ void parse_option(Config *config, char *key, char *value) {
 			(config->gesture_bindings_count + 1) * sizeof(GestureBinding));
 		if (!config->gesture_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for axis gesturebind\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for axis gesturebind\n");
+			return false;
 		}
 
 		GestureBinding *binding =
@@ -2269,12 +2619,16 @@ void parse_option(Config *config, char *key, char *value) {
 							arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 							arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^,],%255[^\n]",
 				   mod_str, motion_str, fingers_count_str, func_name, arg_value,
 				   arg_value2, arg_value3, arg_value4, arg_value5) < 4) {
-			fprintf(stderr, "Error: Invalid gesturebind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid gesturebind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 
 		trim_whitespace(mod_str);
@@ -2290,6 +2644,12 @@ void parse_option(Config *config, char *key, char *value) {
 		binding->mod = parse_mod(mod_str);
 		binding->motion = parse_direction(motion_str);
 		binding->fingers_count = atoi(fingers_count_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
@@ -2297,7 +2657,7 @@ void parse_option(Config *config, char *key, char *value) {
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
 
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2310,34 +2670,49 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in axisbind: %s\n",
-					func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"axisbind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->gesture_bindings_count++;
 		}
 
+	} else if (strncmp(key, "source-optional", 15) == 0) {
+		parse_config_file(config, value, false);
 	} else if (strncmp(key, "source", 6) == 0) {
-		parse_config_file(config, value);
+		parse_config_file(config, value, true);
 	} else {
-		fprintf(stderr, "Error: Unknown key: %s\n", key);
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown keyword: "
+				"\033[1m\033[31m%s\n",
+				key);
+		return false;
 	}
+
+	return true;
 }
 
-void parse_config_line(Config *config, const char *line) {
+bool parse_config_line(Config *config, const char *line) {
 	char key[256], value[256];
 	if (sscanf(line, "%255[^=]=%255[^\n]", key, value) != 2) {
-		// fprintf(stderr, "Error: Invalid line format: %s\n", line);
-		return;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Invalid line format: %s",
+				line);
+		return false;
 	}
 
 	// Then trim each part separately
 	trim_whitespace(key);
 	trim_whitespace(value);
 
-	parse_option(config, key, value);
+	return parse_option(config, key, value);
 }
 
-void parse_config_file(Config *config, const char *file_path) {
+bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	FILE *file;
 	char full_path[1024];
 
@@ -2353,8 +2728,10 @@ void parse_config_file(Config *config, const char *file_path) {
 		} else {
 			const char *home = getenv("HOME");
 			if (!home) {
-				fprintf(stderr, "Error: HOME environment variable not set.\n");
-				return;
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m HOME environment "
+						"variable not set.\n");
+				return false;
 			}
 			snprintf(full_path, sizeof(full_path), "%s/.config/mango/%s", home,
 					 file_path + 1);
@@ -2367,8 +2744,9 @@ void parse_config_file(Config *config, const char *file_path) {
 
 		const char *home = getenv("HOME");
 		if (!home) {
-			fprintf(stderr, "Error: HOME environment variable not set.\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m HOME environment "
+							"variable not set.\n");
+			return false;
 		}
 		snprintf(full_path, sizeof(full_path), "%s%s", home, file_path + 1);
 		file = fopen(full_path, "r");
@@ -2379,19 +2757,39 @@ void parse_config_file(Config *config, const char *file_path) {
 	}
 
 	if (!file) {
-		perror("Error opening file");
-		return;
+		if (must_exist) {
+			fprintf(stderr,
+					"\033[1;31m\033[1;33m[ERROR]:\033[0m Failed to open "
+					"config file: %s\n",
+					file_path);
+			return false;
+		} else {
+			return true;
+		}
 	}
 
 	char line[512];
+	bool parse_correct = true;
+	bool parse_line_correct = true;
+	uint32_t line_count = 0;
 	while (fgets(line, sizeof(line), file)) {
+		line_count++;
 		if (line[0] == '#' || line[0] == '\n') {
 			continue;
 		}
-		parse_config_line(config, line);
+		parse_line_correct = parse_config_line(config, line);
+		if (!parse_line_correct) {
+			parse_correct = false;
+			fprintf(stderr,
+					"\033[1;31m╰─\033[1;33m[Index]\033[0m "
+					"\033[1;36m%s\033[0m:\033[1;35m%d\033[0m\n"
+					"   \033[1;36m╰─\033[0;33m%s\033[0m\n\n",
+					file_path, line_count, line);
+		}
 	}
 
 	fclose(file);
+	return parse_correct;
 }
 
 void free_circle_layout(Config *config) {
@@ -2472,18 +2870,6 @@ void free_config(void) {
 		free(config.window_rules);
 		config.window_rules = NULL;
 		config.window_rules_count = 0;
-	}
-
-	// 释放 monitor_rules
-	if (config.monitor_rules) {
-		for (int32_t i = 0; i < config.monitor_rules_count; i++) {
-			ConfigMonitorRule *rule = &config.monitor_rules[i];
-			free((void *)rule->name);
-			free((void *)rule->layout);
-		}
-		free(config.monitor_rules);
-		config.monitor_rules = NULL;
-		config.monitor_rules_count = 0;
 	}
 
 	// 释放 key_bindings
@@ -2598,10 +2984,33 @@ void free_config(void) {
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)
 				free((void *)config.tag_rules[i].monitor_name);
+			if (config.tag_rules[i].monitor_make)
+				free((void *)config.tag_rules[i].monitor_make);
+			if (config.tag_rules[i].monitor_model)
+				free((void *)config.tag_rules[i].monitor_model);
+			if (config.tag_rules[i].monitor_serial)
+				free((void *)config.tag_rules[i].monitor_serial);
 		}
 		free(config.tag_rules);
 		config.tag_rules = NULL;
 		config.tag_rules_count = 0;
+	}
+
+	// 释放 monitor_rules
+	if (config.monitor_rules) {
+		for (int32_t i = 0; i < config.monitor_rules_count; i++) {
+			if (config.monitor_rules[i].name)
+				free((void *)config.monitor_rules[i].name);
+			if (config.monitor_rules[i].make)
+				free((void *)config.monitor_rules[i].make);
+			if (config.monitor_rules[i].model)
+				free((void *)config.monitor_rules[i].model);
+			if (config.monitor_rules[i].serial)
+				free((void *)config.monitor_rules[i].serial);
+		}
+		free(config.monitor_rules);
+		config.monitor_rules = NULL;
+		config.monitor_rules_count = 0;
 	}
 
 	// 释放 layer_rules
@@ -2722,6 +3131,8 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_ignore_proportion_single, 0, 1);
 	scroller_focus_center = CLAMP_INT(config.scroller_focus_center, 0, 1);
 	scroller_prefer_center = CLAMP_INT(config.scroller_prefer_center, 0, 1);
+	scroller_prefer_overspread =
+		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
 	edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
 	scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
@@ -2735,6 +3146,7 @@ void override_config(void) {
 
 	// 概述模式设置
 	hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
+	hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
 	ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
 	overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
@@ -2743,7 +3155,13 @@ void override_config(void) {
 	// 杂项设置
 	xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
 	syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
-	adaptive_sync = CLAMP_INT(config.adaptive_sync, 0, 1);
+	drag_tile_refresh_interval =
+		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 1.0f, 16.0f);
+	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	allow_shortcuts_inhibit = CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	allow_lock_transparent = CLAMP_INT(config.allow_lock_transparent, 0, 1);
@@ -2754,6 +3172,8 @@ void override_config(void) {
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
 	sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
 	warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
+	drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
+	drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
 	exchange_cross_monitor = CLAMP_INT(config.exchange_cross_monitor, 0, 1);
 	scratchpad_cross_monitor = CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
@@ -2896,11 +3316,12 @@ void set_value_default() {
 
 	config.numlockon = numlockon; // 是否打开右边小键盘
 
-	config.ov_tab_mode = ov_tab_mode;		// alt tab切换模式
-	config.hotarea_size = hotarea_size;		// 热区大小,10x10
+	config.ov_tab_mode = ov_tab_mode;	// alt tab切换模式
+	config.hotarea_size = hotarea_size; // 热区大小,10x10
+	config.hotarea_corner = hotarea_corner;
 	config.enable_hotarea = enable_hotarea; // 是否启用鼠标热区
-	config.smartgaps =
-		smartgaps; /* 1 means no outer gap when there is only one window */
+	config.smartgaps = smartgaps;	  /* 1 means no outer gap when there is
+										 only one window */
 	config.sloppyfocus = sloppyfocus; /* focus follows mouse */
 	config.gappih = gappih;			  /* horiz inner gap between windows */
 	config.gappiv = gappiv;			  /* vert inner gap between windows */
@@ -2918,6 +3339,7 @@ void set_value_default() {
 		scroller_ignore_proportion_single;
 	config.scroller_focus_center = scroller_focus_center;
 	config.scroller_prefer_center = scroller_prefer_center;
+	config.scroller_prefer_overspread = scroller_prefer_overspread;
 	config.edge_scroller_pointer_focus = edge_scroller_pointer_focus;
 	config.focus_cross_monitor = focus_cross_monitor;
 	config.exchange_cross_monitor = exchange_cross_monitor;
@@ -2928,7 +3350,8 @@ void set_value_default() {
 	config.single_scratchpad = single_scratchpad;
 	config.xwayland_persistence = xwayland_persistence;
 	config.syncobj_enable = syncobj_enable;
-	config.adaptive_sync = adaptive_sync;
+	config.drag_tile_refresh_interval = drag_tile_refresh_interval;
+	config.drag_floating_refresh_interval = drag_floating_refresh_interval;
 	config.allow_tearing = allow_tearing;
 	config.allow_shortcuts_inhibit = allow_shortcuts_inhibit;
 	config.allow_lock_transparent = allow_lock_transparent;
@@ -2951,6 +3374,8 @@ void set_value_default() {
 	config.cursor_hide_timeout = cursor_hide_timeout;
 
 	config.warpcursor = warpcursor; /* Warp cursor to focused client */
+	config.drag_corner = drag_corner;
+	config.drag_warp_cursor = drag_warp_cursor;
 
 	config.repeat_rate = repeat_rate;
 	config.repeat_delay = repeat_delay;
@@ -3048,7 +3473,7 @@ void set_default_key_bindings(Config *config) {
 	config->key_bindings_count += default_key_bindings_count;
 }
 
-void parse_config(void) {
+bool parse_config(void) {
 
 	char filename[1024];
 
@@ -3101,7 +3526,7 @@ void parse_config(void) {
 		const char *homedir = getenv("HOME");
 		if (!homedir) {
 			// 如果获取失败，则无法继续
-			return;
+			return false;
 		}
 		// 构建日志文件路径
 		snprintf(filename, sizeof(filename), "%s/.config/mango/config.conf",
@@ -3115,10 +3540,12 @@ void parse_config(void) {
 		}
 	}
 
+	bool parse_correct = true;
 	set_value_default();
-	parse_config_file(&config, filename);
+	parse_correct = parse_config_file(&config, filename, true);
 	set_default_key_bindings(&config);
 	override_config();
+	return parse_correct;
 }
 
 void reset_blur_params(void) {
@@ -3151,70 +3578,45 @@ void reset_blur_params(void) {
 void reapply_monitor_rules(void) {
 	ConfigMonitorRule *mr;
 	Monitor *m = NULL;
-	int32_t ji, jk;
+	int32_t ji, vrr, custom;
+	int32_t mx, my;
 	struct wlr_output_state state;
-	struct wlr_output_mode *internal_mode = NULL;
-	wlr_output_state_init(&state);
 
 	wl_list_for_each(m, &mons, link) {
-		if (!m->wlr_output->enabled) {
+		if (!m->wlr_output->enabled)
 			continue;
-		}
+
+		wlr_output_state_init(&state);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
 				break;
 
 			mr = &config.monitor_rules[ji];
-			if (!mr->name || regex_match(mr->name, m->wlr_output->name)) {
 
-				m->mfact = mr->mfact;
-				m->nmaster = mr->nmaster;
-				m->m.x = mr->x;
-				m->m.y = mr->y;
+			if (monitor_matches_rule(m, mr)) {
+				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
+				my = mr->y == INT32_MAX ? m->m.y : mr->y;
+				vrr = mr->vrr >= 0 ? mr->vrr : 0;
+				custom = mr->custom >= 0 ? mr->custom : 0;
 
-				if (mr->layout) {
-					for (jk = 0; jk < LENGTH(layouts); jk++) {
-						if (strcmp(layouts[jk].name, mr->layout) == 0) {
-							m->lt = &layouts[jk];
-						}
-					}
-				}
-
-				if (mr->width > 0 && mr->height > 0 && mr->refresh > 0) {
-					internal_mode = get_nearest_output_mode(
-						m->wlr_output, mr->width, mr->height, mr->refresh);
-					if (internal_mode) {
-						wlr_output_state_set_mode(&state, internal_mode);
-					} else if (wlr_output_is_headless(m->wlr_output)) {
-						wlr_output_state_set_custom_mode(
-							&state, mr->width, mr->height,
-							(int32_t)roundf(mr->refresh * 1000));
-					}
-				}
-
-				wlr_output_state_set_scale(&state, mr->scale);
-				wlr_output_state_set_transform(&state, mr->rr);
-				wlr_output_layout_add(output_layout, m->wlr_output, mr->x,
-									  mr->y);
+				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
+				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
+				wlr_output_commit_state(m->wlr_output, &state);
+				break;
 			}
 		}
 
-		if (adaptive_sync) {
-			enable_adaptive_sync(m, &state);
-		}
-
-		wlr_output_commit_state(m->wlr_output, &state);
 		wlr_output_state_finish(&state);
-		updatemons(NULL, NULL);
 	}
+	updatemons(NULL, NULL);
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3228,6 +3630,16 @@ void reapply_cursor_style(void) {
 
 	cursor_mgr = wlr_xcursor_manager_create(config.cursor_theme, cursor_size);
 
+	if (cursor_size > 0) {
+		char size_str[16];
+		snprintf(size_str, sizeof(size_str), "%d", cursor_size);
+		setenv("XCURSOR_SIZE", size_str, 1);
+	}
+
+	if (config.cursor_theme) {
+		setenv("XCURSOR_THEME", config.cursor_theme, 1);
+	}
+
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
 		wlr_xcursor_manager_load(cursor_mgr, m->wlr_output->scale);
@@ -3235,14 +3647,17 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source,
+									 cursor_hide_timeout * 1000);
 	}
 }
+
+void reapply_rootbg(void) { wlr_scene_rect_set_color(root_bg, rootcolor); }
 
 void reapply_border(void) {
 	Client *c = NULL;
@@ -3306,14 +3721,48 @@ void reapply_master(void) {
 void parse_tagrule(Monitor *m) {
 	int32_t i, jk;
 	ConfigTagRule tr;
+	Client *c = NULL;
+	bool match_rule = false;
+
+	for (i = 0; i <= LENGTH(tags); i++) {
+		m->pertag->nmasters[i] = default_nmaster;
+		m->pertag->mfacts[i] = default_mfact;
+	}
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 
 		tr = config.tag_rules[i];
 
-		if (config.tag_rules_count > 0 &&
-			(!tr.monitor_name ||
-			 regex_match(tr.monitor_name, m->wlr_output->name))) {
+		match_rule = true;
+
+		if (tr.monitor_name != NULL) {
+			if (!regex_match(tr.monitor_name, m->wlr_output->name)) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_make != NULL) {
+			if (m->wlr_output->make == NULL ||
+				strcmp(tr.monitor_make, m->wlr_output->make) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_model != NULL) {
+			if (m->wlr_output->model == NULL ||
+				strcmp(tr.monitor_model, m->wlr_output->model) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_serial != NULL) {
+			if (m->wlr_output->serial == NULL ||
+				strcmp(tr.monitor_serial, m->wlr_output->serial) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (config.tag_rules_count > 0 && match_rule) {
 
 			for (jk = 0; jk < LENGTH(layouts); jk++) {
 				if (tr.layout_name &&
@@ -3322,7 +3771,23 @@ void parse_tagrule(Monitor *m) {
 				}
 			}
 
-			m->pertag->no_hide[tr.id] = tr.no_hide;
+			if (tr.no_hide >= 0)
+				m->pertag->no_hide[tr.id] = tr.no_hide;
+			if (tr.nmaster >= 1)
+				m->pertag->nmasters[tr.id] = tr.nmaster;
+			if (tr.mfact > 0.0f)
+				m->pertag->mfacts[tr.id] = tr.mfact;
+			if (tr.no_render_border >= 0)
+				m->pertag->no_render_border[tr.id] = tr.no_render_border;
+		}
+	}
+
+	for (i = 1; i <= LENGTH(tags); i++) {
+		wl_list_for_each(c, &clients, link) {
+			if ((c->tags & (1 << (i - 1)) & TAGMASK) && ISTILED(c)) {
+				if (m->pertag->mfacts[i] > 0.0f)
+					c->master_mfact_per = m->pertag->mfacts[i];
+			}
 		}
 	}
 }
@@ -3347,6 +3812,7 @@ void reset_option(void) {
 
 	reapply_cursor_style();
 	reapply_border();
+	reapply_rootbg();
 	reapply_keyboard();
 	reapply_pointer();
 	reapply_master();

@@ -47,7 +47,7 @@ bool is_horizontal_right_stack_layout(Monitor *m) {
 	return false;
 }
 
-int32_t is_special_animaiton_rule(Client *c) {
+int32_t is_special_animation_rule(Client *c) {
 
 	if (is_scroller_layout(c->mon) && !c->isfloating) {
 		return DOWN;
@@ -70,7 +70,7 @@ int32_t is_special_animaiton_rule(Client *c) {
 	}
 }
 
-void set_client_open_animaiton(Client *c, struct wlr_box geo) {
+void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t slide_direction;
 	int32_t horizontal, horizontal_value;
 	int32_t vertical, vertical_value;
@@ -96,7 +96,7 @@ void set_client_open_animaiton(Client *c, struct wlr_box geo) {
 			geo.y + (geo.height - c->animainit_geom.height) / 2;
 		return;
 	} else {
-		special_direction = is_special_animaiton_rule(c);
+		special_direction = is_special_animation_rule(c);
 		center_x = c->geom.x + c->geom.width / 2;
 		center_y = c->geom.y + c->geom.height / 2;
 		if (special_direction == UNDIR) {
@@ -363,7 +363,6 @@ void apply_border(Client *c) {
 		current_corner_location = set_client_corner_location(c);
 	}
 
-	// Handle no-border cases
 	if (hit_no_border && smartgaps) {
 		c->bw = 0;
 		c->fake_no_border = true;
@@ -773,71 +772,71 @@ void init_fadeout_client(Client *c) {
 		return;
 	}
 
-	Client *fadeout_cient = ecalloc(1, sizeof(*fadeout_cient));
+	Client *fadeout_client = ecalloc(1, sizeof(*fadeout_client));
 
 	wlr_scene_node_set_enabled(&c->scene->node, true);
 	client_set_border_color(c, bordercolor);
-	fadeout_cient->scene =
+	fadeout_client->scene =
 		wlr_scene_tree_snapshot(&c->scene->node, layers[LyrFadeOut]);
 	wlr_scene_node_set_enabled(&c->scene->node, false);
 
-	if (!fadeout_cient->scene) {
-		free(fadeout_cient);
+	if (!fadeout_client->scene) {
+		free(fadeout_client);
 		return;
 	}
 
-	fadeout_cient->animation.duration = animation_duration_close;
-	fadeout_cient->geom = fadeout_cient->current =
-		fadeout_cient->animainit_geom = fadeout_cient->animation.initial =
+	fadeout_client->animation.duration = animation_duration_close;
+	fadeout_client->geom = fadeout_client->current =
+		fadeout_client->animainit_geom = fadeout_client->animation.initial =
 			c->animation.current;
-	fadeout_cient->mon = c->mon;
-	fadeout_cient->animation_type_close = c->animation_type_close;
-	fadeout_cient->animation.action = CLOSE;
-	fadeout_cient->bw = c->bw;
-	fadeout_cient->nofadeout = c->nofadeout;
+	fadeout_client->mon = c->mon;
+	fadeout_client->animation_type_close = c->animation_type_close;
+	fadeout_client->animation.action = CLOSE;
+	fadeout_client->bw = c->bw;
+	fadeout_client->nofadeout = c->nofadeout;
 
 	// 这里snap节点的坐标设置是使用的相对坐标，所以不能加上原来坐标
 	// 这跟普通node有区别
 
-	fadeout_cient->animation.initial.x = 0;
-	fadeout_cient->animation.initial.y = 0;
+	fadeout_client->animation.initial.x = 0;
+	fadeout_client->animation.initial.y = 0;
 
 	if ((!c->animation_type_close &&
 		 strcmp(animation_type_close, "fade") == 0) ||
 		(c->animation_type_close &&
 		 strcmp(c->animation_type_close, "fade") == 0)) {
-		fadeout_cient->current.x = 0;
-		fadeout_cient->current.y = 0;
-		fadeout_cient->current.width = 0;
-		fadeout_cient->current.height = 0;
+		fadeout_client->current.x = 0;
+		fadeout_client->current.y = 0;
+		fadeout_client->current.width = 0;
+		fadeout_client->current.height = 0;
 	} else if ((c->animation_type_close &&
 				strcmp(c->animation_type_close, "slide") == 0) ||
 			   (!c->animation_type_close &&
 				strcmp(animation_type_close, "slide") == 0)) {
-		fadeout_cient->current.y =
+		fadeout_client->current.y =
 			c->geom.y + c->geom.height / 2 > c->mon->m.y + c->mon->m.height / 2
 				? c->mon->m.height -
 					  (c->animation.current.y - c->mon->m.y) // down out
 				: c->mon->m.y - c->geom.height;				 // up out
-		fadeout_cient->current.x = 0; // x无偏差，垂直划出
+		fadeout_client->current.x = 0; // x无偏差，垂直划出
 	} else {
-		fadeout_cient->current.y =
-			(fadeout_cient->geom.height -
-			 fadeout_cient->geom.height * zoom_end_ratio) /
+		fadeout_client->current.y =
+			(fadeout_client->geom.height -
+			 fadeout_client->geom.height * zoom_end_ratio) /
 			2;
-		fadeout_cient->current.x =
-			(fadeout_cient->geom.width -
-			 fadeout_cient->geom.width * zoom_end_ratio) /
+		fadeout_client->current.x =
+			(fadeout_client->geom.width -
+			 fadeout_client->geom.width * zoom_end_ratio) /
 			2;
-		fadeout_cient->current.width =
-			fadeout_cient->geom.width * zoom_end_ratio;
-		fadeout_cient->current.height =
-			fadeout_cient->geom.height * zoom_end_ratio;
+		fadeout_client->current.width =
+			fadeout_client->geom.width * zoom_end_ratio;
+		fadeout_client->current.height =
+			fadeout_client->geom.height * zoom_end_ratio;
 	}
 
-	fadeout_cient->animation.time_started = get_now_in_ms();
-	wlr_scene_node_set_enabled(&fadeout_cient->scene->node, true);
-	wl_list_insert(&fadeout_clients, &fadeout_cient->fadeout_link);
+	fadeout_client->animation.time_started = get_now_in_ms();
+	wlr_scene_node_set_enabled(&fadeout_client->scene->node, true);
+	wl_list_insert(&fadeout_clients, &fadeout_client->fadeout_link);
 
 	// 请求刷新屏幕
 	request_fresh_all_monitors();
@@ -972,7 +971,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animainit_geom.height = c->animation.current.height;
 		c->animainit_geom.width = c->animation.current.width;
 	} else if (c->is_pending_open_animation) {
-		set_client_open_animaiton(c, c->geom);
+		set_client_open_animation(c, c->geom);
 	} else {
 		c->animainit_geom = c->animation.current;
 	}
@@ -981,9 +980,19 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->bw = 0;
 	}
 
+	bool hit_no_border = check_hit_no_border(c);
+	if (hit_no_border && smartgaps) {
+		c->bw = 0;
+		c->fake_no_border = true;
+	}
+
 	// c->geom 是真实的窗口大小和位置，跟过度的动画无关，用于计算布局
 	c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
 										  c->geom.height - 2 * c->bw);
+
+	if (c->configure_serial != 0) {
+		c->mon->resizing_count_pending++;
+	}
 
 	if (c == grabc) {
 		c->animation.running = false;
@@ -1049,20 +1058,11 @@ void client_set_focused_opacity_animation(Client *c) {
 		   sizeof(c->opacity_animation.target_border_color));
 	c->opacity_animation.target_opacity = c->focused_opacity;
 	c->opacity_animation.time_started = get_now_in_ms();
-	if (c->opacity_animation.running) {
-		memcpy(c->opacity_animation.initial_border_color,
-			   c->opacity_animation.current_border_color,
-			   sizeof(c->opacity_animation.initial_border_color));
-		c->opacity_animation.initial_opacity =
-			c->opacity_animation.current_opacity;
-	} else {
-		memcpy(c->opacity_animation.initial_border_color, border_color,
-			   sizeof(c->opacity_animation.initial_border_color));
-		memcpy(c->opacity_animation.current_border_color, border_color,
-			   sizeof(c->opacity_animation.current_border_color));
-		c->opacity_animation.initial_opacity = c->unfocused_opacity;
-		c->opacity_animation.current_opacity = c->unfocused_opacity;
-	}
+	memcpy(c->opacity_animation.initial_border_color,
+		   c->opacity_animation.current_border_color,
+		   sizeof(c->opacity_animation.initial_border_color));
+	c->opacity_animation.initial_opacity = c->opacity_animation.current_opacity;
+
 	c->opacity_animation.running = true;
 }
 
@@ -1082,20 +1082,10 @@ void client_set_unfocused_opacity_animation(Client *c) {
 	c->opacity_animation.target_opacity = c->unfocused_opacity;
 	c->opacity_animation.time_started = get_now_in_ms();
 
-	if (c->opacity_animation.running) {
-		memcpy(c->opacity_animation.initial_border_color,
-			   c->opacity_animation.current_border_color,
-			   sizeof(c->opacity_animation.initial_border_color));
-		c->opacity_animation.initial_opacity =
-			c->opacity_animation.current_opacity;
-	} else {
-		memcpy(c->opacity_animation.initial_border_color, border_color,
-			   sizeof(c->opacity_animation.initial_border_color));
-		memcpy(c->opacity_animation.current_border_color, border_color,
-			   sizeof(c->opacity_animation.current_border_color));
-		c->opacity_animation.initial_opacity = c->focused_opacity;
-		c->opacity_animation.current_opacity = c->focused_opacity;
-	}
+	memcpy(c->opacity_animation.initial_border_color,
+		   c->opacity_animation.current_border_color,
+		   sizeof(c->opacity_animation.initial_border_color));
+	c->opacity_animation.initial_opacity = c->opacity_animation.current_opacity;
 
 	c->opacity_animation.running = true;
 }
@@ -1130,7 +1120,12 @@ bool client_apply_focus_opacity(Client *c) {
 		if (target_opacity > opacity) {
 			target_opacity = opacity;
 		}
+		memcpy(c->opacity_animation.current_border_color,
+			   c->opacity_animation.target_border_color,
+			   sizeof(c->opacity_animation.current_border_color));
+		c->opacity_animation.current_opacity = target_opacity;
 		client_set_opacity(c, target_opacity);
+		client_set_border_color(c, c->opacity_animation.target_border_color);
 	} else if (animations && c->opacity_animation.running) {
 
 		struct timespec now;
@@ -1161,7 +1156,7 @@ bool client_apply_focus_opacity(Client *c) {
 					eased_progress;
 		}
 		client_set_border_color(c, c->opacity_animation.current_border_color);
-		if (linear_progress == 1.0f) {
+		if (linear_progress >= 1.0f) {
 			c->opacity_animation.running = false;
 		} else {
 			return true;
