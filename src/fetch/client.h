@@ -83,6 +83,9 @@ setclient_coordinate_center(Client *c, Monitor *tm, struct wlr_box geom,
 	int32_t len = 0;
 	Monitor *m = tm ? tm : selmon;
 
+	if (!m)
+		return geom;
+
 	uint32_t cbw = check_hit_no_border(c) ? c->bw : 0;
 
 	if (!c->no_force_center && m) {

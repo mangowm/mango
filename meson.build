@@ -1,5 +1,5 @@
 project('mango', ['c', 'cpp'],
-  version : '0.12.3',
+  version : '0.12.5',
 )
 
 subdir('protocols')
@@ -147,5 +147,7 @@ executable('mmsg',
 )
 
 desktop_install_dir = join_paths(prefix, 'share/wayland-sessions')
-install_data('mango.desktop', install_dir : desktop_install_dir)
-install_data('config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
+install_data('assets/mango.desktop', install_dir : desktop_install_dir)
+install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
+install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))
