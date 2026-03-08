@@ -71,7 +71,7 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 
 static const char *get_name_from_tag(uint32_t tag) {
 	static const char *names[] = {"overview", "1", "2", "3", "4",
-								  "5",		  "6", "7", "8", "9"};
+								  "5",		  "6", "7", "8", "9", "10"};
 	return (tag < sizeof(names) / sizeof(names[0])) ? names[tag] : NULL;
 }
 

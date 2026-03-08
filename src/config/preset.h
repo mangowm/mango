@@ -208,7 +208,7 @@ enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 #define MODKEY WLR_MODIFIER_ALT
 
 static const char *tags[] = {
-	"1", "2", "3", "4", "5", "6", "7", "8", "9",
+	"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
 };
 
 float focused_opacity = 1.0;
