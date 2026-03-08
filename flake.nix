@@ -2,10 +2,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    mmsg = {
-      url = "github:DreamMaoMao/mmsg";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     scenefx = {
       url = "github:wlrfx/scenefx";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -32,13 +28,9 @@
         pkgs,
         ...
       }: let
-        inherit
-          (pkgs)
-          callPackage
-          ;
+        inherit (pkgs) callPackage ;
         mango = callPackage ./nix {
-          inherit (inputs.mmsg.packages.${pkgs.system}) mmsg;
-          inherit (inputs.scenefx.packages.${pkgs.system}) scenefx;
+          inherit (inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}) scenefx;
         };
         shellOverride = old: {
           nativeBuildInputs = old.nativeBuildInputs ++ [];

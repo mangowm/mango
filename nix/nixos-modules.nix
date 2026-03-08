@@ -11,7 +11,7 @@ in {
       enable = lib.mkEnableOption "mango, a wayland compositor based on dwl";
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.packages.${pkgs.system}.mango;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
         description = "The mango package to use";
       };
     };
@@ -21,15 +21,29 @@ in {
     environment.systemPackages =
       [
         cfg.package
-      ]
-      ++ (
-        if (builtins.hasAttr "mmsg" cfg.package)
-        then [cfg.package.mmsg]
-        else []
-      );
+      ];
 
     xdg.portal = {
       enable = lib.mkDefault true;
+
+      config = {
+        mango = {
+          default = [
+            "gtk"
+          ];
+          # except those
+          "org.freedesktop.impl.portal.Secret" = ["gnome-keyring"];
+          "org.freedesktop.impl.portal.ScreenCast" = ["wlr"];
+          "org.freedesktop.impl.portal.ScreenShot" = ["wlr"];
+
+          # wlr does not have this interface
+          "org.freedesktop.impl.portal.Inhibit" = [];
+        };
+      };
+      extraPortals = with pkgs; [
+        xdg-desktop-portal-wlr
+        xdg-desktop-portal-gtk
+      ];
 
       wlr.enable = lib.mkDefault true;
 

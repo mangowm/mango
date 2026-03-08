@@ -5,7 +5,7 @@ typedef struct {
 
 static const LayoutMapping layout_mappings[] = {
 	{"English (US)", "us"},
-	{"English (UK)", "uk"},
+	{"English (UK)", "gb"},
 	{"Russian", "ru"},
 	{"German", "de"},
 	{"French", "fr"},

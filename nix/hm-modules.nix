@@ -4,7 +4,6 @@ self: {
   pkgs,
   ...
 }: let
-  inherit (self.packages.${pkgs.system}) mango;
   cfg = config.wayland.windowManager.mango;
   variables = lib.concatStringsSep " " cfg.systemd.variables;
   extraCommands = lib.concatStringsSep " && " cfg.systemd.extraCommands;
@@ -19,6 +18,11 @@ in {
       enable = mkOption {
         type = types.bool;
         default = false;
+      };
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
+        description = "The mango package to use";
       };
       systemd = {
         enable = mkOption {
@@ -72,7 +76,7 @@ in {
       };
       settings = mkOption {
         description = "mango config content";
-        type = types.str;
+        type = types.lines;
         default = "";
         example = ''
           # menu and terminal
@@ -82,7 +86,7 @@ in {
       };
       autostart_sh = mkOption {
         description = "WARRNING: This is a shell script, but no need to add shebang";
-        type = types.str;
+        type = types.lines;
         default = "";
         example = ''
           waybar &
@@ -92,27 +96,16 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    home.packages = [mango];
-    home.activation =
-      lib.optionalAttrs (cfg.autostart_sh != "") {
-        createMangoScript = lib.hm.dag.entryAfter ["clearMangoConfig"] ''
-          cat ${autostart_sh} > $HOME/.config/mango/autostart.sh
-          chmod +x $HOME/.config/mango/autostart.sh
-        '';
-      }
-      // lib.optionalAttrs (cfg.settings != "") {
-        createMangoConfig = lib.hm.dag.entryAfter ["clearMangoConfig"] ''
-          cat > $HOME/.config/mango/config.conf <<EOF
-          ${cfg.settings}
-          EOF
-        '';
-      }
-      // {
-        clearMangoConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
-          rm -rf $HOME/.config/mango
-          mkdir -p $HOME/.config/mango
-        '';
+    home.packages = [cfg.package];
+    xdg.configFile = {
+      "mango/config.conf" = lib.mkIf (cfg.settings != "") {
+        text = cfg.settings;
       };
+      "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "") {
+        source = autostart_sh;
+        executable = true;
+      };
+    };
     systemd.user.targets.mango-session = lib.mkIf cfg.systemd.enable {
       Unit = {
         Description = "mango compositor session";

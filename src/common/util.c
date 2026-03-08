@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "util.h"
 
@@ -35,8 +36,8 @@ void *ecalloc(size_t nmemb, size_t size) {
 	return p;
 }
 
-int fd_set_nonblock(int fd) {
-	int flags = fcntl(fd, F_GETFL);
+int32_t fd_set_nonblock(int32_t fd) {
+	int32_t flags = fcntl(fd, F_GETFL);
 	if (flags < 0) {
 		perror("fcntl(F_GETFL):");
 		return -1;
@@ -49,8 +50,8 @@ int fd_set_nonblock(int fd) {
 	return 0;
 }
 
-int regex_match(const char *pattern, const char *str) {
-	int errnum;
+int32_t regex_match(const char *pattern, const char *str) {
+	int32_t errnum;
 	PCRE2_SIZE erroffset;
 
 	if (!pattern || !str) {
@@ -69,10 +70,107 @@ int regex_match(const char *pattern, const char *str) {
 
 	pcre2_match_data *match_data =
 		pcre2_match_data_create_from_pattern(re, NULL);
-	int ret =
+	int32_t ret =
 		pcre2_match(re, (PCRE2_SPTR)str, strlen(str), 0, 0, match_data, NULL);
 
 	pcre2_match_data_free(match_data);
 	pcre2_code_free(re);
 	return ret >= 0;
+}
+
+void wl_list_append(struct wl_list *list, struct wl_list *object) {
+	wl_list_insert(list->prev, object);
+}
+
+uint32_t get_now_in_ms(void) {
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	return timespec_to_ms(&now);
+}
+
+uint32_t timespec_to_ms(struct timespec *ts) {
+	return (uint32_t)ts->tv_sec * 1000 + (uint32_t)ts->tv_nsec / 1000000;
+}
+
+char *join_strings(char *arr[], const char *sep) {
+	if (!arr || !arr[0]) {
+		char *empty = malloc(1);
+		if (empty)
+			empty[0] = '\0';
+		return empty;
+	}
+
+	size_t total_len = 0;
+	int count = 0;
+	for (int i = 0; arr[i] != NULL; i++) {
+		total_len += strlen(arr[i]);
+		count++;
+	}
+	if (count > 0) {
+		total_len += strlen(sep) * (count - 1);
+	}
+
+	char *result = malloc(total_len + 1);
+	if (!result)
+		return NULL;
+
+	result[0] = '\0';
+	for (int i = 0; arr[i] != NULL; i++) {
+		if (i > 0)
+			strcat(result, sep);
+		strcat(result, arr[i]);
+	}
+	return result;
+}
+
+char *join_strings_with_suffix(char *arr[], const char *suffix,
+							   const char *sep) {
+	if (!arr || !arr[0]) {
+		char *empty = malloc(1);
+		if (empty)
+			empty[0] = '\0';
+		return empty;
+	}
+
+	size_t total_len = 0;
+	int count = 0;
+	for (int i = 0; arr[i] != NULL; i++) {
+		total_len += strlen(arr[i]) + strlen(suffix);
+		count++;
+	}
+	if (count > 0) {
+		total_len += strlen(sep) * (count - 1);
+	}
+
+	char *result = malloc(total_len + 1);
+	if (!result)
+		return NULL;
+
+	result[0] = '\0';
+	for (int i = 0; arr[i] != NULL; i++) {
+		if (i > 0)
+			strcat(result, sep);
+		strcat(result, arr[i]);
+		strcat(result, suffix);
+	}
+	return result;
+}
+
+char *string_printf(const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	int len = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+	if (len < 0)
+		return NULL;
+
+	char *str = malloc(len + 1);
+	if (!str)
+		return NULL;
+
+	va_start(args, fmt);
+	vsnprintf(str, len + 1, fmt, args);
+	va_end(args);
+	return str;
 }

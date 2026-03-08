@@ -227,6 +227,27 @@ I would probably just submit raphi's patchset but I don't think that would be po
       <arg name="last_layer" type="string" summary="last map layer."/>
     </event>
 
+    <event name="kb_layout" since="2">
+      <description summary="current keyboard layout.">
+        current keyboard layout.
+      </description>
+      <arg name="kb_layout" type="string" summary="current keyboard layout."/>
+    </event>
+
+    <event name="keymode" since="2">
+      <description summary="current keybind mode.">
+        current keybind mode.
+      </description>
+      <arg name="keymode" type="string" summary="current keybind mode."/>
+    </event>
+
+    <event name="scalefactor" since="2">
+      <description summary="scale factor of monitor.">
+        scale factor of monitor.
+      </description>
+      <arg name="scalefactor" type="uint" summary="scale factor of monitor."/>
+    </event>
+
   </interface>
 
 </protocol>
