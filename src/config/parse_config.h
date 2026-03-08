@@ -82,8 +82,8 @@ typedef struct {
 	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
-	int32_t width;
-	int32_t height;
+	float width;
+	float height;
 	int32_t nofocus;
 	int32_t nofadein;
 	int32_t nofadeout;
@@ -2111,9 +2111,9 @@ bool parse_option(Config *config, char *key, char *value) {
 				} else if (strcmp(key, "no_force_center") == 0) {
 					rule->no_force_center = atoi(val);
 				} else if (strcmp(key, "width") == 0) {
-					rule->width = atoi(val);
+					rule->width = atof(val);
 				} else if (strcmp(key, "height") == 0) {
-					rule->height = atoi(val);
+					rule->height = atof(val);
 				} else if (strcmp(key, "isnoborder") == 0) {
 					rule->isnoborder = atoi(val);
 				} else if (strcmp(key, "isnoshadow") == 0) {
