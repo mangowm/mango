@@ -1775,28 +1775,19 @@ int32_t scroller_stack(const Arg *arg) {
 	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
 		return 0;
 
-	if (c && (!client_only_in_one_tag(c) || c->isglobal || c->isunglobal))
-		return 0;
-
 	bool is_horizontal_layout =
 		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == SCROLLER ? true
 																	   : false;
 
 	Client *target_client = find_client_by_direction(c, arg, false, true);
 
-	if (target_client && (!client_only_in_one_tag(target_client) ||
-						  target_client->isglobal || target_client->isunglobal))
-		return 0;
-
 	if (target_client) {
 		stack_head = get_scroll_stack_head(target_client);
 	}
 
-	if (c) {
-		source_stack_head = get_scroll_stack_head(c);
-	}
+	source_stack_head = get_scroll_stack_head(c);
 
-	if (stack_head == source_stack_head) {
+	if (source_stack_head == stack_head) {
 		return 0;
 	}
 
@@ -1844,6 +1835,10 @@ int32_t scroller_stack(const Arg *arg) {
 
 	if (!target_client || target_client->mon != c->mon) {
 		return 0;
+	} else {
+		c->isglobal = target_client->isglobal = 0;
+		c->isunglobal = target_client->isglobal = 0;
+		c->tags = target_client->tags = get_tags_first_tag(target_client->tags);
 	}
 
 	exit_scroller_stack(c);
