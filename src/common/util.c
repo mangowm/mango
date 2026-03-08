@@ -92,3 +92,85 @@ uint32_t get_now_in_ms(void) {
 uint32_t timespec_to_ms(struct timespec *ts) {
 	return (uint32_t)ts->tv_sec * 1000 + (uint32_t)ts->tv_nsec / 1000000;
 }
+
+char *join_strings(char *arr[], const char *sep) {
+	if (!arr || !arr[0]) {
+		char *empty = malloc(1);
+		if (empty)
+			empty[0] = '\0';
+		return empty;
+	}
+
+	size_t total_len = 0;
+	int count = 0;
+	for (int i = 0; arr[i] != NULL; i++) {
+		total_len += strlen(arr[i]);
+		count++;
+	}
+	if (count > 0) {
+		total_len += strlen(sep) * (count - 1);
+	}
+
+	char *result = malloc(total_len + 1);
+	if (!result)
+		return NULL;
+
+	result[0] = '\0';
+	for (int i = 0; arr[i] != NULL; i++) {
+		if (i > 0)
+			strcat(result, sep);
+		strcat(result, arr[i]);
+	}
+	return result;
+}
+
+char *join_strings_with_suffix(char *arr[], const char *suffix,
+							   const char *sep) {
+	if (!arr || !arr[0]) {
+		char *empty = malloc(1);
+		if (empty)
+			empty[0] = '\0';
+		return empty;
+	}
+
+	size_t total_len = 0;
+	int count = 0;
+	for (int i = 0; arr[i] != NULL; i++) {
+		total_len += strlen(arr[i]) + strlen(suffix);
+		count++;
+	}
+	if (count > 0) {
+		total_len += strlen(sep) * (count - 1);
+	}
+
+	char *result = malloc(total_len + 1);
+	if (!result)
+		return NULL;
+
+	result[0] = '\0';
+	for (int i = 0; arr[i] != NULL; i++) {
+		if (i > 0)
+			strcat(result, sep);
+		strcat(result, arr[i]);
+		strcat(result, suffix);
+	}
+	return result;
+}
+
+char *string_printf(const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	int len = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+	if (len < 0)
+		return NULL;
+
+	char *str = malloc(len + 1);
+	if (!str)
+		return NULL;
+
+	va_start(args, fmt);
+	vsnprintf(str, len + 1, fmt, args);
+	va_end(args);
+	return str;
+}

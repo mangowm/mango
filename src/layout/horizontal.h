@@ -283,6 +283,7 @@ void scroller(Monitor *m) {
 	struct wlr_box target_geom;
 	int32_t focus_client_index = 0;
 	bool need_scroller = false;
+	bool over_overspread_to_left = false;
 	int32_t cur_gappih = enablegaps ? m->gappih : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
@@ -371,6 +372,46 @@ void scroller(Monitor *m) {
 		}
 	}
 
+	bool need_apply_overspread =
+		scroller_prefer_overspread && m->visible_scroll_tiling_clients > 1 &&
+		(focus_client_index == 0 || focus_client_index == n - 1) &&
+		tempClients[focus_client_index]->scroller_proportion < 1.0f;
+
+	if (need_apply_overspread) {
+
+		if (focus_client_index == 0) {
+			over_overspread_to_left = true;
+		} else {
+			over_overspread_to_left = false;
+		}
+
+		if (over_overspread_to_left &&
+			(!INSIDEMON(tempClients[1]) ||
+			 (tempClients[1]->scroller_proportion +
+				  tempClients[focus_client_index]->scroller_proportion >=
+			  1.0f))) {
+			need_scroller = true;
+		} else if (!over_overspread_to_left &&
+				   (!INSIDEMON(tempClients[focus_client_index - 1]) ||
+					(tempClients[focus_client_index - 1]->scroller_proportion +
+						 tempClients[focus_client_index]->scroller_proportion >=
+					 1.0f))) {
+			need_scroller = true;
+		} else {
+			need_apply_overspread = false;
+		}
+	}
+
+	bool need_apply_center =
+		scroller_focus_center || m->visible_scroll_tiling_clients == 1 ||
+		(scroller_prefer_center && !need_apply_overspread &&
+		 (!m->prevsel ||
+		  (ISSCROLLTILED(m->prevsel) &&
+		   (m->prevsel->scroller_proportion * max_client_width) +
+				   (tempClients[focus_client_index]->scroller_proportion *
+					max_client_width) >
+			   m->w.width - 2 * scroller_structs - cur_gappih)));
+
 	if (n == 1 && scroller_ignore_proportion_single) {
 		need_scroller = true;
 	}
@@ -394,18 +435,26 @@ void scroller(Monitor *m) {
 			tempClients[focus_client_index], &target_geom);
 		arrange_stack(tempClients[focus_client_index], target_geom, cur_gappiv);
 	} else if (need_scroller) {
-		if (scroller_focus_center ||
-			((!m->prevsel ||
-			  (ISSCROLLTILED(m->prevsel) &&
-			   (m->prevsel->scroller_proportion * max_client_width) +
-					   (root_client->scroller_proportion * max_client_width) >
-				   m->w.width - 2 * scroller_structs - cur_gappih)) &&
-			 scroller_prefer_center)) {
+		if (need_apply_center) {
 			target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
+		} else if (need_apply_overspread) {
+			if (over_overspread_to_left) {
+				target_geom.x = m->w.x + scroller_structs;
+			} else {
+				target_geom.x =
+					m->w.x +
+					(m->w.width -
+					 tempClients[focus_client_index]->scroller_proportion *
+						 max_client_width -
+					 scroller_structs);
+			}
+
 		} else {
-			target_geom.x = root_client->geom.x > m->w.x + (m->w.width) / 2
+			target_geom.x = tempClients[focus_client_index]->geom.x >
+									m->w.x + (m->w.width) / 2
 								? m->w.x + (m->w.width -
-											root_client->scroller_proportion *
+											tempClients[focus_client_index]
+													->scroller_proportion *
 												max_client_width -
 											scroller_structs)
 								: m->w.x + scroller_structs;

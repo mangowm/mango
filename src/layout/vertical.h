@@ -270,6 +270,7 @@ void vertical_scroller(Monitor *m) {
 	struct wlr_box target_geom;
 	int32_t focus_client_index = 0;
 	bool need_scroller = false;
+	bool over_overspread_to_up = false;
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -355,6 +356,46 @@ void vertical_scroller(Monitor *m) {
 		}
 	}
 
+	bool need_apply_overspread =
+		scroller_prefer_overspread && m->visible_scroll_tiling_clients > 1 &&
+		(focus_client_index == 0 || focus_client_index == n - 1) &&
+		tempClients[focus_client_index]->scroller_proportion < 1.0f;
+
+	if (need_apply_overspread) {
+
+		if (focus_client_index == 0) {
+			over_overspread_to_up = true;
+		} else {
+			over_overspread_to_up = false;
+		}
+
+		if (over_overspread_to_up &&
+			(!INSIDEMON(tempClients[1]) ||
+			 (tempClients[1]->scroller_proportion +
+				  tempClients[focus_client_index]->scroller_proportion >=
+			  1.0f))) {
+			need_scroller = true;
+		} else if (!over_overspread_to_up &&
+				   (!INSIDEMON(tempClients[focus_client_index - 1]) ||
+					(tempClients[focus_client_index - 1]->scroller_proportion +
+						 tempClients[focus_client_index]->scroller_proportion >=
+					 1.0f))) {
+			need_scroller = true;
+		} else {
+			need_apply_overspread = false;
+		}
+	}
+
+	bool need_apply_center =
+		scroller_focus_center || m->visible_scroll_tiling_clients == 1 ||
+		(scroller_prefer_center && !need_apply_overspread &&
+		 (!m->prevsel ||
+		  (ISSCROLLTILED(m->prevsel) &&
+		   (m->prevsel->scroller_proportion * max_client_height) +
+				   (tempClients[focus_client_index]->scroller_proportion *
+					max_client_height) >
+			   m->w.height - 2 * scroller_structs - cur_gappiv)));
+
 	if (n == 1 && scroller_ignore_proportion_single) {
 		need_scroller = true;
 	}
@@ -381,18 +422,24 @@ void vertical_scroller(Monitor *m) {
 		arrange_stack_vertical(tempClients[focus_client_index], target_geom,
 							   cur_gappih);
 	} else if (need_scroller) {
-		if (scroller_focus_center ||
-			((!m->prevsel ||
-			  (ISSCROLLTILED(m->prevsel) &&
-			   (m->prevsel->scroller_proportion * max_client_height) +
-					   (root_client->scroller_proportion * max_client_height) >
-				   m->w.height - 2 * scroller_structs - cur_gappiv)) &&
-			 scroller_prefer_center)) {
+		if (need_apply_center) {
 			target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
+		} else if (need_apply_overspread) {
+			if (over_overspread_to_up) {
+				target_geom.y = m->w.y + scroller_structs;
+			} else {
+				target_geom.y =
+					m->w.y +
+					(m->w.height -
+					 tempClients[focus_client_index]->scroller_proportion *
+						 max_client_height -
+					 scroller_structs);
+			}
 		} else {
 			target_geom.y = root_client->geom.y > m->w.y + (m->w.height) / 2
 								? m->w.y + (m->w.height -
-											root_client->scroller_proportion *
+											tempClients[focus_client_index]
+													->scroller_proportion *
 												max_client_height -
 											scroller_structs)
 								: m->w.y + scroller_structs;

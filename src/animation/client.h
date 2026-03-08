@@ -1002,6 +1002,10 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
 										  c->geom.height - 2 * c->bw);
 
+	if (c->configure_serial != 0) {
+		c->mon->resizing_count_pending++;
+	}
+
 	if (c == grabc) {
 		c->animation.running = false;
 		c->need_output_flush = false;

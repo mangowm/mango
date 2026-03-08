@@ -1,5 +1,5 @@
 project('mango', ['c', 'cpp'],
-  version : '0.12.1',
+  version : '0.12.5',
 )
 
 subdir('protocols')
@@ -56,7 +56,7 @@ endif
 if is_git_repo
   # 如果是 Git 目录，获取 Commit Hash 和最新的 tag
   commit_hash = run_command(git, 'rev-parse', '--short', 'HEAD', check : false).stdout().strip()
-  latest_tag = run_command(git, 'describe', '--tags', '--abbrev=0', check : false).stdout().strip()
+  latest_tag = meson.project_version()
   version_with_hash = '@0@(@1@)'.format(latest_tag, commit_hash)
 else
   # 如果不是 Git 目录，使用项目版本号和 "release" 字符串
@@ -147,5 +147,7 @@ executable('mmsg',
 )
 
 desktop_install_dir = join_paths(prefix, 'share/wayland-sessions')
-install_data('mango.desktop', install_dir : desktop_install_dir)
-install_data('config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
+install_data('assets/mango.desktop', install_dir : desktop_install_dir)
+install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
+install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))

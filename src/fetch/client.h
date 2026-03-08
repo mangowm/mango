@@ -83,6 +83,9 @@ setclient_coordinate_center(Client *c, Monitor *tm, struct wlr_box geom,
 	int32_t len = 0;
 	Monitor *m = tm ? tm : selmon;
 
+	if (!m)
+		return geom;
+
 	uint32_t cbw = check_hit_no_border(c) ? c->bw : 0;
 
 	if (!c->no_force_center && m) {
@@ -574,23 +577,29 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 
 	if (id == TILE || id == VERTICAL_TILE || id == DECK ||
 		id == VERTICAL_DECK || id == RIGHT_TILE) {
-		if (fc && !fc->ismaster)
+		if (tc->ismaster ^ sc->ismaster)
 			return false;
-		else if (!sc->ismaster)
+		if (fc && !(fc->ismaster ^ sc->ismaster))
+			return false;
+		else
 			return true;
 	}
 
 	if (id == TGMIX) {
-		if (fc && !fc->ismaster)
+		if (tc->ismaster ^ sc->ismaster)
+			return false;
+		if (fc && !(fc->ismaster ^ sc->ismaster))
 			return false;
 		if (!sc->ismaster && sc->mon->visible_tiling_clients <= 3)
 			return true;
 	}
 
 	if (id == CENTER_TILE) {
-		if (fc && !fc->ismaster)
+		if (tc->ismaster ^ sc->ismaster)
 			return false;
-		if (!sc->ismaster && sc->geom.x == tc->geom.x)
+		if (fc && !(fc->ismaster ^ sc->ismaster))
+			return false;
+		if (sc->geom.x == tc->geom.x)
 			return true;
 		else
 			return false;

@@ -58,6 +58,7 @@ typedef struct {
 	uint32_t tags;
 	int32_t isfloating;
 	int32_t isfullscreen;
+	int32_t isfakefullscreen;
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
@@ -77,7 +78,8 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
-	const char *monitor;
+	int32_t indleinhibit_when_focus;
+	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
 	int32_t width;
@@ -110,6 +112,7 @@ typedef struct {
 	int32_t width, height;		 // Monitor resolution
 	float refresh;				 // Refresh rate
 	int32_t vrr;				 // variable refresh rate
+	int32_t custom;				 // enable custom mode
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -210,6 +213,7 @@ typedef struct {
 	int32_t scroller_ignore_proportion_single;
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
+	int32_t scroller_prefer_overspread;
 	int32_t edge_scroller_pointer_focus;
 	int32_t focus_cross_monitor;
 	int32_t exchange_cross_monitor;
@@ -352,6 +356,8 @@ typedef struct {
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
 	int32_t syncobj_enable;
+	float drag_tile_refresh_interval;
+	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
@@ -368,6 +374,9 @@ typedef int32_t (*FuncType)(const Arg *);
 Config config;
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
+bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
+						 struct wlr_output_state *state, int vrr, int custom);
+bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -943,6 +952,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).f = atof(arg_value);
 	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
 		func = switch_proportion_preset;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "viewtoleft") == 0) {
 		func = viewtoleft;
 		(*arg).i = atoi(arg_value);
@@ -1015,6 +1025,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "switch_keyboard_layout") == 0) {
 		func = switch_keyboard_layout;
+		(*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
 	} else if (strcmp(func_name, "setlayout") == 0) {
 		func = setlayout;
 		(*arg).v = strdup(arg_value);
@@ -1336,6 +1347,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->scroller_focus_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_center") == 0) {
 		config->scroller_prefer_center = atoi(value);
+	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
+		config->scroller_prefer_overspread = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
@@ -1388,6 +1401,10 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->xwayland_persistence = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
+	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
+		config->drag_tile_refresh_interval = atof(value);
+	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
+		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
@@ -1790,6 +1807,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->height = -1;
 		rule->refresh = 0.0f;
 		rule->vrr = 0;
+		rule->custom = 0;
 
 		bool parse_error = false;
 		char *token = strtok(value, ",");
@@ -1827,6 +1845,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "custom") == 0) {
+					rule->custom = CLAMP_INT(atoi(val), 0, 1);
 				} else {
 					fprintf(stderr,
 							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
@@ -1837,6 +1857,13 @@ bool parse_option(Config *config, char *key, char *value) {
 				}
 			}
 			token = strtok(NULL, ",");
+		}
+
+		if (!rule->name && !rule->make && !rule->model && !rule->serial) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Monitor rule "
+							"must have at least one of the following "
+							"options: name, make, model, serial\n");
+			return false;
 		}
 
 		config->monitor_rules_count++;
@@ -1995,6 +2022,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		// int32_t rule value, relay to a client property
 		rule->isfloating = -1;
 		rule->isfullscreen = -1;
+		rule->isfakefullscreen = -1;
 		rule->isnoborder = -1;
 		rule->isnoshadow = -1;
 		rule->isnoradius = -1;
@@ -2009,6 +2037,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
+		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
 		rule->force_maximize = -1;
@@ -2119,6 +2148,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
+				} else if (strcmp(key, "indleinhibit_when_focus") == 0) {
+					rule->indleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
@@ -2137,6 +2168,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->scroller_proportion = atof(val);
 				} else if (strcmp(key, "isfullscreen") == 0) {
 					rule->isfullscreen = atoi(val);
+				} else if (strcmp(key, "isfakefullscreen") == 0) {
+					rule->isfakefullscreen = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
@@ -3098,6 +3131,8 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_ignore_proportion_single, 0, 1);
 	scroller_focus_center = CLAMP_INT(config.scroller_focus_center, 0, 1);
 	scroller_prefer_center = CLAMP_INT(config.scroller_prefer_center, 0, 1);
+	scroller_prefer_overspread =
+		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
 	edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
 	scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
@@ -3120,6 +3155,13 @@ void override_config(void) {
 	// 杂项设置
 	xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
 	syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
+	drag_tile_refresh_interval =
+		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 1.0f, 16.0f);
+	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	allow_shortcuts_inhibit = CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	allow_lock_transparent = CLAMP_INT(config.allow_lock_transparent, 0, 1);
@@ -3297,6 +3339,7 @@ void set_value_default() {
 		scroller_ignore_proportion_single;
 	config.scroller_focus_center = scroller_focus_center;
 	config.scroller_prefer_center = scroller_prefer_center;
+	config.scroller_prefer_overspread = scroller_prefer_overspread;
 	config.edge_scroller_pointer_focus = edge_scroller_pointer_focus;
 	config.focus_cross_monitor = focus_cross_monitor;
 	config.exchange_cross_monitor = exchange_cross_monitor;
@@ -3307,6 +3350,8 @@ void set_value_default() {
 	config.single_scratchpad = single_scratchpad;
 	config.xwayland_persistence = xwayland_persistence;
 	config.syncobj_enable = syncobj_enable;
+	config.drag_tile_refresh_interval = drag_tile_refresh_interval;
+	config.drag_floating_refresh_interval = drag_floating_refresh_interval;
 	config.allow_tearing = allow_tearing;
 	config.allow_shortcuts_inhibit = allow_shortcuts_inhibit;
 	config.allow_lock_transparent = allow_lock_transparent;
@@ -3533,17 +3578,15 @@ void reset_blur_params(void) {
 void reapply_monitor_rules(void) {
 	ConfigMonitorRule *mr;
 	Monitor *m = NULL;
-	int32_t ji, vrr;
+	int32_t ji, vrr, custom;
 	int32_t mx, my;
 	struct wlr_output_state state;
-	struct wlr_output_mode *internal_mode = NULL;
-	wlr_output_state_init(&state);
-	bool match_rule = false;
 
 	wl_list_for_each(m, &mons, link) {
-		if (!m->wlr_output->enabled) {
+		if (!m->wlr_output->enabled)
 			continue;
-		}
+
+		wlr_output_state_init(&state);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
@@ -3551,78 +3594,29 @@ void reapply_monitor_rules(void) {
 
 			mr = &config.monitor_rules[ji];
 
-			// 检查是否匹配的变量
-			match_rule = true;
-
-			// 检查四个标识字段的匹配
-			if (mr->name != NULL) {
-				if (!regex_match(mr->name, m->wlr_output->name)) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->make != NULL) {
-				if (m->wlr_output->make == NULL ||
-					strcmp(mr->make, m->wlr_output->make) != 0) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->model != NULL) {
-				if (m->wlr_output->model == NULL ||
-					strcmp(mr->model, m->wlr_output->model) != 0) {
-					match_rule = false;
-				}
-			}
-
-			if (mr->serial != NULL) {
-				if (m->wlr_output->serial == NULL ||
-					strcmp(mr->serial, m->wlr_output->serial) != 0) {
-					match_rule = false;
-				}
-			}
-
-			// 只有当所有指定的标识都匹配时才应用规则
-			if (match_rule) {
+			if (monitor_matches_rule(m, mr)) {
 				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
+				custom = mr->custom >= 0 ? mr->custom : 0;
 
-				if (mr->width > 0 && mr->height > 0 && mr->refresh > 0) {
-					internal_mode = get_nearest_output_mode(
-						m->wlr_output, mr->width, mr->height, mr->refresh);
-					if (internal_mode) {
-						wlr_output_state_set_mode(&state, internal_mode);
-					} else if (wlr_output_is_headless(m->wlr_output)) {
-						wlr_output_state_set_custom_mode(
-							&state, mr->width, mr->height,
-							(int32_t)roundf(mr->refresh * 1000));
-					}
-				}
-
-				if (vrr) {
-					enable_adaptive_sync(m, &state);
-				} else {
-					wlr_output_state_set_adaptive_sync_enabled(&state, false);
-				}
-
-				wlr_output_state_set_scale(&state, mr->scale);
-				wlr_output_state_set_transform(&state, mr->rr);
+				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
+				wlr_output_commit_state(m->wlr_output, &state);
+				break;
 			}
 		}
 
-		wlr_output_commit_state(m->wlr_output, &state);
 		wlr_output_state_finish(&state);
-		updatemons(NULL, NULL);
 	}
+	updatemons(NULL, NULL);
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3636,6 +3630,16 @@ void reapply_cursor_style(void) {
 
 	cursor_mgr = wlr_xcursor_manager_create(config.cursor_theme, cursor_size);
 
+	if (cursor_size > 0) {
+		char size_str[16];
+		snprintf(size_str, sizeof(size_str), "%d", cursor_size);
+		setenv("XCURSOR_SIZE", size_str, 1);
+	}
+
+	if (config.cursor_theme) {
+		setenv("XCURSOR_THEME", config.cursor_theme, 1);
+	}
+
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
 		wlr_xcursor_manager_load(cursor_mgr, m->wlr_output->scale);
@@ -3643,12 +3647,13 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source,
+									 cursor_hide_timeout * 1000);
 	}
 }
 
