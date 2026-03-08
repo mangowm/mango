@@ -1716,11 +1716,10 @@ int32_t toggleoverview(const Arg *arg) {
 
 int32_t disable_monitor(const Arg *arg) {
 	Monitor *m = NULL;
-	struct wlr_output_state state = {0};
 	wl_list_for_each(m, &mons, link) {
 		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, false);
-			wlr_output_commit_state(m->wlr_output, &state);
+			wlr_output_state_set_enabled(&m->pending, false);
+			monitor_state_commit(m);
 			m->asleep = 1;
 			updatemons(NULL, NULL);
 			break;
@@ -1731,11 +1730,10 @@ int32_t disable_monitor(const Arg *arg) {
 
 int32_t enable_monitor(const Arg *arg) {
 	Monitor *m = NULL;
-	struct wlr_output_state state = {0};
 	wl_list_for_each(m, &mons, link) {
 		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, true);
-			wlr_output_commit_state(m->wlr_output, &state);
+			wlr_output_state_set_enabled(&m->pending, true);
+			monitor_state_commit(m);
 			m->asleep = 0;
 			updatemons(NULL, NULL);
 			break;
@@ -1746,11 +1744,10 @@ int32_t enable_monitor(const Arg *arg) {
 
 int32_t toggle_monitor(const Arg *arg) {
 	Monitor *m = NULL;
-	struct wlr_output_state state = {0};
 	wl_list_for_each(m, &mons, link) {
 		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, !m->wlr_output->enabled);
-			wlr_output_commit_state(m->wlr_output, &state);
+			wlr_output_state_set_enabled(&m->pending, !m->wlr_output->enabled);
+			monitor_state_commit(m);
 			m->asleep = !m->wlr_output->enabled;
 			updatemons(NULL, NULL);
 			break;

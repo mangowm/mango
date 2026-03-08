@@ -806,6 +806,8 @@ static int32_t keep_idle_inhibit(void *data);
 static void check_keep_idle_inhibit(Client *c);
 static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 										bool from_view, bool only_caculate);
+static bool monitor_state_commit(Monitor *m);
+
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
 #include "layout/layout.h"
@@ -2290,6 +2292,8 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		wl_event_source_remove(m->skip_frame_timeout);
 		m->skip_frame_timeout = NULL;
 	}
+
+	wlr_output_state_finish(&m->pending);
 	m->wlr_output->data = NULL;
 	free(m->pertag);
 	free(m);
@@ -2920,6 +2924,17 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	return mode_set;
 }
 
+bool monitor_state_commit(Monitor *m) {
+	bool committed = wlr_output_commit_state(m->wlr_output, &m->pending);
+	if (committed) {
+		wlr_output_state_finish(&m->pending);
+		wlr_output_state_init(&m->pending);
+	} else {
+		wlr_log(WLR_ERROR, "Failed to commit frame");
+	}
+	return committed;
+}
+
 void createmon(struct wl_listener *listener, void *data) {
 	/* This event is raised by the backend when a new output (aka a display or
 	 * monitor) becomes available. */
@@ -2927,7 +2942,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	const ConfigMonitorRule *r;
 	uint32_t i;
 	int32_t ji, vrr, custom;
-	struct wlr_output_state state;
 	Monitor *m = NULL;
 	bool custom_monitor_mode = false;
 
@@ -2972,9 +2986,9 @@ void createmon(struct wl_listener *listener, void *data) {
 	float scale = 1;
 	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
 
-	wlr_output_state_init(&state);
-	wlr_output_state_set_scale(&state, scale);
-	wlr_output_state_set_transform(&state, rr);
+	wlr_output_state_init(&m->pending); // 初始化为0
+	wlr_output_state_set_scale(&m->pending, scale);
+	wlr_output_state_set_transform(&m->pending, rr);
 
 	for (ji = 0; ji < config.monitor_rules_count; ji++) {
 		if (config.monitor_rules_count < 1)
@@ -2990,7 +3004,7 @@ void createmon(struct wl_listener *listener, void *data) {
 			scale = r->scale;
 			rr = r->rr;
 
-			if (apply_rule_to_state(m, r, &state, vrr, custom)) {
+			if (apply_rule_to_state(m, r, &m->pending, vrr, custom)) {
 				custom_monitor_mode = true;
 			}
 			break; // 只应用第一个匹配规则
@@ -2998,7 +3012,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	}
 
 	if (!custom_monitor_mode)
-		wlr_output_state_set_mode(&state,
+		wlr_output_state_set_mode(&m->pending,
 								  wlr_output_preferred_mode(wlr_output));
 
 	/* Set up event listeners */
@@ -3007,9 +3021,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	LISTEN(&wlr_output->events.request_state, &m->request_state,
 		   requestmonstate);
 
-	wlr_output_state_set_enabled(&state, 1);
-	wlr_output_commit_state(wlr_output, &state);
-	wlr_output_state_finish(&state);
+	wlr_output_state_set_enabled(&m->pending, 1);
+	monitor_state_commit(m);
 
 	wl_list_insert(&mons, &m->link);
 	m->pertag = calloc(1, sizeof(Pertag));
@@ -4520,14 +4533,13 @@ void printstatus(void) { wl_signal_emit(&mango_print_status, NULL); }
 
 void powermgrsetmode(struct wl_listener *listener, void *data) {
 	struct wlr_output_power_v1_set_mode_event *event = data;
-	struct wlr_output_state state = {0};
 	Monitor *m = event->output->data;
 
 	if (!m)
 		return;
 
-	wlr_output_state_set_enabled(&state, event->mode);
-	wlr_output_commit_state(m->wlr_output, &state);
+	wlr_output_state_set_enabled(&m->pending, event->mode);
+	monitor_state_commit(m);
 
 	m->asleep = !event->mode;
 	updatemons(NULL, NULL);

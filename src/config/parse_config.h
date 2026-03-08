@@ -3580,13 +3580,10 @@ void reapply_monitor_rules(void) {
 	Monitor *m = NULL;
 	int32_t ji, vrr, custom;
 	int32_t mx, my;
-	struct wlr_output_state state;
 
 	wl_list_for_each(m, &mons, link) {
 		if (!m->wlr_output->enabled)
 			continue;
-
-		wlr_output_state_init(&state);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
@@ -3600,14 +3597,12 @@ void reapply_monitor_rules(void) {
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
 				custom = mr->custom >= 0 ? mr->custom : 0;
 
-				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
+				(void)apply_rule_to_state(m, mr, &m->pending, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
-				wlr_output_commit_state(m->wlr_output, &state);
+				monitor_state_commit(m);
 				break;
 			}
 		}
-
-		wlr_output_state_finish(&state);
 	}
 	updatemons(NULL, NULL);
 }
