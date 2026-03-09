@@ -110,7 +110,9 @@ int32_t exchange_client(const Arg *arg) {
 	if ((c->isfullscreen || c->ismaximizescreen) && !is_scroller_layout(c->mon))
 		return 0;
 
-	exchange_two_client(c, direction_select(arg));
+	Client *tc = direction_select(arg);
+	tc = get_focused_stack_client(tc);
+	exchange_two_client(c, tc);
 	return 0;
 }
 
@@ -1054,13 +1056,28 @@ int32_t switch_proportion_preset(const Arg *arg) {
 		for (int32_t i = 0; i < config.scroller_proportion_preset_count; i++) {
 			if (config.scroller_proportion_preset[i] ==
 				tc->scroller_proportion) {
-				if (i == config.scroller_proportion_preset_count - 1) {
-					target_proportion = config.scroller_proportion_preset[0];
-					break;
+
+				if (arg->i == NEXT) {
+					if (i == config.scroller_proportion_preset_count - 1) {
+						target_proportion =
+							config.scroller_proportion_preset[0];
+						break;
+					} else {
+						target_proportion =
+							config.scroller_proportion_preset[i + 1];
+						break;
+					}
 				} else {
-					target_proportion =
-						config.scroller_proportion_preset[i + 1];
-					break;
+					if (i == 0) {
+						target_proportion =
+							config.scroller_proportion_preset
+								[config.scroller_proportion_preset_count - 1];
+						break;
+					} else {
+						target_proportion =
+							config.scroller_proportion_preset[i - 1];
+						break;
+					}
 				}
 			}
 		}
@@ -1419,6 +1436,7 @@ int32_t toggleview(const Arg *arg) {
 
 	uint32_t newtagset;
 	uint32_t target;
+	Client *c = NULL;
 
 	target = arg->ui == 0 ? ~0 & TAGMASK : arg->ui;
 
@@ -1427,6 +1445,11 @@ int32_t toggleview(const Arg *arg) {
 	if (newtagset) {
 		selmon->tagset[selmon->seltags] = newtagset;
 		focusclient(focustop(selmon), 1);
+		wl_list_for_each(c, &clients, link) {
+			if (VISIBLEON(c, selmon) && ISTILED(c)) {
+				set_size_per(selmon, c);
+			}
+		}
 		arrange(selmon, false, false);
 	}
 	printstatus();
@@ -1751,28 +1774,19 @@ int32_t scroller_stack(const Arg *arg) {
 	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
 		return 0;
 
-	if (c && (!client_only_in_one_tag(c) || c->isglobal || c->isunglobal))
-		return 0;
-
 	bool is_horizontal_layout =
 		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == SCROLLER ? true
 																	   : false;
 
 	Client *target_client = find_client_by_direction(c, arg, false, true);
 
-	if (target_client && (!client_only_in_one_tag(target_client) ||
-						  target_client->isglobal || target_client->isunglobal))
-		return 0;
-
 	if (target_client) {
 		stack_head = get_scroll_stack_head(target_client);
 	}
 
-	if (c) {
-		source_stack_head = get_scroll_stack_head(c);
-	}
+	source_stack_head = get_scroll_stack_head(c);
 
-	if (stack_head == source_stack_head) {
+	if (source_stack_head == stack_head) {
 		return 0;
 	}
 
@@ -1820,6 +1834,10 @@ int32_t scroller_stack(const Arg *arg) {
 
 	if (!target_client || target_client->mon != c->mon) {
 		return 0;
+	} else {
+		c->isglobal = target_client->isglobal = 0;
+		c->isunglobal = target_client->isglobal = 0;
+		c->tags = target_client->tags = get_tags_first_tag(target_client->tags);
 	}
 
 	exit_scroller_stack(c);
