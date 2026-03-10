@@ -8,9 +8,16 @@
 #define SYSCONFDIR "/etc"
 #endif
 
+static bool config_initialized = false;
+
 // Clamps value in range while preserving numeric type
 #define CLAMP(x, min, max)                                                     \
-	((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+	({                                                                         \
+		__typeof__(x) _x = (x);                                                \
+		__typeof__(min) _min = (min);                                          \
+		__typeof__(max) _max = (max);                                          \
+		_x < _min ? _min : (_x > _max ? _max : _x);                            \
+	})
 
 // 整数版本 - 截断小数部分
 // Deprecated: use CLAMP or CLAMP with explicit casts instead
@@ -1590,8 +1597,16 @@ bool parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "default_nmaster") == 0) {
 		config->default_nmaster = atoi(value);
 	} else if (strcmp(key, "tag_count") == 0) {
-		config->tag_count = CLAMP(atoi(value), 1, 32);
-		tag_count = config->tag_count;
+		uint32_t requested = CLAMP(atoi(value), 1, 32);
+		config->tag_count = requested;
+		if (!config_initialized) {
+			tag_count = requested;
+		} else if (tag_count != requested) {
+			wlr_log(WLR_INFO,
+					"tag_count change requires restart (current: %u, "
+					"requested: %u)",
+					tag_count, requested);
+		}
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
@@ -3555,6 +3570,7 @@ bool parse_config(void) {
 	parse_correct = parse_config_file(&config, filename, true);
 	set_default_key_bindings(&config);
 	override_config();
+	config_initialized = true;
 	return parse_correct;
 }
 

@@ -88,10 +88,14 @@ static void noop_description(void *data, struct wl_output *wl_output,
 // Convert num to an N-bit binary string, store result in buf (minimum length
 // nbits+1)
 void bin_str_nbits(char *buf, uint32_t num, uint32_t nbits) {
+	if (nbits == 0) {
+		*buf = '\0';
+		return;
+	}
 	for (int32_t i = nbits - 1; i >= 0; i--) {
 		*buf++ = ((num >> i) & 1) ? '1' : '0';
 	}
-	*buf = '\0'; // 字符串结尾
+	*buf = '\0';
 }
 
 static void dwl_ipc_tags(void *data,

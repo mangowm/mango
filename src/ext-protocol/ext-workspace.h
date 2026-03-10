@@ -1,5 +1,4 @@
 #include "wlr_ext_workspace_v1.h"
-#include <assert.h>
 
 #define WORKSPACE_NAME_MAX_SIZE 12
 
@@ -74,7 +73,8 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 
 static void get_name_from_tag_number(char *dst_buf, size_t dst_len,
 									 uint32_t tag_number) {
-	assert(tag_number <= tag_count);
+	if (tag_number > tag_count)
+		die("tag_number %u exceeds tag_count %u", tag_number, tag_count);
 	if (tag_number == 0)
 		snprintf(dst_buf, dst_len, "overview");
 	else

@@ -3032,6 +3032,8 @@ void createmon(struct wl_listener *listener, void *data) {
 
 	wl_list_insert(&mons, &m->link);
 	m->pertag = calloc(1, sizeof(Pertag));
+	if (!m->pertag)
+		die("pertag calloc failed");
 	m->pertag->nmasters = calloc(tag_count + 1, sizeof(int32_t));
 	m->pertag->mfacts = calloc(tag_count + 1, sizeof(float));
 	m->pertag->no_hide = calloc(tag_count + 1, sizeof(bool));
@@ -3039,7 +3041,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->pertag->ltidxs = calloc(tag_count + 1, sizeof(const Layout *));
 	if (!m->pertag->nmasters || !m->pertag->mfacts || !m->pertag->no_hide ||
 		!m->pertag->no_render_border || !m->pertag->ltidxs)
-		die("pertag calloc failed");
+		die("pertag member calloc failed");
 	if (chvt_backup_tag &&
 		regex_match(chvt_backup_selmon, m->wlr_output->name)) {
 		m->tagset[0] = m->tagset[1] = (1 << (chvt_backup_tag - 1)) & TAGMASK;
