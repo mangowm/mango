@@ -8,15 +8,19 @@
 #define SYSCONFDIR "/etc"
 #endif
 
+// Clamps value in range while preserving numeric type
+#define CLAMP(x, min, max)                                                     \
+	((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+
 // 整数版本 - 截断小数部分
+// Deprecated: use CLAMP or CLAMP with explicit casts instead
 #define CLAMP_INT(x, min, max)                                                 \
-	((int32_t)(x) < (int32_t)(min)                                             \
-		 ? (int32_t)(min)                                                      \
-		 : ((int32_t)(x) > (int32_t)(max) ? (int32_t)(max) : (int32_t)(x)))
+	CLAMP((int32_t)(x), (int32_t)(min), (int32_t)(max))
 
 // 浮点数版本 - 保留小数部分
+// Deprecated: use CLAMP instead
 #define CLAMP_FLOAT(x, min, max)                                               \
-	((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+	CLAMP(x, min, max)
 
 enum { NUM_TYPE_MINUS, NUM_TYPE_PLUS, NUM_TYPE_DEFAULT };
 
@@ -159,7 +163,7 @@ typedef struct {
 } GestureBinding;
 
 typedef struct {
-	int32_t id;
+	uint32_t id;
 	char *layout_name;
 	char *monitor_name;
 	char *monitor_make;
@@ -314,7 +318,7 @@ typedef struct {
 
 	char autostart[3][256];
 
-	int32_t tag_count;
+	uint32_t tag_count;
 	ConfigTagRule *tag_rules; // 动态数组
 	int32_t tag_rules_count;  // 数量
 
@@ -1586,7 +1590,7 @@ bool parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "default_nmaster") == 0) {
 		config->default_nmaster = atoi(value);
 	} else if (strcmp(key, "tag_count") == 0) {
-		config->tag_count = CLAMP_INT(atoi(value), 1, 32);
+		config->tag_count = CLAMP(atoi(value), 1, 32);
 		tag_count = config->tag_count;
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
@@ -3707,7 +3711,7 @@ void reapply_pointer(void) {
 
 void reapply_master(void) {
 
-	int32_t i;
+	uint32_t i;
 	Monitor *m = NULL;
 	for (i = 0; i <= tag_count; i++) {
 		wl_list_for_each(m, &mons, link) {
@@ -3725,7 +3729,7 @@ void reapply_master(void) {
 }
 
 void parse_tagrule(Monitor *m) {
-	int32_t i, jk;
+	uint32_t i, jk;
 	ConfigTagRule tr;
 	Client *c = NULL;
 	bool match_rule = false;

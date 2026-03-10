@@ -74,7 +74,7 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 
 static void get_name_from_tag_number(char *dst_buf, size_t dst_len,
 									 uint32_t tag_number) {
-	assert(tag_number <= (uint32_t)tag_count);
+	assert(tag_number <= tag_count);
 	if (tag_number == 0)
 		snprintf(dst_buf, dst_len, "overview");
 	else
@@ -169,7 +169,7 @@ void dwl_ext_workspace_printstatus(Monitor *m) {
 }
 
 void refresh_monitors_workspaces_status(Monitor *m) {
-	int32_t i;
+	uint32_t i;
 
 	if (m->isoverview) {
 		for (i = 1; i <= tag_count; i++) {

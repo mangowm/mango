@@ -112,15 +112,15 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	Client *c = NULL, *focused = NULL;
 	struct wlr_keyboard *keyboard;
 	xkb_layout_index_t current;
-	int32_t tagmask, state, numclients, focused_client, tag;
+	uint32_t tagmask, state, numclients, focused_client, tag_idx;
 	const char *title, *appid, *symbol;
 	char kb_layout[32];
 	focused = focustop(monitor);
 	zdwl_ipc_output_v2_send_active(ipc_output->resource, monitor == selmon);
 
-	for (tag = 0; tag < tag_count; tag++) {
+	for (tag_idx = 0; tag_idx < tag_count; tag_idx++) {
 		numclients = state = focused_client = 0;
-		tagmask = 1 << tag;
+		tagmask = 1 << tag_idx;
 		if ((tagmask & monitor->tagset[monitor->seltags]) != 0)
 			state |= ZDWL_IPC_OUTPUT_V2_TAG_STATE_ACTIVE;
 		wl_list_for_each(c, &clients, link) {
@@ -134,7 +134,7 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 				state |= ZDWL_IPC_OUTPUT_V2_TAG_STATE_URGENT;
 			numclients++;
 		}
-		zdwl_ipc_output_v2_send_tag(ipc_output->resource, tag, state,
+		zdwl_ipc_output_v2_send_tag(ipc_output->resource, tag_idx, state,
 									numclients, focused_client);
 	}
 

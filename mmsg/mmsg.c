@@ -46,7 +46,7 @@ static int32_t Aflag;
 static uint32_t occ, seltags, total_clients, urg;
 
 static char *output_name;
-static int32_t tagcount;
+static uint32_t tag_count;
 static char *tagset;
 static char *layout_name;
 static int32_t layoutcount, layout_idx;
@@ -85,10 +85,11 @@ static void noop_scale(void *data, struct wl_output *wl_output,
 static void noop_description(void *data, struct wl_output *wl_output,
 							 const char *description) {}
 
-// Convert n to an N-bit binary string, store result in buf (minimum length bits+1)
-void bin_str_nbits(char *buf, uint32_t n, int32_t bits) {
-	for (int32_t i = bits - 1; i >= 0; i--) {
-		*buf++ = ((n >> i) & 1) ? '1' : '0';
+// Convert num to an N-bit binary string, store result in buf (minimum length
+// nbits+1)
+void bin_str_nbits(char *buf, uint32_t num, uint32_t nbits) {
+	for (int32_t i = nbits - 1; i >= 0; i--) {
+		*buf++ = ((num >> i) & 1) ? '1' : '0';
 	}
 	*buf = '\0'; // 字符串结尾
 }
@@ -96,9 +97,9 @@ void bin_str_nbits(char *buf, uint32_t n, int32_t bits) {
 static void dwl_ipc_tags(void *data,
 						 struct zdwl_ipc_manager_v2 *dwl_ipc_manager,
 						 uint32_t count) {
-	tagcount = count;
+	tag_count = count;
 	if (Tflag && mode & GET)
-		printf("%d\n", tagcount);
+		printf("%u\n", tag_count);
 }
 
 static void dwl_ipc_layout(void *data,
@@ -324,7 +325,7 @@ static void dwl_ipc_output_frame(void *data,
 		if (tflag) {
 			uint32_t mask = seltags;
 			char *t = tagset;
-			int32_t i = 0;
+			uint32_t i = 0;
 
 			for (; *t && *t >= '0' && *t <= '9'; t++)
 				i = *t - '0' + i * 10;
@@ -346,7 +347,7 @@ static void dwl_ipc_output_frame(void *data,
 				}
 			}
 
-			if ((i - 1) > tagcount)
+			if ((i - 1) > tag_count)
 				die("bad tagset %s", tagset);
 
 			zdwl_ipc_output_v2_set_tags(dwl_ipc_output, mask, 0);
@@ -354,7 +355,7 @@ static void dwl_ipc_output_frame(void *data,
 		if (cflag) {
 			uint32_t and = ~0, xor = 0;
 			char *t = client_tags;
-			int32_t i = 0;
+			uint32_t i = 0;
 
 			for (; *t && *t >= '0' && *t <= '9'; t++)
 				i = *t - '0' + i * 10;
@@ -376,7 +377,7 @@ static void dwl_ipc_output_frame(void *data,
 					break;
 				}
 			}
-			if ((i - 1) > tagcount)
+			if ((i - 1) > tag_count)
 				die("bad client tagset %s", client_tags);
 
 			zdwl_ipc_output_v2_set_client_tags(dwl_ipc_output, and, xor);
@@ -395,11 +396,11 @@ static void dwl_ipc_output_frame(void *data,
 
 			printf("%s clients %u\n", output_name, total_clients);
 
-			char occ_str[tagcount + 1], seltags_str[tagcount + 1], urg_str[tagcount + 1];
+			char occ_str[tag_count + 1], seltags_str[tag_count + 1], urg_str[tag_count + 1];
 
-			bin_str_nbits(occ_str, occ, tagcount);
-			bin_str_nbits(seltags_str, seltags, tagcount);
-			bin_str_nbits(urg_str, urg, tagcount);
+			bin_str_nbits(occ_str, occ, tag_count);
+			bin_str_nbits(seltags_str, seltags, tag_count);
+			bin_str_nbits(urg_str, urg, tag_count);
 			printf("%s tags %u %u %u\n", output_name, occ, seltags, urg);
 			printf("%s tags %s %s %s\n", output_name, occ_str, seltags_str,
 				   urg_str);
