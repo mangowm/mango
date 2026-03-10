@@ -313,6 +313,7 @@ typedef struct {
 
 	char autostart[3][256];
 
+	int32_t tag_count;
 	ConfigTagRule *tag_rules; // 动态数组
 	int32_t tag_rules_count;  // 数量
 
@@ -358,8 +359,6 @@ typedef struct {
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
-
-	int32_t tag_count;
 
 	struct xkb_rule_names xkb_rules;
 
