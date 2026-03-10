@@ -5456,7 +5456,6 @@ void setup(void) {
 	setenv("XDG_CURRENT_DESKTOP", "mango", 1);
 
 	parse_config();
-	tag_count = config.tag_count;
 	init_baked_points();
 
 	int32_t drm_fd, i, sig[] = {SIGCHLD, SIGINT, SIGTERM, SIGPIPE};

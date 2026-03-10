@@ -74,7 +74,7 @@ static const char *get_name_from_tag(uint32_t tag, char *buf, size_t len) {
 		return "overview";
 	if (tag > (uint32_t)tag_count)
 		return NULL;
-	snprintf(buf, len, "%u", tag);
+	snprintf(buf, len, "%u", CLAMP_INT(tag, 1, 32));
 	return buf;
 }
 

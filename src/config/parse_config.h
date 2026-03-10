@@ -1577,6 +1577,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->default_nmaster = atoi(value);
 	} else if (strcmp(key, "tag_count") == 0) {
 		config->tag_count = CLAMP_INT(atoi(value), 1, 32);
+		tag_count = config->tag_count;
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
@@ -3494,6 +3495,7 @@ bool parse_config(void) {
 	config.scroller_proportion_preset_count = 0;
 	config.circle_layout = NULL;
 	config.circle_layout_count = 0;
+	config.tag_count = 9;
 	config.tag_rules = NULL;
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
