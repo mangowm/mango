@@ -1,4 +1,7 @@
 #include "wlr_ext_workspace_v1.h"
+#include <assert.h>
+
+#define WORKSPACE_NAME_MAX_SIZE 12
 
 #define EXT_WORKSPACE_ENABLE_CAPS                                              \
 	EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE |                  \
@@ -8,8 +11,8 @@ typedef struct Monitor Monitor;
 
 struct workspace {
 	struct wl_list link; // Link in global workspaces list
-	uint32_t tag;		 // Numeric identifier (1-9, 0=overview)
-	Monitor *m;			 // Associated monitor
+	uint32_t tag;        // Identifier (tag number) in [0=overview, tag_count]
+	Monitor *m;          // Associated monitor
 	struct wlr_ext_workspace_handle_v1 *ext_workspace; // Protocol object
 	/* Event listeners */
 	struct wl_listener activate;
@@ -22,24 +25,24 @@ struct wlr_ext_workspace_manager_v1 *ext_manager;
 struct wl_list workspaces;
 
 void goto_workspace(struct workspace *target) {
-	uint32_t tag;
-	tag = 1 << (target->tag - 1);
+	uint32_t tag_bit;
+	tag_bit = 1 << (target->tag - 1);
 	if (target->tag == 0) {
 		toggleoverview(&(Arg){.i = -1});
 		return;
 	} else {
-		view(&(Arg){.ui = tag}, true);
+		view(&(Arg){.ui = tag_bit}, true);
 	}
 }
 
 void toggle_workspace(struct workspace *target) {
-	uint32_t tag;
-	tag = 1 << (target->tag - 1);
+	uint32_t tag_bit;
+	tag_bit = 1 << (target->tag - 1);
 	if (target->tag == 0) {
 		toggleview(&(Arg){.i = -1});
 		return;
 	} else {
-		toggleview(&(Arg){.ui = tag});
+		toggleview(&(Arg){.ui = tag_bit});
 	}
 }
 
@@ -69,13 +72,13 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 	wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
 }
 
-static const char *get_name_from_tag(uint32_t tag, char *buf, size_t len) {
-	if (tag == 0)
-		return "overview";
-	if (tag > (uint32_t)tag_count)
-		return NULL;
-	snprintf(buf, len, "%u", CLAMP_INT(tag, 1, 32));
-	return buf;
+static void get_name_from_tag_number(char *dst_buf, size_t dst_len,
+									 uint32_t tag_number) {
+	assert(tag_number <= (uint32_t)tag_count);
+	if (tag_number == 0)
+		snprintf(dst_buf, dst_len, "overview");
+	else
+		snprintf(dst_buf, dst_len, "%u", tag_number);
 }
 
 void destroy_workspace(struct workspace *workspace) {
@@ -105,9 +108,9 @@ static void remove_workspace_by_tag(uint32_t tag, Monitor *m) {
 	}
 }
 
-static void add_workspace_by_tag(int32_t tag, Monitor *m) {
-	char name_buf[4];
-	const char *name = get_name_from_tag(tag, name_buf, sizeof(name_buf));
+static void add_workspace_by_tag(uint32_t tag, Monitor *m) {
+	char name[WORKSPACE_NAME_MAX_SIZE];
+	get_name_from_tag_number(name, sizeof(name), tag);
 
 	struct workspace *workspace = ecalloc(1, sizeof(*workspace));
 	wl_list_append(&workspaces, &workspace->link);
