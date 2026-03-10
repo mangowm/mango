@@ -8,15 +8,26 @@
 #define SYSCONFDIR "/etc"
 #endif
 
+static bool config_initialized = false;
+
+// Clamps value in range while preserving numeric type
+#define CLAMP(x, min, max)                                                     \
+	({                                                                         \
+		__typeof__(x) _x = (x);                                                \
+		__typeof__(min) _min = (min);                                          \
+		__typeof__(max) _max = (max);                                          \
+		_x < _min ? _min : (_x > _max ? _max : _x);                            \
+	})
+
 // 整数版本 - 截断小数部分
+// Deprecated: use CLAMP or CLAMP with explicit casts instead
 #define CLAMP_INT(x, min, max)                                                 \
-	((int32_t)(x) < (int32_t)(min)                                             \
-		 ? (int32_t)(min)                                                      \
-		 : ((int32_t)(x) > (int32_t)(max) ? (int32_t)(max) : (int32_t)(x)))
+	CLAMP((int32_t)(x), (int32_t)(min), (int32_t)(max))
 
 // 浮点数版本 - 保留小数部分
+// Deprecated: use CLAMP instead
 #define CLAMP_FLOAT(x, min, max)                                               \
-	((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+	CLAMP(x, min, max)
 
 enum { NUM_TYPE_MINUS, NUM_TYPE_PLUS, NUM_TYPE_DEFAULT };
 
@@ -159,7 +170,7 @@ typedef struct {
 } GestureBinding;
 
 typedef struct {
-	int32_t id;
+	uint32_t id;
 	char *layout_name;
 	char *monitor_name;
 	char *monitor_make;
@@ -314,6 +325,7 @@ typedef struct {
 
 	char autostart[3][256];
 
+	uint32_t tag_count;
 	ConfigTagRule *tag_rules; // 动态数组
 	int32_t tag_rules_count;  // 数量
 
@@ -1118,7 +1130,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 
 			while (token != NULL) {
 				int32_t num = atoi(token);
-				if (num > 0 && num <= LENGTH(tags)) {
+				if (num > 0 && num <= tag_count) {
 					mask |= (1 << (num - 1));
 				}
 				token = strtok_r(NULL, "|", &saveptr);
@@ -1584,6 +1596,17 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->default_mfact = atof(value);
 	} else if (strcmp(key, "default_nmaster") == 0) {
 		config->default_nmaster = atoi(value);
+	} else if (strcmp(key, "tag_count") == 0) {
+		uint32_t requested = CLAMP(atoi(value), 1, 32);
+		config->tag_count = requested;
+		if (!config_initialized) {
+			tag_count = requested;
+		} else if (tag_count != requested) {
+			wlr_log(WLR_INFO,
+					"tag_count change requires restart (current: %u, "
+					"requested: %u)",
+					tag_count, requested);
+		}
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
@@ -1907,7 +1930,7 @@ bool parse_option(Config *config, char *key, char *value) {
 				trim_whitespace(val);
 
 				if (strcmp(key, "id") == 0) {
-					rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
+					rule->id = CLAMP_INT(atoi(val), 0, tag_count);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -3309,6 +3332,7 @@ void set_value_default() {
 	config.new_is_master = new_is_master; // 新窗口是否插在头部
 	config.default_mfact = default_mfact; // master 窗口比例
 	config.default_nmaster = default_nmaster; // 默认master数量
+	config.tag_count = tag_count;
 	config.center_master_overspread =
 		center_master_overspread; // 中心master时是否铺满
 	config.center_when_single_stack =
@@ -3512,6 +3536,7 @@ bool parse_config(void) {
 	config.scroller_proportion_preset_count = 0;
 	config.circle_layout = NULL;
 	config.circle_layout_count = 0;
+	config.tag_count = 9;
 	config.tag_rules = NULL;
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
@@ -3545,6 +3570,7 @@ bool parse_config(void) {
 	parse_correct = parse_config_file(&config, filename, true);
 	set_default_key_bindings(&config);
 	override_config();
+	config_initialized = true;
 	return parse_correct;
 }
 
@@ -3701,9 +3727,9 @@ void reapply_pointer(void) {
 
 void reapply_master(void) {
 
-	int32_t i;
+	uint32_t i;
 	Monitor *m = NULL;
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= tag_count; i++) {
 		wl_list_for_each(m, &mons, link) {
 			if (!m->wlr_output->enabled) {
 				continue;
@@ -3719,12 +3745,12 @@ void reapply_master(void) {
 }
 
 void parse_tagrule(Monitor *m) {
-	int32_t i, jk;
+	uint32_t i, jk;
 	ConfigTagRule tr;
 	Client *c = NULL;
 	bool match_rule = false;
 
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= tag_count; i++) {
 		m->pertag->nmasters[i] = default_nmaster;
 		m->pertag->mfacts[i] = default_mfact;
 	}
@@ -3782,7 +3808,7 @@ void parse_tagrule(Monitor *m) {
 		}
 	}
 
-	for (i = 1; i <= LENGTH(tags); i++) {
+	for (i = 1; i <= tag_count; i++) {
 		wl_list_for_each(c, &clients, link) {
 			if ((c->tags & (1 << (i - 1)) & TAGMASK) && ISTILED(c)) {
 				if (m->pertag->mfacts[i] > 0.0f)
