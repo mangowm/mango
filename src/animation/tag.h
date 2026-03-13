@@ -7,11 +7,11 @@ void set_tagin_animation(Monitor *m, Client *c) {
 
 	if (m->pertag->curtag > m->pertag->prevtag) {
 
-		c->animainit_geom.x = tag_animation_direction == VERTICAL
+		c->animainit_geom.x = config.tag_animation_direction == VERTICAL
 								  ? c->animation.current.x
 								  : MAX(c->mon->m.x + c->mon->m.width,
 										c->geom.x + c->mon->m.width);
-		c->animainit_geom.y = tag_animation_direction == VERTICAL
+		c->animainit_geom.y = config.tag_animation_direction == VERTICAL
 								  ? MAX(c->mon->m.y + c->mon->m.height,
 										c->geom.y + c->mon->m.height)
 								  : c->animation.current.y;
@@ -19,11 +19,11 @@ void set_tagin_animation(Monitor *m, Client *c) {
 	} else {
 
 		c->animainit_geom.x =
-			tag_animation_direction == VERTICAL
+			config.tag_animation_direction == VERTICAL
 				? c->animation.current.x
 				: MIN(m->m.x - c->geom.width, c->geom.x - c->mon->m.width);
 		c->animainit_geom.y =
-			tag_animation_direction == VERTICAL
+			config.tag_animation_direction == VERTICAL
 				? MIN(m->m.y - c->geom.height, c->geom.y - c->mon->m.height)
 				: c->animation.current.y;
 	}
@@ -39,7 +39,8 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 	client_set_suspended(c, false);
 
 	if (!c->animation.tag_from_rule && want_animation &&
-		m->pertag->prevtag != 0 && m->pertag->curtag != 0 && animations) {
+		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
+		config.animations) {
 		c->animation.tagining = true;
 		set_tagin_animation(m, c);
 	} else {
@@ -57,10 +58,10 @@ void set_tagout_animation(Monitor *m, Client *c) {
 	if (m->pertag->curtag > m->pertag->prevtag) {
 		c->pending = c->geom;
 		c->pending.x =
-			tag_animation_direction == VERTICAL
+			config.tag_animation_direction == VERTICAL
 				? c->animation.current.x
 				: MIN(c->mon->m.x - c->geom.width, c->geom.x - c->mon->m.width);
-		c->pending.y = tag_animation_direction == VERTICAL
+		c->pending.y = config.tag_animation_direction == VERTICAL
 						   ? MIN(c->mon->m.y - c->geom.height,
 								 c->geom.y - c->mon->m.height)
 						   : c->animation.current.y;
@@ -68,11 +69,11 @@ void set_tagout_animation(Monitor *m, Client *c) {
 		resize(c, c->geom, 0);
 	} else {
 		c->pending = c->geom;
-		c->pending.x = tag_animation_direction == VERTICAL
+		c->pending.x = config.tag_animation_direction == VERTICAL
 						   ? c->animation.current.x
 						   : MAX(c->mon->m.x + c->mon->m.width,
 								 c->geom.x + c->mon->m.width);
-		c->pending.y = tag_animation_direction == VERTICAL
+		c->pending.y = config.tag_animation_direction == VERTICAL
 						   ? MAX(c->mon->m.y + c->mon->m.height,
 								 c->geom.y + c->mon->m.height)
 						   : c->animation.current.y;
@@ -82,7 +83,8 @@ void set_tagout_animation(Monitor *m, Client *c) {
 
 void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 	if ((c->tags & (1 << (m->pertag->prevtag - 1))) &&
-		m->pertag->prevtag != 0 && m->pertag->curtag != 0 && animations) {
+		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
+		config.animations) {
 		c->animation.tagouting = true;
 		c->animation.tagining = false;
 		set_tagout_animation(m, c);

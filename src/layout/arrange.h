@@ -309,7 +309,7 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -478,7 +478,7 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -494,7 +494,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 	Client *stack_head = get_scroll_stack_head(grabc);
 
 	if (grabc && grabc->mon->visible_tiling_clients == 1 &&
-		!scroller_ignore_proportion_single)
+		!config.scroller_ignore_proportion_single)
 		return;
 
 	if (!start_drag_window && isdrag) {
@@ -670,7 +670,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
