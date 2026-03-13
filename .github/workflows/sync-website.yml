@@ -38,5 +38,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apps/web/content/docs
-          git diff --staged --quiet || git commit -m "sync from mango @ ${{ github.sha }}"
+          git diff --staged --quiet || git commit \
+            -m "docs: content update from mangowm/mango" \
+            -m "${{ github.event.head_commit.message }}\nSource: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           git push
