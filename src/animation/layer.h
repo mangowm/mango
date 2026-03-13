@@ -328,7 +328,7 @@ void layer_animation_next_tick(LayerSurface *l) {
 			1.0f);
 
 	if (config.animation_fade_in) {
-		if (blur && !l->noblur && !config.blur_optimized) {
+		if (config.blur && !l->noblur && !config.blur_optimized) {
 			wlr_scene_blur_set_strength(l->blur, opacity);
 			wlr_scene_blur_set_alpha(l->blur, opacity);
 		}
@@ -362,7 +362,7 @@ void layer_animation_next_tick(LayerSurface *l) {
 		.height = height,
 	};
 
-	if (blur && blur_layer && !l->noblur && l->blur)
+	if (config.blur && config.blur_layer && !l->noblur && l->blur)
 		wlr_scene_blur_set_size(l->blur, l->animation.current.width,
 								l->animation.current.height);
 

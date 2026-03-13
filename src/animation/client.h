@@ -251,7 +251,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 		data.corner_location = corner_radii_none();
 	}
 
-	if (blur && !c->noblur) {
+	if (config.blur && !c->noblur) {
 		wlr_scene_blur_set_corner_radii(c->blur, data.corner_location);
 	}
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
@@ -355,7 +355,7 @@ void client_draw_shadow(Client *c) {
 }
 
 void client_draw_blur(Client *c, struct wlr_box clip_box, struct ivec2 offset) {
-	if (blur && !c->noblur) {
+	if (config.blur && !c->noblur && c->blur) {
 		wlr_scene_node_set_position(&c->blur->node, offset.x, offset.y);
 		wlr_scene_blur_set_size(c->blur, clip_box.width - c->bw,
 								clip_box.height - c->bw);
@@ -1016,7 +1016,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		apply_border(c);
 		client_get_clip(c, &clip);
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
-		if (blur && !c->noblur)
+		if (config.blur && !c->noblur)
 			wlr_scene_blur_set_size(c->blur,
 									c->animation.current.width - 2 * c->bw,
 									c->animation.current.height - 2 * c->bw);
@@ -1139,14 +1139,14 @@ bool client_apply_focus_opacity(Client *c) {
 			   sizeof(c->opacity_animation.current_border_color));
 		c->opacity_animation.current_opacity = target_opacity;
 		client_set_opacity(c, target_opacity);
-		if (blur && !c->noblur && !blur_optimized) {
+		if (config.blur && !c->noblur && !config.blur_optimized) {
 			wlr_scene_blur_set_strength(
-				c->blur, MIN(percent * (1.0 - fadein_begin_opacity) +
-								 fadein_begin_opacity,
+				c->blur, MIN(percent * (1.0 - config.fadein_begin_opacity) +
+								 config.fadein_begin_opacity,
 							 1.0));
 			wlr_scene_blur_set_alpha(
-				c->blur, MIN(percent * (1.0 - fadein_begin_opacity) +
-								 fadein_begin_opacity,
+				c->blur, MIN(percent * (1.0 - config.fadein_begin_opacity) +
+								 config.fadein_begin_opacity,
 							 1.0));
 		}
 		client_set_border_color(c, c->opacity_animation.target_border_color);

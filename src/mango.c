@@ -2361,19 +2361,6 @@ static void iter_layer_scene_buffers(struct wlr_scene_buffer *buffer,
 }
 
 void layer_flush_blur_background(LayerSurface *l) {
-	if (!blur)
-		return;
-
-	// 如果背景层发生变化,标记优化的模糊背景缓存需要更新
-	if (l->layer_surface->current.layer ==
-		ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
-		if (l->mon) {
-			wlr_scene_optimized_blur_mark_dirty(l->mon->blur);
-		}
-	}
-}
-
-void layer_flush_blur_background(LayerSurface *l) {
 	if (!config.blur)
 		return;
 
@@ -2430,7 +2417,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	if (layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 		layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
 		if (layer_surface->current.exclusive_zone == 0) {
-			l->shadow = wlr_scene_shadow_create(l->scene, 0, 0, border_radius,
+			l->shadow = wlr_scene_shadow_create(l->scene, 0, 0, config.border_radius,
 												config.shadows_blur, config.shadowscolor);
 			wlr_scene_node_lower_to_bottom(&l->shadow->node);
 			wlr_scene_node_set_enabled(&l->shadow->node, true);
