@@ -2,21 +2,21 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 	struct dvec2 point;
 	double *animation_curve;
 	if (type == MOVE) {
-		animation_curve = animation_curve_move;
+		animation_curve = config.animation_curve_move;
 	} else if (type == OPEN) {
-		animation_curve = animation_curve_open;
+		animation_curve = config.animation_curve_open;
 	} else if (type == TAG) {
-		animation_curve = animation_curve_tag;
+		animation_curve = config.animation_curve_tag;
 	} else if (type == CLOSE) {
-		animation_curve = animation_curve_close;
+		animation_curve = config.animation_curve_close;
 	} else if (type == FOCUS) {
-		animation_curve = animation_curve_focus;
+		animation_curve = config.animation_curve_focus;
 	} else if (type == OPAFADEIN) {
-		animation_curve = animation_curve_opafadein;
+		animation_curve = config.animation_curve_opafadein;
 	} else if (type == OPAFADEOUT) {
-		animation_curve = animation_curve_opafadeout;
+		animation_curve = config.animation_curve_opafadeout;
 	} else {
-		animation_curve = animation_curve_move;
+		animation_curve = config.animation_curve_move;
 	}
 
 	point.x = 3 * t * (1 - t) * (1 - t) * animation_curve[0] +
