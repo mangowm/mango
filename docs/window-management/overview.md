@@ -27,10 +27,3 @@ When in overview mode:
 
 - **Left mouse button** — Jump to (focus) a window.
 - **Right mouse button** — Close a window.
-
-To enable this behavior, add the following mouse bindings to your config:
-
-```ini
-mousebind=NONE,btn_left,toggleoverview,1
-mousebind=NONE,btn_right,killclient,0
-```

@@ -48,7 +48,7 @@ source-optional=~/.config/mango/optional.conf
 You can check your configuration for errors without starting mangowm:
 
 ```bash
-mango -p /path/to/config.conf
+mango -c /path/to/config.conf -p
 ```
 
 Use with `source-optional` for shared configs across different setups.
