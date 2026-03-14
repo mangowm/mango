@@ -975,8 +975,8 @@ int32_t switch_keyboard_layout(const Arg *arg) {
 	return 0;
 }
 
-int32_t switch_layout(const Arg *arg) {
-
+// Internal helper: direction > 0 means next, direction < 0 means previous
+static int32_t _switch_layout_dir(int direction) {
 	int32_t jk, ji;
 	char *target_layout_name = NULL;
 	uint32_t len;
@@ -986,7 +986,6 @@ int32_t switch_layout(const Arg *arg) {
 
 	if (config.circle_layout_count != 0) {
 		for (jk = 0; jk < config.circle_layout_count; jk++) {
-
 			len = MAX(
 				strlen(config.circle_layout[jk]),
 				strlen(selmon->pertag->ltidxs[selmon->pertag->curtag]->name));
@@ -994,9 +993,19 @@ int32_t switch_layout(const Arg *arg) {
 			if (strncmp(config.circle_layout[jk],
 						selmon->pertag->ltidxs[selmon->pertag->curtag]->name,
 						len) == 0) {
-				target_layout_name = jk == config.circle_layout_count - 1
-										 ? config.circle_layout[0]
-										 : config.circle_layout[jk + 1];
+				if (direction > 0) {
+					// next: wrap forward
+					target_layout_name = (jk == config.circle_layout_count - 1)
+											 ? config.circle_layout[0]
+											 : config.circle_layout[jk + 1];
+				} else {
+					// previous: wrap backward
+					target_layout_name =
+						(jk == 0)
+							? config
+								  .circle_layout[config.circle_layout_count - 1]
+							: config.circle_layout[jk - 1];
+				}
 				break;
 			}
 		}
@@ -1009,7 +1018,6 @@ int32_t switch_layout(const Arg *arg) {
 			len = MAX(strlen(layouts[ji].name), strlen(target_layout_name));
 			if (strncmp(layouts[ji].name, target_layout_name, len) == 0) {
 				selmon->pertag->ltidxs[selmon->pertag->curtag] = &layouts[ji];
-
 				break;
 			}
 		}
@@ -1019,11 +1027,21 @@ int32_t switch_layout(const Arg *arg) {
 		return 0;
 	}
 
+	// Fallback: iterate through global layouts[]
 	for (jk = 0; jk < LENGTH(layouts); jk++) {
 		if (strcmp(layouts[jk].name,
 				   selmon->pertag->ltidxs[selmon->pertag->curtag]->name) == 0) {
-			selmon->pertag->ltidxs[selmon->pertag->curtag] =
-				jk == LENGTH(layouts) - 1 ? &layouts[0] : &layouts[jk + 1];
+			if (direction > 0) {
+				// next: wrap forward
+				selmon->pertag->ltidxs[selmon->pertag->curtag] =
+					(jk == LENGTH(layouts) - 1) ? &layouts[0]
+												: &layouts[jk + 1];
+			} else {
+				// previous: wrap backward
+				selmon->pertag->ltidxs[selmon->pertag->curtag] =
+					(jk == 0) ? &layouts[LENGTH(layouts) - 1]
+							  : &layouts[jk - 1];
+			}
 			clear_fullscreen_and_maximized_state(selmon);
 			arrange(selmon, false, false);
 			printstatus();
@@ -1032,6 +1050,12 @@ int32_t switch_layout(const Arg *arg) {
 	}
 	return 0;
 }
+
+int32_t next_layout(const Arg *arg) { return _switch_layout_dir(1); }
+
+int32_t previous_layout(const Arg *arg) { return _switch_layout_dir(-1); }
+
+int32_t switch_layout(const Arg *arg) { return next_layout(arg); }
 
 int32_t switch_proportion_preset(const Arg *arg) {
 	float target_proportion = 0;

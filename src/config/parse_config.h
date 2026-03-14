@@ -1036,6 +1036,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "setlayout") == 0) {
 		func = setlayout;
 		(*arg).v = strdup(arg_value);
+	} else if (strcmp(func_name, "next_layout") == 0) {
+		func = next_layout;
+	} else if (strcmp(func_name, "previous_layout") == 0) {
+		func = previous_layout;
 	} else if (strcmp(func_name, "switch_layout") == 0) {
 		func = switch_layout;
 	} else if (strcmp(func_name, "togglefloating") == 0) {
