@@ -68,7 +68,7 @@ stdenv.mkDerivation {
   meta = {
     mainProgram = "mango";
     description = "A streamlined but feature-rich Wayland compositor";
-    homepage = "https://github.com/DreamMaoMao/mango";
+    homepage = "https://github.com/Sqooky/maomaowm";
     license = lib.licenses.gpl3Plus;
     maintainers = [];
     platforms = lib.platforms.unix;

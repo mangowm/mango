@@ -1,9 +1,13 @@
 # Mango Wayland Compositor
-<div>
-  <img src="https://github.com/mangowm/mango/blob/main/assets/mango-transparency-256.png" alt="MangoWM Logo" width="120"/>
-</div>
 
-This project's development is based on [dwl](https://codeberg.org/dwl/dwl/).
+This is a fork of MangoWM which adds in support for tablelts
+
+git clone https://github.com/Sqooky/Fork-of-Mamaowm-With-Tablet-Support
+cd Fork-of-Mamaowm-With-Tablet-Support
+meson build -Dprefix=/usr
+sudo ninja -C build install
+
+
 
 
 1. **Lightweight & Fast Build**
