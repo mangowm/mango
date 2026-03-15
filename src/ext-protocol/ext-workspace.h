@@ -1,4 +1,4 @@
-#include "wlr_ext_workspace_v1.h"
+#include <wlr/types/wlr_ext_workspace_v1.h>
 
 #define EXT_WORKSPACE_ENABLE_CAPS                                              \
 	EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE |                  \
@@ -7,15 +7,11 @@
 typedef struct Monitor Monitor;
 
 struct workspace {
-	struct wl_list link; // Link in global workspaces list
-	uint32_t tag;		 // Numeric identifier (1-9, 0=overview)
-	Monitor *m;			 // Associated monitor
-	struct wlr_ext_workspace_handle_v1 *ext_workspace; // Protocol object
-	/* Event listeners */
-	struct wl_listener activate;
-	struct wl_listener deactivate;
-	struct wl_listener assign;
-	struct wl_listener remove;
+	struct wl_list link;
+	uint32_t tag;
+	Monitor *m;
+	struct wlr_ext_workspace_handle_v1 *ext_workspace;
+	struct wl_listener commit;
 };
 
 struct wlr_ext_workspace_manager_v1 *ext_manager;
@@ -43,30 +39,60 @@ void toggle_workspace(struct workspace *target) {
 	}
 }
 
-static void handle_ext_workspace_activate(struct wl_listener *listener,
-										  void *data) {
-	struct workspace *workspace =
-		wl_container_of(listener, workspace, activate);
+static void handle_ext_commit(struct wl_listener *listener, void *data) {
+	struct wlr_ext_workspace_v1_commit_event *event = data;
+	struct wlr_ext_workspace_v1_request *request;
 
-	if (workspace->m->isoverview) {
-		return;
+	wl_list_for_each(request, event->requests, link) {
+		switch (request->type) {
+		case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE: {
+			if (!request->activate.workspace) {
+				break;
+			}
+
+			struct workspace *workspace = NULL;
+			struct workspace *w;
+			wl_list_for_each(w, &workspaces, link) {
+				if (w->ext_workspace == request->activate.workspace) {
+					workspace = w;
+					break;
+				}
+			}
+
+			if (!workspace || workspace->m->isoverview) {
+				break;
+			}
+
+			goto_workspace(workspace);
+			wlr_log(WLR_INFO, "ext activating workspace %d", workspace->tag);
+			break;
+		}
+		case WLR_EXT_WORKSPACE_V1_REQUEST_DEACTIVATE: {
+			if (!request->deactivate.workspace) {
+				break;
+			}
+
+			struct workspace *workspace = NULL;
+			struct workspace *w;
+			wl_list_for_each(w, &workspaces, link) {
+				if (w->ext_workspace == request->deactivate.workspace) {
+					workspace = w;
+					break;
+				}
+			}
+
+			if (!workspace || workspace->m->isoverview) {
+				break;
+			}
+
+			toggle_workspace(workspace);
+			wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
+			break;
+		}
+		default:
+			break;
+		}
 	}
-
-	goto_workspace(workspace);
-	wlr_log(WLR_INFO, "ext activating workspace %d", workspace->tag);
-}
-
-static void handle_ext_workspace_deactivate(struct wl_listener *listener,
-											void *data) {
-	struct workspace *workspace =
-		wl_container_of(listener, workspace, deactivate);
-
-	if (workspace->m->isoverview) {
-		return;
-	}
-
-	toggle_workspace(workspace);
-	wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
 }
 
 static const char *get_name_from_tag(uint32_t tag) {
@@ -76,8 +102,6 @@ static const char *get_name_from_tag(uint32_t tag) {
 }
 
 void destroy_workspace(struct workspace *workspace) {
-	wl_list_remove(&workspace->activate.link);
-	wl_list_remove(&workspace->deactivate.link);
 	wlr_ext_workspace_handle_v1_destroy(workspace->ext_workspace);
 	wl_list_remove(&workspace->link);
 	free(workspace);
@@ -112,17 +136,12 @@ static void add_workspace_by_tag(int32_t tag, Monitor *m) {
 	workspace->m = m;
 	workspace->ext_workspace = wlr_ext_workspace_handle_v1_create(
 		ext_manager, name, EXT_WORKSPACE_ENABLE_CAPS);
+
+	workspace->ext_workspace->data = workspace;
+
 	wlr_ext_workspace_handle_v1_set_group(workspace->ext_workspace,
 										  m->ext_group);
 	wlr_ext_workspace_handle_v1_set_name(workspace->ext_workspace, name);
-
-	workspace->activate.notify = handle_ext_workspace_activate;
-	wl_signal_add(&workspace->ext_workspace->events.activate,
-				  &workspace->activate);
-
-	workspace->deactivate.notify = handle_ext_workspace_deactivate;
-	wl_signal_add(&workspace->ext_workspace->events.deactivate,
-				  &workspace->deactivate);
 }
 
 void dwl_ext_workspace_printstatus(Monitor *m) {
@@ -180,8 +199,11 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 }
 
 void workspaces_init() {
-	/* Create the global workspace manager with activation capability */
 	ext_manager = wlr_ext_workspace_manager_v1_create(dpy, 1);
-	/* Initialize the global workspaces list */
+
 	wl_list_init(&workspaces);
+
+	static struct wl_listener commit_listener;
+	commit_listener.notify = handle_ext_commit;
+	wl_signal_add(&ext_manager->events.commit, &commit_listener);
 }
