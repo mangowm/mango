@@ -11,7 +11,6 @@
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
-#include <scenefx/types/fx/corner_location.h>
 #include <scenefx/types/wlr_scene.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -301,7 +300,7 @@ typedef struct {
 	float height_scale;
 	int32_t width;
 	int32_t height;
-	enum corner_location corner_location;
+	struct fx_corner_radii corner_location;
 	bool should_scale;
 } BufferData;
 
@@ -315,6 +314,7 @@ struct Client {
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
 	struct wlr_scene_shadow *shadow;
+	struct wlr_scene_blur *blur;
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
 	struct wl_list flink;
@@ -465,6 +465,7 @@ typedef struct {
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_tree *popups;
 	struct wlr_scene_shadow *shadow;
+	struct wlr_scene_blur *blur;
 	struct wlr_scene_layer_surface_v1 *scene_layer;
 	struct wl_list link;
 	struct wl_list fadeout_link;
@@ -763,7 +764,7 @@ static double find_animation_curve_at(double t, int32_t type);
 
 static void apply_opacity_to_rect_nodes(Client *c, struct wlr_scene_node *node,
 										double animation_passed);
-static enum corner_location set_client_corner_location(Client *c);
+static struct fx_corner_radii set_client_corner_location(Client *c);
 static double all_output_frame_duration_ms();
 static struct wlr_scene_tree *
 wlr_scene_tree_snapshot(struct wlr_scene_node *node,
@@ -2351,12 +2352,16 @@ static void iter_layer_scene_buffers(struct wlr_scene_buffer *buffer,
 		return;
 	}
 
-	wlr_scene_buffer_set_backdrop_blur(buffer, true);
-	wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, true);
+	LayerSurface *l = (LayerSurface *)user_data;
+
+	wlr_scene_node_set_enabled(&l->blur->node, true);
+	wlr_scene_blur_set_transparency_mask_source(l->blur, buffer);
+	wlr_scene_blur_set_size(l->blur, l->geom.width, l->geom.height);
+
 	if (config.blur_optimized) {
-		wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
+		wlr_scene_blur_set_should_only_blur_bottom_layer(l->blur, true);
 	} else {
-		wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
+		wlr_scene_blur_set_should_only_blur_bottom_layer(l->blur, false);
 	}
 }
 
@@ -2414,14 +2419,17 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	}
 
 	// 初始化阴影
-	if (layer_surface->current.exclusive_zone == 0 &&
-		layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
+	if (layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 		layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
-		l->shadow =
-			wlr_scene_shadow_create(l->scene, 0, 0, config.border_radius,
-									config.shadows_blur, config.shadowscolor);
-		wlr_scene_node_lower_to_bottom(&l->shadow->node);
-		wlr_scene_node_set_enabled(&l->shadow->node, true);
+		if (layer_surface->current.exclusive_zone == 0) {
+			l->shadow = wlr_scene_shadow_create(l->scene, 0, 0, config.border_radius,
+												config.shadows_blur, config.shadowscolor);
+			wlr_scene_node_lower_to_bottom(&l->shadow->node);
+			wlr_scene_node_set_enabled(&l->shadow->node, true);
+		}
+
+		l->blur = wlr_scene_blur_create(l->scene, 0, 0);
+		wlr_scene_node_lower_to_bottom(&l->blur->node);
 	}
 
 	// 初始化动画
@@ -2493,7 +2501,8 @@ void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
 		if (!l->noblur &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
-				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
+				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND &&
+			l->blur) {
 
 			wlr_scene_node_for_each_buffer(&l->scene->node,
 										   iter_layer_scene_buffers, l);
@@ -3971,15 +3980,14 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 		return;
 
 	if (config.blur && c && !c->noblur) {
-		wlr_scene_buffer_set_backdrop_blur(buffer, true);
-		wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, false);
+		wlr_scene_node_set_enabled(&c->blur->node, true);
 		if (config.blur_optimized) {
-			wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
+			wlr_scene_blur_set_should_only_blur_bottom_layer(c->blur, true);
 		} else {
-			wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
+			wlr_scene_blur_set_should_only_blur_bottom_layer(c->blur, false);
 		}
 	} else {
-		wlr_scene_buffer_set_backdrop_blur(buffer, false);
+		wlr_scene_node_set_enabled(&c->blur->node, false);
 	}
 }
 
@@ -4129,13 +4137,15 @@ mapnotify(struct wl_listener *listener, void *data) {
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
 	wlr_scene_node_set_position(&c->border->node, 0, 0);
-	wlr_scene_rect_set_corner_radius(c->border, config.border_radius,
-									 config.border_radius_location_default);
+	wlr_scene_rect_set_corner_radii(c->border, corner_radii_all(config.border_radius));
 	wlr_scene_node_set_enabled(&c->border->node, true);
 
 	c->shadow =
 		wlr_scene_shadow_create(c->scene, 0, 0, config.border_radius,
 								config.shadows_blur, config.shadowscolor);
+
+	c->blur = wlr_scene_blur_create(c->scene_surface, 0, 0);
+	wlr_scene_node_lower_to_bottom(&c->blur->node);
 
 	wlr_scene_node_lower_to_bottom(&c->shadow->node);
 	wlr_scene_node_set_enabled(&c->shadow->node, true);
