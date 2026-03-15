@@ -921,7 +921,9 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
 	} else {
-		m->pertag->ltidxs[m->pertag->curtag]->arrange(m);
+		const Layout *lt = m->pertag->ltidxs[m->pertag->curtag];
+		if (lt->arrange)
+			lt->arrange(m);
 	}
 
 	if (!start_drag_window) {
