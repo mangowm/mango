@@ -20,7 +20,7 @@
 
 enum { NUM_TYPE_MINUS, NUM_TYPE_PLUS, NUM_TYPE_DEFAULT };
 
-enum { KEY_TYPE_CODE, KEY_TYPE_SYM };
+enum { KEY_TYPE_CODE, KEY_TYPE_SYM, KEY_TYPE_NONE };
 
 typedef struct {
 	uint32_t keycode1;
@@ -781,6 +781,22 @@ void create_config_keymap(void) {
 
 KeySymCode parse_key(const char *key_str, bool isbindsym) {
 	KeySymCode kc = {0}; // 初始化为0
+
+	// Handle "none" key for modifier-only bindings
+	{
+		char lower_key[10];
+		int32_t ki = 0;
+		while (key_str[ki] && ki < 9) {
+			lower_key[ki] = tolower(key_str[ki]);
+			ki++;
+		}
+		lower_key[ki] = '\0';
+		if (strcmp(lower_key, "none") == 0) {
+			kc.type = KEY_TYPE_NONE;
+			kc.keysym = XKB_KEY_NoSymbol;
+			return kc;
+		}
+	}
 
 	if (config.keymap == NULL || config.ctx == NULL) {
 		// 处理错误
@@ -2347,6 +2363,18 @@ bool parse_option(Config *config, char *key, char *value) {
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
+
+		/* KEY_TYPE_NONE bindings must use the release flag (bindr) */
+		if (binding->keysymcode.type == KEY_TYPE_NONE) {
+			if (!binding->isreleaseapply) {
+				fprintf(stderr,
+						"\033[1m\033[33m[WARN]:\033[0m "
+						"\"none\" key only works with bindr "
+						"(release bind), forcing release mode\n");
+				binding->isreleaseapply = true;
+			}
+		}
+
 		if (!binding->func || binding->mod == UINT32_MAX ||
 			(binding->keysymcode.type == KEY_TYPE_SYM &&
 			 binding->keysymcode.keysym == XKB_KEY_NoSymbol)) {
