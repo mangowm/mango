@@ -1539,10 +1539,10 @@ int32_t viewtoright_have_client(const Arg *arg) {
 		return 0;
 	}
 
-	if (current >= tag_count)
+	if (current >= config.tag_count)
 		return 0;
 
-	for (n = current + 1; n <= tag_count; n++) {
+	for (n = current + 1; n <= config.tag_count; n++) {
 		if (get_tag_status(n, selmon)) {
 			found = true;
 			break;

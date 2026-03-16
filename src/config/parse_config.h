@@ -8,7 +8,11 @@
 #define SYSCONFDIR "/etc"
 #endif
 
-static bool config_initialized = false;
+// We don't want to allow config hot-reloading to change the tag_count and we
+// want to require a compositor reload. The code to support hot-reloading a
+// change in tag_count is a lot more involved than this minimal solution we have
+// for configuring the number of tags available in Mango.
+static uint32_t active_tag_count = 0;
 
 // Clamps value in range while preserving numeric type
 #define CLAMP(x, min, max)                                                     \
@@ -1136,7 +1140,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 
 			while (token != NULL) {
 				int32_t num = atoi(token);
-				if (num > 0 && num <= tag_count) {
+				if (num > 0 && num <= config.tag_count) {
 					mask |= (1 << (num - 1));
 				}
 				token = strtok_r(NULL, "|", &saveptr);
@@ -1604,14 +1608,17 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->default_nmaster = atoi(value);
 	} else if (strcmp(key, "tag_count") == 0) {
 		uint32_t requested = CLAMP(atoi(value), 1, 32);
-		config->tag_count = requested;
-		if (!config_initialized) {
-			tag_count = requested;
-		} else if (tag_count != requested) {
-			wlr_log(WLR_INFO,
-					"tag_count change requires restart (current: %u, "
-					"requested: %u)",
-					tag_count, requested);
+		bool is_initial_config_load = active_tag_count == 0;
+		if (is_initial_config_load) {
+			config->tag_count = requested;
+		} else {
+			config->tag_count = active_tag_count;
+			if (active_tag_count != requested) {
+				wlr_log(WLR_INFO,
+						"tag_count change requires restart (current: %u, "
+						"requested: %u)",
+						active_tag_count, requested);
+			}
 		}
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
@@ -1936,7 +1943,7 @@ bool parse_option(Config *config, char *key, char *value) {
 				trim_whitespace(val);
 
 				if (strcmp(key, "id") == 0) {
-					rule->id = CLAMP_INT(atoi(val), 0, tag_count);
+					rule->id = CLAMP_INT(atoi(val), 0, config->tag_count);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -3527,7 +3534,7 @@ bool parse_config(void) {
 	config.scroller_proportion_preset_count = 0;
 	config.circle_layout = NULL;
 	config.circle_layout_count = 0;
-	config.tag_count = 9;
+	config.tag_count = 0;
 	config.tag_rules = NULL;
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
@@ -3561,7 +3568,6 @@ bool parse_config(void) {
 	parse_correct = parse_config_file(&config, filename, true);
 	set_default_key_bindings(&config);
 	override_config();
-	config_initialized = true;
 	return parse_correct;
 }
 
@@ -3729,7 +3735,7 @@ void reapply_master(void) {
 
 	uint32_t i;
 	Monitor *m = NULL;
-	for (i = 0; i <= tag_count; i++) {
+	for (i = 0; i <= config.tag_count; i++) {
 		wl_list_for_each(m, &mons, link) {
 			if (!m->wlr_output->enabled) {
 				continue;
@@ -3808,7 +3814,7 @@ void parse_tagrule(Monitor *m) {
 		}
 	}
 
-	for (i = 1; i <= tag_count; i++) {
+	for (i = 1; i <= config.tag_count; i++) {
 		wl_list_for_each(c, &clients, link) {
 			if ((c->tags & (1 << (i - 1)) & TAGMASK) && ISTILED(c)) {
 				if (m->pertag->mfacts[i] > 0.0f)

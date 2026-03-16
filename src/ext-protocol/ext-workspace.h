@@ -1,7 +1,5 @@
 #include "wlr_ext_workspace_v1.h"
 
-#define WORKSPACE_NAME_MAX_SIZE 12
-
 #define EXT_WORKSPACE_ENABLE_CAPS                                              \
 	EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE |                  \
 		EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_DEACTIVATE
@@ -10,8 +8,8 @@ typedef struct Monitor Monitor;
 
 struct workspace {
 	struct wl_list link; // Link in global workspaces list
-	uint32_t tag;        // Identifier (tag number) in [0=overview, tag_count]
-	Monitor *m;          // Associated monitor
+	uint32_t tag;		 // Identifier (tag number) in [0=overview, tag_count]
+	Monitor *m;			 // Associated monitor
 	struct wlr_ext_workspace_handle_v1 *ext_workspace; // Protocol object
 	/* Event listeners */
 	struct wl_listener activate;
@@ -71,14 +69,22 @@ static void handle_ext_workspace_deactivate(struct wl_listener *listener,
 	wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
 }
 
-static void get_name_from_tag_number(char *dst_buf, size_t dst_len,
-									 uint32_t tag_number) {
-	if (tag_number > tag_count)
-		die("tag_number %u exceeds tag_count %u", tag_number, tag_count);
+// Returns the size_t that would have been written to dst_buf if dst_len was
+// large enough. Safe usage of this function is to call it with
+// dst_buf == NULL and dst_len == 0, then use the returned value to allocate the
+// destination buffer, then call it again passing in the buffer and size.
+static size_t get_name_from_tag_number(char *dst_buf, size_t dst_len,
+									   uint32_t tag_number) {
+	if (tag_number > config.tag_count)
+		die("tag_number %u exceeds tag_count %u", tag_number, config.tag_count);
+	int n;
 	if (tag_number == 0)
-		snprintf(dst_buf, dst_len, "overview");
+		n = snprintf(dst_buf, dst_len, "overview");
 	else
-		snprintf(dst_buf, dst_len, "%u", tag_number);
+		n = snprintf(dst_buf, dst_len, "%u", tag_number);
+	if (n < 0)
+		die("snprintf failed for tag_number %u", tag_number);
+	return (size_t)(n + 1);
 }
 
 void destroy_workspace(struct workspace *workspace) {
@@ -109,8 +115,9 @@ static void remove_workspace_by_tag(uint32_t tag, Monitor *m) {
 }
 
 static void add_workspace_by_tag(uint32_t tag, Monitor *m) {
-	char name[WORKSPACE_NAME_MAX_SIZE];
-	get_name_from_tag_number(name, sizeof(name), tag);
+	size_t name_len = get_name_from_tag_number(NULL, 0, tag);
+	char name[name_len];
+	get_name_from_tag_number(name, name_len, tag);
 
 	struct workspace *workspace = ecalloc(1, sizeof(*workspace));
 	wl_list_append(&workspaces, &workspace->link);
@@ -172,13 +179,13 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 	uint32_t i;
 
 	if (m->isoverview) {
-		for (i = 1; i <= tag_count; i++) {
+		for (i = 1; i <= config.tag_count; i++) {
 			remove_workspace_by_tag(i, m);
 		}
 		add_workspace_by_tag(0, m);
 	} else {
 		remove_workspace_by_tag(0, m);
-		for (i = 1; i <= tag_count; i++) {
+		for (i = 1; i <= config.tag_count; i++) {
 			add_workspace_by_tag(i, m);
 		}
 	}

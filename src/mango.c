@@ -117,7 +117,7 @@
 	((C) && (M) && (C)->mon == (M) && ((C)->tags & (M)->tagset[(M)->seltags]))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
-#define TAGMASK (tag_count == 32 ? ~0u : ((1u << tag_count) - 1))
+#define TAGMASK (config.tag_count == 32 ? ~0u : ((1u << config.tag_count) - 1))
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 #define ISFULLSCREEN(A)                                                        \
 	((A)->isfullscreen || (A)->ismaximizescreen ||                             \
@@ -3041,14 +3041,16 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 
 	wl_list_insert(&mons, &m->link);
+	if (active_tag_count == 0)
+		active_tag_count = config.tag_count;
 	m->pertag = calloc(1, sizeof(Pertag));
 	if (!m->pertag)
 		die("pertag calloc failed");
-	m->pertag->nmasters = calloc(tag_count + 1, sizeof(int32_t));
-	m->pertag->mfacts = calloc(tag_count + 1, sizeof(float));
-	m->pertag->no_hide = calloc(tag_count + 1, sizeof(bool));
-	m->pertag->no_render_border = calloc(tag_count + 1, sizeof(bool));
-	m->pertag->ltidxs = calloc(tag_count + 1, sizeof(const Layout *));
+	m->pertag->nmasters = calloc(config.tag_count + 1, sizeof(int32_t));
+	m->pertag->mfacts = calloc(config.tag_count + 1, sizeof(float));
+	m->pertag->no_hide = calloc(config.tag_count + 1, sizeof(bool));
+	m->pertag->no_render_border = calloc(config.tag_count + 1, sizeof(bool));
+	m->pertag->ltidxs = calloc(config.tag_count + 1, sizeof(const Layout *));
 	if (!m->pertag->nmasters || !m->pertag->mfacts || !m->pertag->no_hide ||
 		!m->pertag->no_render_border || !m->pertag->ltidxs)
 		die("pertag member calloc failed");
@@ -3103,7 +3105,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		ext_manager, EXT_WORKSPACE_ENABLE_CAPS);
 	wlr_ext_workspace_group_handle_v1_output_enter(m->ext_group, m->wlr_output);
 
-	for (i = 1; i <= tag_count; i++) {
+	for (i = 1; i <= config.tag_count; i++) {
 		add_workspace_by_tag(i, m);
 	}
 
@@ -6307,10 +6309,10 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 		if (arg->ui == (~0 & TAGMASK))
 			m->pertag->curtag = 0;
 		else {
-			for (i = 0; !(arg->ui & 1 << i) && i < tag_count && arg->ui != 0;
+			for (i = 0; !(arg->ui & 1u << i) && i < config.tag_count && arg->ui != 0;
 				 i++)
 				;
-			m->pertag->curtag = i >= tag_count ? tag_count : i + 1;
+			m->pertag->curtag = i >= config.tag_count ? config.tag_count : i + 1;
 		}
 
 		m->pertag->prevtag =

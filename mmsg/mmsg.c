@@ -351,7 +351,7 @@ static void dwl_ipc_output_frame(void *data,
 				}
 			}
 
-			if ((i - 1) > tag_count)
+			if (i == 0 || (i - 1) > tag_count)
 				die("bad tagset %s", tagset);
 
 			zdwl_ipc_output_v2_set_tags(dwl_ipc_output, mask, 0);
@@ -381,7 +381,7 @@ static void dwl_ipc_output_frame(void *data,
 					break;
 				}
 			}
-			if ((i - 1) > tag_count)
+			if (i == 0 || (i - 1) > tag_count)
 				die("bad client tagset %s", client_tags);
 
 			zdwl_ipc_output_v2_set_client_tags(dwl_ipc_output, and, xor);
@@ -400,7 +400,8 @@ static void dwl_ipc_output_frame(void *data,
 
 			printf("%s clients %u\n", output_name, total_clients);
 
-			char occ_str[tag_count + 1], seltags_str[tag_count + 1], urg_str[tag_count + 1];
+			char occ_str[tag_count + 1], seltags_str[tag_count + 1],
+				urg_str[tag_count + 1];
 
 			bin_str_nbits(occ_str, occ, tag_count);
 			bin_str_nbits(seltags_str, seltags, tag_count);

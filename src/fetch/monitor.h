@@ -57,14 +57,14 @@ uint32_t get_tags_first_tag_num(uint32_t source_tags) {
 		return selmon->pertag->curtag;
 	}
 
-	for (i = 0; !(tag & 1) && source_tags != 0 && i < tag_count; i++) {
+	for (i = 0; !(tag & 1) && source_tags != 0 && i < config.tag_count; i++) {
 		tag = source_tags >> i;
 	}
 
 	if (i == 1) {
 		return 1;
-	} else if (i > tag_count) {
-		return tag_count;
+	} else if (i > config.tag_count) {
+		return config.tag_count;
 	} else {
 		return i;
 	}
@@ -79,14 +79,14 @@ uint32_t get_tags_first_tag(uint32_t source_tags) {
 		return selmon->pertag->curtag;
 	}
 
-	for (i = 0; !(tag & 1) && source_tags != 0 && i < tag_count; i++) {
+	for (i = 0; !(tag & 1) && source_tags != 0 && i < config.tag_count; i++) {
 		tag = source_tags >> i;
 	}
 
 	if (i == 1) {
 		return 1;
-	} else if (i > tag_count) {
-		return 1 << (tag_count - 1);
+	} else if (i > config.tag_count) {
+		return 1 << (config.tag_count - 1);
 	} else {
 		return 1 << (i - 1);
 	}
