@@ -15,6 +15,9 @@ void restore_size_per(Monitor *m, Client *c) {
 	if (!m || !c)
 		return;
 
+	if (!m->wlr_output->enabled)
+		return;
+
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc)) {
 			fc->old_ismaster = fc->ismaster;
@@ -811,11 +814,6 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 	int32_t master_num = 0;
 	int32_t stack_num = 0;
 
-	if (!m)
-		return;
-
-	if (!m->wlr_output->enabled)
-		return;
 	m->visible_clients = 0;
 	m->visible_tiling_clients = 0;
 	m->visible_scroll_tiling_clients = 0;
@@ -911,6 +909,12 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
+
+	if (!m)
+		return;
+
+	if (!m->wlr_output->enabled)
+		return;
 
 	pre_caculate_before_arrange(m, want_animation, from_view, false);
 
