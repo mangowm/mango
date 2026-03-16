@@ -1,0 +1,44 @@
+name: Sync website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+
+concurrency:
+  group: sync-website
+  cancel-in-progress: true
+
+jobs:
+  sync-website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: Checkout website
+        uses: actions/checkout@v4
+        with:
+          repository: mangowm/mangowm.github.io
+          path: website
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          fetch-depth: 1
+
+      - name: Sync docs
+        run: |
+          rm -rf website/apps/web/content/docs
+          cp -r docs website/apps/web/content/docs
+
+      - name: Commit and push
+        working-directory: website
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/web/content/docs
+          git diff --staged --quiet || git commit \
+            -m "docs: content update from mangowm/mango" \
+            -m "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          git push

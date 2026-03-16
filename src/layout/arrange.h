@@ -15,6 +15,9 @@ void restore_size_per(Monitor *m, Client *c) {
 	if (!m || !c)
 		return;
 
+	if (!m->wlr_output->enabled)
+		return;
+
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc)) {
 			fc->old_ismaster = fc->ismaster;
@@ -309,7 +312,7 @@ void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -478,7 +481,7 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -494,7 +497,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 	Client *stack_head = get_scroll_stack_head(grabc);
 
 	if (grabc && grabc->mon->visible_tiling_clients == 1 &&
-		!scroller_ignore_proportion_single)
+		!config.scroller_ignore_proportion_single)
 		return;
 
 	if (!start_drag_window && isdrag) {
@@ -670,7 +673,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (last_apply_drap_time == 0 ||
-			time - last_apply_drap_time > drag_tile_refresh_interval) {
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 			arrange(grabc->mon, false, false);
 			last_apply_drap_time = time;
 		}
@@ -811,11 +814,6 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 	int32_t master_num = 0;
 	int32_t stack_num = 0;
 
-	if (!m)
-		return;
-
-	if (!m->wlr_output->enabled)
-		return;
 	m->visible_clients = 0;
 	m->visible_tiling_clients = 0;
 	m->visible_scroll_tiling_clients = 0;
@@ -911,6 +909,12 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
+
+	if (!m)
+		return;
+
+	if (!m->wlr_output->enabled)
+		return;
 
 	pre_caculate_before_arrange(m, want_animation, from_view, false);
 
