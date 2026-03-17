@@ -612,9 +612,14 @@ uint32_t parse_mod(const char *mod_str) {
 	// 分割处理每个部分
 	token = strtok_r(input_copy, "+", &saveptr);
 	while (token != NULL) {
-		// 去除空白
-		while (*token == ' ' || *token == '\t')
-			token++;
+		// 去除前后空白
+		trim_whitespace(token);
+
+		// 如果 token 变成空字符串则跳过
+		if (*token == '\0') {
+			token = strtok_r(NULL, "+", &saveptr);
+			continue;
+		}
 
 		if (strncmp(token, "code:", 5) == 0) {
 			// 处理 code: 形式
