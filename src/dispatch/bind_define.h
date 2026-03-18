@@ -134,6 +134,27 @@ int32_t exchange_stack_client(const Arg *arg) {
 	return 0;
 }
 
+int32_t exchange_stack_client_bounded(const Arg *arg) {
+	if (!selmon)
+		return 0;
+
+	Client *c = selmon->sel;
+	Client *tc = NULL;
+	if (!c || c->isfloating || c->isfullscreen || c->ismaximizescreen)
+		return 0;
+    /* again, lazy we just search once more if we found master */
+	if (arg->i == NEXT) {
+		tc = get_next_stack_client(c, false);
+        if (tc && tc->ismaster) tc = get_next_stack_client(tc, false);
+	} else {
+		tc = get_next_stack_client(c, true);
+        if (tc && tc->ismaster) tc = get_next_stack_client(tc, true);
+	}
+	if (tc)
+		exchange_two_client(c, tc);
+	return 0;
+}
+
 int32_t focusdir(const Arg *arg) {
 	Client *c = NULL;
 	c = direction_select(arg);
@@ -251,6 +272,33 @@ int32_t focusstack(const Arg *arg) {
 		tc = get_next_stack_client(sel, false);
 	} else {
 		tc = get_next_stack_client(sel, true);
+	}
+	/* If only one client is visible on selmon, then c == sel */
+
+	if (!tc)
+		return 0;
+
+	focusclient(tc, 1);
+	if (config.warpcursor)
+		warp_cursor(tc);
+	return 0;
+}
+
+int32_t focusstack_bounded(const Arg *arg) {
+    /* Focus the next or previous client (in tiling order) on selmon */
+    /* but skipping past master */
+	Client *sel = focustop(selmon);
+	Client *tc = NULL;
+
+	if (!sel)
+		return 0;
+    /* lazy fix we just search twice, don't make new deeper functions */
+	if (arg->i == NEXT) {
+		tc = get_next_stack_client(sel, false);
+        if (tc && tc->ismaster) tc = get_next_stack_client(tc, false);
+	} else {
+		tc = get_next_stack_client(sel, true);
+        if (tc && tc->ismaster) tc = get_next_stack_client(tc, true);
 	}
 	/* If only one client is visible on selmon, then c == sel */
 

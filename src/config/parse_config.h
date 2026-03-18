@@ -938,7 +938,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "focusdir") == 0) {
+	} else if (strcmp(func_name, "focusstack_bounded") == 0) {
+        func = focusstack_bounded;
+        (*arg).i = parse_circle_direction(arg_value);
+    } else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "incnmaster") == 0) {
@@ -955,7 +958,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "exchange_stack_client") == 0) {
 		func = exchange_stack_client;
 		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "toggleglobal") == 0) {
+	} else if (strcmp(func_name, "exchange_stack_client_bounded") == 0) {
+		func = exchange_stack_client_bounded;
+		(*arg).i = parse_circle_direction(arg_value);
+    } else if (strcmp(func_name, "toggleglobal") == 0) {
 		func = toggleglobal;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
