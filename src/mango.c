@@ -1437,7 +1437,7 @@ void client_reset_mon_tags(Client *c, Monitor *mon, uint32_t newtags) {
 
 void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	if (c->tags && !c->isfloating && mon && !c->swallowedby &&
-		mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags) + 1]) {
+		mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags)]) {
 		c->isfloating = 1;
 	}
 }
@@ -3986,9 +3986,9 @@ void init_client_properties(Client *c) {
 	c->master_mfact_per = 0.0f;
 	c->master_inner_per = 0.0f;
 	c->stack_inner_per = 0.0f;
-	c->old_stack_inner_per = 1.0f;
-	c->old_master_inner_per = 1.0f;
-	c->old_master_mfact_per = 1.0f;
+	c->old_stack_inner_per = 0.0f;
+	c->old_master_inner_per = 0.0f;
+	c->old_master_mfact_per = 0.0f;
 	c->isterm = 0;
 	c->allow_csd = 0;
 	c->force_maximize = 0;
@@ -5095,7 +5095,7 @@ setfloating(Client *c, int32_t floating) {
 								layers[c->isfloating ? LyrTop : LyrTile]);
 	}
 
-	if (!c->isfloating && old_floating_state) {
+	if (!c->isfloating && old_floating_state && (c->old_stack_inner_per > 0.0f || c->old_master_inner_per > 0.0f)) {
 		restore_size_per(c->mon, c);
 	}
 

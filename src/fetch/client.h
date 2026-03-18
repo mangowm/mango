@@ -5,7 +5,7 @@ bool check_hit_no_border(Client *c) {
 	}
 
 	if (c->mon && !c->mon->isoverview &&
-		c->mon->pertag->no_render_border[get_tags_first_tag_num(c->tags) + 1]) {
+		c->mon->pertag->no_render_border[get_tags_first_tag_num(c->tags)]) {
 		hit_no_border = true;
 	}
 
