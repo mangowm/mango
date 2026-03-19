@@ -145,10 +145,10 @@ int32_t exchange_stack_client_bounded(const Arg *arg) {
     /* again, lazy we just search once more if we found master */
 	if (arg->i == NEXT) {
 		tc = get_next_stack_client(c, false);
-        if (tc && tc->ismaster) tc = get_next_stack_client(tc, false);
+        while (tc && tc != c && tc->ismaster) tc = get_next_stack_client(tc, false);
 	} else {
 		tc = get_next_stack_client(c, true);
-        if (tc && tc->ismaster) tc = get_next_stack_client(tc, true);
+        while (tc && tc != c && tc->ismaster) tc = get_next_stack_client(tc, true);
 	}
 	if (tc)
 		exchange_two_client(c, tc);
@@ -295,10 +295,10 @@ int32_t focusstack_bounded(const Arg *arg) {
     /* lazy fix we just search twice, don't make new deeper functions */
 	if (arg->i == NEXT) {
 		tc = get_next_stack_client(sel, false);
-        if (tc && tc->ismaster) tc = get_next_stack_client(tc, false);
+        while (tc && tc != sel && tc->ismaster) tc = get_next_stack_client(tc, false);
 	} else {
 		tc = get_next_stack_client(sel, true);
-        if (tc && tc->ismaster) tc = get_next_stack_client(tc, true);
+        while (tc && tc != sel && tc->ismaster) tc = get_next_stack_client(tc, true);
 	}
 	/* If only one client is visible on selmon, then c == sel */
 
