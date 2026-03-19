@@ -1,15 +1,12 @@
 bool check_hit_no_border(Client *c) {
-	int32_t i;
 	bool hit_no_border = false;
 	if (!render_border) {
 		hit_no_border = true;
 	}
 
-	for (i = 0; i < config.tag_rules_count; i++) {
-		if (c->tags & (1 << (config.tag_rules[i].id - 1)) &&
-			config.tag_rules[i].no_render_border) {
-			hit_no_border = true;
-		}
+	if (c->mon && !c->mon->isoverview &&
+		c->mon->pertag->no_render_border[get_tags_first_tag_num(c->tags)]) {
+		hit_no_border = true;
 	}
 
 	if (config.no_border_when_single && c && c->mon &&
@@ -19,6 +16,7 @@ bool check_hit_no_border(Client *c) {
 	}
 	return hit_no_border;
 }
+
 Client *termforwin(Client *w) {
 	Client *c = NULL;
 

@@ -90,6 +90,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | :--- | :--- | :--- |
 | `killclient` | - | Close the focused window. |
 | `togglefloating` | - | Toggle floating state. |
+| `toggle_all_floating` | - | Toggle all visible clients floating state. |
 | `togglefullscreen` | - | Toggle fullscreen. |
 | `togglefakefullscreen` | - | Toggle "fake" fullscreen (remains constrained). |
 | `togglemaximizescreen` | - | Maximize window (keep decoration/bar). |
