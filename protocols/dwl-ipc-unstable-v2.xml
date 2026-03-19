@@ -190,7 +190,14 @@ I would probably just submit raphi's patchset but I don't think that would be po
           Indicates if the selected client on this output is floating.
       </description>
       <arg name="is_floating" type="uint" summary="If the selected client is floating. Nonzero is valid, zero invalid"/>
-    </event>
+  </event>
+
+    <event name="master" since="2">
+      <description summary="Update the floating status">
+          Indicates if the selected client on this output is master.
+      </description>
+      <arg name="is_master" type="uint" summary="If the selected client is master. Nonzero is valid, zero invalid"/>
+  </event>
 
     <event name="x" since="2">
       <description summary="Update the x coordinates">

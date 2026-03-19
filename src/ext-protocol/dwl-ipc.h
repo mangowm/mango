@@ -170,6 +170,11 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 										 focused ? focused->isfloating : 0);
 	}
 	if (wl_resource_get_version(ipc_output->resource) >=
+		ZDWL_IPC_OUTPUT_V2_MASTER_SINCE_VERSION) {
+		zdwl_ipc_output_v2_send_master(ipc_output->resource,
+										 focused ? focused->ismaster : 0);
+	}
+	if (wl_resource_get_version(ipc_output->resource) >=
 		ZDWL_IPC_OUTPUT_V2_X_SINCE_VERSION) {
 		zdwl_ipc_output_v2_send_x(ipc_output->resource,
 								  focused ? focused->geom.x : 0);

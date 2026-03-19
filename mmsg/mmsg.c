@@ -35,6 +35,7 @@ static int32_t cflag;
 static int32_t vflag;
 static int32_t mflag;
 static int32_t fflag;
+static int32_t Mflag;
 static int32_t qflag;
 static int32_t dflag;
 static int32_t xflag;
@@ -310,6 +311,17 @@ static void dwl_ipc_output_floating(void *data,
 	printf("floating %u\n", is_floating);
 }
 
+static void dwl_ipc_output_master(void *data,
+                                  struct zdwl_ipc_output_v2 *dwl_ipc_output,
+                                  uint32_t is_master) {
+    if (!Mflag)
+        return;
+    char *output_name = data;
+    if (output_name)
+        printf("%s ", output_name);
+    printf("master: %u\n", is_master);
+}
+
 static void dwl_ipc_output_frame(void *data,
 								 struct zdwl_ipc_output_v2 *dwl_ipc_output) {
 	if (mode & SET) {
@@ -419,6 +431,7 @@ static const struct zdwl_ipc_output_v2_listener dwl_ipc_output_listener = {
 	.layout_symbol = dwl_ipc_output_layout_symbol,
 	.fullscreen = dwl_ipc_output_fullscreen,
 	.floating = dwl_ipc_output_floating,
+    .master = dwl_ipc_output_master,
 	.x = dwl_ipc_output_x,
 	.y = dwl_ipc_output_y,
 	.width = dwl_ipc_output_width,
@@ -529,6 +542,7 @@ static void usage(void) {
 			"\t-v           Get visibility of statusbar\n"
 			"\t-m           Get fullscreen status\n"
 			"\t-f           Get floating status\n"
+            "\t-M           Get master status\n"
 			"\t-x           Get focused client geometry\n"
 			"\t-e           Get name of last focused layer\n"
 			"\t-k           Get current keyboard layout\n"
@@ -758,6 +772,12 @@ int32_t main(int32_t argc, char *argv[]) {
 			usage();
 		mode |= GET;
 		break;
+	case 'M':
+		Mflag = 1;
+		if (mode == SET)
+			usage();
+		mode |= GET;
+		break;
 	case 'x':
 		xflag = 1;
 		if (mode == SET)
@@ -797,9 +817,9 @@ int32_t main(int32_t argc, char *argv[]) {
 		usage();
 	if (mode & GET && !output_name &&
 		!(oflag || tflag || lflag || Oflag || Tflag || Lflag || cflag ||
-		  vflag || mflag || fflag || xflag || eflag || kflag || bflag ||
+		  vflag || mflag || fflag || Mflag || xflag || eflag || kflag || bflag ||
 		  Aflag || dflag))
-		oflag = tflag = lflag = cflag = vflag = mflag = fflag = xflag = eflag =
+		oflag = tflag = lflag = cflag = vflag = mflag = fflag = Mflag = xflag = eflag =
 			kflag = bflag = Aflag = 1;
 
 	display = wl_display_connect(NULL);
