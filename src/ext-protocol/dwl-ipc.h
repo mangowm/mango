@@ -114,6 +114,7 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	xkb_layout_index_t current;
 	int32_t tagmask, state, numclients, focused_client, tag;
 	const char *title, *appid, *symbol;
+    uint32_t nmasters;
 	char kb_layout[32];
 	focused = focustop(monitor);
 	zdwl_ipc_output_v2_send_active(ipc_output->resource, monitor == selmon);
@@ -143,8 +144,10 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 
 	if (monitor->isoverview) {
 		symbol = overviewlayout.symbol;
+        nmasters = 0;
 	} else {
 		symbol = monitor->pertag->ltidxs[monitor->pertag->curtag]->symbol;
+        nmasters = monitor->pertag->nmasters[monitor->pertag->curtag];
 	}
 
 	keyboard = &kb_group->wlr_group->keyboard;
@@ -159,6 +162,8 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	zdwl_ipc_output_v2_send_title(ipc_output->resource, title ? title : broken);
 	zdwl_ipc_output_v2_send_appid(ipc_output->resource, appid ? appid : broken);
 	zdwl_ipc_output_v2_send_layout_symbol(ipc_output->resource, symbol);
+    zdwl_ipc_output_v2_send_nmasters(ipc_output->resource, nmasters);
+
 	if (wl_resource_get_version(ipc_output->resource) >=
 		ZDWL_IPC_OUTPUT_V2_FULLSCREEN_SINCE_VERSION) {
 		zdwl_ipc_output_v2_send_fullscreen(ipc_output->resource,

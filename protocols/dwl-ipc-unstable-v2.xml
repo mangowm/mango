@@ -136,6 +136,13 @@ I would probably just submit raphi's patchset but I don't think that would be po
       </description>
       <arg name="layout" type="string" summary="The new layout"/>
     </event>
+    
+    <event name="nmasters" since="1">
+      <description summary="Update the current masters count">
+          Indicates the count of masters has changed.
+      </description>
+      <arg name="nmasters" type="uint" summary="The new masters count"/>
+    </event>
 
     <event name="frame">
       <description summary="The update sequence is done.">
