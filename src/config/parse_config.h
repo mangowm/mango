@@ -3907,10 +3907,7 @@ void reapply_monitor_rules(void) {
 		if (!m->wlr_output->enabled)
 			continue;
 
-		for (ji = 0; ji < config.monitor_rules_count; ji++) {
-			if (config.monitor_rules_count < 1)
-				break;
-
+		for (ji = config.monitor_rules_count - 1; ji >= 0; ji--) {
 			mr = &config.monitor_rules[ji];
 
 			if (monitor_matches_rule(m, mr)) {
