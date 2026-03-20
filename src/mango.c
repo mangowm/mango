@@ -4878,8 +4878,12 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 		/* Update selmon (even while dragging a window) */
-		if (config.sloppyfocus)
+		if (config.sloppyfocus) {
+			Monitor *oldmon = selmon;
 			selmon = xytomon(cursor->x, cursor->y);
+			if (oldmon != selmon)
+				printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
+		}
 	}
 
 	/* Find the client under the pointer and send the event along. */
