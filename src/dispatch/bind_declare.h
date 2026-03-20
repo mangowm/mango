@@ -34,6 +34,7 @@ int32_t exchange_client(const Arg *arg);
 int32_t exchange_stack_client(const Arg *arg);
 int32_t exchange_stack_client_bounded(const Arg *arg);
 int32_t killclient(const Arg *arg);
+int32_t killclient_byappid(const Arg *arg);
 int32_t toggleglobal(const Arg *arg);
 int32_t incnmaster(const Arg *arg);
 int32_t focusmon(const Arg *arg);

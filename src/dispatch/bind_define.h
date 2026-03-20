@@ -409,6 +409,21 @@ int32_t killclient(const Arg *arg) {
 	return 0;
 }
 
+int32_t killclient_byappid(const Arg *arg) {
+    Client *c = NULL;
+    /* No Arg? No Kill. */
+    if (!arg || !arg->v) 
+        return 0;
+    /* for some reason its warning me about this indent? */
+
+    wl_list_for_each(c, &clients, link) {
+        if (strcmp((*arg).v, client_get_appid(c)) == 0) {
+            pending_kill_client(c);
+        }
+    }
+    return 0;
+}
+
 int32_t moveresize(const Arg *arg) {
 	const char *cursors[] = {"nw-resize", "ne-resize", "sw-resize",
 							 "se-resize"};
