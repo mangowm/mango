@@ -1182,6 +1182,10 @@ bool client_draw_frame(Client *c) {
 	if (!c || !client_surface(c)->mapped)
 		return false;
 
+	if (c->animation.running && client_is_initing(c)) {
+		return true;
+	}
+
 	if (!c->need_output_flush) {
 		return client_apply_focus_opacity(c);
 	}

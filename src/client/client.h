@@ -491,6 +491,14 @@ static inline bool client_request_maximize(Client *c, void *data) {
 	return c->surface.xdg->toplevel->requested.maximized;
 }
 
+static inline bool client_is_initing(Client *c) {
+#ifdef XWAYLAND
+	if (client_is_x11(c))
+		return false;
+#endif
+	return c->surface.xdg->initial_commit;
+}
+
 static inline void client_set_size_bound(Client *c) {
 	struct wlr_xdg_toplevel *toplevel;
 	struct wlr_xdg_toplevel_state state;
