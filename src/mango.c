@@ -93,6 +93,7 @@
 #include <xcb/xcb_icccm.h>
 #endif
 #include "common/util.h"
+#include <math.h>
 
 /* macros */
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
@@ -117,6 +118,7 @@
 	((C) && (M) && (C)->mon == (M) && ((C)->tags & (M)->tagset[(M)->seltags]))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
+#define CANVAS_MAX_TAGS 10
 #define TAGMASK ((1 << LENGTH(tags)) - 1)
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 #define ISFULLSCREEN(A)                                                        \
@@ -148,9 +150,9 @@ enum { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT };
 
 enum { VERTICAL, HORIZONTAL };
 enum { SWIPE_UP, SWIPE_DOWN, SWIPE_LEFT, SWIPE_RIGHT };
-enum { CurNormal, CurPressed, CurMove, CurResize }; /* cursor */
-enum { XDGShell, LayerShell, X11 };					/* client types */
-enum { AxisUp, AxisDown, AxisLeft, AxisRight };		// 滚轮滚动的方向
+enum { CurNormal, CurPressed, CurMove, CurResize, CurPan }; /* cursor */
+enum { XDGShell, LayerShell, X11 };							/* client types */
+enum { AxisUp, AxisDown, AxisLeft, AxisRight };				// 滚轮滚动的方向
 enum {
 	LyrBg,
 	LyrBlur,
@@ -308,7 +310,8 @@ typedef struct {
 struct Client {
 	/* Must keep these three elements in this order */
 	uint32_t type; /* XDGShell or X11* */
-	struct wlr_box geom, pending, float_geom, animainit_geom,
+	struct wlr_box geom, pending, float_geom, canvas_geom[CANVAS_MAX_TAGS],
+		canvas_geom_backup[CANVAS_MAX_TAGS], animainit_geom,
 		overview_backup_geom, current,
 		drag_begin_geom; /* layout-relative, includes border */
 	Monitor *mon;
@@ -504,6 +507,11 @@ typedef struct {
 struct Monitor {
 	struct wl_list link;
 	struct wlr_output *wlr_output;
+	bool minimap_visible;
+	bool canvas_overview_visible;
+	bool canvas_overview_closing;	// true while animating out
+	float canvas_overview_progress; // 0.0 = hidden, 1.0 = fully visible
+	uint32_t canvas_overview_anim_start;
 	struct wlr_scene_output *scene_output;
 	struct wlr_output_state pending;
 	struct wl_listener frame;
@@ -539,6 +547,10 @@ struct Monitor {
 	struct wlr_scene_optimized_blur *blur;
 	char last_surface_ws_name[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
+	bool canvas_in_overview;
+	float canvas_saved_pan_x;
+	float canvas_saved_pan_y;
+	float canvas_saved_zoom;
 };
 
 typedef struct {
@@ -769,7 +781,11 @@ static struct wlr_scene_tree *
 wlr_scene_tree_snapshot(struct wlr_scene_node *node,
 						struct wlr_scene_tree *parent);
 static bool is_scroller_layout(Monitor *m);
+static bool is_canvas_layout(Monitor *m);
 static bool is_centertile_layout(Monitor *m);
+static bool cursor_in_minimap(Monitor *m, double cx, double cy);
+static void get_canvas_bounds(Monitor *m, int *min_x, int *min_y, int *max_x,
+							  int *max_y);
 static void create_output(struct wlr_backend *backend, void *data);
 static void get_layout_abbr(char *abbr, const char *full_name);
 static void apply_named_scratchpad(Client *target_client);
@@ -819,7 +835,16 @@ static void *exclusive_focus;
 static struct wl_display *dpy;
 static struct wl_event_loop *event_loop;
 static struct wlr_backend *backend;
-static struct wlr_backend *headless_backend;
+static struct wlr_scene_tree *minimap_scene_tree = NULL;
+
+static struct wlr_scene_tree *overview_scene_tree = NULL;
+static int overview_canvas_min_x = 0, overview_canvas_min_y = 0;
+static float overview_scale = 1.0f;
+static bool overview_built = false;
+static struct wlr_scene_rect *overview_vp_rects[4] = {
+	NULL}; // top, bot, left, right
+static int overview_tree_x = 0, overview_tree_y = 0;
+
 static struct wlr_scene *scene;
 static struct wlr_scene_tree *layers[NUM_LAYERS];
 static struct wlr_renderer *drw;
@@ -886,6 +911,8 @@ static int32_t scroller_focus_lock = 0;
 static uint32_t swipe_fingers = 0;
 static double swipe_dx = 0;
 static double swipe_dy = 0;
+static bool canvas_swipe_panning = false;
+static double pinch_last_scale = 1.0;
 
 bool render_border = true;
 
@@ -938,6 +965,9 @@ struct Pertag {
 	int32_t open_as_floating[LENGTH(tags) + 1]; /* open_as_floating per tag */
 	const Layout
 		*ltidxs[LENGTH(tags) + 1]; /* matrix of tags and layouts indexes  */
+	float canvas_pan_x[LENGTH(tags) + 1];
+	float canvas_pan_y[LENGTH(tags) + 1];
+	float canvas_zoom[LENGTH(tags) + 1]; /* visual zoom factor, 1.0 = no zoom */
 };
 
 #include "config/parse_config.h"
@@ -1004,10 +1034,12 @@ static struct wl_event_source *sync_keymap;
 #include "animation/common.h"
 #include "animation/layer.h"
 #include "animation/tag.h"
+static void canvas_reposition(Monitor *m);
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
 #include "layout/arrange.h"
+#include "layout/canvas.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
 
@@ -1087,6 +1119,24 @@ void show_scratchpad(Client *c) {
 		resize(c, c->geom, 0);
 	}
 
+	if (c->mon && is_canvas_layout(c->mon)) {
+		uint32_t tag = c->mon->pertag->curtag;
+		float pan_x = c->mon->pertag->canvas_pan_x[tag];
+		float pan_y = c->mon->pertag->canvas_pan_y[tag];
+		float zoom = c->mon->pertag->canvas_zoom[tag];
+		int w = c->canvas_geom[tag].width > 0 ? c->canvas_geom[tag].width
+											  : c->geom.width;
+		int h = c->canvas_geom[tag].height > 0 ? c->canvas_geom[tag].height
+											   : c->geom.height;
+
+		float cx = pan_x + (c->mon->w.width / 2.0f) / zoom;
+		float cy = pan_y + (c->mon->w.height / 2.0f) / zoom;
+		c->canvas_geom[tag].x = (int32_t)(cx - w / 2.0f);
+		c->canvas_geom[tag].y = (int32_t)(cy - h / 2.0f);
+		c->canvas_geom[tag].width = w;
+		c->canvas_geom[tag].height = h;
+	}
+
 	c->oldtags = c->mon->tagset[c->mon->seltags];
 	wl_list_remove(&c->link);					  // 从原来位置移除
 	wl_list_insert(clients.prev->next, &c->link); // 插入开头
@@ -1164,6 +1214,24 @@ bool switch_scratchpad_client_state(Client *c) {
 
 		c->float_geom =
 			setclient_coordinate_center(c, c->mon, c->float_geom, 0, 0);
+
+		if (is_canvas_layout(c->mon)) {
+			uint32_t ctag = c->mon->pertag->curtag;
+			float cpan_x = c->mon->pertag->canvas_pan_x[ctag];
+			float cpan_y = c->mon->pertag->canvas_pan_y[ctag];
+			float czoom = c->mon->pertag->canvas_zoom[ctag];
+			int cw = c->canvas_geom[ctag].width > 0 ? c->canvas_geom[ctag].width
+													: c->float_geom.width;
+			int ch = c->canvas_geom[ctag].height > 0
+						 ? c->canvas_geom[ctag].height
+						 : c->float_geom.height;
+			float ccx = cpan_x + (c->mon->w.width / 2.0f) / czoom;
+			float ccy = cpan_y + (c->mon->w.height / 2.0f) / czoom;
+			c->canvas_geom[ctag].x = (int32_t)(ccx - cw / 2.0f);
+			c->canvas_geom[ctag].y = (int32_t)(ccy - ch / 2.0f);
+			c->canvas_geom[ctag].width = cw;
+			c->canvas_geom[ctag].height = ch;
+		}
 
 		// 只有显示状态的scratchpad才需要聚焦和返回true
 		if (c->is_scratchpad_show) {
@@ -1417,7 +1485,8 @@ void client_reset_mon_tags(Client *c, Monitor *mon, uint32_t newtags) {
 
 void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	if (c->tags && !c->isfloating && mon && !c->swallowedby &&
-		mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags)]) {
+		(mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags)] ||
+		 mon->pertag->ltidxs[mon->pertag->curtag]->id == CANVAS)) {
 		c->isfloating = 1;
 	}
 }
@@ -1927,6 +1996,11 @@ int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
 void swipe_begin(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_begin_event *event = data;
 
+	if (event->fingers == 3 && selmon && is_canvas_layout(selmon)) {
+		canvas_swipe_panning = true;
+		return;
+	}
+
 	// Forward swipe begin event to client
 	wlr_pointer_gestures_v1_send_swipe_begin(pointer_gestures, seat,
 											 event->time_msec, event->fingers);
@@ -1934,6 +2008,15 @@ void swipe_begin(struct wl_listener *listener, void *data) {
 
 void swipe_update(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_update_event *event = data;
+
+	if (canvas_swipe_panning && selmon && is_canvas_layout(selmon)) {
+		uint32_t tag = selmon->pertag->curtag;
+		float zoom = selmon->pertag->canvas_zoom[tag];
+		selmon->pertag->canvas_pan_x[tag] -= event->dx / zoom;
+		selmon->pertag->canvas_pan_y[tag] -= event->dy / zoom;
+		canvas_reposition(selmon);
+		return;
+	}
 
 	swipe_fingers = event->fingers;
 	// Accumulate swipe distance
@@ -1947,6 +2030,12 @@ void swipe_update(struct wl_listener *listener, void *data) {
 
 void swipe_end(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_end_event *event = data;
+
+	if (canvas_swipe_panning) {
+		canvas_swipe_panning = false;
+		return;
+	}
+
 	ongesture(event);
 	swipe_dx = 0;
 	swipe_dy = 0;
@@ -1959,6 +2048,11 @@ void pinch_begin(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_pinch_begin_event *event = data;
 
 	// Forward pinch begin event to client
+	pinch_last_scale = 1.0;
+
+	if (selmon && is_canvas_layout(selmon))
+		return;
+
 	wlr_pointer_gestures_v1_send_pinch_begin(pointer_gestures, seat,
 											 event->time_msec, event->fingers);
 }
@@ -1966,7 +2060,28 @@ void pinch_begin(struct wl_listener *listener, void *data) {
 void pinch_update(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_pinch_update_event *event = data;
 
-	// Forward pinch update event to client
+	if (selmon && is_canvas_layout(selmon)) {
+		uint32_t tag = selmon->pertag->curtag;
+		float old_zoom = selmon->pertag->canvas_zoom[tag];
+
+		double ratio =
+			(pinch_last_scale > 0.0) ? event->scale / pinch_last_scale : 1.0;
+		pinch_last_scale = event->scale;
+
+		float new_zoom = CLAMP_FLOAT(old_zoom * (float)ratio, 0.1f, 1.0f);
+		selmon->pertag->canvas_zoom[tag] = new_zoom;
+
+		float cursor_sx = (float)(cursor->x - selmon->w.x);
+		float cursor_sy = (float)(cursor->y - selmon->w.y);
+		selmon->pertag->canvas_pan_x[tag] +=
+			cursor_sx * (1.0f / old_zoom - 1.0f / new_zoom);
+		selmon->pertag->canvas_pan_y[tag] +=
+			cursor_sy * (1.0f / old_zoom - 1.0f / new_zoom);
+
+		canvas_reposition(selmon);
+		return;
+	}
+
 	wlr_pointer_gestures_v1_send_pinch_update(
 		pointer_gestures, seat, event->time_msec, event->dx, event->dy,
 		event->scale, event->rotation);
@@ -1976,6 +2091,9 @@ void pinch_end(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_pinch_end_event *event = data;
 
 	// Forward pinch end event to client
+	if (selmon && is_canvas_layout(selmon))
+		return;
+
 	wlr_pointer_gestures_v1_send_pinch_end(pointer_gestures, seat,
 										   event->time_msec, event->cancelled);
 }
@@ -2072,6 +2190,25 @@ buttonpress(struct wl_listener *listener, void *data) {
 		if (locked)
 			break;
 
+		{
+			struct wlr_keyboard *kb = wlr_seat_get_keyboard(seat);
+			uint32_t pmods = kb ? wlr_keyboard_get_modifiers(kb) : 0;
+			struct wlr_keyboard *hkb = &kb_group->wlr_group->keyboard;
+			uint32_t hmods = hkb ? wlr_keyboard_get_modifiers(hkb) : 0;
+			pmods = pmods | hmods;
+			if (event->button == BTN_MIDDLE &&
+				(CLEANMASK(pmods) & WLR_MODIFIER_LOGO) && selmon &&
+				selmon->pertag->ltidxs[selmon->pertag->curtag]->id == CANVAS &&
+				!cursor_in_minimap(selmon, cursor->x, cursor->y) &&
+				!(focustop(selmon) && focustop(selmon)->isfullscreen)) {
+				grabcx = (int32_t)round(cursor->x);
+				grabcy = (int32_t)round(cursor->y);
+				cursor_mode = CurPan;
+				wlr_cursor_set_xcursor(cursor, cursor_mgr, "grabbing");
+				return;
+			}
+		}
+
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene->node.enabled &&
@@ -2112,6 +2249,54 @@ buttonpress(struct wl_listener *listener, void *data) {
 				return;
 			}
 
+			if (selmon->canvas_overview_visible &&
+				!selmon->canvas_overview_closing && event->button == BTN_LEFT &&
+				selmon->pertag->ltidxs[selmon->pertag->curtag]->id == CANVAS) {
+				uint32_t tag = selmon->pertag->curtag;
+				float zoom = selmon->pertag->canvas_zoom[tag];
+
+				int min_x, min_y, max_x, max_y;
+				get_canvas_bounds(selmon, &min_x, &min_y, &max_x, &max_y);
+				int canvas_w = max_x - min_x;
+				int canvas_h = max_y - min_y;
+				if (canvas_w < 100)
+					canvas_w = 100;
+				if (canvas_h < 100)
+					canvas_h = 100;
+
+				float screen_aspect = (float)selmon->m.width / selmon->m.height;
+				float canvas_aspect = (float)canvas_w / canvas_h;
+				if (canvas_aspect < screen_aspect) {
+					int new_w = (int)(canvas_h * screen_aspect);
+					int pad = (new_w - canvas_w) / 2;
+					min_x -= pad;
+					canvas_w = new_w;
+				} else if (canvas_aspect > screen_aspect) {
+					int new_h = (int)(canvas_w / screen_aspect);
+					int pad = (new_h - canvas_h) / 2;
+					min_y -= pad;
+					canvas_h = new_h;
+				}
+
+				float scale = (float)selmon->m.width / canvas_w;
+
+				float click_x = cursor->x - selmon->m.x;
+				float click_y = cursor->y - selmon->m.y;
+				float canvas_x = click_x / scale + min_x;
+				float canvas_y = click_y / scale + min_y;
+
+				selmon->pertag->canvas_pan_x[tag] =
+					canvas_x - (selmon->w.width / zoom) / 2.0f;
+				selmon->pertag->canvas_pan_y[tag] =
+					canvas_y - (selmon->w.height / zoom) / 2.0f;
+
+				selmon->canvas_overview_closing = true;
+				selmon->canvas_overview_anim_start = get_now_in_ms();
+				arrange(selmon, true, false);
+				request_fresh_all_monitors();
+				return;
+			}
+
 			if (selmon->isoverview && event->button == BTN_RIGHT && c) {
 				pending_kill_client(c);
 				return;
@@ -2127,6 +2312,12 @@ buttonpress(struct wl_listener *listener, void *data) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		if (!locked && cursor_mode == CurPan) {
+			cursor_mode = CurNormal;
+			wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+			motionnotify(0, NULL, 0, 0, 0, 0);
+			return;
+		}
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		if (!locked && cursor_mode != CurNormal && cursor_mode != CurPressed) {
 			cursor_mode = CurNormal;
@@ -2140,8 +2331,14 @@ buttonpress(struct wl_listener *listener, void *data) {
 				selmon->sel = NULL;
 			}
 			selmon = xytomon(cursor->x, cursor->y);
-			client_update_oldmonname_record(grabc, selmon);
-			setmon(grabc, selmon, 0, true);
+			if (grabc->mon &&
+				grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag]->id ==
+					CANVAS) {
+				selmon = grabc->mon;
+			} else {
+				client_update_oldmonname_record(grabc, selmon);
+				setmon(grabc, selmon, 0, true);
+			}
 			selmon->prevsel = ISTILED(selmon->sel) ? selmon->sel : NULL;
 			selmon->sel = grabc;
 			tmpc = grabc;
@@ -2610,6 +2807,20 @@ void commitnotify(struct wl_listener *listener, void *data) {
 				   new_geo->x != 0 || new_geo->y != 0;
 	}
 
+	if (c->mon && is_canvas_layout(c->mon) && !c->isfullscreen &&
+		!c->ismaximizescreen) {
+		uint32_t tag = c->mon->pertag->curtag;
+		float zoom = c->mon->pertag->canvas_zoom[tag];
+		float effective_zoom = zoom;
+		if (c->mon->canvas_in_overview &&
+			c->canvas_geom_backup[tag].width > 0) {
+			effective_zoom *= (float)c->canvas_geom[tag].width /
+							  c->canvas_geom_backup[tag].width;
+		}
+		if (effective_zoom != 1.0f)
+			apply_visual_zoom(c, effective_zoom);
+	}
+
 	if (c == grabc || !c->dirty)
 		return;
 
@@ -2973,6 +3184,22 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 }
 
 void createmon(struct wl_listener *listener, void *data) {
+	if (wlr_output_is_headless((struct wlr_output *)data)) {
+		if (!wlr_output_init_render((struct wlr_output *)data, alloc, drw))
+			return;
+		struct wlr_output_state state;
+		wlr_output_state_init(&state);
+		wlr_output_state_set_enabled(&state, true);
+		struct wlr_output_mode *mode =
+			wlr_output_preferred_mode((struct wlr_output *)data);
+		if (mode != NULL) {
+			wlr_output_state_set_mode(&state, mode);
+		}
+		wlr_output_commit_state((struct wlr_output *)data, &state);
+		wlr_output_state_finish(&state);
+		return;
+	}
+
 	/* This event is raised by the backend when a new output (aka a display or
 	 * monitor) becomes available. */
 	struct wlr_output *wlr_output = data;
@@ -3079,6 +3306,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		m->pertag->nmasters[i] = config.default_nmaster;
 		m->pertag->mfacts[i] = config.default_mfact;
 		m->pertag->ltidxs[i] = &layouts[0];
+		m->pertag->canvas_zoom[i] = 1.0f;
 	}
 
 	// apply tag rule
@@ -4114,6 +4342,10 @@ mapnotify(struct wl_listener *listener, void *data) {
 	if (client_is_x11(c))
 		init_client_properties(c);
 
+	if (c->mon && c->mon->canvas_in_overview) {
+		canvas_overview_toggle(&(Arg){0});
+	}
+
 	// set special window properties
 	if (client_is_unmanaged(c) || client_is_x11_popup(c)) {
 		c->bw = 0;
@@ -4331,6 +4563,19 @@ void resize_floating_window(Client *grabc) {
 		.height = grabc->geom.height + (rzcorner & 2 ? cdy : -cdy)};
 
 	grabc->float_geom = box;
+	if (grabc->mon &&
+		grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag]->id == CANVAS) {
+		uint32_t tag = grabc->mon->pertag->curtag;
+		float zoom = grabc->mon->pertag->canvas_zoom[tag];
+		float pan_x = grabc->mon->pertag->canvas_pan_x[tag];
+		float pan_y = grabc->mon->pertag->canvas_pan_y[tag];
+		grabc->canvas_geom[tag].x =
+			(int32_t)roundf((box.x - grabc->mon->w.x) / zoom + pan_x);
+		grabc->canvas_geom[tag].y =
+			(int32_t)roundf((box.y - grabc->mon->w.y) / zoom + pan_y);
+		grabc->canvas_geom[tag].width = (int32_t)roundf(box.width / zoom);
+		grabc->canvas_geom[tag].height = (int32_t)roundf(box.height / zoom);
+	}
 
 	resize(grabc, box, 1);
 	grabcx += cdx;
@@ -4383,6 +4628,10 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 			selmon = xytomon(cursor->x, cursor->y);
 	}
 
+	if (selmon && selmon->canvas_overview_visible &&
+		!selmon->canvas_overview_closing)
+		request_fresh_all_monitors();
+
 	/* Find the client under the pointer and send the event along. */
 	xytonode(cursor->x, cursor->y, &surface, &c, NULL, &sx, &sy);
 
@@ -4402,7 +4651,24 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 	/* If we are currently grabbing the mouse, handle and return */
 	if (cursor_mode == CurMove) {
-		/* Move the grabbed client to the new position. */
+		if (grabc->mon &&
+			grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag]->id ==
+				CANVAS) {
+			if (!time)
+				return;
+			int dx = (int32_t)round(cursor->x) - grabcx;
+			int dy = (int32_t)round(cursor->y) - grabcy;
+			grabcx = (int32_t)round(cursor->x);
+			grabcy = (int32_t)round(cursor->y);
+
+			uint32_t tag = grabc->mon->pertag->curtag;
+			float zoom = grabc->mon->pertag->canvas_zoom[tag];
+			grabc->canvas_geom[tag].x += (int32_t)roundf(dx / zoom);
+			grabc->canvas_geom[tag].y += (int32_t)roundf(dy / zoom);
+
+			arrange(grabc->mon, false, false);
+			return;
+		}
 		grabc->iscustomsize = 1;
 		grabc->float_geom =
 			(struct wlr_box){.x = (int32_t)round(cursor->x) - grabcx,
@@ -4412,7 +4678,10 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		resize(grabc, grabc->float_geom, 1);
 		return;
 	} else if (cursor_mode == CurResize) {
-		if (grabc->isfloating) {
+		if (grabc->isfloating ||
+			(grabc->mon &&
+			 grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag]->id ==
+				 CANVAS)) {
 			grabc->iscustomsize = 1;
 			if (last_apply_drap_time == 0 ||
 				time - last_apply_drap_time >
@@ -4424,6 +4693,21 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		} else {
 			resize_tile_client(grabc, true, 0, 0, time);
 		}
+	} else if (cursor_mode == CurPan) {
+		if (!time)
+			return;
+		int dx = (int32_t)round(cursor->x) - grabcx;
+		int dy = (int32_t)round(cursor->y) - grabcy;
+		grabcx = (int32_t)round(cursor->x);
+		grabcy = (int32_t)round(cursor->y);
+
+		uint32_t tag = selmon->pertag->curtag;
+		float zoom = selmon->pertag->canvas_zoom[tag];
+		selmon->pertag->canvas_pan_x[tag] -= dx / zoom;
+		selmon->pertag->canvas_pan_y[tag] -= dy / zoom;
+
+		canvas_reposition(selmon);
+		return;
 	}
 
 	/* If there's no client surface under the cursor, set the cursor image
@@ -4636,6 +4920,117 @@ void monitor_check_skip_frame_timeout(Monitor *m) {
 	}
 }
 
+static void get_canvas_bounds(Monitor *m, int *min_x, int *min_y, int *max_x,
+							  int *max_y) {
+	Client *c;
+	uint32_t tag = m->pertag->curtag;
+	bool found = false;
+
+	*min_x = INT32_MAX;
+	*min_y = INT32_MAX;
+	*max_x = INT32_MIN;
+	*max_y = INT32_MIN;
+
+	wl_list_for_each(c, &clients, link) {
+		if (!VISIBLEON(c, m) || c->isminimized)
+			continue;
+		if (c->canvas_geom[tag].width <= 0 || c->canvas_geom[tag].height <= 0)
+			continue;
+
+		int cx = c->canvas_geom[tag].x;
+		int cy = c->canvas_geom[tag].y;
+		int cw = c->canvas_geom[tag].width;
+		int ch = c->canvas_geom[tag].height;
+
+		if (cx < *min_x)
+			*min_x = cx;
+		if (cy < *min_y)
+			*min_y = cy;
+		if (cx + cw > *max_x)
+			*max_x = cx + cw;
+		if (cy + ch > *max_y)
+			*max_y = cy + ch;
+		found = true;
+	}
+
+	if (!found) {
+		*min_x = -m->m.width;
+		*min_y = -m->m.height;
+		*max_x = m->m.width;
+		*max_y = m->m.height;
+	}
+
+	int margin = 100;
+	*min_x -= margin;
+	*min_y -= margin;
+	*max_x += margin;
+	*max_y += margin;
+}
+
+static bool cursor_in_minimap(Monitor *m, double cx, double cy) {
+	if (!m || !m->minimap_visible)
+		return false;
+
+	int minimap_w = m->m.width / 4;
+	int minimap_h = m->m.height / 4;
+	int margin = 20;
+
+	int mx = m->m.x + m->m.width - minimap_w - margin;
+	int my = m->m.y + margin;
+
+	return cx >= mx && cx < mx + minimap_w && cy >= my && cy < my + minimap_h;
+}
+
+int32_t toggleminimap(const Arg *arg) {
+	if (!selmon)
+		return 0;
+
+	Client *fs_mm = focustop(selmon);
+	if (fs_mm && fs_mm->isfullscreen)
+		return 0;
+
+	selmon->minimap_visible = !selmon->minimap_visible;
+	if (!selmon->minimap_visible) {
+		if (minimap_scene_tree) {
+			wlr_scene_node_destroy(&minimap_scene_tree->node);
+			minimap_scene_tree = NULL;
+		}
+		if (is_canvas_layout(selmon))
+			canvas_reposition(selmon);
+		request_fresh_all_monitors();
+	}
+	return 0;
+}
+
+struct thumbnail_ctx {
+	struct wlr_scene_tree *tree;
+	int rx, ry;
+	float surf_scale;
+	bool any_rendered;
+};
+
+static void render_surface_thumbnail(struct wlr_surface *surface, int sx,
+									 int sy, void *data) {
+	struct thumbnail_ctx *ctx = data;
+	if (!surface->buffer)
+		return;
+	int sw = (int)(surface->current.width * ctx->surf_scale);
+	int sh = (int)(surface->current.height * ctx->surf_scale);
+	if (sw < 1)
+		sw = 1;
+	if (sh < 1)
+		sh = 1;
+	struct wlr_scene_buffer *sbuf =
+		wlr_scene_buffer_create(ctx->tree, &surface->buffer->base);
+	if (!sbuf)
+		return;
+	wlr_scene_buffer_set_dest_size(sbuf, sw, sh);
+	wlr_scene_node_set_position(&sbuf->node,
+								ctx->rx + (int)(sx * ctx->surf_scale),
+								ctx->ry + (int)(sy * ctx->surf_scale));
+	ctx->any_rendered = true;
+}
+
 void rendermon(struct wl_listener *listener, void *data) {
 	Monitor *m = wl_container_of(listener, m, frame);
 	Client *c = NULL, *tmp = NULL;
@@ -4686,6 +5081,443 @@ void rendermon(struct wl_listener *listener, void *data) {
 	}
 
 	// 只有在需要帧时才构建和提交状态
+
+	if (m->minimap_visible &&
+		m->pertag->ltidxs[m->pertag->curtag]->id == CANVAS) {
+		uint32_t tag = m->pertag->curtag;
+
+		int min_x, min_y, max_x, max_y;
+		get_canvas_bounds(m, &min_x, &min_y, &max_x, &max_y);
+
+		int canvas_w = max_x - min_x;
+		int canvas_h = max_y - min_y;
+		if (canvas_w < 100)
+			canvas_w = 100;
+		if (canvas_h < 100)
+			canvas_h = 100;
+
+		int minimap_w = m->m.width / 4;
+		int minimap_h = m->m.height / 4;
+		int margin = 20;
+
+		float scale_x = (float)minimap_w / canvas_w;
+		float scale_y = (float)minimap_h / canvas_h;
+		float scale = (scale_x < scale_y) ? scale_x : scale_y;
+
+		if (minimap_scene_tree) {
+			wlr_scene_node_destroy(&minimap_scene_tree->node);
+		}
+		minimap_scene_tree = wlr_scene_tree_create(layers[LyrBlock]);
+
+		wlr_scene_node_set_position(&minimap_scene_tree->node,
+									m->m.x + m->m.width - minimap_w - margin,
+									m->m.y + margin);
+
+		bool wallpaper_set = false;
+		LayerSurface *l;
+		wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND],
+						 link) {
+			if (l->layer_surface && l->layer_surface->surface &&
+				l->layer_surface->surface->buffer && l->mapped) {
+				struct wlr_buffer *wbuf =
+					&l->layer_surface->surface->buffer->base;
+				struct wlr_scene_buffer *bg_buf =
+					wlr_scene_buffer_create(minimap_scene_tree, wbuf);
+				if (bg_buf) {
+					wlr_scene_buffer_set_dest_size(bg_buf, minimap_w,
+												   minimap_h);
+					wlr_scene_node_set_position(&bg_buf->node, 0, 0);
+					wallpaper_set = true;
+					break;
+				}
+			}
+		}
+		if (!wallpaper_set) {
+			struct wlr_scene_rect *bg =
+				wlr_scene_rect_create(minimap_scene_tree, minimap_w, minimap_h,
+									  (float[4]){0.1f, 0.1f, 0.15f, 0.9f});
+			(void)bg;
+		}
+
+		Client *c;
+		wl_list_for_each(c, &clients, link) {
+			if (!VISIBLEON(c, m) || c->isminimized)
+				continue;
+			if (c->canvas_geom[tag].width <= 0 ||
+				c->canvas_geom[tag].height <= 0)
+				continue;
+
+			struct wlr_surface *surface = client_surface(c);
+			if (!surface || !surface->mapped)
+				continue;
+
+			int rx = (int)((c->canvas_geom[tag].x - min_x) * scale);
+			int ry = (int)((c->canvas_geom[tag].y - min_y) * scale);
+			int rw = (int)(c->canvas_geom[tag].width * scale);
+			int rh = (int)(c->canvas_geom[tag].height * scale);
+
+			if (rw < 4)
+				rw = 4;
+			if (rh < 4)
+				rh = 4;
+
+			struct thumbnail_ctx tctx = {
+				.tree = minimap_scene_tree,
+				.rx = rx,
+				.ry = ry,
+				.surf_scale = c->canvas_geom[tag].width > 0
+								  ? (float)rw / c->canvas_geom[tag].width
+								  : scale,
+				.any_rendered = false,
+			};
+			wlr_surface_for_each_surface(surface, render_surface_thumbnail,
+										 &tctx);
+			if (!tctx.any_rendered) {
+				float color[4] = {0.3f, 0.5f, 0.7f, 0.8f};
+				if (c == focustop(m)) {
+					color[0] = 0.8f;
+					color[1] = 0.6f;
+					color[2] = 0.2f;
+				}
+				struct wlr_scene_rect *wr =
+					wlr_scene_rect_create(minimap_scene_tree, rw, rh, color);
+				wlr_scene_node_set_position(&wr->node, rx, ry);
+			}
+		}
+
+		float pan_x = m->pertag->canvas_pan_x[tag];
+		float pan_y = m->pertag->canvas_pan_y[tag];
+		float zoom = m->pertag->canvas_zoom[tag];
+
+		int vp_x = (int)((pan_x - min_x) * scale);
+		int vp_y = (int)((pan_y - min_y) * scale);
+		int vp_w = (int)((m->w.width / zoom) * scale);
+		int vp_h = (int)((m->w.height / zoom) * scale);
+
+		if (vp_w < 4)
+			vp_w = 4;
+		if (vp_h < 4)
+			vp_h = 4;
+
+		float vp_color[4] = {1.0f, 1.0f, 1.0f, 0.6f};
+		int border = 2;
+		struct wlr_scene_rect *vp_top =
+			wlr_scene_rect_create(minimap_scene_tree, vp_w, border, vp_color);
+		wlr_scene_node_set_position(&vp_top->node, vp_x, vp_y);
+		struct wlr_scene_rect *vp_bot =
+			wlr_scene_rect_create(minimap_scene_tree, vp_w, border, vp_color);
+		wlr_scene_node_set_position(&vp_bot->node, vp_x, vp_y + vp_h - border);
+		struct wlr_scene_rect *vp_left =
+			wlr_scene_rect_create(minimap_scene_tree, border, vp_h, vp_color);
+		wlr_scene_node_set_position(&vp_left->node, vp_x, vp_y);
+		struct wlr_scene_rect *vp_right =
+			wlr_scene_rect_create(minimap_scene_tree, border, vp_h, vp_color);
+		wlr_scene_node_set_position(&vp_right->node, vp_x + vp_w - border,
+									vp_y);
+
+	} else if (!m->minimap_visible && minimap_scene_tree) {
+		wlr_scene_node_destroy(&minimap_scene_tree->node);
+		minimap_scene_tree = NULL;
+	}
+
+	if (m->canvas_overview_visible &&
+		m->pertag->ltidxs[m->pertag->curtag]->id == CANVAS) {
+		uint32_t tag = m->pertag->curtag;
+
+		uint32_t anim_duration = 300;
+		uint32_t elapsed = get_now_in_ms() - m->canvas_overview_anim_start;
+		double raw_t =
+			anim_duration ? (double)elapsed / (double)anim_duration : 1.0;
+		if (raw_t > 1.0)
+			raw_t = 1.0;
+
+		bool animating = false;
+		if (m->canvas_overview_closing) {
+			double factor = find_animation_curve_at(raw_t, OPAFADEOUT);
+			m->canvas_overview_progress = 1.0f - (float)factor;
+			if (raw_t >= 1.0) {
+				m->canvas_overview_visible = false;
+				m->canvas_overview_closing = false;
+				m->canvas_overview_progress = 0.0f;
+				overview_built = false;
+				if (overview_scene_tree) {
+					wlr_scene_node_destroy(&overview_scene_tree->node);
+					overview_scene_tree = NULL;
+				}
+				memset(overview_vp_rects, 0, sizeof(overview_vp_rects));
+				goto overview_done;
+			}
+			animating = true;
+			need_more_frames = true;
+		} else {
+			double factor = find_animation_curve_at(raw_t, OPAFADEIN);
+			m->canvas_overview_progress = (float)factor;
+			if (raw_t < 1.0) {
+				animating = true;
+				need_more_frames = true;
+			}
+		}
+
+		float prog = m->canvas_overview_progress;
+
+		if (!animating && overview_built && overview_scene_tree) {
+			float zoom = m->pertag->canvas_zoom[tag];
+			float pan_x = m->pertag->canvas_pan_x[tag];
+			float pan_y = m->pertag->canvas_pan_y[tag];
+
+			float cx = cursor->x - overview_tree_x;
+			float cy = cursor->y - overview_tree_y;
+			if (cx >= 0 && cx < m->m.width && cy >= 0 && cy < m->m.height) {
+				float canvas_cx = cx / overview_scale + overview_canvas_min_x;
+				float canvas_cy = cy / overview_scale + overview_canvas_min_y;
+				pan_x = canvas_cx - (m->w.width / zoom) / 2.0f;
+				pan_y = canvas_cy - (m->w.height / zoom) / 2.0f;
+			}
+
+			int vp_x = (int)((pan_x - overview_canvas_min_x) * overview_scale);
+			int vp_y = (int)((pan_y - overview_canvas_min_y) * overview_scale);
+			int vp_w = (int)((m->w.width / zoom) * overview_scale);
+			int vp_h = (int)((m->w.height / zoom) * overview_scale);
+			if (vp_w < 8)
+				vp_w = 8;
+			if (vp_h < 8)
+				vp_h = 8;
+
+			int border = 3;
+			if (overview_vp_rects[0]) {
+				wlr_scene_rect_set_size(overview_vp_rects[0], vp_w, border);
+				wlr_scene_node_set_position(&overview_vp_rects[0]->node, vp_x,
+											vp_y);
+			}
+			if (overview_vp_rects[1]) {
+				wlr_scene_rect_set_size(overview_vp_rects[1], vp_w, border);
+				wlr_scene_node_set_position(&overview_vp_rects[1]->node, vp_x,
+											vp_y + vp_h - border);
+			}
+			if (overview_vp_rects[2]) {
+				wlr_scene_rect_set_size(overview_vp_rects[2], border, vp_h);
+				wlr_scene_node_set_position(&overview_vp_rects[2]->node, vp_x,
+											vp_y);
+			}
+			if (overview_vp_rects[3]) {
+				wlr_scene_rect_set_size(overview_vp_rects[3], border, vp_h);
+				wlr_scene_node_set_position(&overview_vp_rects[3]->node,
+											vp_x + vp_w - border, vp_y);
+			}
+			goto overview_done;
+		}
+
+		{
+			Client *ci;
+			int cascade_idx = 0;
+			uint32_t ctag = m->pertag->curtag;
+			float cpx = m->pertag->canvas_pan_x[ctag];
+			float cpy = m->pertag->canvas_pan_y[ctag];
+			wl_list_for_each(ci, &clients, link) {
+				if (!VISIBLEON(ci, m) || ci->isminimized)
+					continue;
+				if (ci->canvas_geom[ctag].width <= 0 ||
+					ci->canvas_geom[ctag].height <= 0)
+					canvas_geom_init(ci, m, ctag, cpx, cpy, &cascade_idx);
+			}
+		}
+
+		int min_x, min_y, max_x, max_y;
+		get_canvas_bounds(m, &min_x, &min_y, &max_x, &max_y);
+
+		int canvas_w = max_x - min_x;
+		int canvas_h = max_y - min_y;
+		if (canvas_w < 100)
+			canvas_w = 100;
+		if (canvas_h < 100)
+			canvas_h = 100;
+
+		float screen_aspect = (float)m->m.width / m->m.height;
+		float canvas_aspect = (float)canvas_w / canvas_h;
+		if (canvas_aspect < screen_aspect) {
+			int new_w = (int)(canvas_h * screen_aspect);
+			int pad = (new_w - canvas_w) / 2;
+			min_x -= pad;
+			max_x += pad;
+			canvas_w = new_w;
+		} else if (canvas_aspect > screen_aspect) {
+			int new_h = (int)(canvas_w / screen_aspect);
+			int pad = (new_h - canvas_h) / 2;
+			min_y -= pad;
+			max_y += pad;
+			canvas_h = new_h;
+		}
+
+		float scale = (float)m->m.width / canvas_w;
+
+		if (overview_scene_tree) {
+			wlr_scene_node_destroy(&overview_scene_tree->node);
+			overview_scene_tree = NULL;
+		}
+		memset(overview_vp_rects, 0, sizeof(overview_vp_rects));
+		overview_scene_tree = wlr_scene_tree_create(layers[LyrBlock]);
+		if (!overview_scene_tree)
+			goto overview_done;
+
+		int final_x = m->m.x;
+		int final_y = m->m.y;
+		int center_x = m->m.x + m->m.width / 2;
+		int center_y = m->m.y + m->m.height / 2;
+		int tree_x = final_x + (int)((center_x - final_x) * (1.0f - prog));
+		int tree_y = final_y + (int)((center_y - final_y) * (1.0f - prog));
+
+		wlr_scene_node_set_position(&overview_scene_tree->node, tree_x, tree_y);
+
+		struct wlr_scene_rect *fullbg =
+			wlr_scene_rect_create(overview_scene_tree, m->m.width, m->m.height,
+								  (float[4]){0.0f, 0.0f, 0.0f, prog});
+		if (fullbg)
+			wlr_scene_node_set_position(&fullbg->node, m->m.x - tree_x,
+										m->m.y - tree_y);
+
+		int anim_content_w = (int)(m->m.width * prog);
+		int anim_content_h = (int)(m->m.height * prog);
+		if (anim_content_w < 1)
+			anim_content_w = 1;
+		if (anim_content_h < 1)
+			anim_content_h = 1;
+
+		bool wallpaper_set = false;
+		LayerSurface *l;
+		wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND],
+						 link) {
+			if (l->layer_surface && l->layer_surface->surface &&
+				l->layer_surface->surface->buffer && l->mapped) {
+				struct wlr_buffer *wbuf =
+					&l->layer_surface->surface->buffer->base;
+				struct wlr_scene_buffer *bg_buf =
+					wlr_scene_buffer_create(overview_scene_tree, wbuf);
+				if (bg_buf) {
+					wlr_scene_buffer_set_dest_size(bg_buf, anim_content_w,
+												   anim_content_h);
+					wlr_scene_node_set_position(&bg_buf->node, 0, 0);
+					wallpaper_set = true;
+					break;
+				}
+			}
+		}
+		if (!wallpaper_set) {
+			struct wlr_scene_rect *bg = wlr_scene_rect_create(
+				overview_scene_tree, anim_content_w, anim_content_h,
+				(float[4]){0.15f, 0.15f, 0.2f, prog});
+			(void)bg;
+		}
+
+		Client *c;
+		wl_list_for_each(c, &clients, link) {
+			if (!VISIBLEON(c, m) || c->isminimized)
+				continue;
+			if (c->canvas_geom[tag].width <= 0 ||
+				c->canvas_geom[tag].height <= 0)
+				continue;
+
+			struct wlr_surface *surface = client_surface(c);
+			if (!surface || !surface->mapped)
+				continue;
+
+			int rx = (int)((c->canvas_geom[tag].x - min_x) * scale * prog);
+			int ry = (int)((c->canvas_geom[tag].y - min_y) * scale * prog);
+			int rw = (int)(c->canvas_geom[tag].width * scale * prog);
+			int rh = (int)(c->canvas_geom[tag].height * scale * prog);
+
+			if (rw < 1)
+				rw = 1;
+			if (rh < 1)
+				rh = 1;
+
+			struct thumbnail_ctx tctx = {
+				.tree = overview_scene_tree,
+				.rx = rx,
+				.ry = ry,
+				.surf_scale = c->canvas_geom[tag].width > 0
+								  ? (float)rw / c->canvas_geom[tag].width
+								  : scale * prog,
+				.any_rendered = false,
+			};
+			wlr_surface_for_each_surface(surface, render_surface_thumbnail,
+										 &tctx);
+			if (!tctx.any_rendered) {
+				float color[4] = {0.3f, 0.5f, 0.7f, prog};
+				if (c == focustop(m)) {
+					color[0] = 0.9f;
+					color[1] = 0.7f;
+					color[2] = 0.3f;
+				}
+				struct wlr_scene_rect *wr =
+					wlr_scene_rect_create(overview_scene_tree, rw, rh, color);
+				if (wr)
+					wlr_scene_node_set_position(&wr->node, rx, ry);
+			}
+		}
+
+		float pan_x = m->pertag->canvas_pan_x[tag];
+		float pan_y = m->pertag->canvas_pan_y[tag];
+		float zoom = m->pertag->canvas_zoom[tag];
+
+		if (prog >= 1.0f) {
+			float cx = cursor->x - final_x;
+			float cy = cursor->y - final_y;
+			if (cx >= 0 && cx < m->m.width && cy >= 0 && cy < m->m.height) {
+				float canvas_cx = cx / scale + min_x;
+				float canvas_cy = cy / scale + min_y;
+				pan_x = canvas_cx - (m->w.width / zoom) / 2.0f;
+				pan_y = canvas_cy - (m->w.height / zoom) / 2.0f;
+			}
+		}
+
+		int vp_x = (int)((pan_x - min_x) * scale * prog);
+		int vp_y = (int)((pan_y - min_y) * scale * prog);
+		int vp_w = (int)((m->w.width / zoom) * scale * prog);
+		int vp_h = (int)((m->w.height / zoom) * scale * prog);
+		if (vp_w < 8)
+			vp_w = 8;
+		if (vp_h < 8)
+			vp_h = 8;
+
+		float vp_color[4] = {1.0f, 1.0f, 1.0f, 0.8f * prog};
+		int border = 3;
+		overview_vp_rects[0] =
+			wlr_scene_rect_create(overview_scene_tree, vp_w, border, vp_color);
+		if (overview_vp_rects[0])
+			wlr_scene_node_set_position(&overview_vp_rects[0]->node, vp_x,
+										vp_y);
+		overview_vp_rects[1] =
+			wlr_scene_rect_create(overview_scene_tree, vp_w, border, vp_color);
+		if (overview_vp_rects[1])
+			wlr_scene_node_set_position(&overview_vp_rects[1]->node, vp_x,
+										vp_y + vp_h - border);
+		overview_vp_rects[2] =
+			wlr_scene_rect_create(overview_scene_tree, border, vp_h, vp_color);
+		if (overview_vp_rects[2])
+			wlr_scene_node_set_position(&overview_vp_rects[2]->node, vp_x,
+										vp_y);
+		overview_vp_rects[3] =
+			wlr_scene_rect_create(overview_scene_tree, border, vp_h, vp_color);
+		if (overview_vp_rects[3])
+			wlr_scene_node_set_position(&overview_vp_rects[3]->node,
+										vp_x + vp_w - border, vp_y);
+
+		overview_canvas_min_x = min_x;
+		overview_canvas_min_y = min_y;
+		overview_scale = scale;
+		overview_tree_x = tree_x;
+		overview_tree_y = tree_y;
+
+		if (!animating)
+			overview_built = true;
+	overview_done:;
+	} else if (!m->canvas_overview_visible && overview_scene_tree) {
+		wlr_scene_node_destroy(&overview_scene_tree->node);
+		overview_scene_tree = NULL;
+		overview_built = false;
+		memset(overview_vp_rects, 0, sizeof(overview_vp_rects));
+	}
+
 	if (config.allow_tearing && frame_allow_tearing) {
 		apply_tear_state(m);
 	} else {
@@ -5257,6 +6089,22 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, c->mon->m, 1);
 		c->isfullscreen = 1;
+
+		if (is_canvas_layout(c->mon)) {
+			c->animation.running = false;
+			c->need_output_flush = false;
+			c->animation.current = c->animainit_geom = c->animation.initial =
+				c->pending = c->current = c->geom;
+			wlr_scene_node_set_position(&c->scene->node, c->mon->m.x,
+										c->mon->m.y);
+			wlr_scene_node_set_position(&c->scene_surface->node, 0, 0);
+			clear_visual_zoom(c);
+			struct wlr_box full_clip = {0, 0, c->mon->m.width,
+										c->mon->m.height};
+			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
+											   &full_clip);
+			request_fresh_all_monitors();
+		}
 	} else {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 		c->isfullscreen = 0;
@@ -5526,13 +6374,6 @@ void setup(void) {
 	 * hardware cursors (some older GPUs don't). */
 	if (!(backend = wlr_backend_autocreate(event_loop, &session)))
 		die("couldn't create backend");
-
-	headless_backend = wlr_headless_backend_create(event_loop);
-	if (!headless_backend) {
-		wlr_log(WLR_ERROR, "Failed to create secondary headless backend");
-	} else {
-		wlr_multi_backend_add(backend, headless_backend);
-	}
 
 	/* Initialize the scene graph used to lay out windows */
 	scene = wlr_scene_create();
@@ -6176,7 +7017,7 @@ void updatemons(struct wl_listener *listener, void *data) {
 		wl_list_for_each(c, &clients, link) {
 			// floating window position auto adjust the change of monitor
 			// position
-			if (c->isfloating && c->mon == m) {
+			if (c->isfloating && c->mon == m && !is_canvas_layout(m)) {
 				c->geom.x += mon_pos_offsetx;
 				c->geom.y += mon_pos_offsety;
 				c->float_geom = c->geom;
@@ -6334,6 +7175,18 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	}
 
 toggleseltags:
+
+	if (m->canvas_overview_visible) {
+		m->canvas_overview_visible = false;
+		m->canvas_overview_closing = false;
+	}
+	if (m->minimap_visible) {
+		m->minimap_visible = false;
+		if (minimap_scene_tree) {
+			wlr_scene_node_destroy(&minimap_scene_tree->node);
+			minimap_scene_tree = NULL;
+		}
+	}
 
 	if (changefocus)
 		focusclient(focustop(m), 1);
@@ -6565,6 +7418,19 @@ void createnotifyx11(struct wl_listener *listener, void *data) {
 void commitx11(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, commmitx11);
 	struct wlr_surface_state *state = &c->surface.xwayland->surface->current;
+
+	if (c->mon && is_canvas_layout(c->mon)) {
+		uint32_t tag = c->mon->pertag->curtag;
+		float zoom = c->mon->pertag->canvas_zoom[tag];
+		float effective_zoom = zoom;
+		if (c->mon->canvas_in_overview &&
+			c->canvas_geom_backup[tag].width > 0) {
+			effective_zoom *= (float)c->canvas_geom[tag].width /
+							  c->canvas_geom_backup[tag].width;
+		}
+		if (effective_zoom != 1.0f)
+			apply_visual_zoom(c, effective_zoom);
+	}
 
 	if ((int32_t)c->geom.width - 2 * (int32_t)c->bw == (int32_t)state->width &&
 		(int32_t)c->geom.height - 2 * (int32_t)c->bw ==

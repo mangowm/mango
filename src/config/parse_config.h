@@ -126,9 +126,36 @@ typedef struct {
 	}
 
 // 默认按键绑定数组
-KeyBinding default_key_bindings[] = {CHVT(1), CHVT(2),	CHVT(3),  CHVT(4),
-									 CHVT(5), CHVT(6),	CHVT(7),  CHVT(8),
-									 CHVT(9), CHVT(10), CHVT(11), CHVT(12)};
+KeyBinding default_key_bindings[] = {
+	CHVT(1),
+	CHVT(2),
+	CHVT(3),
+	CHVT(4),
+	CHVT(5),
+	CHVT(6),
+	CHVT(7),
+	CHVT(8),
+	CHVT(9),
+	CHVT(10),
+	CHVT(11),
+	CHVT(12),
+	{WLR_MODIFIER_LOGO,
+	 {.keysym = XKB_KEY_o, .type = KEY_TYPE_SYM},
+	 toggleminimap,
+	 {0}},
+	{WLR_MODIFIER_LOGO,
+	 {.keysym = XKB_KEY_p, .type = KEY_TYPE_SYM},
+	 canvas_overview_toggle,
+	 {0}},
+	{WLR_MODIFIER_LOGO,
+	 {.keysym = XKB_KEY_z, .type = KEY_TYPE_SYM},
+	 canvas_zoom_resize,
+	 {.f = 1.0f / 1.1f}},
+	{WLR_MODIFIER_LOGO,
+	 {.keysym = XKB_KEY_x, .type = KEY_TYPE_SYM},
+	 canvas_zoom_resize,
+	 {.f = 1.1f}},
+};
 
 typedef struct {
 	uint32_t mod;
@@ -1052,6 +1079,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = togglefakefullscreen;
 	} else if (strcmp(func_name, "toggleoverlay") == 0) {
 		func = toggleoverlay;
+	} else if (strcmp(func_name, "toggleminimap") == 0) {
+		func = toggleminimap;
 	} else if (strcmp(func_name, "minimized") == 0) {
 		func = minimized;
 	} else if (strcmp(func_name, "restore_minimized") == 0) {
@@ -1204,6 +1233,11 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
 		func = toggle_all_floating;
+	} else if (strcmp(func_name, "canvas_zoom_resize") == 0) {
+		func = canvas_zoom_resize;
+		(*arg).f = atof(arg_value);
+	} else if (strcmp(func_name, "canvas_overview_toggle") == 0) {
+		func = canvas_overview_toggle;
 	} else {
 		return NULL;
 	}

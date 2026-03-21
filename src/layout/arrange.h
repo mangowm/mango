@@ -813,6 +813,7 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 	int32_t stack_index = 0;
 	int32_t master_num = 0;
 	int32_t stack_num = 0;
+	bool is_canvas = m->pertag->ltidxs[m->pertag->curtag]->id == CANVAS;
 
 	m->visible_clients = 0;
 	m->visible_tiling_clients = 0;
@@ -844,7 +845,7 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 			if (!c->isunglobal)
 				m->visible_clients++;
 
-			if (ISTILED(c)) {
+			if (ISTILED(c) && !is_canvas) {
 				m->visible_tiling_clients++;
 			}
 
@@ -862,7 +863,7 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 
 		if (c->mon == m) {
 			if (VISIBLEON(c, m)) {
-				if (ISTILED(c)) {
+				if (ISTILED(c) && !is_canvas) {
 
 					if (i < nmasters) {
 						master_num++;
@@ -915,6 +916,22 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 
 	if (!m->wlr_output->enabled)
 		return;
+
+	if (!is_canvas_layout(m) && m->canvas_in_overview) {
+		uint32_t tag = m->pertag->curtag;
+		Client *ov_c;
+		wl_list_for_each(ov_c, &clients, link) {
+			if (!VISIBLEON(ov_c, m) || ov_c->isunglobal)
+				continue;
+			if (ov_c->canvas_geom_backup[tag].width > 0)
+				ov_c->canvas_geom[tag] = ov_c->canvas_geom_backup[tag];
+			memset(&ov_c->canvas_geom_backup[tag], 0,
+				   sizeof(ov_c->canvas_geom_backup[tag]));
+		}
+		m->pertag->canvas_pan_x[tag] = m->canvas_saved_pan_x;
+		m->pertag->canvas_pan_y[tag] = m->canvas_saved_pan_y;
+		m->canvas_in_overview = false;
+	}
 
 	pre_caculate_before_arrange(m, want_animation, from_view, false);
 

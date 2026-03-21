@@ -96,10 +96,13 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		if (!node->enabled)
 			continue;
 
-		if (node->type == WLR_SCENE_NODE_BUFFER)
-			surface = wlr_scene_surface_try_from_buffer(
-						  wlr_scene_buffer_from_node(node))
-						  ->surface;
+		if (node->type == WLR_SCENE_NODE_BUFFER) {
+			struct wlr_scene_surface *scene_surface =
+				wlr_scene_surface_try_from_buffer(
+					wlr_scene_buffer_from_node(node));
+			if (scene_surface)
+				surface = scene_surface->surface;
+		}
 
 		/*  start from the topmost layer,
 			find a sureface that can be focused by pointer,
