@@ -407,6 +407,7 @@ struct Client {
 	float focused_opacity;
 	float unfocused_opacity;
 	char oldmonname[128];
+	char session_launch_command[1024];
 	int32_t noblur;
 	double master_mfact_per, master_inner_per, stack_inner_per;
 	double old_master_mfact_per, old_master_inner_per, old_stack_inner_per;
@@ -941,6 +942,7 @@ struct Pertag {
 };
 
 #include "config/parse_config.h"
+#include "session/session.h"
 
 static struct wl_signal mango_print_status;
 
@@ -1010,6 +1012,257 @@ static struct wl_event_source *sync_keymap;
 #include "layout/arrange.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
+
+static void session_write_json_string(FILE *out, const char *str) {
+	const unsigned char *p = (const unsigned char *)(str ? str : "");
+
+	fputc('"', out);
+	for (; *p != '\0'; ++p) {
+		switch (*p) {
+		case '\\':
+			fputs("\\\\", out);
+			break;
+		case '"':
+			fputs("\\\"", out);
+			break;
+		case '\n':
+			fputs("\\n", out);
+			break;
+		case '\r':
+			fputs("\\r", out);
+			break;
+		case '\t':
+			fputs("\\t", out);
+			break;
+		default:
+			if (*p < 0x20)
+				fprintf(out, "\\u%04x", *p);
+			else
+				fputc(*p, out);
+		}
+	}
+	fputc('"', out);
+}
+
+const char *mango_session_client_appid(Client *c) { return client_get_appid(c); }
+
+const char *mango_session_client_title(Client *c) { return client_get_title(c); }
+
+const char *mango_session_client_monitor(Client *c) {
+	return (c && c->mon && c->mon->wlr_output) ? c->mon->wlr_output->name : "";
+}
+
+const char *mango_session_lookup_launch_command(const char *app_id,
+												const char *title) {
+	if (!app_id || app_id[0] == '\0')
+		return "";
+
+	for (int32_t i = 0; i < config.session_launch_rules_count; ++i) {
+		ConfigSessionLaunchRule *rule = &config.session_launch_rules[i];
+		if (strcmp(rule->app_id, app_id) != 0)
+			continue;
+		if (rule->title[0] == '\0')
+			continue;
+		if (title && strcmp(rule->title, title) == 0)
+			return rule->command;
+	}
+
+	for (int32_t i = 0; i < config.session_launch_rules_count; ++i) {
+		ConfigSessionLaunchRule *rule = &config.session_launch_rules[i];
+		if (strcmp(rule->app_id, app_id) == 0 && rule->title[0] == '\0')
+			return rule->command;
+	}
+
+	return "";
+}
+
+void mango_session_remember_client_launch_command(Client *c, const char *command) {
+	if (!c)
+		return;
+
+	memset(c->session_launch_command, 0, sizeof(c->session_launch_command));
+	if (!command || command[0] == '\0')
+		return;
+
+	strncpy(c->session_launch_command, command,
+			sizeof(c->session_launch_command) - 1);
+	c->session_launch_command[sizeof(c->session_launch_command) - 1] = '\0';
+}
+
+void mango_session_spawn_command(const char *command) {
+	if (!command || command[0] == '\0')
+		return;
+
+	if (fork() == 0) {
+		signal(SIGSEGV, SIG_IGN);
+		signal(SIGABRT, SIG_IGN);
+		signal(SIGILL, SIG_IGN);
+
+		dup2(STDERR_FILENO, STDOUT_FILENO);
+		setsid();
+
+		execlp("sh", "sh", "-c", command, (char *)NULL);
+		execlp("bash", "bash", "-c", command, (char *)NULL);
+		_exit(EXIT_FAILURE);
+	}
+}
+
+static bool session_client_should_save(Client *c) {
+	const char *appid;
+
+	if (!c || c->iskilling || !c->mon || c->tags == 0)
+		return false;
+	if (client_is_unmanaged(c) || client_is_x11_popup(c))
+		return false;
+	if (client_get_parent(c) != NULL)
+		return false;
+	if (c->is_in_scratchpad || c->is_scratchpad_show || c->isnamedscratchpad)
+		return false;
+	if (c->swallowing || c->swallowedby)
+		return false;
+
+	appid = client_get_appid(c);
+	return appid && appid[0] != '\0' && strcmp(appid, "broken") != 0;
+}
+
+int32_t mango_session_is_config_enabled(void) { return config.session_restore; }
+
+static const char *session_client_launch_command(Client *c) {
+	const char *appid;
+	const char *title;
+	const char *mapped_command;
+
+	if (c && c->session_launch_command[0] != '\0')
+		return c->session_launch_command;
+
+	appid = client_get_appid(c);
+
+	if (!appid || appid[0] == '\0' || strcmp(appid, "broken") == 0)
+		return "";
+
+	title = client_get_title(c);
+	mapped_command = mango_session_lookup_launch_command(appid, title);
+	if (mapped_command && mapped_command[0] != '\0')
+		return mapped_command;
+
+	/* First relaunch pass: use app_id as the best-effort launch command.
+	 * Explicit config mappings will override this for wrappers and PWAs. */
+	return appid;
+}
+
+int32_t mango_session_write_snapshot(FILE *out) {
+	Client *c;
+	int32_t count = 0;
+
+	fputs("[\n", out);
+	wl_list_for_each(c, &clients, link) {
+		const char *monitor_name;
+		const char *appid;
+		const char *launch_command;
+		const char *title;
+		const char *separator;
+
+		if (!session_client_should_save(c))
+			continue;
+
+		monitor_name =
+			(c->mon && c->mon->wlr_output) ? c->mon->wlr_output->name : "";
+		appid = client_get_appid(c);
+		launch_command = session_client_launch_command(c);
+		title = client_get_title(c);
+		separator = count == 0 ? "" : ",\n";
+
+		fputs(separator, out);
+		fputs("  {\n", out);
+		fputs("    \"app_id\": ", out);
+		session_write_json_string(out, appid);
+		fputs(",\n    \"title\": ", out);
+		session_write_json_string(out, title);
+		fprintf(out,
+				",\n    \"pid\": %d,\n    \"monitor\": ",
+				client_get_pid(c));
+		session_write_json_string(out, monitor_name);
+		fputs(",\n    \"launch_command\": ", out);
+		session_write_json_string(out, launch_command);
+		fprintf(out,
+				",\n    \"tags\": %u,\n    \"is_floating\": %d,\n    "
+				"\"is_fullscreen\": %d,\n    \"is_minimized\": %d,\n    "
+				"\"geom\": {\"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d},"
+				"\n    \"float_geom\": {\"x\": %d, \"y\": %d, \"width\": %d, "
+				"\"height\": %d}\n  }",
+				c->tags, c->isfloating, c->isfullscreen, c->isminimized, c->geom.x,
+				c->geom.y, c->geom.width, c->geom.height, c->float_geom.x,
+				c->float_geom.y, c->float_geom.width, c->float_geom.height);
+		count++;
+	}
+	fputs("\n]\n", out);
+
+	return count;
+}
+
+void mango_session_apply_restore_entry(Client *c,
+									   const SessionRestoreEntry *entry) {
+	Monitor *target = NULL, *m = NULL;
+	uint32_t tags;
+
+	if (!c || !entry || !c->mon)
+		return;
+
+	tags = entry->tags;
+	if (tags == 0)
+		tags = c->tags ? c->tags : c->mon->tagset[c->mon->seltags];
+
+	if (entry->monitor[0] != '\0') {
+		wl_list_for_each(m, &mons, link) {
+			if (!m->wlr_output->enabled)
+				continue;
+			if (strcmp(m->wlr_output->name, entry->monitor) == 0) {
+				target = m;
+				break;
+			}
+		}
+	}
+
+	if (target && target != c->mon) {
+		setmon(c, target, tags, false);
+	} else {
+		c->tags = tags;
+	}
+
+	arrange(c->mon, false, false);
+
+	if (entry->is_floating) {
+		c->float_geom = (struct wlr_box){
+			.x = entry->float_geom.x,
+			.y = entry->float_geom.y,
+			.width = entry->float_geom.width,
+			.height = entry->float_geom.height,
+		};
+		if (c->float_geom.width <= 0 || c->float_geom.height <= 0) {
+			c->float_geom = (struct wlr_box){
+				.x = entry->geom.x,
+				.y = entry->geom.y,
+				.width = entry->geom.width,
+				.height = entry->geom.height,
+			};
+		}
+		c->geom = c->float_geom;
+		setfloating(c, 1);
+		resize(c, c->geom, 0);
+	} else if (c->isfloating) {
+		setfloating(c, 0);
+	}
+
+	if (entry->is_fullscreen && !c->isfullscreen) {
+		setfullscreen(c, 1);
+	} else if (!entry->is_fullscreen && c->isfullscreen) {
+		setfullscreen(c, 0);
+	}
+
+	/* Skip minimized restore for now to avoid introducing new focus changes. */
+	client_update_oldmonname_record(c, c->mon);
+	printstatus();
+}
 
 void client_change_mon(Client *c, Monitor *m) {
 	setmon(c, m, c->tags, true);
@@ -2264,6 +2517,8 @@ void cleanuplisteners(void) {
 }
 
 void cleanup(void) {
+	session_save_now(true);
+	session_shutdown();
 	cleanuplisteners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(xwayland);
@@ -4208,6 +4463,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+	session_handle_client_mapped(c);
 	printstatus();
 }
 
@@ -4978,6 +5234,7 @@ run(char *startup_cmd) {
 
 	run_exec();
 	run_exec_once();
+	session_maybe_restore_startup();
 
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
@@ -5494,6 +5751,7 @@ void setup(void) {
 	setenv("_JAVA_AWT_WM_NONREPARENTING", "1", 1);
 
 	parse_config();
+	session_init();
 	if (cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
