@@ -480,6 +480,7 @@ struct Client {
 	float focused_opacity;
 	float unfocused_opacity;
 	char oldmonname[128];
+	char session_launch_command[1024];
 	int32_t noblur;
 	float blur_opacity;
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
@@ -1245,6 +1246,7 @@ struct Pertag {
 };
 #include "common/log.h"
 #include "config/parse_config.h"
+#include "session/session.h"
 
 static struct wl_signal mango_print_status;
 
@@ -1408,6 +1410,8 @@ void cleanup(void) {
 	allow_frame_scheduling = false;
 
 	ipc_cleanup();
+	session_save_now(true);
+	session_shutdown();
 	cleanuplisteners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(xwayland);
@@ -1537,6 +1541,7 @@ run(char *startup_cmd, int readiness_fd) {
 
 	run_exec();
 	run_exec_once();
+	session_maybe_restore_startup();
 
 	/*
 	 * If running inside supervision suite like s6, notify about successfull
@@ -1562,6 +1567,7 @@ void setup(void) {
 	setenv("_JAVA_AWT_WM_NONREPARENTING", "1", 1);
 
 	parse_config();
+	session_init();
 	if (cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
