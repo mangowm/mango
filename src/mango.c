@@ -348,6 +348,7 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoGroupBar *group_bar;
+
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -4666,8 +4667,12 @@ mapnotify(struct wl_listener *listener, void *data) {
 	c->ext_foreign_toplevel = wlr_ext_foreign_toplevel_handle_v1_create(
 		foreign_toplevel_list, &foreign_toplevel_state);
 	c->ext_foreign_toplevel->data = c;
-	c->image_capture_scene_surface = wlr_scene_surface_create(
-		&c->image_capture_scene->tree, client_surface(c));
+	c->image_capture_tree =
+		c->type == XDGShell
+			? wlr_scene_xdg_surface_create(&c->image_capture_scene->tree,
+										   c->surface.xdg)
+			: wlr_scene_subsurface_tree_create(&c->image_capture_scene->tree,
+											   client_surface(c));
 
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
@@ -6860,9 +6865,16 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->group_bar = NULL;
 	}
 
-	wlr_scene_node_destroy(&c->image_capture_scene_surface->buffer->node);
-	wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
+	if (c->image_capture_tree) {
+		wlr_scene_node_destroy(&c->image_capture_tree->node);
+		c->image_capture_tree = NULL;
+	}
+	if (c->image_capture_scene) {
+		wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
+		c->image_capture_scene = NULL;
+	}
 
+	c->image_capture_source = NULL;
 	init_client_properties(c);
 
 	wlr_scene_node_destroy(&c->scene->node);
