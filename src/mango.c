@@ -707,6 +707,13 @@ typedef struct {
 	struct wl_listener destroy;
 } SnapshotMetadata;
 
+typedef struct {
+	struct wl_list link;
+	pid_t pid;
+	time_t created_at;
+	char command[1024];
+} SessionSpawnCommand;
+
 /* function declarations */
 static void applybounds(
 	Client *c,
@@ -923,6 +930,16 @@ static void init_fadeout_layers(LayerSurface *l);
 static void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height);
 static void get_layer_target_geometry(LayerSurface *l,
 									  struct wlr_box *target_box);
+void mango_session_spawn_tracker_init(void);
+void mango_session_spawn_tracker_shutdown(void);
+void mango_session_track_spawned_command(pid_t pid, const char *command);
+void mango_session_attach_spawn_command(Client *c);
+void mango_session_remember_client_launch_command(Client *c,
+												  const char *command);
+static char *mango_session_recover_process_command(pid_t pid);
+static void mango_session_attach_process_command(Client *c);
+static char *mango_session_find_desktop_exec(const char *app_id);
+static char *mango_session_normalize_launch_command(Client *c, pid_t pid);
 static void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									  int32_t sx, int32_t sy, void *data);
 static double find_animation_curve_at(double t, int32_t type);
@@ -1288,6 +1305,7 @@ static struct wl_listener keyboard_shortcuts_inhibit_new_inhibitor = {
 	.notify = handle_keyboard_shortcuts_inhibit_new_inhibitor};
 static struct wl_listener last_cursor_surface_destroy_listener = {
 	.notify = last_cursor_surface_destroy};
+static struct wl_list session_spawn_commands;
 
 #ifdef XWAYLAND
 static float xwayland_client_scale(Client *c);

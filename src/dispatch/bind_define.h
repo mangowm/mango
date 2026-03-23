@@ -1116,7 +1116,8 @@ void spawn_shell(const Arg *arg) {
 	// hand the child an activation token so it can request activation
 	const char *activation_token = xdg_activation_v1_export_token();
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1151,7 +1152,8 @@ void spawn(const Arg *arg) {
 	// hand the child an activation token so it can request activation
 	const char *activation_token = xdg_activation_v1_export_token();
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
