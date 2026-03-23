@@ -292,9 +292,8 @@ static void handle_input_method_commit(struct wl_listener *listener,
 									   void *data) {
 	struct dwl_input_method_relay *relay =
 		wl_container_of(listener, relay, input_method_commit);
-	struct wlr_input_method_v2 *input_method = data;
 	struct text_input *text_input;
-	assert(relay->input_method == input_method);
+	struct wlr_input_method_v2 *input_method = relay->input_method;
 
 	text_input = relay->active_text_input;
 	if (!text_input) {
@@ -324,7 +323,8 @@ static void handle_keyboard_grab_destroy(struct wl_listener *listener,
 										 void *data) {
 	struct dwl_input_method_relay *relay =
 		wl_container_of(listener, relay, keyboard_grab_destroy);
-	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab = data;
+	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab =
+		relay->input_method->keyboard_grab;
 	wl_list_remove(&relay->keyboard_grab_destroy.link);
 
 	if (keyboard_grab->keyboard) {
@@ -356,7 +356,6 @@ static void handle_input_method_destroy(struct wl_listener *listener,
 										void *data) {
 	struct dwl_input_method_relay *relay =
 		wl_container_of(listener, relay, input_method_destroy);
-	assert(relay->input_method == data);
 	wl_list_remove(&relay->input_method_commit.link);
 	wl_list_remove(&relay->input_method_grab_keyboard.link);
 	wl_list_remove(&relay->input_method_new_popup_surface.link);
@@ -562,11 +561,11 @@ struct dwl_input_method_relay *dwl_im_relay_create() {
 	relay->popup_tree = wlr_scene_tree_create(&scene->tree);
 
 	relay->new_text_input.notify = handle_new_text_input;
-	wl_signal_add(&text_input_manager->events.text_input,
+	wl_signal_add(&text_input_manager->events.new_text_input,
 				  &relay->new_text_input);
 
 	relay->new_input_method.notify = handle_new_input_method;
-	wl_signal_add(&input_method_manager->events.input_method,
+	wl_signal_add(&input_method_manager->events.new_input_method,
 				  &relay->new_input_method);
 
 	relay->focused_surface_destroy.notify = handle_focused_surface_destroy;
