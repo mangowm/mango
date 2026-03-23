@@ -3363,7 +3363,6 @@ void set_value_default() {
 	config.blur_layer = 0;
 	config.blur_optimized = 1;
 	config.border_radius = 0;
-	config.border_radius_location_default = CORNER_LOCATION_ALL;
 	config.blur_params.num_passes = 1;
 	config.blur_params.radius = 5;
 	config.blur_params.noise = 0.02f;
