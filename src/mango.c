@@ -775,6 +775,7 @@ void mango_session_remember_client_launch_command(Client *c,
 static char *mango_session_recover_process_command(pid_t pid);
 static void mango_session_attach_process_command(Client *c);
 static char *mango_session_find_desktop_exec(const char *app_id);
+static char *mango_session_find_flatpak_command(const char *app_id);
 static char *mango_session_normalize_launch_command(Client *c, pid_t pid);
 static void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									  int32_t sx, int32_t sy, void *data);
@@ -1207,42 +1208,112 @@ static void mango_session_trim_newline(char *s) {
 }
 
 static char *mango_session_strip_exec_field_codes(const char *exec) {
-	char *copy, *token, *saveptr = NULL, *result;
+	char **tokens = NULL;
+	char *current = NULL;
+	char *result = NULL;
+	size_t token_count = 0, token_capacity = 0;
+	size_t current_len = 0, current_capacity = 0;
+	bool in_single_quotes = false;
+	bool in_double_quotes = false;
+	const char *p;
 
 	if (!exec || exec[0] == '\0')
 		return NULL;
 
-	copy = strdup(exec);
-	if (!copy)
-		return NULL;
+	for (p = exec; *p != '\0'; ++p) {
+		char ch = *p;
 
-	result = strdup("");
-	for (token = strtok_r(copy, " \t", &saveptr); token != NULL;
-		 token = strtok_r(NULL, " \t", &saveptr)) {
-		char *next;
+		if (!in_single_quotes && !in_double_quotes &&
+			(ch == ' ' || ch == '\t')) {
+			if (current_len > 0) {
+				char **next_tokens;
 
-		if (token[0] == '%' && token[1] != '\0')
+				if (token_count + 1 > token_capacity) {
+					size_t next_capacity =
+						token_capacity == 0 ? 8 : token_capacity * 2;
+
+					next_tokens =
+						realloc(tokens, next_capacity * sizeof(*tokens));
+					if (!next_tokens)
+						goto cleanup;
+					tokens = next_tokens;
+					token_capacity = next_capacity;
+				}
+
+				current[current_len] = '\0';
+				tokens[token_count++] = current;
+				current = NULL;
+				current_len = 0;
+				current_capacity = 0;
+			}
 			continue;
-		if (strcmp(token, "%%") == 0)
-			token = "%";
-
-		next = result[0] == '\0' ? string_printf("%s", token)
-								 : string_printf("%s %s", result, token);
-		free(result);
-		result = next;
-		if (!result) {
-			free(copy);
-			return NULL;
 		}
+
+		if (!in_double_quotes && ch == '\'') {
+			in_single_quotes = !in_single_quotes;
+			continue;
+		}
+		if (!in_single_quotes && ch == '"') {
+			in_double_quotes = !in_double_quotes;
+			continue;
+		}
+
+		if (ch == '\\' && p[1] != '\0') {
+			ch = *++p;
+		} else if (ch == '%' && p[1] != '\0') {
+			if (p[1] == '%') {
+				ch = '%';
+				++p;
+			} else {
+				++p;
+				continue;
+			}
+		}
+
+		if (current_len + 2 > current_capacity) {
+			size_t next_capacity = current_capacity == 0 ? 32 : current_capacity * 2;
+			char *next_current = realloc(current, next_capacity);
+
+			if (!next_current)
+				goto cleanup;
+			current = next_current;
+			current_capacity = next_capacity;
+		}
+
+		current[current_len++] = ch;
 	}
 
-	free(copy);
+	if (current_len > 0) {
+		char **next_tokens;
 
-	if (result[0] == '\0') {
+		if (token_count + 1 > token_capacity) {
+			size_t next_capacity = token_capacity == 0 ? 8 : token_capacity * 2;
+
+			next_tokens = realloc(tokens, next_capacity * sizeof(*tokens));
+			if (!next_tokens)
+				goto cleanup;
+			tokens = next_tokens;
+		}
+
+		current[current_len] = '\0';
+		tokens[token_count++] = current;
+		current = NULL;
+	}
+
+	result = mango_session_join_argv(tokens, token_count);
+
+cleanup:
+	free(current);
+	if (tokens) {
+		for (size_t i = 0; i < token_count; ++i)
+			free(tokens[i]);
+		free(tokens);
+	}
+
+	if (!result || result[0] == '\0') {
 		free(result);
 		return NULL;
 	}
-
 	return result;
 }
 
@@ -1251,43 +1322,211 @@ static bool mango_session_path_exists(const char *path) {
 	return path && stat(path, &st) == 0;
 }
 
-static bool mango_session_desktop_matches(const char *desktop_path,
-										 const char *app_id,
-										 char **exec_out) {
+typedef struct {
+	char *path;
+	char *exec_value;
+	char *startup_wm_class;
+	char *flatpak_id;
+} MangoSessionDesktopEntry;
+
+static void mango_session_free_desktop_entry(MangoSessionDesktopEntry *entry) {
+	if (!entry)
+		return;
+
+	free(entry->path);
+	free(entry->exec_value);
+	free(entry->startup_wm_class);
+	free(entry->flatpak_id);
+	memset(entry, 0, sizeof(*entry));
+}
+
+static bool mango_session_append_search_dir(char ***dirs, size_t *count,
+												size_t *capacity,
+												const char *dir) {
+	char **next_dirs;
+
+	if (!dirs || !count || !capacity || !dir || dir[0] == '\0')
+		return true;
+
+	if (*count > 0 && strcmp((*dirs)[*count - 1], dir) == 0)
+		return true;
+
+	if (*count + 1 >= *capacity) {
+		size_t next_capacity = *capacity == 0 ? 8 : *capacity * 2;
+
+		next_dirs = realloc(*dirs, next_capacity * sizeof(**dirs));
+		if (!next_dirs)
+			return false;
+		*dirs = next_dirs;
+		*capacity = next_capacity;
+	}
+
+	(*dirs)[*count] = strdup(dir);
+	if (!(*dirs)[*count])
+		return false;
+	(*count)++;
+	(*dirs)[*count] = NULL;
+	return true;
+}
+
+static bool mango_session_append_data_home_applications(char ***dirs, size_t *count,
+														  size_t *capacity) {
+	const char *xdg_data_home = getenv("XDG_DATA_HOME");
+	const char *home = getenv("HOME");
+	char *applications_dir = NULL;
+	bool ok;
+
+	if (xdg_data_home && xdg_data_home[0] != '\0')
+		applications_dir = string_printf("%s/applications", xdg_data_home);
+	else if (home && home[0] != '\0')
+		applications_dir = string_printf("%s/.local/share/applications", home);
+
+	if (!applications_dir)
+		return true;
+
+	ok = mango_session_append_search_dir(dirs, count, capacity, applications_dir);
+	free(applications_dir);
+	return ok;
+}
+
+static bool mango_session_append_data_dirs_applications(char ***dirs, size_t *count,
+														 size_t *capacity) {
+	const char *xdg_data_dirs = getenv("XDG_DATA_DIRS");
+	const char *cursor;
+
+	if (!xdg_data_dirs || xdg_data_dirs[0] == '\0')
+		xdg_data_dirs = "/usr/local/share:/usr/share";
+
+	for (cursor = xdg_data_dirs; cursor && cursor[0] != '\0';) {
+		const char *separator = strchr(cursor, ':');
+		size_t len = separator ? (size_t)(separator - cursor) : strlen(cursor);
+		char *base_dir;
+		char *applications_dir;
+		bool ok;
+
+		if (len == 0) {
+			cursor = separator ? separator + 1 : NULL;
+			continue;
+		}
+
+		base_dir = strndup(cursor, len);
+		if (!base_dir)
+			return false;
+
+		applications_dir = string_printf("%s/applications", base_dir);
+		free(base_dir);
+		if (!applications_dir)
+			return false;
+
+		ok = mango_session_append_search_dir(dirs, count, capacity,
+											 applications_dir);
+		free(applications_dir);
+		if (!ok)
+			return false;
+
+		cursor = separator ? separator + 1 : NULL;
+	}
+
+	return true;
+}
+
+static char **mango_session_desktop_search_dirs(void) {
+	char **dirs = NULL;
+	size_t count = 0, capacity = 0;
+	const char *home = getenv("HOME");
+	char *user_flatpak_dir = NULL;
+
+	if (!mango_session_append_data_home_applications(&dirs, &count, &capacity) ||
+		!mango_session_append_data_dirs_applications(&dirs, &count, &capacity))
+		goto fail;
+
+	if (!mango_session_append_search_dir(&dirs, &count, &capacity,
+										 "/var/lib/flatpak/exports/share/applications"))
+		goto fail;
+
+	if (home && home[0] != '\0') {
+		user_flatpak_dir = string_printf(
+			"%s/.local/share/flatpak/exports/share/applications", home);
+		if (!user_flatpak_dir)
+			goto fail;
+		if (!mango_session_append_search_dir(&dirs, &count, &capacity,
+											 user_flatpak_dir))
+			goto fail;
+	}
+
+	free(user_flatpak_dir);
+	return dirs;
+
+fail:
+	free(user_flatpak_dir);
+	if (dirs) {
+		for (size_t i = 0; i < count; ++i)
+			free(dirs[i]);
+		free(dirs);
+	}
+	return NULL;
+}
+
+static void mango_session_free_search_dirs(char **dirs) {
+	size_t i;
+
+	if (!dirs)
+		return;
+
+	for (i = 0; dirs[i] != NULL; ++i)
+		free(dirs[i]);
+	free(dirs);
+}
+
+static bool mango_session_load_desktop_entry(const char *desktop_path,
+											 MangoSessionDesktopEntry *entry) {
 	FILE *f;
 	char line[2048];
-	char *exec_value = NULL;
-	char *startup_wm_class = NULL;
-	char *flatpak_id = NULL;
-	char *desktop_id = NULL;
-	bool matched = false;
-	const char *basename;
-	char *dot;
 
-	if (!desktop_path || !app_id || app_id[0] == '\0')
+	if (!desktop_path || !entry)
+		return false;
+
+	memset(entry, 0, sizeof(*entry));
+	entry->path = strdup(desktop_path);
+	if (!entry->path)
 		return false;
 
 	f = fopen(desktop_path, "r");
-	if (!f)
+	if (!f) {
+		mango_session_free_desktop_entry(entry);
 		return false;
+	}
 
 	while (fgets(line, sizeof(line), f)) {
 		mango_session_trim_newline(line);
 		if (strncmp(line, "Exec=", 5) == 0) {
-			free(exec_value);
-			exec_value = strdup(line + 5);
+			free(entry->exec_value);
+			entry->exec_value = strdup(line + 5);
 		} else if (strncmp(line, "StartupWMClass=", 15) == 0) {
-			free(startup_wm_class);
-			startup_wm_class = strdup(line + 15);
+			free(entry->startup_wm_class);
+			entry->startup_wm_class = strdup(line + 15);
 		} else if (strncmp(line, "X-Flatpak=", 10) == 0) {
-			free(flatpak_id);
-			flatpak_id = strdup(line + 10);
+			free(entry->flatpak_id);
+			entry->flatpak_id = strdup(line + 10);
 		}
 	}
 	fclose(f);
 
-	basename = strrchr(desktop_path, '/');
-	basename = basename ? basename + 1 : desktop_path;
+	return true;
+}
+
+static bool mango_session_desktop_entry_matches(
+	const MangoSessionDesktopEntry *entry, const char *app_id) {
+	const char *basename;
+	char *desktop_id;
+	char *dot;
+	bool matched = false;
+
+	if (!entry || !entry->path || !app_id || app_id[0] == '\0')
+		return false;
+
+	basename = strrchr(entry->path, '/');
+	basename = basename ? basename + 1 : entry->path;
 	desktop_id = strdup(basename);
 	if (desktop_id) {
 		dot = strrchr(desktop_id, '.');
@@ -1298,30 +1537,28 @@ static bool mango_session_desktop_matches(const char *desktop_path,
 		free(desktop_id);
 	}
 
-	if (!matched && startup_wm_class && strcmp(startup_wm_class, app_id) == 0)
+	if (!matched && entry->startup_wm_class &&
+		strcmp(entry->startup_wm_class, app_id) == 0)
 		matched = true;
-	if (!matched && flatpak_id && strcmp(flatpak_id, app_id) == 0)
+	if (!matched && entry->flatpak_id && strcmp(entry->flatpak_id, app_id) == 0)
 		matched = true;
 
-	if (matched && exec_value && exec_out)
-		*exec_out = mango_session_strip_exec_field_codes(exec_value);
-
-	free(exec_value);
-	free(startup_wm_class);
-	free(flatpak_id);
 	return matched;
 }
 
-static char *mango_session_find_desktop_exec(const char *app_id) {
-	const char *dirs[] = {
-		"/home/kenn/.local/share/applications",
-		"/etc/profiles/per-user/kenn/share/applications",
-		"/run/current-system/sw/share/applications",
-		"/var/lib/flatpak/exports/share/applications",
-		NULL,
-	};
+static bool mango_session_find_desktop_entry(const char *app_id,
+											 MangoSessionDesktopEntry *result) {
+	char **dirs = mango_session_desktop_search_dirs();
+	bool found = false;
 
-	for (size_t i = 0; dirs[i] != NULL; ++i) {
+	if (!result)
+		return false;
+
+	memset(result, 0, sizeof(*result));
+	if (!dirs)
+		return false;
+
+	for (size_t i = 0; dirs[i] != NULL && !found; ++i) {
 		DIR *dir = opendir(dirs[i]);
 		struct dirent *entry;
 
@@ -1329,27 +1566,66 @@ static char *mango_session_find_desktop_exec(const char *app_id) {
 			continue;
 
 		while ((entry = readdir(dir)) != NULL) {
+			MangoSessionDesktopEntry candidate;
 			char *path;
-			char *exec_value = NULL;
-			bool matched;
 
 			if (!strstr(entry->d_name, ".desktop"))
 				continue;
 
 			path = string_printf("%s/%s", dirs[i], entry->d_name);
-			matched = mango_session_desktop_matches(path, app_id, &exec_value);
-			free(path);
-			if (!matched)
+			if (!path)
 				continue;
 
-			closedir(dir);
-			return exec_value;
+			if (!mango_session_load_desktop_entry(path, &candidate)) {
+				free(path);
+				continue;
+			}
+			free(path);
+
+			if (!mango_session_desktop_entry_matches(&candidate, app_id)) {
+				mango_session_free_desktop_entry(&candidate);
+				continue;
+			}
+
+			*result = candidate;
+			found = true;
+			break;
 		}
 
 		closedir(dir);
 	}
 
-	return NULL;
+	mango_session_free_search_dirs(dirs);
+	return found;
+}
+
+static char *mango_session_find_desktop_exec(const char *app_id) {
+	MangoSessionDesktopEntry entry;
+	char *exec_value;
+
+	if (!mango_session_find_desktop_entry(app_id, &entry))
+		return NULL;
+
+	exec_value = entry.exec_value
+					 ? mango_session_strip_exec_field_codes(entry.exec_value)
+					 : NULL;
+	mango_session_free_desktop_entry(&entry);
+	return exec_value;
+}
+
+static char *mango_session_find_flatpak_command(const char *app_id) {
+	MangoSessionDesktopEntry entry;
+	char *command = NULL;
+
+	if (!mango_session_find_desktop_entry(app_id, &entry))
+		return NULL;
+
+	if (entry.flatpak_id && strcmp(entry.flatpak_id, app_id) == 0)
+		command = entry.exec_value ? mango_session_strip_exec_field_codes(entry.exec_value)
+								   : NULL;
+
+	mango_session_free_desktop_entry(&entry);
+	return command;
 }
 
 static char *mango_session_read_cmdline(pid_t pid, size_t *argc_out) {
@@ -1441,26 +1717,16 @@ static char *mango_session_recover_process_command(pid_t pid) {
 
 static char *mango_session_normalize_launch_command(Client *c, pid_t pid) {
 	const char *app_id;
+	char *flatpak_command;
 	char *desktop_exec;
 	char *raw_command;
 
 	app_id = c ? client_get_appid(c) : NULL;
 	if (app_id && app_id[0] != '\0' && strcmp(app_id, "broken") != 0) {
-		char *flatpak_desktop = string_printf(
-			"/var/lib/flatpak/exports/share/applications/%s.desktop", app_id);
-		char *user_flatpak_desktop = string_printf(
-			"%s/.local/share/flatpak/exports/share/applications/%s.desktop",
-			getenv("HOME") ? getenv("HOME") : "", app_id);
-
-		if ((flatpak_desktop && mango_session_path_exists(flatpak_desktop)) ||
-			(user_flatpak_desktop &&
-			 mango_session_path_exists(user_flatpak_desktop))) {
-			free(flatpak_desktop);
-			free(user_flatpak_desktop);
-			return string_printf("flatpak run %s", app_id);
-		}
-		free(flatpak_desktop);
-		free(user_flatpak_desktop);
+		flatpak_command = mango_session_find_flatpak_command(app_id);
+		if (flatpak_command && flatpak_command[0] != '\0')
+			return flatpak_command;
+		free(flatpak_command);
 
 		desktop_exec = mango_session_find_desktop_exec(app_id);
 		if (desktop_exec && desktop_exec[0] != '\0')
