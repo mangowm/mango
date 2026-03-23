@@ -569,8 +569,8 @@ int32_t main(int32_t argc, char *argv[]) {
 		mode = WATCH;
 		break;
 	case 'o':
-        if (mode == GET || mode == WATCH)
-            oflag = 1;
+		if (mode == GET || mode == WATCH)
+			oflag = 1;
 		else if (mode == SET)
 			output_name = EARGF(usage());
 		else
