@@ -939,6 +939,7 @@ void mango_session_remember_client_launch_command(Client *c,
 static char *mango_session_recover_process_command(pid_t pid);
 static void mango_session_attach_process_command(Client *c);
 static char *mango_session_find_desktop_exec(const char *app_id);
+static char *mango_session_find_flatpak_command(const char *app_id);
 static char *mango_session_normalize_launch_command(Client *c, pid_t pid);
 static void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									  int32_t sx, int32_t sy, void *data);

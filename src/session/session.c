@@ -82,6 +82,23 @@ static char *session_file_path(void) {
 	return path;
 }
 
+static bool session_file_is_trusted(const char *path) {
+	struct stat st;
+	uid_t uid = getuid();
+
+	if (!path || stat(path, &st) != 0)
+		return false;
+
+	if (!S_ISREG(st.st_mode))
+		return false;
+	if (st.st_uid != uid)
+		return false;
+	if ((st.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+		return false;
+
+	return true;
+}
+
 static void free_pending_entries(void) {
 	free(pending_entries);
 	pending_entries = NULL;
@@ -274,6 +291,16 @@ static bool load_pending_entries(void) {
 	free_pending_entries();
 	if (!path)
 		return false;
+
+	if (access(path, F_OK) != 0)
+		goto cleanup;
+
+	if (!session_file_is_trusted(path)) {
+		fprintf(stderr,
+				"mango session: refusing to restore from untrusted session file: %s\n",
+				path);
+		goto cleanup;
+	}
 
 	in = fopen(path, "r");
 	if (!in)
