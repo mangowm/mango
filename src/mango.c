@@ -666,7 +666,7 @@ static void requestdecorationmode(struct wl_listener *listener, void *data);
 static void requestdrmlease(struct wl_listener *listener, void *data);
 static void requeststartdrag(struct wl_listener *listener, void *data);
 static void resize(Client *c, struct wlr_box geo, int32_t interact);
-static void run(char *startup_cmd);
+static void run(char *startup_cmd, int readiness_fd);
 static void setcursor(struct wl_listener *listener, void *data);
 static void setfloating(Client *c, int32_t floating);
 static void setfakefullscreen(Client *c, int32_t fakefullscreen);
@@ -4918,7 +4918,7 @@ cleanup:
 }
 
 void // 17
-run(char *startup_cmd) {
+run(char *startup_cmd, int readiness_fd) {
 
 	set_env();
 
@@ -4978,6 +4978,15 @@ run(char *startup_cmd) {
 
 	run_exec();
 	run_exec_once();
+
+    /*
+     * If running inside supervision suite like s6, notify about successfull startup
+     * by writing \n to the provided file descriptor and closing it
+     */
+    if (readiness_fd > 2){
+        write(readiness_fd, "\n", 1);
+        close(readiness_fd);
+    }
 
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
@@ -6634,8 +6643,9 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 int32_t main(int32_t argc, char *argv[]) {
 	char *startup_cmd = NULL;
 	int32_t c;
+    int readiness_fd = 0;
 
-	while ((c = getopt(argc, argv, "s:c:hdvp")) != -1) {
+	while ((c = getopt(argc, argv, "s:c:r:hdvp")) != -1) {
 		if (c == 's') {
 			startup_cmd = optarg;
 		} else if (c == 'd') {
@@ -6647,6 +6657,11 @@ int32_t main(int32_t argc, char *argv[]) {
 			cli_config_path = optarg;
 		} else if (c == 'p') {
 			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
+        } else if (c == 'r') {
+            readiness_fd = atoi(optarg);
+            if (readiness_fd < 3) {
+                goto usage;
+            }
 		} else {
 			goto usage;
 		}
@@ -6660,7 +6675,7 @@ int32_t main(int32_t argc, char *argv[]) {
 	if (!getenv("XDG_RUNTIME_DIR"))
 		die("XDG_RUNTIME_DIR must be set");
 	setup();
-	run(startup_cmd);
+	run(startup_cmd, readiness_fd);
 	cleanup();
 	return EXIT_SUCCESS;
 usage:
@@ -6671,6 +6686,7 @@ usage:
 		   "  -d             Enable debug log\n"
 		   "  -c <file>      Use custom configuration file\n"
 		   "  -s <command>   Execute startup command\n"
+           "  -r <fdnum>     When WM is ready, write '\\n' to the given file descriptor and close it. fdnum >= 3\n"
 		   "  -p             Check configuration file error\n");
 	return EXIT_SUCCESS;
 }
