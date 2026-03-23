@@ -8,6 +8,7 @@
 #include <libinput.h>
 #include <limits.h>
 #include <linux/input-event-codes.h>
+#include <dirent.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
@@ -556,6 +557,13 @@ typedef struct {
 	struct wl_listener destroy;
 } SessionLock;
 
+typedef struct {
+	struct wl_list link;
+	pid_t pid;
+	time_t created_at;
+	char command[1024];
+} SessionSpawnCommand;
+
 /* function declarations */
 static void applybounds(
 	Client *c,
@@ -758,6 +766,16 @@ static void init_fadeout_layers(LayerSurface *l);
 static void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height);
 static void get_layer_target_geometry(LayerSurface *l,
 									  struct wlr_box *target_box);
+void mango_session_spawn_tracker_init(void);
+void mango_session_spawn_tracker_shutdown(void);
+void mango_session_track_spawned_command(pid_t pid, const char *command);
+void mango_session_attach_spawn_command(Client *c);
+void mango_session_remember_client_launch_command(Client *c,
+												  const char *command);
+static char *mango_session_recover_process_command(pid_t pid);
+static void mango_session_attach_process_command(Client *c);
+static char *mango_session_find_desktop_exec(const char *app_id);
+static char *mango_session_normalize_launch_command(Client *c, pid_t pid);
 static void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									  int32_t sx, int32_t sy, void *data);
 static double find_animation_curve_at(double t, int32_t type);
@@ -987,6 +1005,7 @@ static struct wl_listener keyboard_shortcuts_inhibit_new_inhibitor = {
 	.notify = handle_keyboard_shortcuts_inhibit_new_inhibitor};
 static struct wl_listener last_cursor_surface_destroy_listener = {
 	.notify = last_cursor_surface_destroy};
+static struct wl_list session_spawn_commands;
 
 #ifdef XWAYLAND
 static void fix_xwayland_unmanaged_coordinate(Client *c);
@@ -1056,6 +1075,428 @@ const char *mango_session_client_monitor(Client *c) {
 	return (c && c->mon && c->mon->wlr_output) ? c->mon->wlr_output->name : "";
 }
 
+static void mango_session_spawn_tracker_cleanup(bool all) {
+	SessionSpawnCommand *entry, *tmp;
+	time_t now = time(NULL);
+
+	wl_list_for_each_safe(entry, tmp, &session_spawn_commands, link) {
+		if (!all && now - entry->created_at < 300)
+			continue;
+		wl_list_remove(&entry->link);
+		free(entry);
+	}
+}
+
+void mango_session_spawn_tracker_init(void) {
+	wl_list_init(&session_spawn_commands);
+}
+
+void mango_session_spawn_tracker_shutdown(void) {
+	mango_session_spawn_tracker_cleanup(true);
+}
+
+void mango_session_track_spawned_command(pid_t pid, const char *command) {
+	SessionSpawnCommand *entry;
+
+	if (pid <= 0 || !command || command[0] == '\0')
+		return;
+
+	mango_session_spawn_tracker_cleanup(false);
+
+	entry = ecalloc(1, sizeof(*entry));
+	entry->pid = pid;
+	entry->created_at = time(NULL);
+	strncpy(entry->command, command, sizeof(entry->command) - 1);
+	entry->command[sizeof(entry->command) - 1] = '\0';
+	wl_list_insert(&session_spawn_commands, &entry->link);
+}
+
+void mango_session_attach_spawn_command(Client *c) {
+	SessionSpawnCommand *entry, *match = NULL;
+	pid_t pid;
+
+	if (!c)
+		return;
+
+	pid = client_get_pid(c);
+	if (pid <= 0)
+		return;
+
+	c->pid = pid;
+	mango_session_spawn_tracker_cleanup(false);
+
+	wl_list_for_each(entry, &session_spawn_commands, link) {
+		if (entry->pid == pid || isdescprocess(entry->pid, pid)) {
+			match = entry;
+			break;
+		}
+	}
+
+	if (!match)
+		return;
+
+	mango_session_remember_client_launch_command(c, match->command);
+	wl_list_remove(&match->link);
+	free(match);
+}
+
+static char *mango_session_shell_quote(const char *arg) {
+	size_t len = 2;
+	const char *p;
+	char *out, *dst;
+
+	if (!arg)
+		return strdup("''");
+
+	for (p = arg; *p != '\0'; ++p) {
+		if (*p == '\'')
+			len += 4;
+		else
+			len += 1;
+	}
+
+	out = ecalloc(len + 1, sizeof(char));
+	dst = out;
+	*dst++ = '\'';
+	for (p = arg; *p != '\0'; ++p) {
+		if (*p == '\'') {
+			memcpy(dst, "'\\''", 4);
+			dst += 4;
+		} else {
+			*dst++ = *p;
+		}
+	}
+	*dst++ = '\'';
+	*dst = '\0';
+	return out;
+}
+
+static char *mango_session_join_argv(char **argv, size_t argc) {
+	char *joined;
+
+	if (!argv || argc == 0)
+		return NULL;
+
+	joined = strdup("");
+	for (size_t i = 0; i < argc; ++i) {
+		char *quoted = mango_session_shell_quote(argv[i]);
+		char *next = i == 0 ? string_printf("%s", quoted)
+							: string_printf("%s %s", joined, quoted);
+		free(quoted);
+		free(joined);
+		joined = next;
+		if (!joined)
+			return NULL;
+	}
+
+	return joined;
+}
+
+static void mango_session_trim_newline(char *s) {
+	size_t len;
+
+	if (!s)
+		return;
+
+	len = strlen(s);
+	while (len > 0 &&
+		   (s[len - 1] == '\n' || s[len - 1] == '\r' || s[len - 1] == ' ' ||
+			s[len - 1] == '\t')) {
+		s[--len] = '\0';
+	}
+}
+
+static char *mango_session_strip_exec_field_codes(const char *exec) {
+	char *copy, *token, *saveptr = NULL, *result;
+
+	if (!exec || exec[0] == '\0')
+		return NULL;
+
+	copy = strdup(exec);
+	if (!copy)
+		return NULL;
+
+	result = strdup("");
+	for (token = strtok_r(copy, " \t", &saveptr); token != NULL;
+		 token = strtok_r(NULL, " \t", &saveptr)) {
+		char *next;
+
+		if (token[0] == '%' && token[1] != '\0')
+			continue;
+		if (strcmp(token, "%%") == 0)
+			token = "%";
+
+		next = result[0] == '\0' ? string_printf("%s", token)
+								 : string_printf("%s %s", result, token);
+		free(result);
+		result = next;
+		if (!result) {
+			free(copy);
+			return NULL;
+		}
+	}
+
+	free(copy);
+
+	if (result[0] == '\0') {
+		free(result);
+		return NULL;
+	}
+
+	return result;
+}
+
+static bool mango_session_path_exists(const char *path) {
+	struct stat st;
+	return path && stat(path, &st) == 0;
+}
+
+static bool mango_session_desktop_matches(const char *desktop_path,
+										 const char *app_id,
+										 char **exec_out) {
+	FILE *f;
+	char line[2048];
+	char *exec_value = NULL;
+	char *startup_wm_class = NULL;
+	char *flatpak_id = NULL;
+	char *desktop_id = NULL;
+	bool matched = false;
+	const char *basename;
+	char *dot;
+
+	if (!desktop_path || !app_id || app_id[0] == '\0')
+		return false;
+
+	f = fopen(desktop_path, "r");
+	if (!f)
+		return false;
+
+	while (fgets(line, sizeof(line), f)) {
+		mango_session_trim_newline(line);
+		if (strncmp(line, "Exec=", 5) == 0) {
+			free(exec_value);
+			exec_value = strdup(line + 5);
+		} else if (strncmp(line, "StartupWMClass=", 15) == 0) {
+			free(startup_wm_class);
+			startup_wm_class = strdup(line + 15);
+		} else if (strncmp(line, "X-Flatpak=", 10) == 0) {
+			free(flatpak_id);
+			flatpak_id = strdup(line + 10);
+		}
+	}
+	fclose(f);
+
+	basename = strrchr(desktop_path, '/');
+	basename = basename ? basename + 1 : desktop_path;
+	desktop_id = strdup(basename);
+	if (desktop_id) {
+		dot = strrchr(desktop_id, '.');
+		if (dot)
+			*dot = '\0';
+		if (strcmp(desktop_id, app_id) == 0)
+			matched = true;
+		free(desktop_id);
+	}
+
+	if (!matched && startup_wm_class && strcmp(startup_wm_class, app_id) == 0)
+		matched = true;
+	if (!matched && flatpak_id && strcmp(flatpak_id, app_id) == 0)
+		matched = true;
+
+	if (matched && exec_value && exec_out)
+		*exec_out = mango_session_strip_exec_field_codes(exec_value);
+
+	free(exec_value);
+	free(startup_wm_class);
+	free(flatpak_id);
+	return matched;
+}
+
+static char *mango_session_find_desktop_exec(const char *app_id) {
+	const char *dirs[] = {
+		"/home/kenn/.local/share/applications",
+		"/etc/profiles/per-user/kenn/share/applications",
+		"/run/current-system/sw/share/applications",
+		"/var/lib/flatpak/exports/share/applications",
+		NULL,
+	};
+
+	for (size_t i = 0; dirs[i] != NULL; ++i) {
+		DIR *dir = opendir(dirs[i]);
+		struct dirent *entry;
+
+		if (!dir)
+			continue;
+
+		while ((entry = readdir(dir)) != NULL) {
+			char *path;
+			char *exec_value = NULL;
+			bool matched;
+
+			if (!strstr(entry->d_name, ".desktop"))
+				continue;
+
+			path = string_printf("%s/%s", dirs[i], entry->d_name);
+			matched = mango_session_desktop_matches(path, app_id, &exec_value);
+			free(path);
+			if (!matched)
+				continue;
+
+			closedir(dir);
+			return exec_value;
+		}
+
+		closedir(dir);
+	}
+
+	return NULL;
+}
+
+static char *mango_session_read_cmdline(pid_t pid, size_t *argc_out) {
+	FILE *f;
+	char path[64];
+	char *buf = NULL;
+	size_t size = 0, used = 0;
+	int ch;
+
+	if (argc_out)
+		*argc_out = 0;
+	if (pid <= 0)
+		return NULL;
+
+	snprintf(path, sizeof(path), "/proc/%d/cmdline", pid);
+	f = fopen(path, "rb");
+	if (!f)
+		return NULL;
+
+	while ((ch = fgetc(f)) != EOF) {
+		if (used + 2 > size) {
+			size_t next_size = size == 0 ? 256 : size * 2;
+			char *next = realloc(buf, next_size);
+			if (!next) {
+				free(buf);
+				fclose(f);
+				return NULL;
+			}
+			buf = next;
+			size = next_size;
+		}
+		buf[used++] = (char)ch;
+	}
+	fclose(f);
+
+	if (!buf || used == 0) {
+		free(buf);
+		return NULL;
+	}
+
+	buf[used] = '\0';
+
+	if (argc_out) {
+		size_t argc = 0;
+		for (size_t i = 0; i < used; ++i) {
+			if (buf[i] == '\0')
+				argc++;
+		}
+		*argc_out = argc;
+	}
+
+	return buf;
+}
+
+static char *mango_session_recover_process_command(pid_t pid) {
+	char *cmdline;
+	char *argv[64];
+	size_t argc = 0, idx = 0;
+	char *p;
+
+	cmdline = mango_session_read_cmdline(pid, &argc);
+	if (!cmdline || argc == 0)
+		return NULL;
+
+	for (p = cmdline; idx < argc && idx < LENGTH(argv); ++idx) {
+		argv[idx] = p;
+		p += strlen(p) + 1;
+	}
+	argc = idx;
+
+	if (argc >= 3 &&
+		(strcmp(argv[0], "sh") == 0 || strcmp(argv[0], "/bin/sh") == 0 ||
+		 strcmp(argv[0], "bash") == 0 || strcmp(argv[0], "/bin/bash") == 0) &&
+		strcmp(argv[1], "-c") == 0) {
+		char *command = strdup(argv[2]);
+		free(cmdline);
+		return command;
+	}
+
+	if (argc >= 1) {
+		char *command = mango_session_join_argv(argv, argc);
+		free(cmdline);
+		return command;
+	}
+
+	free(cmdline);
+	return NULL;
+}
+
+static char *mango_session_normalize_launch_command(Client *c, pid_t pid) {
+	const char *app_id;
+	char *desktop_exec;
+	char *raw_command;
+
+	app_id = c ? client_get_appid(c) : NULL;
+	if (app_id && app_id[0] != '\0' && strcmp(app_id, "broken") != 0) {
+		char *flatpak_desktop = string_printf(
+			"/var/lib/flatpak/exports/share/applications/%s.desktop", app_id);
+		char *user_flatpak_desktop = string_printf(
+			"%s/.local/share/flatpak/exports/share/applications/%s.desktop",
+			getenv("HOME") ? getenv("HOME") : "", app_id);
+
+		if ((flatpak_desktop && mango_session_path_exists(flatpak_desktop)) ||
+			(user_flatpak_desktop &&
+			 mango_session_path_exists(user_flatpak_desktop))) {
+			free(flatpak_desktop);
+			free(user_flatpak_desktop);
+			return string_printf("flatpak run %s", app_id);
+		}
+		free(flatpak_desktop);
+		free(user_flatpak_desktop);
+
+		desktop_exec = mango_session_find_desktop_exec(app_id);
+		if (desktop_exec && desktop_exec[0] != '\0')
+			return desktop_exec;
+		free(desktop_exec);
+	}
+
+	raw_command = mango_session_recover_process_command(pid);
+	if (raw_command && raw_command[0] != '\0')
+		return raw_command;
+
+	free(raw_command);
+	return NULL;
+}
+
+static void mango_session_attach_process_command(Client *c) {
+	char *command;
+	pid_t pid;
+
+	if (!c || c->session_launch_command[0] != '\0')
+		return;
+
+	pid = c->pid > 0 ? c->pid : client_get_pid(c);
+	if (pid <= 0)
+		return;
+
+	command = mango_session_normalize_launch_command(c, pid);
+	if (!command || command[0] == '\0') {
+		free(command);
+		return;
+	}
+
+	mango_session_remember_client_launch_command(c, command);
+	free(command);
+}
+
 const char *mango_session_lookup_launch_command(const char *app_id,
 												const char *title) {
 	if (!app_id || app_id[0] == '\0')
@@ -1094,10 +1535,13 @@ void mango_session_remember_client_launch_command(Client *c, const char *command
 }
 
 void mango_session_spawn_command(const char *command) {
+	pid_t pid;
+
 	if (!command || command[0] == '\0')
 		return;
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_IGN);
 		signal(SIGABRT, SIG_IGN);
 		signal(SIGILL, SIG_IGN);
@@ -1109,6 +1553,8 @@ void mango_session_spawn_command(const char *command) {
 		execlp("bash", "bash", "-c", command, (char *)NULL);
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, command);
 }
 
 static bool session_client_should_save(Client *c) {
@@ -4485,6 +4931,8 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+	mango_session_attach_spawn_command(c);
+	mango_session_attach_process_command(c);
 	session_handle_client_mapped(c);
 	printstatus();
 }

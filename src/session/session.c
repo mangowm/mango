@@ -23,6 +23,8 @@ extern void mango_session_remember_client_launch_command(Client *c,
 extern void mango_session_spawn_command(const char *command);
 extern void mango_session_apply_restore_entry(Client *c,
 											  const SessionRestoreEntry *entry);
+extern void mango_session_spawn_tracker_init(void);
+extern void mango_session_spawn_tracker_shutdown(void);
 
 typedef struct {
 	SessionRestoreEntry entry;
@@ -391,11 +393,12 @@ static void session_spawn_restore_entries(void) {
 	}
 }
 
-void session_init(void) {}
+void session_init(void) { mango_session_spawn_tracker_init(); }
 
 void session_shutdown(void) {
 	free_pending_entries();
 	restore_started = false;
+	mango_session_spawn_tracker_shutdown();
 }
 
 void session_maybe_restore_startup(void) {
