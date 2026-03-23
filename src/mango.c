@@ -5236,6 +5236,10 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 	if (c->mon->isoverview)
 		return;
 
+	if (fullscreen == c->isfullscreen) {
+		return;
+	}
+
 	int32_t old_fullscreen_state = c->isfullscreen;
 	c->isfullscreen = fullscreen;
 
@@ -5243,9 +5247,12 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 
 	if (fullscreen) {
 
-		c->ismaximizescreen = 0;
-		exit_scroller_stack(c);
+		if (c->ismaximizescreen) {
+			client_set_maximized(c, false);
+			c->ismaximizescreen = 0;
+		}
 
+		exit_scroller_stack(c);
 		c->isfakefullscreen = 0;
 
 		c->bw = 0;
