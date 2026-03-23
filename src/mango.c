@@ -905,6 +905,8 @@ static struct wl_event_source *hide_cursor_source;
 static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
+static bool mod_key_used = false;
+static uint32_t prev_mods = 0;
 static const char *cli_config_path = NULL;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
@@ -2071,6 +2073,9 @@ buttonpress(struct wl_listener *listener, void *data) {
 		selmon = xytomon(cursor->x, cursor->y);
 		if (locked)
 			break;
+
+		/* Invalidate modifier-only bindings on mouse click */
+		mod_key_used = true;
 
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
@@ -3755,6 +3760,10 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			state != WL_KEYBOARD_KEY_STATE_RELEASED)
 			continue;
 
+		/* Skip KEY_TYPE_NONE bindings here; they are handled in keypressmod */
+		if (config.key_bindings[ji].keysymcode.type == KEY_TYPE_NONE)
+			continue;
+
 		k = &config.key_bindings[ji];
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
@@ -3885,6 +3894,16 @@ void keypress(struct wl_listener *listener, void *data) {
 		}
 	}
 
+	/* Track non-modifier key presses to invalidate modifier-only bindings.
+	 * Modifier keycodes: 133,134=Super, 37,105=Ctrl, 50,62=Shift, 64,108=Alt */
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+		keycode != 133 && keycode != 134 && /* Super_L, Super_R */
+		keycode != 37 && keycode != 105 &&	/* Control_L, Control_R */
+		keycode != 50 && keycode != 62 &&	/* Shift_L, Shift_R */
+		keycode != 64 && keycode != 108) {	/* Alt_L, Alt_R */
+		mod_key_used = true;
+	}
+
 	/* On _press_ if there is no active screen locker,
 	 * attempt to process a compositor keybinding. */
 	for (i = 0; i < nsyms; i++)
@@ -3940,6 +3959,47 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
+
+	uint32_t mods = wlr_keyboard_get_modifiers(&group->wlr_group->keyboard);
+
+	/* Handle modifier-only keybindings (KEY_TYPE_NONE).
+	 * Fire when a modifier is released without any non-modifier key having
+	 * been pressed during the hold. We detect release by checking if a
+	 * modifier bit was set in prev_mods but is now cleared.
+	 * The (prev_mods & ~mods) check ensures a modifier was actually
+	 * released (bits cleared), not just a new modifier added. */
+	if (!locked && group == kb_group && !mod_key_used && prev_mods != 0 &&
+		mods != prev_mods && (prev_mods & ~mods) != 0) {
+		/* A modifier was released — check if the previously held modifier
+		 * combination matches any KEY_TYPE_NONE bindings */
+		for (int32_t ji = 0; ji < config.key_bindings_count; ji++) {
+			const KeyBinding *k = &config.key_bindings[ji];
+			if (k->keysymcode.type != KEY_TYPE_NONE)
+				continue;
+			if (!k->func)
+				continue;
+			if (!(k->iscommonmode ||
+				  (k->isdefaultmode && keymode.isdefault) ||
+				  (strcmp(keymode.mode, k->mode) == 0)))
+				continue;
+			/* The binding's mod should match the modifiers that were held
+			 * before this release */
+			if (CLEANMASK(prev_mods) == CLEANMASK(k->mod)) {
+				k->func(&k->arg);
+				/* Mark as used so we don't fire again during
+				 * subsequent releases of the same combo */
+				mod_key_used = true;
+				break;
+			}
+		}
+	}
+
+	/* Reset tracking when all modifiers are released */
+	if (mods == 0) {
+		mod_key_used = false;
+	}
+
+	prev_mods = mods;
 
 	if (!dwl_im_keyboard_grab_forward_modifiers(group)) {
 
