@@ -43,6 +43,7 @@
 #include <wlr/types/wlr_ext_data_control_v1.h>
 #include <wlr/types/wlr_ext_image_capture_source_v1.h>
 #include <wlr/types/wlr_ext_image_copy_capture_v1.h>
+#include <wlr/types/wlr_fixes.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_idle_inhibit_v1.h>
@@ -5593,6 +5594,7 @@ void setup(void) {
 	wlr_subcompositor_create(dpy);
 	wlr_alpha_modifier_v1_create(dpy);
 	wlr_ext_data_control_manager_v1_create(dpy, 1);
+	wlr_fixes_create(dpy, 1);
 
 	// 在 setup 函数中
 	wl_signal_init(&mango_print_status);
