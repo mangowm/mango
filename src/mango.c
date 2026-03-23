@@ -1317,11 +1317,6 @@ cleanup:
 	return result;
 }
 
-static bool mango_session_path_exists(const char *path) {
-	struct stat st;
-	return path && stat(path, &st) == 0;
-}
-
 typedef struct {
 	char *path;
 	char *exec_value;
