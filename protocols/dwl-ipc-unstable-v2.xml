@@ -136,6 +136,13 @@ I would probably just submit raphi's patchset but I don't think that would be po
       </description>
       <arg name="layout" type="string" summary="The new layout"/>
     </event>
+    
+    <event name="nmasters" since="1">
+      <description summary="Update the current masters count">
+          Indicates the count of masters has changed.
+      </description>
+      <arg name="nmasters" type="uint" summary="The new masters count"/>
+    </event>
 
     <event name="frame">
       <description summary="The update sequence is done.">
@@ -190,7 +197,14 @@ I would probably just submit raphi's patchset but I don't think that would be po
           Indicates if the selected client on this output is floating.
       </description>
       <arg name="is_floating" type="uint" summary="If the selected client is floating. Nonzero is valid, zero invalid"/>
-    </event>
+  </event>
+
+    <event name="master" since="2">
+      <description summary="Update the floating status">
+          Indicates if the selected client on this output is master.
+      </description>
+      <arg name="is_master" type="uint" summary="If the selected client is master. Nonzero is valid, zero invalid"/>
+  </event>
 
     <event name="x" since="2">
       <description summary="Update the x coordinates">
