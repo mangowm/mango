@@ -569,12 +569,12 @@ int32_t main(int32_t argc, char *argv[]) {
 		mode = WATCH;
 		break;
 	case 'o':
-		if (mode == SET)
+		if (mode == GET || mode == WATCH)
+			oflag = 1;
+		else if (mode == SET)
 			output_name = EARGF(usage());
 		else
 			output_name = ARGF();
-		if (!output_name)
-			oflag = 1;
 		break;
 	case 't':
 		tflag = 1;

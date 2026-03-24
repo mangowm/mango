@@ -40,5 +40,5 @@ jobs:
           git add apps/web/content/docs
           git diff --staged --quiet || git commit \
             -m "docs: content update from mangowm/mango" \
-            -m "${{ github.event.head_commit.message }}\nSource: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+            -m "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           git push

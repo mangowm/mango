@@ -54,6 +54,3 @@ Set the size and theme of your mouse cursor.
 cursor_size=24
 cursor_theme=Adwaita
 ```
-
-> **Tip:** You may also want to set the `XCURSOR_SIZE` environment variable to match:
-> `env=XCURSOR_SIZE,24`

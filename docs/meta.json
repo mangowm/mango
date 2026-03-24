@@ -1,13 +1,16 @@
 {
 	"title": "mangowm",
 	"pages": [
+		"---Getting Started---",
 		"index",
 		"installation",
 		"quick-start",
+		"---Configuration---",
 		"configuration",
 		"visuals",
 		"window-management",
 		"bindings",
+		"---Reference---",
 		"ipc",
 		"faq"
 	]

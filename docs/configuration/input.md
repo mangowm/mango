@@ -136,6 +136,7 @@ To use Fcitx5 or IBus, set these environment variables in your config file.
 ```ini
 env=GTK_IM_MODULE,fcitx
 env=QT_IM_MODULE,fcitx
+env=QT_IM_MODULES,wayland;fcitx
 env=SDL_IM_MODULE,fcitx
 env=XMODIFIERS,@im=fcitx
 env=GLFW_IM_MODULE,ibus

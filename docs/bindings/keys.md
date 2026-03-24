@@ -90,6 +90,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | :--- | :--- | :--- |
 | `killclient` | - | Close the focused window. |
 | `togglefloating` | - | Toggle floating state. |
+| `toggle_all_floating` | - | Toggle all visible clients floating state. |
 | `togglefullscreen` | - | Toggle fullscreen. |
 | `togglefakefullscreen` | - | Toggle "fake" fullscreen (remains constrained). |
 | `togglemaximizescreen` | - | Maximize window (keep decoration/bar). |
@@ -192,6 +193,16 @@ bind=NONE,XF86AudioRaiseVolume,spawn,wpctl set-volume @DEFAULT_SINK@ 5%+
 bind=NONE,XF86AudioLowerVolume,spawn,wpctl set-volume @DEFAULT_SINK@ 5%-
 bind=NONE,XF86AudioMute,spawn,wpctl set-mute @DEFAULT_SINK@ toggle
 bind=SHIFT,XF86AudioMute,spawn,wpctl set-mute @DEFAULT_SOURCE@ toggle
+```
+
+#### Playback
+
+Requires: `playerctl`
+
+```ini
+bind=NONE,XF86AudioNext,spawn,playerctl next
+bind=NONE,XF86AudioPrev,spawn,playerctl previous
+bind=NONE,XF86AudioPlay,spawn,playerctl play-pause
 ```
 
 ### Floating Window Movement

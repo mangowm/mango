@@ -179,6 +179,7 @@ tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
 | `monitor_serial` | string | monitor serial | Match by monitor serial number |
 | `layout_name` | string | layout name | Layout name to set |
 | `no_render_border` | integer | `0` / `1` | Disable render border |
+| `open_as_floating` | integer | `0` / `1` | New open window will be floating|
 | `no_hide` | integer | `0` / `1` | Not hide even if the tag is empty |
 | `nmaster` | integer | 0, 99 | Number of master windows |
 | `mfact` | float | 0.1–0.9 | Master area factor |

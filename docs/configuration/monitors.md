@@ -48,11 +48,13 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 
 > **Critical:** If you use XWayland applications, **never use negative coordinates** for your monitor positions. This is a known XWayland bug that causes click events to malfunction. Always arrange your monitors starting from `0,0` and extend into positive coordinates.
 
+> **Note:** that "name" is a regular expression. If you want an exact match, you need to add `^` and `$` to the beginning and end of the expression, for example, `^eDP-1$` matches exactly the string `eDP-1`.
+
 ### Examples
 
 ```ini
 # Laptop display: 1080p, 60Hz, positioned at origin
-monitorrule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:10
+monitorrule=name:^eDP-1$,width:1920,height:1080,refresh:60,x:0,y:10
 
 # Match by make and model instead of name
 monitorrule=make:Chimei Innolux Corporation,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0
@@ -241,7 +243,7 @@ yay -S xwayland-satellite
 
 ```ini
 env=DISPLAY,:2
-exec=xwayland-satellite :2
+exec-once=xwayland-satellite :2
 monitorrule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:0,scale:1.4,vrr:0,rr:0
 ```
 
