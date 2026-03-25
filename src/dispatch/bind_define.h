@@ -379,6 +379,9 @@ int32_t moveresize(const Arg *arg) {
 		grabc->drag_to_tile = true;
 		exit_scroller_stack(grabc);
 		setfloating(grabc, 1);
+		grabc->old_stack_inner_per = 0.0f;
+		grabc->old_master_inner_per = 0.0f;
+		set_size_per(grabc->mon, grabc);
 	}
 
 	switch (cursor_mode = arg->ui) {
