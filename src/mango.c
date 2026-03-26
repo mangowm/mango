@@ -4565,6 +4565,16 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		time = now.tv_sec * 1000 + now.tv_nsec / 1000000;
 	}
 
+#ifdef XWAYLAND
+	if (c && c->mon && client_is_x11(c)) {
+		float scale = c->mon->wlr_output->scale;
+		if (scale > 0.0f && fabsf(scale - 1.0f) > 0.001f) {
+			sx *= scale;
+			sy *= scale;
+		}
+	}
+#endif
+
 	/* Let the client know that the mouse cursor has entered one
 	 * of its surfaces, and make keyboard focus follow if desired.
 	 * wlroots makes this a no-op if surface is already focused */
