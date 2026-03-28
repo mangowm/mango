@@ -142,6 +142,8 @@ int32_t focusdir(const Arg *arg) {
 		focusclient(c, 1);
 		if (config.warpcursor)
 			warp_cursor(c);
+		if (selmon && is_canvas_layout(selmon))
+			canvas_pan_to_client(selmon, c);
 	} else {
 		if (config.focus_cross_tag) {
 			if (arg->i == LEFT || arg->i == UP)

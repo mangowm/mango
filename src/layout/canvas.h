@@ -119,3 +119,31 @@ static void canvas(Monitor *m) {
 			apply_visual_zoom(c, effective_zoom);
 	}
 }
+
+static void canvas_pan_to_client(Monitor *m, Client *c) {
+	if (!m || !c || !is_canvas_layout(m))
+		return;
+
+	uint32_t tag = m->pertag->curtag;
+	if (c->canvas_geom[tag].width <= 0 || c->canvas_geom[tag].height <= 0)
+		return;
+
+	float zoom = m->pertag->canvas_zoom[tag];
+	float pan_x = m->pertag->canvas_pan_x[tag];
+	float pan_y = m->pertag->canvas_pan_y[tag];
+	float vp_w = m->w.width / zoom;
+	float vp_h = m->w.height / zoom;
+
+	float cx = c->canvas_geom[tag].x;
+	float cy = c->canvas_geom[tag].y;
+	float cw = c->canvas_geom[tag].width;
+	float ch = c->canvas_geom[tag].height;
+
+	if (cx >= pan_x && cy >= pan_y &&
+		cx + cw <= pan_x + vp_w && cy + ch <= pan_y + vp_h)
+		return;
+
+	m->pertag->canvas_pan_x[tag] = cx + cw / 2.0f - vp_w / 2.0f;
+	m->pertag->canvas_pan_y[tag] = cy + ch / 2.0f - vp_h / 2.0f;
+	canvas_reposition(m);
+}

@@ -1036,6 +1036,7 @@ static struct wl_event_source *sync_keymap;
 #include "animation/layer.h"
 #include "animation/tag.h"
 static void canvas_reposition(Monitor *m);
+static void canvas_pan_to_client(Monitor *m, Client *c);
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
