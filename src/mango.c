@@ -399,6 +399,7 @@ struct Client {
 	pid_t pid;
 	Client *swallowing, *swallowedby;
 	bool is_clip_to_hide;
+	bool canvas_floating;
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
 	bool fake_no_border;
@@ -1488,6 +1489,8 @@ void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 		(mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags)] ||
 		 mon->pertag->ltidxs[mon->pertag->curtag]->id == CANVAS)) {
 		c->isfloating = 1;
+		if (mon->pertag->ltidxs[mon->pertag->curtag]->id == CANVAS)
+			c->canvas_floating = true;
 	}
 }
 

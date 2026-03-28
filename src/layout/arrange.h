@@ -815,6 +815,16 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 	int32_t stack_num = 0;
 	bool is_canvas = m->pertag->ltidxs[m->pertag->curtag]->id == CANVAS;
 
+	if (!is_canvas) {
+		wl_list_for_each(c, &clients, link) {
+			if (VISIBLEON(c, m) && c->canvas_floating) {
+				c->isfloating = 0;
+				c->canvas_floating = false;
+				clear_visual_zoom(c);
+			}
+		}
+	}
+
 	m->visible_clients = 0;
 	m->visible_tiling_clients = 0;
 	m->visible_scroll_tiling_clients = 0;
