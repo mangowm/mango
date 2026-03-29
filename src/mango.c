@@ -5036,13 +5036,7 @@ int32_t toggleminimap(const Arg *arg) {
 		return 0;
 
 	selmon->minimap_visible = !selmon->minimap_visible;
-	if (selmon->minimap_visible) {
-		if (selmon->canvas_overview_visible &&
-			!selmon->canvas_overview_closing) {
-			selmon->canvas_overview_closing = true;
-			selmon->canvas_overview_anim_start = get_now_in_ms();
-		}
-	} else {
+	if (!selmon->minimap_visible) {
 		if (minimap_scene_tree) {
 			wlr_scene_node_destroy(&minimap_scene_tree->node);
 			minimap_scene_tree = NULL;
@@ -5134,7 +5128,7 @@ void rendermon(struct wl_listener *listener, void *data) {
 
 	// 只有在需要帧时才构建和提交状态
 
-	if (m->minimap_visible &&
+	if (m->minimap_visible && !m->canvas_overview_visible &&
 		m->pertag->ltidxs[m->pertag->curtag]->id == CANVAS) {
 		uint32_t tag = m->pertag->curtag;
 

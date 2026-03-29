@@ -1938,19 +1938,33 @@ int32_t canvas_overview_toggle(const Arg *arg) {
 		selmon->canvas_overview_closing = true;
 		selmon->canvas_overview_anim_start = get_now_in_ms();
 	} else if (!selmon->canvas_overview_visible) {
-		if (selmon->minimap_visible) {
-			selmon->minimap_visible = false;
-			if (minimap_scene_tree) {
-				wlr_scene_node_destroy(&minimap_scene_tree->node);
-				minimap_scene_tree = NULL;
-			}
-		}
 		selmon->canvas_overview_visible = true;
 		selmon->canvas_overview_closing = false;
 		selmon->canvas_overview_progress = 0.0f;
 		selmon->canvas_overview_anim_start = get_now_in_ms();
 	}
 	request_fresh_all_monitors();
+	return 0;
+}
+
+int32_t canvas_centerview(const Arg *arg) {
+	if (!selmon || !is_canvas_layout(selmon))
+		return 0;
+
+	Client *c = selmon->sel;
+	if (!c || c->isfullscreen || c->ismaximizescreen)
+		return 0;
+
+	uint32_t tag = selmon->pertag->curtag;
+	float zoom = selmon->pertag->canvas_zoom[tag];
+
+	float cx = c->canvas_geom[tag].x + c->canvas_geom[tag].width / 2.0f;
+	float cy = c->canvas_geom[tag].y + c->canvas_geom[tag].height / 2.0f;
+
+	selmon->pertag->canvas_pan_x[tag] = cx - (selmon->w.width / zoom) / 2.0f;
+	selmon->pertag->canvas_pan_y[tag] = cy - (selmon->w.height / zoom) / 2.0f;
+
+	canvas_reposition(selmon);
 	return 0;
 }
 
@@ -1967,10 +1981,12 @@ int32_t canvas_fill_viewport(const Arg *arg) {
 	float pan_x = selmon->pertag->canvas_pan_x[tag];
 	float pan_y = selmon->pertag->canvas_pan_y[tag];
 
-	c->canvas_geom[tag].x = (int32_t)roundf(pan_x);
-	c->canvas_geom[tag].y = (int32_t)roundf(pan_y);
-	c->canvas_geom[tag].width = (int32_t)roundf(selmon->w.width / zoom);
-	c->canvas_geom[tag].height = (int32_t)roundf(selmon->w.height / zoom);
+	c->canvas_geom[tag].x = (int32_t)roundf(pan_x + config.gappoh / zoom);
+	c->canvas_geom[tag].y = (int32_t)roundf(pan_y + config.gappov / zoom);
+	c->canvas_geom[tag].width =
+		(int32_t)roundf((selmon->w.width - 2 * config.gappoh) / zoom);
+	c->canvas_geom[tag].height =
+		(int32_t)roundf((selmon->w.height - 2 * config.gappov) / zoom);
 	c->iscustomsize = 1;
 
 	arrange(selmon, false, false);

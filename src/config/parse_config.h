@@ -139,22 +139,6 @@ KeyBinding default_key_bindings[] = {
 	CHVT(10),
 	CHVT(11),
 	CHVT(12),
-	{WLR_MODIFIER_LOGO,
-	 {.keysym = XKB_KEY_o, .type = KEY_TYPE_SYM},
-	 toggleminimap,
-	 {0}},
-	{WLR_MODIFIER_LOGO,
-	 {.keysym = XKB_KEY_p, .type = KEY_TYPE_SYM},
-	 canvas_overview_toggle,
-	 {0}},
-	{WLR_MODIFIER_LOGO,
-	 {.keysym = XKB_KEY_z, .type = KEY_TYPE_SYM},
-	 canvas_zoom_resize,
-	 {.f = 1.0f / 1.1f}},
-	{WLR_MODIFIER_LOGO,
-	 {.keysym = XKB_KEY_x, .type = KEY_TYPE_SYM},
-	 canvas_zoom_resize,
-	 {.f = 1.1f}},
 };
 
 typedef struct {
@@ -1240,6 +1224,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = canvas_overview_toggle;
 	} else if (strcmp(func_name, "canvas_fill_viewport") == 0) {
 		func = canvas_fill_viewport;
+	} else if (strcmp(func_name, "canvas_centerview") == 0) {
+		func = canvas_centerview;
 	} else {
 		return NULL;
 	}

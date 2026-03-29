@@ -74,4 +74,5 @@ int32_t scroller_stack(const Arg *arg);
 int32_t canvas_zoom_resize(const Arg *arg);
 int32_t canvas_overview_toggle(const Arg *arg);
 int32_t canvas_fill_viewport(const Arg *arg);
+int32_t canvas_centerview(const Arg *arg);
 int32_t toggle_all_floating(const Arg *arg);
