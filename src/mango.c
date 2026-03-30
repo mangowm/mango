@@ -1063,10 +1063,18 @@ void clear_fullscreen_flag(Client *c) {
 	}
 }
 
+void client_pending_fullscreen_state(Client *c, int32_t isfullscreen) {
+	c->isfullscreen = isfullscreen;
+
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_fullscreen(c->foreign_toplevel,
+													  isfullscreen);
+}
+
 void show_scratchpad(Client *c) {
 	c->is_scratchpad_show = 1;
 	if (c->isfullscreen || c->ismaximizescreen) {
-		c->isfullscreen = 0; // 清除窗口全屏标志
+		client_pending_fullscreen_state(c, 0);
 		c->ismaximizescreen = 0;
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 	}
@@ -5042,7 +5050,7 @@ setfloating(Client *c, int32_t floating) {
 	if (floating == 1 && c != grabc) {
 
 		if (c->isfullscreen) {
-			c->isfullscreen = 0;
+			client_pending_fullscreen_state(c, 0);
 			client_set_fullscreen(c, 0);
 		}
 
@@ -5176,7 +5184,7 @@ void setmaximizescreen(Client *c, int32_t maximizescreen) {
 	if (maximizescreen) {
 
 		if (c->isfullscreen) {
-			c->isfullscreen = 0;
+			client_pending_fullscreen_state(c, 0);
 			client_set_fullscreen(c, 0);
 		}
 
@@ -5256,10 +5264,10 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 		wlr_scene_node_raise_to_top(&c->scene->node); // 将视图提升到顶层
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, c->mon->m, 1);
-		c->isfullscreen = 1;
+		client_pending_fullscreen_state(c, 1);
 	} else {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
-		c->isfullscreen = 0;
+		client_pending_fullscreen_state(c, 0);
 		if (c->isfloating)
 			setfloating(c, 1);
 	}
@@ -5876,7 +5884,7 @@ void overview_backup(Client *c) {
 		c->isfloating = 0;
 	}
 	if (c->isfullscreen || c->ismaximizescreen) {
-		c->isfullscreen = 0; // 清除窗口全屏标志
+		client_pending_fullscreen_state(c, 0); // 清除窗口全屏标志
 		c->ismaximizescreen = 0;
 	}
 	c->bw = c->isnoborder ? 0 : config.borderpx;
@@ -5907,7 +5915,7 @@ void overview_restore(Client *c, const Arg *arg) {
 		} else if (want_restore_fullscreen(c) && c->isfullscreen) {
 			setfullscreen(c, 1);
 		} else {
-			c->isfullscreen = 0;
+			client_pending_fullscreen_state(c, 0);
 			c->ismaximizescreen = 0;
 			setfullscreen(c, false);
 		}
