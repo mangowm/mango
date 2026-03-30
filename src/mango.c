@@ -823,6 +823,10 @@ static int32_t keep_idle_inhibit(void *data);
 static void check_keep_idle_inhibit(Client *c);
 static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 										bool from_view, bool only_caculate);
+static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
+static void client_pending_maximized_state(Client *c, int32_t ismaximized);
+static void client_pending_minimized_state(Client *c, int32_t isminimized);
+
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
 #include "layout/layout.h"
@@ -1097,11 +1101,33 @@ void clear_fullscreen_flag(Client *c) {
 	}
 }
 
+void client_pending_fullscreen_state(Client *c, int32_t isfullscreen) {
+	c->isfullscreen = isfullscreen;
+
+	if (c->foreign_toplevel && !c->iskilling)
+		wlr_foreign_toplevel_handle_v1_set_fullscreen(c->foreign_toplevel,
+													  isfullscreen);
+}
+
+void client_pending_maximized_state(Client *c, int32_t ismaximized) {
+	c->ismaximizescreen = ismaximized;
+	if (c->foreign_toplevel && !c->iskilling)
+		wlr_foreign_toplevel_handle_v1_set_maximized(c->foreign_toplevel,
+													 ismaximized);
+}
+
+void client_pending_minimized_state(Client *c, int32_t isminimized) {
+	c->isminimized = isminimized;
+	if (c->foreign_toplevel && !c->iskilling)
+		wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel,
+													 isminimized);
+}
+
 void show_scratchpad(Client *c) {
 	c->is_scratchpad_show = 1;
 	if (c->isfullscreen || c->ismaximizescreen) {
-		c->isfullscreen = 0; // 清除窗口全屏标志
-		c->ismaximizescreen = 0;
+		client_pending_fullscreen_state(c, 0);
+		client_pending_maximized_state(c, 0);
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 	}
 
@@ -1158,9 +1184,6 @@ void swallow(Client *c, Client *w) {
 	c->bw = w->bw;
 	c->isfloating = w->isfloating;
 	c->isurgent = w->isurgent;
-	c->isfullscreen = w->isfullscreen;
-	c->ismaximizescreen = w->ismaximizescreen;
-	c->isminimized = w->isminimized;
 	c->is_in_scratchpad = w->is_in_scratchpad;
 	c->is_scratchpad_show = w->is_scratchpad_show;
 	c->tags = w->tags;
@@ -1172,6 +1195,7 @@ void swallow(Client *c, Client *w) {
 	c->scroller_proportion = w->scroller_proportion;
 	c->next_in_stack = w->next_in_stack;
 	c->prev_in_stack = w->prev_in_stack;
+
 	if (w->next_in_stack)
 		w->next_in_stack->prev_in_stack = c;
 	if (w->prev_in_stack)
@@ -1190,11 +1214,9 @@ void swallow(Client *c, Client *w) {
 	if (!c->foreign_toplevel && c->mon)
 		add_foreign_toplevel(c);
 
-	if (c->isminimized && c->foreign_toplevel) {
-		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel,
-													 false);
-		wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel, true);
-	}
+	client_pending_fullscreen_state(c, w->isfullscreen);
+	client_pending_maximized_state(c, w->ismaximizescreen);
+	client_pending_minimized_state(c, w->isminimized);
 }
 
 bool switch_scratchpad_client_state(Client *c) {
@@ -4467,7 +4489,7 @@ void maximizenotify(struct wl_listener *listener, void *data) {
 
 void unminimize(Client *c) {
 	if (c && c->is_in_scratchpad && c->is_scratchpad_show) {
-		c->isminimized = 0;
+		client_pending_minimized_state(c, 0);
 		c->is_scratchpad_show = 0;
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
@@ -4495,13 +4517,12 @@ void set_minimized(Client *c) {
 	c->oldtags = c->mon->tagset[c->mon->seltags];
 	c->mini_restore_tag = c->tags;
 	c->tags = 0;
-	c->isminimized = 1;
+	client_pending_minimized_state(c, 1);
 	c->is_in_scratchpad = 1;
 	c->is_scratchpad_show = 0;
 	focusclient(focustop(selmon), 1);
 	arrange(c->mon, false, false);
 	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, false);
-	wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel, true);
 	wl_list_remove(&c->link);				// 从原来位置移除
 	wl_list_insert(clients.prev, &c->link); // 插入尾部
 }
@@ -5920,11 +5941,11 @@ setfloating(Client *c, int32_t floating) {
 	if (floating == 1 && c != grabc) {
 
 		if (c->isfullscreen) {
-			c->isfullscreen = 0;
+			client_pending_fullscreen_state(c, 0);
 			client_set_fullscreen(c, 0);
 		}
 
-		c->ismaximizescreen = 0;
+		client_pending_maximized_state(c, 0);
 		exit_scroller_stack(c);
 
 		// 重新计算居中的坐标
@@ -6049,12 +6070,12 @@ void setmaximizescreen(Client *c, int32_t maximizescreen) {
 		return;
 
 	int32_t old_maximizescreen_state = c->ismaximizescreen;
-	c->ismaximizescreen = maximizescreen;
+	client_pending_maximized_state(c, maximizescreen);
 
 	if (maximizescreen) {
 
 		if (c->isfullscreen) {
-			c->isfullscreen = 0;
+			client_pending_fullscreen_state(c, 0);
 			client_set_fullscreen(c, 0);
 		}
 
@@ -6067,10 +6088,8 @@ void setmaximizescreen(Client *c, int32_t maximizescreen) {
 		wlr_scene_node_raise_to_top(&c->scene->node);
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, maximizescreen_box, 0);
-		c->ismaximizescreen = 1;
 	} else {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
-		c->ismaximizescreen = 0;
 		if (c->isfloating)
 			setfloating(c, 1);
 	}
@@ -6118,6 +6137,7 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 	c->isfullscreen = fullscreen;
 
 	client_set_fullscreen(c, fullscreen);
+	client_pending_fullscreen_state(c, fullscreen);
 
 	if (fullscreen) {
 
@@ -6125,7 +6145,7 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 			client_set_maximized(c, false);
 		}
 
-		c->ismaximizescreen = 0;
+		client_pending_maximized_state(c, 0);
 
 		exit_scroller_stack(c);
 		c->isfakefullscreen = 0;
@@ -6134,8 +6154,6 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 		wlr_scene_node_raise_to_top(&c->scene->node); // 将视图提升到顶层
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, c->mon->m, 1);
-		c->isfullscreen = 1;
-
 		if (is_canvas_layout(c->mon)) {
 			c->animation.running = false;
 			c->need_output_flush = false;
@@ -6153,7 +6171,6 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 		}
 	} else {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
-		c->isfullscreen = 0;
 		if (c->isfloating)
 			setfloating(c, 1);
 	}
@@ -6345,8 +6362,7 @@ void show_hide_client(Client *c) {
 		c->tags = c->oldtags;
 		arrange(c->mon, false, false);
 	}
-	c->isminimized = 0;
-	wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel, false);
+	client_pending_minimized_state(c, 0);
 	focusclient(c, 1);
 	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
 }
@@ -6763,8 +6779,8 @@ void overview_backup(Client *c) {
 		c->isfloating = 0;
 	}
 	if (c->isfullscreen || c->ismaximizescreen) {
-		c->isfullscreen = 0; // 清除窗口全屏标志
-		c->ismaximizescreen = 0;
+		client_pending_fullscreen_state(c, 0); // 清除窗口全屏标志
+		client_pending_maximized_state(c, 0);
 	}
 	c->bw = c->isnoborder ? 0 : config.borderpx;
 
@@ -6794,8 +6810,8 @@ void overview_restore(Client *c, const Arg *arg) {
 		} else if (want_restore_fullscreen(c) && c->isfullscreen) {
 			setfullscreen(c, 1);
 		} else {
-			c->isfullscreen = 0;
-			c->ismaximizescreen = 0;
+			client_pending_fullscreen_state(c, 0);
+			client_pending_maximized_state(c, 0);
 			setfullscreen(c, false);
 		}
 	} else {
@@ -7380,13 +7396,11 @@ void activatex11(struct wl_listener *listener, void *data) {
 		return;
 
 	if (c->isminimized) {
-		c->isminimized = 0;
+		client_pending_minimized_state(c, 0);
 		c->tags = c->mini_restore_tag;
 		c->is_scratchpad_show = 0;
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
-		wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel,
-													 false);
 		setborder_color(c);
 		if (VISIBLEON(c, c->mon)) {
 			need_arrange = true;

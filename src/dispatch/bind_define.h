@@ -575,7 +575,7 @@ int32_t restore_minimized(const Arg *arg) {
 
 	if (selmon && selmon->sel && selmon->sel->is_in_scratchpad &&
 		selmon->sel->is_scratchpad_show) {
-		selmon->sel->isminimized = 0;
+		client_pending_minimized_state(selmon->sel, 0);
 		selmon->sel->is_scratchpad_show = 0;
 		selmon->sel->is_in_scratchpad = 0;
 		selmon->sel->isnamedscratchpad = 0;
