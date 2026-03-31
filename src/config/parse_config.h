@@ -286,7 +286,7 @@ typedef struct {
 	int32_t blur_layer;
 	int32_t blur_optimized;
 	int32_t border_radius;
-	int32_t border_radius_location_default;
+	struct fx_corner_radii border_radius_location_default;
 	struct blur_data blur_params;
 	int32_t shadows;
 	int32_t shadow_only_floating;
@@ -1384,6 +1384,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->blur_optimized = atoi(value);
 	} else if (strcmp(key, "border_radius") == 0) {
 		config->border_radius = atoi(value);
+		config->border_radius_location_default = corner_radii_all(config->border_radius);
 	} else if (strcmp(key, "blur_params_num_passes") == 0) {
 		config->blur_params.num_passes = atoi(value);
 	} else if (strcmp(key, "blur_params_radius") == 0) {
@@ -3363,7 +3364,7 @@ void set_value_default() {
 	config.blur_layer = 0;
 	config.blur_optimized = 1;
 	config.border_radius = 0;
-	config.border_radius_location_default = CORNER_LOCATION_ALL;
+	config.border_radius_location_default = corner_radii_all(config.border_radius);
 	config.blur_params.num_passes = 1;
 	config.blur_params.radius = 5;
 	config.blur_params.noise = 0.02f;

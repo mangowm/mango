@@ -151,6 +151,24 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 	}
 }
 
+void layer_draw_blur(LayerSurface *l) {
+
+	if (!l->mapped || !l->blur)
+		return;
+
+	if (!config.blur || !config.blur_layer || l->noblur) {
+		wlr_scene_node_set_enabled(&l->blur->node, false);
+		return;
+	}
+
+	int32_t width, height;
+	layer_actual_size(l, &width, &height);
+
+	wlr_scene_node_set_enabled(&l->blur->node, true);
+	wlr_scene_blur_set_size(l->blur, width, height);
+	wlr_scene_blur_set_corner_radii(l->blur, config.border_radius_location_default);
+}
+
 void layer_draw_shadow(LayerSurface *l) {
 
 	if (!l->mapped || !l->shadow)
@@ -187,7 +205,6 @@ void layer_draw_shadow(LayerSurface *l) {
 
 	struct clipped_region clipped_region = {
 		.area = intersection_box,
-		.corner_radius = config.border_radius,
 		.corners = config.border_radius_location_default,
 	};
 
@@ -568,8 +585,10 @@ bool layer_draw_frame(LayerSurface *l) {
 		!l->noanim) {
 		layer_animation_next_tick(l);
 		layer_draw_shadow(l);
+		layer_draw_blur(l);
 	} else {
 		layer_draw_shadow(l);
+		layer_draw_blur(l);
 		l->need_output_flush = false;
 	}
 	return true;

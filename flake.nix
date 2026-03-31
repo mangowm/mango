@@ -3,7 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     scenefx = {
-      url = "github:wlrfx/scenefx";
+      url = "github:wlrfx/scenefx/bdc3e64ad91b71db725df42095dcc1ea9af49b05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -30,7 +30,7 @@
       }: let
         inherit (pkgs) callPackage ;
         mango = callPackage ./nix {
-          inherit (inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}) scenefx;
+          scenefx = inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
         shellOverride = old: {
           nativeBuildInputs = old.nativeBuildInputs ++ [];

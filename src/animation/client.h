@@ -8,25 +8,26 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 	wlr_scene_rect_set_size(rect, GEZERO(width), GEZERO(height));
 }
 
-enum corner_location set_client_corner_location(Client *c) {
-	enum corner_location current_corner_location = CORNER_LOCATION_ALL;
+struct fx_corner_radii set_client_corner_radii(Client *c) {
 	struct wlr_box target_geom =
 		config.animations ? c->animation.current : c->geom;
+	int r = config.border_radius;
+	int tl = r, tr = r, br = r, bl = r;
 	if (target_geom.x + config.border_radius <= c->mon->m.x) {
-		current_corner_location &= ~CORNER_LOCATION_LEFT;
+		tl = 0; bl = 0; // left corners
 	}
 	if (target_geom.x + target_geom.width - config.border_radius >=
 		c->mon->m.x + c->mon->m.width) {
-		current_corner_location &= ~CORNER_LOCATION_RIGHT;
+		tr = 0; br = 0; // right corners
 	}
 	if (target_geom.y + config.border_radius <= c->mon->m.y) {
-		current_corner_location &= ~CORNER_LOCATION_TOP;
+		tl = 0; tr = 0; // top corners
 	}
 	if (target_geom.y + target_geom.height - config.border_radius >=
 		c->mon->m.y + c->mon->m.height) {
-		current_corner_location &= ~CORNER_LOCATION_BOTTOM;
+		bl = 0; br = 0; // bottom corners
 	}
-	return current_corner_location;
+	return corner_radii_new(tl, tr, br, bl);
 }
 
 bool is_horizontal_stack_layout(Monitor *m) {
@@ -226,8 +227,7 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 	if (wlr_xdg_popup_try_from_wlr_surface(surface) != NULL)
 		return;
 
-	wlr_scene_buffer_set_corner_radius(buffer, config.border_radius,
-									   buffer_data->corner_location);
+	wlr_scene_buffer_set_corner_radii(buffer, buffer_data->corner_radii);
 }
 
 void buffer_set_effect(Client *c, BufferData data) {
@@ -246,11 +246,20 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c->isnoradius || c->isfullscreen ||
 		(config.no_radius_when_single && c->mon &&
 		 c->mon->visible_tiling_clients == 1)) {
-		data.corner_location = CORNER_LOCATION_NONE;
+		data.corner_radii = corner_radii_none();
 	}
 
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
 								   scene_buffer_apply_effect, &data);
+
+	if (c->blur) {
+		bool blur_enabled = config.blur && !c->noblur && !c->isfullscreen;
+		wlr_scene_node_set_enabled(&c->blur->node, blur_enabled);
+		if (blur_enabled) {
+			wlr_scene_blur_set_size(c->blur, data.width, data.height);
+			wlr_scene_blur_set_corner_radii(c->blur, data.corner_radii);
+		}
+	}
 }
 
 void client_draw_shadow(Client *c) {
@@ -268,11 +277,11 @@ void client_draw_shadow(Client *c) {
 	}
 
 	bool hit_no_border = check_hit_no_border(c);
-	enum corner_location current_corner_location =
+	struct fx_corner_radii current_corner_radii =
 		c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)
-			? CORNER_LOCATION_NONE
-			: CORNER_LOCATION_ALL;
+			? corner_radii_none()
+			: corner_radii_all(config.border_radius);
 
 	int32_t bwoffset = c->bw != 0 && hit_no_border ? (int32_t)c->bw : 0;
 
@@ -302,8 +311,7 @@ void client_draw_shadow(Client *c) {
 
 	struct clipped_region clipped_region = {
 		.area = intersection_box,
-		.corner_radius = config.border_radius,
-		.corners = current_corner_location,
+		.corners = current_corner_radii,
 	};
 
 	struct wlr_box absolute_shadow_box = {
@@ -355,12 +363,12 @@ void apply_border(Client *c) {
 		return;
 
 	bool hit_no_border = check_hit_no_border(c);
-	enum corner_location current_corner_location;
+	struct fx_corner_radii current_corner_radii;
 	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)) {
-		current_corner_location = CORNER_LOCATION_NONE;
+		current_corner_radii = corner_radii_none();
 	} else {
-		current_corner_location = set_client_corner_location(c);
+		current_corner_radii = set_client_corner_radii(c);
 	}
 
 	if (hit_no_border && config.smartgaps) {
@@ -434,15 +442,13 @@ void apply_border(Client *c) {
 	struct clipped_region clipped_region = {
 		.area = {inner_surface_x, inner_surface_y, inner_surface_width,
 				 inner_surface_height},
-		.corner_radius = config.border_radius,
-		.corners = current_corner_location,
+		.corners = current_corner_radii,
 	};
 
 	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
 	wlr_scene_rect_set_size(c->border, rect_width, rect_height);
 	wlr_scene_node_set_position(&c->border->node, rect_x, rect_y);
-	wlr_scene_rect_set_corner_radius(c->border, config.border_radius,
-									 current_corner_location);
+	wlr_scene_rect_set_corner_radii(c->border, current_corner_radii);
 	wlr_scene_rect_set_clipped_region(c->border, clipped_region);
 }
 
@@ -520,8 +526,8 @@ void client_apply_clip(Client *c, float factor) {
 	struct ivec2 offset;
 	BufferData buffer_data;
 
-	enum corner_location current_corner_location =
-		set_client_corner_location(c);
+	struct fx_corner_radii current_corner_radii =
+		set_client_corner_radii(c);
 
 	if (!config.animations) {
 		c->animation.running = false;
@@ -543,7 +549,7 @@ void client_apply_clip(Client *c, float factor) {
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
-										  current_corner_location, true});
+										  current_corner_radii, true});
 		return;
 	}
 
@@ -600,7 +606,7 @@ void client_apply_clip(Client *c, float factor) {
 	buffer_data.should_scale = true;
 	buffer_data.width = clip_box.width;
 	buffer_data.height = clip_box.height;
-	buffer_data.corner_location = current_corner_location;
+	buffer_data.corner_radii = current_corner_radii;
 
 	if (factor == 1.0) {
 		buffer_data.width_scale = 1.0;
