@@ -185,7 +185,7 @@ mangowm is available in the **PikaOS package repository**.
 You can install it using the `pikman` package manager:
 
 ```bash
-pikman install mangowc
+pikman install mangowm
 ```
 
 ---

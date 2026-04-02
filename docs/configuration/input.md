@@ -45,6 +45,7 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
 | `tap_to_click` | `1` | Tap to trigger a left click. |
 | `tap_and_drag` | `1` | Tap and hold to drag items. |
 | `trackpad_natural_scrolling` | `0` | Invert scrolling direction (natural scrolling). |
+| `scroll_button` | `274` | The mouse button that use for scrolling(272 to 279).
 | `scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
 | `click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
 | `drag_lock` | `1` | Lock dragging after tapping. |
@@ -56,6 +57,16 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
 ---
 
 **Detailed descriptions:**
+
+- `scroll_button` values:
+  - `272` — Left button.
+  - `273` — Right button.
+  - `274` — Middle button.
+  - `275` — Side button.
+  - `276` — Extra button.
+  - `277` — Forward button.
+  - `278` — Back button.
+  - `279` — Task button.
 
 - `scroll_method` values:
   - `0` — Never send scroll events (no scrolling).

@@ -195,6 +195,16 @@ bind=NONE,XF86AudioMute,spawn,wpctl set-mute @DEFAULT_SINK@ toggle
 bind=SHIFT,XF86AudioMute,spawn,wpctl set-mute @DEFAULT_SOURCE@ toggle
 ```
 
+#### Playback
+
+Requires: `playerctl`
+
+```ini
+bind=NONE,XF86AudioNext,spawn,playerctl next
+bind=NONE,XF86AudioPrev,spawn,playerctl previous
+bind=NONE,XF86AudioPlay,spawn,playerctl play-pause
+```
+
 ### Floating Window Movement
 
 | Command | Param | Description |
