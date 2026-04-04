@@ -36,10 +36,13 @@
           (add-before 'configure 'patch-meson
             (lambda _
               (substitute* "meson.build"
+                ;; MangoWM ignores sysconfdir handling for NixOS.
+                ;; We also need to skip that sysconfdir edits.
+                (("is_nixos = false")
+                 "is_nixos = true")
+                ;; Unhardcode path.  Fixes loading default config.
                 (("'-DSYSCONFDIR=\\\"@0@\\\"'.format\\('/etc'\\)")
-                 "'-DSYSCONFDIR=\"@0@\"'.format(sysconfdir)")
-                (("sysconfdir = sysconfdir.substring\\(prefix.length\\(\\)\\)")
-                 "")))))))
+                 "'-DSYSCONFDIR=\"@0@\"'.format(sysconfdir)")))))))
     (inputs (list wayland
                   libinput
                   libdrm
