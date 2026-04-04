@@ -52,7 +52,7 @@
                   pcre2
                   libxcb
                   xcb-util-wm
-                  wlroots
+                  wlroots-0.19
                   scenefx))
     (native-inputs (list pkg-config wayland-protocols))
     (home-page "https://github.com/DreamMaoMao/mangowm")
