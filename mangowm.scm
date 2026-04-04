@@ -60,8 +60,9 @@
     (native-inputs (list pkg-config wayland-protocols))
     (home-page "https://github.com/mangowm/mango")
     (synopsis "Wayland compositor based on wlroots and scenefx")
-    (description "A Wayland compositor based on wlroots and scenefx,
-inspired by dwl but aiming to be more feature-rich.")
+    (description
+     "MangoWM is a modern, lightweight, high-performance Wayland compositor
+built on dwl — crafted for speed, flexibility, and a customizable desktop experience.")
     (license (list license:gpl3 ;mangowm itself, dwl
                    license:expat ;dwm, sway, wlroots
                    license:cc0)))) ;tinywl
