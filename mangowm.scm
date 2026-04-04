@@ -55,7 +55,7 @@
                   wlroots-0.19
                   scenefx))
     (native-inputs (list pkg-config wayland-protocols))
-    (home-page "https://github.com/DreamMaoMao/mangowm")
+    (home-page "https://github.com/mangowm/mango")
     (synopsis "Wayland compositor based on wlroots and scenefx")
     (description "A Wayland compositor based on wlroots and scenefx,
 inspired by dwl but aiming to be more feature-rich.")
