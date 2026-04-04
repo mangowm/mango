@@ -15,7 +15,7 @@
   #:use-module (gnu packages ninja)
   #:use-module (gnu packages pkg-config)
   #:use-module (guix build-system meson)
-  #:use-module (guix licenses))
+  #:use-module ((guix licenses) #:prefix license:))
 
 
 (define-public mangowm-git
@@ -59,7 +59,9 @@
     (synopsis "Wayland compositor based on wlroots and scenefx")
     (description "A Wayland compositor based on wlroots and scenefx,
 inspired by dwl but aiming to be more feature-rich.")
-    (license gpl3)))
+    (license (list license:gpl3 ;mangowm itself, dwl
+                   license:expat ;dwm, sway, wlroots
+                   license:cc0)))) ;tinywl
 
 (define-deprecated-package mangowc
   mangowm-git)
