@@ -401,6 +401,7 @@ struct Client {
 	bool is_clip_to_hide;
 	bool canvas_floating;
 	bool drag_to_tile;
+	bool snap_to_geom;
 	bool scratchpad_switching_mon;
 	bool fake_no_border;
 	int32_t nofocus;
@@ -1045,12 +1046,12 @@ static struct wl_event_source *sync_keymap;
 #include "animation/tag.h"
 static void canvas_reposition(Monitor *m);
 static void canvas_pan_to_client(Monitor *m, Client *c);
+#include "layout/dwindle.h"
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
 #include "layout/arrange.h"
 #include "layout/canvas.h"
-#include "layout/dwindle.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
 
@@ -2169,7 +2170,7 @@ void place_drag_tile_client(Client *c) {
 			c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == DWINDLE) {
 			uint32_t tag = c->mon->pertag->curtag;
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c,
-						   closest_client, c->mon->pertag->mfacts[tag]);
+						   closest_client, c->mon->pertag->mfacts[tag], false);
 		} else if (closest_client->link.prev != &c->link) {
 			wl_list_remove(&c->link);
 			c->link.next = &closest_client->link;

@@ -3,6 +3,9 @@ struct DwindleNode {
 	bool is_split;
 	bool split_h;
 	float ratio;
+	float drag_init_ratio;
+	int32_t container_x;
+	int32_t container_y;
 	int32_t container_w;
 	int32_t container_h;
 	DwindleNode *parent;
@@ -10,6 +13,9 @@ struct DwindleNode {
 	DwindleNode *second;
 	Client *client;
 };
+
+static DwindleNode *dwindle_locked_h_node = NULL;
+static DwindleNode *dwindle_locked_v_node = NULL;
 
 static DwindleNode *dwindle_new_leaf(Client *c) {
 	DwindleNode *n = calloc(1, sizeof(DwindleNode));
@@ -43,7 +49,7 @@ static void dwindle_free_tree(DwindleNode *node) {
 }
 
 static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
-						   float ratio) {
+						   float ratio, bool as_first) {
 	DwindleNode *new_leaf = dwindle_new_leaf(new_c);
 
 	if (!*root) {
@@ -58,8 +64,13 @@ static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 	DwindleNode *split = calloc(1, sizeof(DwindleNode));
 	split->is_split = true;
 	split->ratio = ratio;
-	split->first = target;
-	split->second = new_leaf;
+	if (as_first) {
+		split->first = new_leaf;
+		split->second = target;
+	} else {
+		split->first = target;
+		split->second = new_leaf;
+	}
 	split->parent = target->parent;
 	target->parent = split;
 	new_leaf->parent = split;
@@ -90,6 +101,8 @@ static void dwindle_remove(DwindleNode **root, Client *c) {
 		(parent->first == leaf) ? parent->second : parent->first;
 	DwindleNode *grandparent = parent->parent;
 	sibling->parent = grandparent;
+	sibling->container_w = 0;
+	sibling->container_h = 0;
 
 	if (!grandparent) {
 		*root = sibling;
@@ -120,6 +133,8 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 
 	if (node->container_w == 0 && node->container_h == 0)
 		node->split_h = (aw >= ah);
+	node->container_x = ax;
+	node->container_y = ay;
 	node->container_w = aw;
 	node->container_h = ah;
 	if (node->split_h) {
@@ -136,13 +151,14 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 }
 
 static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-								float ratio) {
+								float ratio, int32_t dir) {
 	if (!c || !target || c == target)
 		return;
 	if (!dwindle_find_leaf(*root, c) || !dwindle_find_leaf(*root, target))
 		return;
 	dwindle_remove(root, c);
-	dwindle_insert(root, c, target, ratio);
+	bool as_first = (dir == UP || dir == LEFT);
+	dwindle_insert(root, c, target, ratio, as_first);
 }
 
 static void dwindle_swap_clients(DwindleNode **root, Client *a, Client *b) {
@@ -161,34 +177,84 @@ static void dwindle_resize_client(Monitor *m, Client *c, int32_t dx,
 	if (!leaf)
 		return;
 
-	bool want_h = abs(dx) >= abs(dy);
-
-	DwindleNode *node = leaf->parent;
-	while (node) {
-		if (node->split_h == want_h) {
-			float container_sz = want_h ? (float)MAX(1, node->container_w)
-										: (float)MAX(1, node->container_h);
-
-			float delta =
-				want_h ? (float)dx / container_sz : (float)dy / container_sz;
-
-			node->ratio += delta;
-			node->ratio = CLAMP_FLOAT(node->ratio, 0.05f, 0.95f);
-
-			int32_t n = m->visible_tiling_clients;
-			int32_t gap_ih = enablegaps ? m->gappih : 0;
-			int32_t gap_iv = enablegaps ? m->gappiv : 0;
-			int32_t gap_oh = enablegaps ? m->gappoh : 0;
-			int32_t gap_ov = enablegaps ? m->gappov : 0;
-			if (config.smartgaps && n == 1)
-				gap_ih = gap_iv = gap_oh = gap_ov = 0;
-			dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
-						   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-						   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
-			return;
+	if (!start_drag_window) {
+		start_drag_window = true;
+		dwindle_locked_h_node = NULL;
+		dwindle_locked_v_node = NULL;
+		DwindleNode *node = leaf->parent;
+		while (node) {
+			if (node->split_h && !dwindle_locked_h_node) {
+				dwindle_locked_h_node = node;
+				node->drag_init_ratio = node->ratio;
+			}
+			if (!node->split_h && !dwindle_locked_v_node) {
+				dwindle_locked_v_node = node;
+				node->drag_init_ratio = node->ratio;
+			}
+			if (dwindle_locked_h_node && dwindle_locked_v_node)
+				break;
+			node = node->parent;
 		}
-		node = node->parent;
 	}
+
+	if (!dwindle_locked_h_node && !dwindle_locked_v_node)
+		return;
+
+	if (dwindle_locked_h_node) {
+		float cw = (float)MAX(1, dwindle_locked_h_node->container_w);
+		float ox = (float)(cursor->x - drag_begin_cursorx);
+		dwindle_locked_h_node->ratio =
+			dwindle_locked_h_node->drag_init_ratio + ox / cw;
+		dwindle_locked_h_node->ratio =
+			CLAMP_FLOAT(dwindle_locked_h_node->ratio, 0.05f, 0.95f);
+	}
+
+	if (dwindle_locked_v_node) {
+		float ch = (float)MAX(1, dwindle_locked_v_node->container_h);
+		float oy = (float)(cursor->y - drag_begin_cursory);
+		dwindle_locked_v_node->ratio =
+			dwindle_locked_v_node->drag_init_ratio + oy / ch;
+		dwindle_locked_v_node->ratio =
+			CLAMP_FLOAT(dwindle_locked_v_node->ratio, 0.05f, 0.95f);
+	}
+
+	int32_t n = m->visible_tiling_clients;
+	int32_t gap_ih = enablegaps ? m->gappih : 0;
+	int32_t gap_iv = enablegaps ? m->gappiv : 0;
+	int32_t gap_oh = enablegaps ? m->gappoh : 0;
+	int32_t gap_ov = enablegaps ? m->gappov : 0;
+	if (config.smartgaps && n == 1)
+		gap_ih = gap_iv = gap_oh = gap_ov = 0;
+
+	Client *tc;
+	wl_list_for_each(tc, &clients, link) if (VISIBLEON(tc, m) && ISTILED(tc))
+		tc->snap_to_geom = true;
+
+	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
+				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
+				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
+
+	wl_list_for_each(tc, &clients, link) if (VISIBLEON(tc, m) && ISTILED(tc))
+		tc->snap_to_geom = false;
+}
+
+static bool dwindle_get_resize_border(Monitor *m, Client *c, int32_t *out_x,
+									  int32_t *out_y) {
+	uint32_t tag = m->pertag->curtag;
+	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
+	if (!leaf || !leaf->parent)
+		return false;
+
+	DwindleNode *parent = leaf->parent;
+	bool is_first = (parent->first == leaf);
+	if (parent->split_h) {
+		*out_x = is_first ? (c->geom.x + c->geom.width) : c->geom.x;
+		*out_y = -1;
+	} else {
+		*out_x = -1;
+		*out_y = is_first ? (c->geom.y + c->geom.height) : c->geom.y;
+	}
+	return true;
 }
 
 static void dwindle_remove_client(Client *c) {
@@ -255,7 +321,7 @@ void dwindle(Monitor *m) {
 		focused = m->sel;
 	for (int32_t i = 0; i < count; i++) {
 		if (!dwindle_find_leaf(*root, vis[i]))
-			dwindle_insert(root, vis[i], focused, ratio);
+			dwindle_insert(root, vis[i], focused, ratio, false);
 	}
 
 	int32_t gap_ih = enablegaps ? m->gappih : 0;
