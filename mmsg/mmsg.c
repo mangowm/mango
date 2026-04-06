@@ -500,7 +500,7 @@ static const struct wl_registry_listener registry_listener = {
 
 static void usage(void) {
 	fprintf(stderr,
-			"mmsg - MangoWC IPC\n"
+			"mmsg - MangoWM IPC\n"
 			"\n"
 			"SYNOPSIS:\n"
 			"\tmmsg [-OTLq]\n"
@@ -517,7 +517,7 @@ static void usage(void) {
 			"\t-O           Get all output (monitor) information\n"
 			"\t-T           Get number of tags\n"
 			"\t-L           Get all available layouts\n"
-			"\t-q           Quit MangoWC\n"
+			"\t-q           Quit mango\n"
 			"\t-o <output>  Select output (monitor)\n"
 			"\n"
 			"GET OPTIONS (used with -g or -w):\n"
@@ -569,12 +569,12 @@ int32_t main(int32_t argc, char *argv[]) {
 		mode = WATCH;
 		break;
 	case 'o':
-		if (mode == SET)
+		if (mode == GET || mode == WATCH)
+			oflag = 1;
+		else if (mode == SET)
 			output_name = EARGF(usage());
 		else
 			output_name = ARGF();
-		if (!output_name)
-			oflag = 1;
 		break;
 	case 't':
 		tflag = 1;

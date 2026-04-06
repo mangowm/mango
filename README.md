@@ -1,6 +1,6 @@
 # Mango Wayland Compositor
 <div>
-  <img src="https://github.com/DreamMaoMao/mangowc/blob/main/assets/mango-transparency-256.png" alt="MangoWC Logo" width="120"/>
+  <img src="https://github.com/mangowm/mango/blob/main/assets/mango-transparency-256.png" alt="MangoWM Logo" width="120"/>
 </div>
 
 This project's development is based on [dwl](https://codeberg.org/dwl/dwl/).
@@ -27,11 +27,18 @@ This project's development is based on [dwl](https://codeberg.org/dwl/dwl/).
 
 https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 
+# Mango's Vision
+
+**Mango's primary goal is stability**: After months of testing and development—and aside from a few lingering GPU compatibility issues—it should now be stable enough. I don't plan on making many breaking changes.
+
+**Mango's preference is practicality**: I tend to add features that genuinely help with daily workflows—things that make our work more convenient.
+
+**Mango won't cater to every user preference**: For niche feature requests, I'll take a wait-and-see approach. I'll only consider adding them if they get a significant number of upvotes.
+
 # Our discord
-[mangowc](https://discord.gg/CPjbDxesh5)
+[mangowm](https://discord.gg/CPjbDxesh5)
 
 # Supported layouts
-
 - tile
 - scroller
 - monocle
@@ -41,23 +48,20 @@ https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 - vertical_tile
 - vertical_grid
 - vertical_scroller
+- tgmix
 
 # Installation
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/mangowc.svg)](https://repology.org/project/mangowc/versions)
+[![Packaging status](https://repology.org/badge/vertical-allrepos/mangowm.svg)](https://repology.org/project/mangowm/versions)
 
 ## Dependencies
 
-- glibc
 - wayland
 - wayland-protocols
 - libinput
 - libdrm
 - libxkbcommon
 - pixman
-- git
-- meson
-- ninja
 - libdisplay-info
 - libliftoff
 - hwdata
@@ -67,9 +71,9 @@ https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 - libxcb
 
 ## Arch Linux
-The package is in the Arch User Repository and is available for manual download [here](https://aur.archlinux.org/packages/mangowc-git) or through a AUR helper like yay:
+The package is in the Arch User Repository and is available for manual download [here](https://aur.archlinux.org/packages/mangowm-git) or through a AUR helper like yay:
 ```bash
-yay -S mangowc-git
+yay -S mangowm-git
 
 ```
 
@@ -83,12 +87,12 @@ eselect repository enable guru
 emerge --sync guru
 ```
 
-Then, add `gui-libs/scenefx` and `gui-wm/mangowc` to the `package.accept_keywords`.
+Then, add `gui-libs/scenefx` and `gui-wm/mangowm` to the `package.accept_keywords`.
 
 Finally, install the package:
 
 ```bash
-emerge --ask --verbose gui-wm/mangowc
+emerge --ask --verbose gui-wm/mangowm
 ```
 
 ## Fedora Linux
@@ -98,31 +102,32 @@ First, add the [Terra Repository](https://terra.fyralabs.com/).
 Then, install the package:
 
 ```bash
-dnf install mangowc
+dnf install mangowm
 ```
 
-## GuixSD
+## Guix System
 The package definition is described in the source repository.
-First, add `mangowc` channel to `channels.scm` file:
+First, add `mangowm` channel to `channels.scm` file:
 
 ```scheme
 ;; In $HOME/.config/guix/channels.scm
 (cons (channel
-        (name 'mangowc)
-        (url "https://github.com/DreamMaoMao/mangowc.git"))
+        (name 'mangowm)
+        (url "https://github.com/mangowm/mango.git")
+        (branch "main"))
       ... ;; Your other channels
       %default-channels)
 ```
 
 Then, run `guix pull` and after update you can either run
-`guix install mangowc` or add it to your configuration via:
+`guix install mangowm` or add it to your configuration via:
 
 ```scheme
-(use-modules (mangowc)) ;; Add mangowc module
+(use-modules (mangowm)) ;; Add mangowm module
 
-;; Add mangowc to packages list
-(packages (cons 
-            mangowc
+;; Add mangowm to packages list
+(packages (cons*
+            mangowm-git
             ... ;; Other packages you specified
             %base-packages))
 ```
@@ -132,7 +137,7 @@ And then rebuild your system.
 ## Other
 
 ```bash
-git clone -b 0.19.2 https://gitlab.freedesktop.org/wlroots/wlroots.git
+git clone -b 0.19.3 https://gitlab.freedesktop.org/wlroots/wlroots.git
 cd wlroots
 meson build -Dprefix=/usr
 sudo ninja -C build install
@@ -142,8 +147,8 @@ cd scenefx
 meson build -Dprefix=/usr
 sudo ninja -C build install
 
-git clone https://github.com/DreamMaoMao/mangowc.git
-cd mangowc
+git clone https://github.com/mangowm/mango.git
+cd mangowm
 meson build -Dprefix=/usr
 sudo ninja -C build install
 ```
@@ -201,9 +206,9 @@ git clone https://github.com/DreamMaoMao/mango-config.git ~/.config/mango
 
 ## Config Documentation
 
-Refer to the repo wiki [wiki](https://github.com/DreamMaoMao/mango/wiki/)
+Refer to the repo wiki [wiki](https://github.com/mangowm/mango/wiki/)
 
-or the website docs [docs](https://mangowc.vercel.app/docs)
+or the website docs [docs](https://mangowm.github.io/)
 
 # NixOS + Home-manager
 
@@ -223,7 +228,7 @@ Here's an example of using the modules in a flake:
     };
     flake-parts.url = "github:hercules-ci/flake-parts";
     mango = {
-      url = "github:DreamMaoMao/mango";
+      url = "github:mangowm/mango";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -285,9 +290,9 @@ Here's an example of using the modules in a flake:
 
 To package mango for other distributions, you can check the reference setup for:
 
-- [nix](https://github.com/DreamMaoMao/mangowc/blob/main/nix/default.nix)
-- [arch](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=mangowc-git).
-- [gentoo](https://data.gpo.zugaina.org/guru/gui-wm/mangowc)
+- [nix](https://github.com/mangowm/mango/blob/main/nix/default.nix)
+- [arch](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=mangowm-git).
+- [gentoo](https://data.gpo.zugaina.org/guru/gui-wm/mangowm)
 
 You might need to package `scenefx` for your distribution, check availability [here](https://github.com/wlrfx/scenefx.git).
 

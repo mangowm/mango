@@ -8,3 +8,7 @@ int32_t regex_match(const char *pattern_mb, const char *str_mb);
 void wl_list_append(struct wl_list *list, struct wl_list *object);
 uint32_t get_now_in_ms(void);
 uint32_t timespec_to_ms(struct timespec *ts);
+char *join_strings(char *arr[], const char *sep);
+char *join_strings_with_suffix(char *arr[], const char *suffix,
+							   const char *sep);
+char *string_printf(const char *fmt, ...);
