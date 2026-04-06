@@ -503,6 +503,7 @@ typedef struct TouchGroup {
 	uint32_t pending_swipe;
 	uint32_t touch_points_pending_swipe;
 	Monitor *m;
+	double pinch_dist;
 } TouchGroup;
 
 typedef struct {
@@ -6927,6 +6928,17 @@ void touchdown(struct wl_listener *listener, void *data) {
 	gesture_touch_down(tg, t, lx, ly);
 	wl_list_insert(&tg->touch_points, &t->link);
 
+	if (wl_list_length(&tg->touch_points) == 2) {
+		TouchPoint *tp_pd;
+		wl_list_for_each(tp_pd, &tg->touch_points, link) {
+			if (tp_pd->touch_id != t->touch_id) {
+				tg->pinch_dist = sqrt(pow(lx - tp_pd->start_x, 2) +
+									  pow(ly - tp_pd->start_y, 2));
+				break;
+			}
+		}
+	}
+
 	xytonode(lx, ly, &surface, &c, NULL, &sx, &sy);
 	t->start_surface_x = sx;
 	t->start_surface_y = sy;
@@ -7063,12 +7075,10 @@ void touchmotion(struct wl_listener *listener, void *data) {
 				}
 			}
 			if (other) {
-				double prev_dist = sqrt(pow(t->prev_x - other->prev_x, 2) +
-										pow(t->prev_y - other->prev_y, 2));
-				double new_dist =
-					sqrt(pow(lx - other->end_x, 2) + pow(ly - other->end_y, 2));
-				if (prev_dist > 1.0) {
-					float factor = (float)(new_dist / prev_dist);
+				double cur_dist = sqrt(pow(lx - other->end_x, 2) +
+									   pow(ly - other->end_y, 2));
+				if (tg->pinch_dist > 1.0 && cur_dist > 1.0) {
+					float factor = (float)(cur_dist / tg->pinch_dist);
 					float old_zoom = zoom;
 					selmon->pertag->canvas_zoom[tag] =
 						CLAMP_FLOAT(zoom * factor, 0.1f, 1.0f);
@@ -7083,6 +7093,7 @@ void touchmotion(struct wl_listener *listener, void *data) {
 						cy - (selmon->w.height / new_zoom) / 2.0f;
 					canvas_reposition(selmon);
 				}
+				tg->pinch_dist = cur_dist;
 			}
 		}
 	}
