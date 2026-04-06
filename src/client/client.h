@@ -294,9 +294,8 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 									   uint32_t height) {
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
-
-		struct wlr_surface_state *state =
-			&c->surface.xwayland->surface->current;
+		struct wlr_xwayland_surface *surface = c->surface.xwayland;
+		struct wlr_surface_state *state = &surface->surface->current;
 
 		if ((int32_t)c->geom.width - 2 * (int32_t)c->bw ==
 				(int32_t)state->width &&
@@ -308,6 +307,22 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 				(int32_t)c->geom.y + (int32_t)c->bw) {
 			return 0;
 		}
+
+		xcb_size_hints_t *size_hints = surface->size_hints;
+		int32_t width = c->geom.width - 2 * c->bw;
+		int32_t height = c->geom.height - 2 * c->bw;
+
+		if (c->mon && c->mon->isoverview && size_hints &&
+			c->geom.width - 2 * (int32_t)c->bw < size_hints->min_width &&
+			c->geom.height - 2 * (int32_t)c->bw < size_hints->min_height)
+			return 0;
+
+		if (size_hints &&
+			c->geom.width - 2 * (int32_t)c->bw < size_hints->min_width)
+			width = size_hints->min_width;
+		if (size_hints &&
+			c->geom.height - 2 * (int32_t)c->bw < size_hints->min_height)
+			height = size_hints->min_height;
 
 		wlr_xwayland_surface_configure(c->surface.xwayland, c->geom.x + c->bw,
 									   c->geom.y + c->bw, width, height);
@@ -350,7 +365,7 @@ static inline void client_set_maximized(Client *c, bool maximized) {
 static inline void client_set_tiled(Client *c, uint32_t edges) {
 	struct wlr_xdg_toplevel *toplevel;
 #ifdef XWAYLAND
-	if (client_is_x11(c) && c->force_maximize) {
+	if (client_is_x11(c) && c->force_fakemaximize) {
 		wlr_xwayland_surface_set_maximized(c->surface.xwayland,
 										   edges != WLR_EDGE_NONE,
 										   edges != WLR_EDGE_NONE);
@@ -365,7 +380,7 @@ static inline void client_set_tiled(Client *c, uint32_t edges) {
 		wlr_xdg_toplevel_set_tiled(c->surface.xdg->toplevel, edges);
 	}
 
-	if (c->force_maximize) {
+	if (c->force_fakemaximize) {
 		wlr_xdg_toplevel_set_maximized(toplevel, edges != WLR_EDGE_NONE);
 	}
 }

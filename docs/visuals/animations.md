@@ -46,7 +46,7 @@ fadeout_begin_opacity=0.5
 Adjust the zoom ratios for zoom animations.
 
 ```ini
-zoom_initial_ratio=0.3
+zoom_initial_ratio=0.4
 zoom_end_ratio=0.8
 ```
 

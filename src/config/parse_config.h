@@ -90,7 +90,7 @@ typedef struct {
 	int32_t no_force_center;
 	int32_t isterm;
 	int32_t allow_csd;
-	int32_t force_maximize;
+	int32_t force_fakemaximize;
 	int32_t force_tiled_state;
 	int32_t force_tearing;
 	int32_t noswallow;
@@ -2059,7 +2059,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
-		rule->force_maximize = -1;
+		rule->force_fakemaximize = -1;
 		rule->force_tiled_state = -1;
 		rule->force_tearing = -1;
 		rule->noswallow = -1;
@@ -2173,8 +2173,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
 					rule->allow_csd = atoi(val);
-				} else if (strcmp(key, "force_maximize") == 0) {
-					rule->force_maximize = atoi(val);
+				} else if (strcmp(key, "force_fakemaximize") == 0) {
+					rule->force_fakemaximize = atoi(val);
 				} else if (strcmp(key, "force_tiled_state") == 0) {
 					rule->force_tiled_state = atoi(val);
 				} else if (strcmp(key, "force_tearing") == 0) {
@@ -3214,7 +3214,7 @@ void override_config(void) {
 	config.accel_profile = CLAMP_INT(config.accel_profile, 0, 2);
 	config.accel_speed = CLAMP_FLOAT(config.accel_speed, -1.0f, 1.0f);
 	config.scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
-	config.scroll_button = CLAMP_INT(config.scroll_button, 272, 276);
+	config.scroll_button = CLAMP_INT(config.scroll_button, 272, 279);
 	config.click_method = CLAMP_INT(config.click_method, 0, 2);
 	config.send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);
 	config.button_map = CLAMP_INT(config.button_map, 0, 1);
@@ -3264,7 +3264,7 @@ void set_value_default() {
 	config.animation_fade_in = 1;
 	config.animation_fade_out = 1;
 	config.tag_animation_direction = HORIZONTAL;
-	config.zoom_initial_ratio = 0.3f;
+	config.zoom_initial_ratio = 0.4f;
 	config.zoom_end_ratio = 0.8f;
 	config.fadein_begin_opacity = 0.5f;
 	config.fadeout_begin_opacity = 0.5f;

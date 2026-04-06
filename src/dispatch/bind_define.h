@@ -380,7 +380,11 @@ int32_t moveresize(const Arg *arg) {
 	/* Float the window and tell motionnotify to grab it */
 	if (grabc->isfloating == 0 && arg->ui == CurMove) {
 		grabc->drag_to_tile = true;
+		exit_scroller_stack(grabc);
 		setfloating(grabc, 1);
+		grabc->old_stack_inner_per = 0.0f;
+		grabc->old_master_inner_per = 0.0f;
+		set_size_per(grabc->mon, grabc);
 	}
 
 	switch (cursor_mode = arg->ui) {
@@ -552,7 +556,7 @@ int32_t restore_minimized(const Arg *arg) {
 
 	if (selmon && selmon->sel && selmon->sel->is_in_scratchpad &&
 		selmon->sel->is_scratchpad_show) {
-		selmon->sel->isminimized = 0;
+		client_pending_minimized_state(selmon->sel, 0);
 		selmon->sel->is_scratchpad_show = 0;
 		selmon->sel->is_in_scratchpad = 0;
 		selmon->sel->isnamedscratchpad = 0;
@@ -863,7 +867,6 @@ int32_t spawn_shell(const Arg *arg) {
 }
 
 int32_t spawn(const Arg *arg) {
-
 	if (!arg->v)
 		return 0;
 
@@ -876,28 +879,21 @@ int32_t spawn(const Arg *arg) {
 		dup2(STDERR_FILENO, STDOUT_FILENO);
 		setsid();
 
-		// 2. 解析参数
-		char *argv[64];
-		int32_t argc = 0;
-		char *token = strtok((char *)arg->v, " ");
-		while (token != NULL && argc < 63) {
-			wordexp_t p;
-			if (wordexp(token, &p, 0) == 0) {
-				argv[argc++] = p.we_wordv[0];
-			} else {
-				argv[argc++] = token;
-			}
-			token = strtok(NULL, " ");
+		// 2. 对整个参数字符串进行单词展开
+		wordexp_t p;
+		if (wordexp(arg->v, &p, 0) != 0) {
+			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n", arg->v);
+			_exit(EXIT_FAILURE);
 		}
-		argv[argc] = NULL;
 
-		// 3. 执行命令
-		execvp(argv[0], argv);
+		// 3. 执行命令（p.we_wordv 已经是 argv 数组）
+		execvp(p.we_wordv[0], p.we_wordv);
 
-		// 4. execvp 失败时：打印错误并直接退出（避免 coredump）
-		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", argv[0],
+		// 4. execvp 失败时：打印错误，释放 wordexp 资源，然后退出
+		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
 				strerror(errno));
-		_exit(EXIT_FAILURE); // 使用 _exit 避免缓冲区刷新等操作
+		wordfree(&p); // 释放 wordexp 分配的内存
+		_exit(EXIT_FAILURE);
 	}
 	return 0;
 }
