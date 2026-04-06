@@ -1044,6 +1044,14 @@ int32_t tag(const Arg *arg) {
 }
 
 int32_t tagmon(const Arg *arg) {
+	tagmon_general(arg, false);
+}
+
+int32_t tagmonsilent(const Arg *arg) {
+	tagmon_general(arg, true);
+}
+
+int32_t tagmon_general(const Arg *arg, bool silent) {
 	Monitor *m = NULL, *cm = NULL;
 	Client *c = focustop(selmon);
 
@@ -1073,7 +1081,9 @@ int32_t tagmon(const Arg *arg) {
 	uint32_t target;
 
 	if (c->mon == m) {
-		view(&(Arg){.ui = newtags}, true);
+		if (!silent) {
+			view(&(Arg){.ui = newtags}, true);
+		}
 		return 0;
 	}
 
@@ -1081,7 +1091,7 @@ int32_t tagmon(const Arg *arg) {
 		selmon->sel = NULL;
 	}
 
-	setmon(c, m, newtags, true);
+	setmon(c, m, newtags, !silent); // todo silent, last arg = false
 	client_update_oldmonname_record(c, m);
 
 	reset_foreign_tolevel(c);
@@ -1097,18 +1107,22 @@ int32_t tagmon(const Arg *arg) {
 	// 重新计算居中的坐标
 	if (c->isfloating) {
 		c->geom = c->float_geom;
-		target = get_tags_first_tag(c->tags);
-		view(&(Arg){.ui = target}, true);
-		focusclient(c, 1);
+		if (!silent) {
+			target = get_tags_first_tag(c->tags);
+			view(&(Arg){.ui = target}, true);
+			focusclient(c, 1);
+		}
 		resize(c, c->geom, 1);
 	} else {
 		selmon = c->mon;
-		target = get_tags_first_tag(c->tags);
-		view(&(Arg){.ui = target}, true);
-		focusclient(c, 1);
+		if (!silent) {
+			target = get_tags_first_tag(c->tags);
+			view(&(Arg){.ui = target}, true);
+			focusclient(c, 1);
+		}
 		arrange(selmon, false, false);
 	}
-	if (warpcursor) {
+	if (warpcursor && !silent) {
 		warp_cursor_to_selmon(c->mon);
 	}
 	return 0;
@@ -1144,11 +1158,29 @@ int32_t tagtoleft(const Arg *arg) {
 	return 0;
 }
 
+int32_t tagtoleftsilent(const Arg *arg) {
+	if (selmon->sel != NULL &&
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
+		selmon->tagset[selmon->seltags] > 1) {
+		tagsilent(&(Arg){.ui = selmon->tagset[selmon->seltags] >> 1, .i = arg->i});
+	}
+	return 0;
+}
+
 int32_t tagtoright(const Arg *arg) {
 	if (selmon->sel != NULL &&
 		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
 		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
 		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
+	}
+	return 0;
+}
+
+int32_t tagtorightsilent(const Arg *arg) {
+	if (selmon->sel != NULL &&
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
+		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
+		tagsilent(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
 	}
 	return 0;
 }
