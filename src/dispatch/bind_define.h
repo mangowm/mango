@@ -911,7 +911,7 @@ int32_t spawn(const Arg *arg) {
 				argv[argc] = strdup(token);
 			}
 			argc++;
-			token = strtok(NULL, " ");
+			token = strtok_r(NULL, " ", &last);
 		}
 
 		if (argc == 0) {
