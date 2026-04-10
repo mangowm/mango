@@ -1567,16 +1567,13 @@ int32_t viewtoleft_have_client(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
+	if (selmon->isoverview)
+		return 0;
+
 	uint32_t n;
 	uint32_t current = get_tags_first_tag_num(selmon->tagset[selmon->seltags]);
 	bool found = false;
-
-	if (selmon->isoverview) {
-		return 0;
-	}
-
-	if (current <= 1)
-		return 0;
+	bool wrapped = false;
 
 	for (n = current - 1; n >= 1; n--) {
 		if (get_tag_status(n, selmon)) {
@@ -1585,8 +1582,22 @@ int32_t viewtoleft_have_client(const Arg *arg) {
 		}
 	}
 
-	if (found)
+	if (!found && config.tag_carousel) {
+		for (n = LENGTH(tags); n > current; n--) {
+			if (get_tag_status(n, selmon)) {
+				found = true;
+				wrapped = true;
+				break;
+			}
+		}
+	}
+
+	if (found) {
+		if (wrapped)
+			selmon->carousel_anim_dir = -1;
 		view(&(Arg){.ui = (1 << (n - 1)) & TAGMASK, .i = arg->i}, true);
+		selmon->carousel_anim_dir = 0;
+	}
 	return 0;
 }
 
@@ -1594,16 +1605,13 @@ int32_t viewtoright_have_client(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
+	if (selmon->isoverview)
+		return 0;
+
 	uint32_t n;
 	uint32_t current = get_tags_first_tag_num(selmon->tagset[selmon->seltags]);
 	bool found = false;
-
-	if (selmon->isoverview) {
-		return 0;
-	}
-
-	if (current >= LENGTH(tags))
-		return 0;
+	bool wrapped = false;
 
 	for (n = current + 1; n <= LENGTH(tags); n++) {
 		if (get_tag_status(n, selmon)) {
@@ -1612,8 +1620,22 @@ int32_t viewtoright_have_client(const Arg *arg) {
 		}
 	}
 
-	if (found)
+	if (!found && config.tag_carousel) {
+		for (n = 1; n < current; n++) {
+			if (get_tag_status(n, selmon)) {
+				found = true;
+				wrapped = true;
+				break;
+			}
+		}
+	}
+
+	if (found) {
+		if (wrapped)
+			selmon->carousel_anim_dir = 1;
 		view(&(Arg){.ui = (1 << (n - 1)) & TAGMASK, .i = arg->i}, true);
+		selmon->carousel_anim_dir = 0;
+	}
 	return 0;
 }
 
