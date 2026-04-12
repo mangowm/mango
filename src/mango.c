@@ -11,7 +11,7 @@
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
-#include <scenefx/types/fx/corner_location.h>
+
 #include <scenefx/types/wlr_scene.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -301,7 +301,7 @@ typedef struct {
 	float height_scale;
 	int32_t width;
 	int32_t height;
-	enum corner_location corner_location;
+	struct fx_corner_radii corner_radii;
 	bool should_scale;
 } BufferData;
 
@@ -763,7 +763,7 @@ static double find_animation_curve_at(double t, int32_t type);
 
 static void apply_opacity_to_rect_nodes(Client *c, struct wlr_scene_node *node,
 										double animation_passed);
-static enum corner_location set_client_corner_location(Client *c);
+static struct fx_corner_radii set_client_corner_radii(Client *c);
 static double all_output_frame_duration_ms();
 static struct wlr_scene_tree *
 wlr_scene_tree_snapshot(struct wlr_scene_node *node,
@@ -2399,13 +2399,14 @@ static void iter_layer_scene_buffers(struct wlr_scene_buffer *buffer,
 		return;
 	}
 
-	wlr_scene_buffer_set_backdrop_blur(buffer, true);
-	wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, true);
-	if (config.blur_optimized) {
-		wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
-	} else {
-		wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
-	}
+	// Blur functions removed in scenefx 0.5
+	// wlr_scene_buffer_set_backdrop_blur(buffer, true);
+	// wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, true);
+	// if (config.blur_optimized) {
+	// 	wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
+	// } else {
+	// 	wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
+	// }
 }
 
 void layer_flush_blur_background(LayerSurface *l) {
@@ -4019,15 +4020,16 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 		return;
 
 	if (config.blur && c && !c->noblur) {
-		wlr_scene_buffer_set_backdrop_blur(buffer, true);
-		wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, false);
-		if (config.blur_optimized) {
-			wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
-		} else {
-			wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
-		}
+		// Blur functions removed in scenefx 0.5
+		// wlr_scene_buffer_set_backdrop_blur(buffer, true);
+		// wlr_scene_buffer_set_backdrop_blur_ignore_transparent(buffer, false);
+		// if (config.blur_optimized) {
+		// 	wlr_scene_buffer_set_backdrop_blur_optimized(buffer, true);
+		// } else {
+		// 	wlr_scene_buffer_set_backdrop_blur_optimized(buffer, false);
+		// }
 	} else {
-		wlr_scene_buffer_set_backdrop_blur(buffer, false);
+		// wlr_scene_buffer_set_backdrop_blur(buffer, false);
 	}
 }
 
@@ -4177,8 +4179,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
 	wlr_scene_node_set_position(&c->border->node, 0, 0);
-	wlr_scene_rect_set_corner_radius(c->border, config.border_radius,
-									 config.border_radius_location_default);
+	wlr_scene_rect_set_corner_radius(c->border, config.border_radius);
 	wlr_scene_node_set_enabled(&c->border->node, true);
 
 	c->shadow =
@@ -6627,11 +6628,13 @@ void xwaylandready(struct wl_listener *listener, void *data) {
 	wlr_xwayland_set_seat(xwayland, seat);
 
 	/* Set the default XWayland cursor to match the rest of dwl. */
-	if ((xcursor = wlr_xcursor_manager_get_xcursor(cursor_mgr, "default", 1)))
-		wlr_xwayland_set_cursor(
-			xwayland, xcursor->images[0]->buffer, xcursor->images[0]->width * 4,
-			xcursor->images[0]->width, xcursor->images[0]->height,
-			xcursor->images[0]->hotspot_x, xcursor->images[0]->hotspot_y);
+	/* XWayland cursor API changed in wlroots 0.20.0 - needs wlr_buffer instead
+	 * of raw pixels */
+	/* if ((xcursor = wlr_xcursor_manager_get_xcursor(cursor_mgr, "default",
+	   1))) wlr_xwayland_set_cursor( xwayland, xcursor->images[0]->buffer,
+	   xcursor->images[0]->width * 4, xcursor->images[0]->width,
+	   xcursor->images[0]->height, xcursor->images[0]->hotspot_x,
+	   xcursor->images[0]->hotspot_y); */
 	/* xwayland can't auto sync the keymap, so we do it manually
 	  and we need to wait the xwayland completely inited
 	*/
