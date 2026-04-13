@@ -90,7 +90,7 @@ typedef struct {
 	int32_t no_force_center;
 	int32_t isterm;
 	int32_t allow_csd;
-	int32_t force_maximize;
+	int32_t force_fakemaximize;
 	int32_t force_tiled_state;
 	int32_t force_tearing;
 	int32_t noswallow;
@@ -168,6 +168,7 @@ typedef struct {
 	float mfact;
 	int32_t nmaster;
 	int32_t no_render_border;
+	int32_t open_as_floating;
 	int32_t no_hide;
 } ConfigTagRule;
 
@@ -285,6 +286,7 @@ typedef struct {
 	int32_t blur_layer;
 	int32_t blur_optimized;
 	int32_t border_radius;
+	int32_t border_radius_location_default;
 	struct blur_data blur_params;
 	int32_t shadows;
 	int32_t shadow_only_floating;
@@ -312,7 +314,8 @@ typedef struct {
 	float globalcolor[4];
 	float overlaycolor[4];
 
-	char autostart[3][256];
+	int32_t log_level;
+	uint32_t capslock;
 
 	ConfigTagRule *tag_rules; // 动态数组
 	int32_t tag_rules_count;  // 数量
@@ -363,6 +366,11 @@ typedef struct {
 	int32_t allow_lock_transparent;
 
 	struct xkb_rule_names xkb_rules;
+	char xkb_rules_rules[128];
+	char xkb_rules_model[128];
+	char xkb_rules_layout[128];
+	char xkb_rules_variant[128];
+	char xkb_rules_options[128];
 
 	char keymode[28];
 
@@ -627,9 +635,14 @@ uint32_t parse_mod(const char *mod_str) {
 	// 分割处理每个部分
 	token = strtok_r(input_copy, "+", &saveptr);
 	while (token != NULL) {
-		// 去除空白
-		while (*token == ' ' || *token == '\t')
-			token++;
+		// 去除前后空白
+		trim_whitespace(token);
+
+		// 如果 token 变成空字符串则跳过
+		if (*token == '\0') {
+			token = strtok_r(NULL, "+", &saveptr);
+			continue;
+		}
 
 		if (strncmp(token, "code:", 5) == 0) {
 			// 处理 code: 形式
@@ -1193,6 +1206,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
+		func = toggle_all_floating;
 	} else {
 		return NULL;
 	}
@@ -1432,25 +1447,25 @@ bool parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "unfocused_opacity") == 0) {
 		config->unfocused_opacity = atof(value);
 	} else if (strcmp(key, "xkb_rules_rules") == 0) {
-		strncpy(xkb_rules_rules, value, sizeof(xkb_rules_rules) - 1);
-		xkb_rules_rules[sizeof(xkb_rules_rules) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_rules, value,
+				sizeof(config->xkb_rules_rules) - 1);
+		config->xkb_rules_rules[sizeof(config->xkb_rules_rules) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_model") == 0) {
-		strncpy(xkb_rules_model, value, sizeof(xkb_rules_model) - 1);
-		xkb_rules_model[sizeof(xkb_rules_model) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_model, value,
+				sizeof(config->xkb_rules_model) - 1);
+		config->xkb_rules_model[sizeof(config->xkb_rules_model) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_layout") == 0) {
-		strncpy(xkb_rules_layout, value, sizeof(xkb_rules_layout) - 1);
-		xkb_rules_layout[sizeof(xkb_rules_layout) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_layout, value,
+				sizeof(config->xkb_rules_layout) - 1);
+		config->xkb_rules_layout[sizeof(config->xkb_rules_layout) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_variant") == 0) {
-		strncpy(xkb_rules_variant, value, sizeof(xkb_rules_variant) - 1);
-		xkb_rules_variant[sizeof(xkb_rules_variant) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_variant, value,
+				sizeof(config->xkb_rules_variant) - 1);
+		config->xkb_rules_variant[sizeof(config->xkb_rules_variant) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_options") == 0) {
-		strncpy(xkb_rules_options, value, sizeof(xkb_rules_options) - 1);
-		xkb_rules_options[sizeof(xkb_rules_options) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_options, value,
+				sizeof(config->xkb_rules_options) - 1);
+		config->xkb_rules_options[sizeof(config->xkb_rules_options) - 1] = '\0';
 	} else if (strcmp(key, "scroller_proportion_preset") == 0) {
 		// 1. 统计 value 中有多少个逗号，确定需要解析的浮点数个数
 		int32_t count = 0; // 初始化为 0
@@ -1896,6 +1911,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->nmaster = 0;
 		rule->mfact = 0.0f;
 		rule->no_render_border = 0;
+		rule->open_as_floating = 0;
 		rule->no_hide = 0;
 
 		bool parse_error = false;
@@ -1924,6 +1940,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->monitor_serial = strdup(val);
 				} else if (strcmp(key, "no_render_border") == 0) {
 					rule->no_render_border = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "open_as_floating") == 0) {
+					rule->open_as_floating = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "no_hide") == 0) {
 					rule->no_hide = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "nmaster") == 0) {
@@ -2044,7 +2062,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->indleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
-		rule->force_maximize = -1;
+		rule->force_fakemaximize = -1;
 		rule->force_tiled_state = -1;
 		rule->force_tearing = -1;
 		rule->noswallow = -1;
@@ -2158,8 +2176,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
 					rule->allow_csd = atoi(val);
-				} else if (strcmp(key, "force_maximize") == 0) {
-					rule->force_maximize = atoi(val);
+				} else if (strcmp(key, "force_fakemaximize") == 0) {
+					rule->force_fakemaximize = atoi(val);
 				} else if (strcmp(key, "force_tiled_state") == 0) {
 					rule->force_tiled_state = atoi(val);
 				} else if (strcmp(key, "force_tearing") == 0) {
@@ -3091,363 +3109,347 @@ void free_config(void) {
 }
 
 void override_config(void) {
-	// 动画启用
-	animations = CLAMP_INT(config.animations, 0, 1);
-	layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
-
-	// 标签动画方向
-	tag_animation_direction = CLAMP_INT(config.tag_animation_direction, 0, 1);
-
-	// 动画淡入淡出设置
-	animation_fade_in = CLAMP_INT(config.animation_fade_in, 0, 1);
-	animation_fade_out = CLAMP_INT(config.animation_fade_out, 0, 1);
-	zoom_initial_ratio = CLAMP_FLOAT(config.zoom_initial_ratio, 0.1f, 1.0f);
-	zoom_end_ratio = CLAMP_FLOAT(config.zoom_end_ratio, 0.1f, 1.0f);
-	fadein_begin_opacity = CLAMP_FLOAT(config.fadein_begin_opacity, 0.0f, 1.0f);
-	fadeout_begin_opacity =
+	config.animations = CLAMP_INT(config.animations, 0, 1);
+	config.layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
+	config.tag_animation_direction =
+		CLAMP_INT(config.tag_animation_direction, 0, 1);
+	config.animation_fade_in = CLAMP_INT(config.animation_fade_in, 0, 1);
+	config.animation_fade_out = CLAMP_INT(config.animation_fade_out, 0, 1);
+	config.zoom_initial_ratio =
+		CLAMP_FLOAT(config.zoom_initial_ratio, 0.1f, 1.0f);
+	config.zoom_end_ratio = CLAMP_FLOAT(config.zoom_end_ratio, 0.1f, 1.0f);
+	config.fadein_begin_opacity =
+		CLAMP_FLOAT(config.fadein_begin_opacity, 0.0f, 1.0f);
+	config.fadeout_begin_opacity =
 		CLAMP_FLOAT(config.fadeout_begin_opacity, 0.0f, 1.0f);
-
-	// 打开关闭动画类型
-	animation_type_open = config.animation_type_open;
-	animation_type_close = config.animation_type_close;
-
-	// layer打开关闭动画类型
-	layer_animation_type_open = config.layer_animation_type_open;
-	layer_animation_type_close = config.layer_animation_type_close;
-
-	// 动画时间限制在合理范围(1-50000ms)
-	animation_duration_move =
+	config.animation_duration_move =
 		CLAMP_INT(config.animation_duration_move, 1, 50000);
-	animation_duration_open =
+	config.animation_duration_open =
 		CLAMP_INT(config.animation_duration_open, 1, 50000);
-	animation_duration_tag = CLAMP_INT(config.animation_duration_tag, 1, 50000);
-	animation_duration_close =
+	config.animation_duration_tag =
+		CLAMP_INT(config.animation_duration_tag, 1, 50000);
+	config.animation_duration_close =
 		CLAMP_INT(config.animation_duration_close, 1, 50000);
-	animation_duration_focus =
+	config.animation_duration_focus =
 		CLAMP_INT(config.animation_duration_focus, 1, 50000);
-
-	// 滚动布局设置
-	scroller_default_proportion =
+	config.scroller_default_proportion =
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
-	scroller_default_proportion_single =
+	config.scroller_default_proportion_single =
 		CLAMP_FLOAT(config.scroller_default_proportion_single, 0.1f, 1.0f);
-	scroller_ignore_proportion_single =
+	config.scroller_ignore_proportion_single =
 		CLAMP_INT(config.scroller_ignore_proportion_single, 0, 1);
-	scroller_focus_center = CLAMP_INT(config.scroller_focus_center, 0, 1);
-	scroller_prefer_center = CLAMP_INT(config.scroller_prefer_center, 0, 1);
-	scroller_prefer_overspread =
+	config.scroller_focus_center =
+		CLAMP_INT(config.scroller_focus_center, 0, 1);
+	config.scroller_prefer_center =
+		CLAMP_INT(config.scroller_prefer_center, 0, 1);
+	config.scroller_prefer_overspread =
 		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
-	edge_scroller_pointer_focus =
+	config.edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
-	scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
-
-	// 主从布局设置
-	default_mfact = CLAMP_FLOAT(config.default_mfact, 0.1f, 0.9f);
-	default_nmaster = CLAMP_INT(config.default_nmaster, 1, 1000);
-	center_master_overspread = CLAMP_INT(config.center_master_overspread, 0, 1);
-	center_when_single_stack = CLAMP_INT(config.center_when_single_stack, 0, 1);
-	new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
-
-	// 概述模式设置
-	hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
-	hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
-	enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
-	ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
-	overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
-	overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
-
-	// 杂项设置
-	xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
-	syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
-	drag_tile_refresh_interval =
+	config.scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
+	config.default_mfact = CLAMP_FLOAT(config.default_mfact, 0.1f, 0.9f);
+	config.default_nmaster = CLAMP_INT(config.default_nmaster, 1, 1000);
+	config.center_master_overspread =
+		CLAMP_INT(config.center_master_overspread, 0, 1);
+	config.center_when_single_stack =
+		CLAMP_INT(config.center_when_single_stack, 0, 1);
+	config.new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
+	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
+	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
+	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
+	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
+	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
+	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
+	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
+	config.syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
+	config.drag_tile_refresh_interval =
 		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
-	drag_floating_refresh_interval =
-		CLAMP_FLOAT(config.drag_floating_refresh_interval, 1.0f, 16.0f);
-	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
-	drag_floating_refresh_interval =
+	config.drag_floating_refresh_interval =
 		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
-	allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
-	allow_shortcuts_inhibit = CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
-	allow_lock_transparent = CLAMP_INT(config.allow_lock_transparent, 0, 1);
-	axis_bind_apply_timeout =
+	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
+	config.allow_shortcuts_inhibit =
+		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
+	config.allow_lock_transparent =
+		CLAMP_INT(config.allow_lock_transparent, 0, 1);
+	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
-	focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
-	idleinhibit_ignore_visible =
+	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
+	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
-	sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
-	warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
-	drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
-	drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
-	focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
-	exchange_cross_monitor = CLAMP_INT(config.exchange_cross_monitor, 0, 1);
-	scratchpad_cross_monitor = CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
-	focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
-	view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
-	enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
-	snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
-	cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
-	no_border_when_single = CLAMP_INT(config.no_border_when_single, 0, 1);
-	no_radius_when_single = CLAMP_INT(config.no_radius_when_single, 0, 1);
-	cursor_hide_timeout =
-		CLAMP_INT(config.cursor_hide_timeout, 0, 36000); // 0-10小时
-	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
-	single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
-
-	// 键盘设置
-	repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
-	repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);
-	numlockon = CLAMP_INT(config.numlockon, 0, 1);
-
-	// 触控板设置
-	disable_trackpad = CLAMP_INT(config.disable_trackpad, 0, 1);
-	tap_to_click = CLAMP_INT(config.tap_to_click, 0, 1);
-	tap_and_drag = CLAMP_INT(config.tap_and_drag, 0, 1);
-	drag_lock = CLAMP_INT(config.drag_lock, 0, 1);
-	trackpad_natural_scrolling =
+	config.sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
+	config.warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
+	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
+	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
+	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
+	config.exchange_cross_monitor =
+		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
+	config.scratchpad_cross_monitor =
+		CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
+	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
+	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
+	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
+	config.snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
+	config.cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
+	config.no_border_when_single =
+		CLAMP_INT(config.no_border_when_single, 0, 1);
+	config.no_radius_when_single =
+		CLAMP_INT(config.no_radius_when_single, 0, 1);
+	config.cursor_hide_timeout =
+		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
+	config.single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
+	config.repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
+	config.repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);
+	config.numlockon = CLAMP_INT(config.numlockon, 0, 1);
+	config.disable_trackpad = CLAMP_INT(config.disable_trackpad, 0, 1);
+	config.tap_to_click = CLAMP_INT(config.tap_to_click, 0, 1);
+	config.tap_and_drag = CLAMP_INT(config.tap_and_drag, 0, 1);
+	config.drag_lock = CLAMP_INT(config.drag_lock, 0, 1);
+	config.trackpad_natural_scrolling =
 		CLAMP_INT(config.trackpad_natural_scrolling, 0, 1);
-	disable_while_typing = CLAMP_INT(config.disable_while_typing, 0, 1);
-	left_handed = CLAMP_INT(config.left_handed, 0, 1);
-	middle_button_emulation = CLAMP_INT(config.middle_button_emulation, 0, 1);
-	swipe_min_threshold = CLAMP_INT(config.swipe_min_threshold, 1, 1000);
-
-	// 鼠标设置
-	mouse_natural_scrolling = CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
-	accel_profile = CLAMP_INT(config.accel_profile, 0, 2);
-	accel_speed = CLAMP_FLOAT(config.accel_speed, -1.0f, 1.0f);
-	scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
-	scroll_button = CLAMP_INT(config.scroll_button, 272, 276);
-	click_method = CLAMP_INT(config.click_method, 0, 2);
-	send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);
-	button_map = CLAMP_INT(config.button_map, 0, 1);
-	axis_scroll_factor = CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
-
-	// 外观设置
-	gappih = CLAMP_INT(config.gappih, 0, 1000);
-	gappiv = CLAMP_INT(config.gappiv, 0, 1000);
-	gappoh = CLAMP_INT(config.gappoh, 0, 1000);
-	gappov = CLAMP_INT(config.gappov, 0, 1000);
-	scratchpad_width_ratio =
+	config.disable_while_typing = CLAMP_INT(config.disable_while_typing, 0, 1);
+	config.left_handed = CLAMP_INT(config.left_handed, 0, 1);
+	config.middle_button_emulation =
+		CLAMP_INT(config.middle_button_emulation, 0, 1);
+	config.swipe_min_threshold = CLAMP_INT(config.swipe_min_threshold, 1, 1000);
+	config.mouse_natural_scrolling =
+		CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
+	config.accel_profile = CLAMP_INT(config.accel_profile, 0, 2);
+	config.accel_speed = CLAMP_FLOAT(config.accel_speed, -1.0f, 1.0f);
+	config.scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
+	config.scroll_button = CLAMP_INT(config.scroll_button, 272, 279);
+	config.click_method = CLAMP_INT(config.click_method, 0, 2);
+	config.send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);
+	config.button_map = CLAMP_INT(config.button_map, 0, 1);
+	config.axis_scroll_factor =
+		CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
+	config.gappih = CLAMP_INT(config.gappih, 0, 1000);
+	config.gappiv = CLAMP_INT(config.gappiv, 0, 1000);
+	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
+	config.gappov = CLAMP_INT(config.gappov, 0, 1000);
+	config.scratchpad_width_ratio =
 		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
-	scratchpad_height_ratio =
+	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
-	borderpx = CLAMP_INT(config.borderpx, 0, 200);
-	smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
-
-	blur = CLAMP_INT(config.blur, 0, 1);
-	blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
-	blur_optimized = CLAMP_INT(config.blur_optimized, 0, 1);
-	border_radius = CLAMP_INT(config.border_radius, 0, 100);
-	blur_params.num_passes = CLAMP_INT(config.blur_params.num_passes, 0, 10);
-	blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
-	blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
-	blur_params.brightness = CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
-	blur_params.contrast = CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
-	blur_params.saturation = CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
-	shadows = CLAMP_INT(config.shadows, 0, 1);
-	shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
-	layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
-	shadows_size = CLAMP_INT(config.shadows_size, 0, 100);
-	shadows_blur = CLAMP_INT(config.shadows_blur, 0, 100);
-	shadows_position_x = CLAMP_INT(config.shadows_position_x, -1000, 1000);
-	shadows_position_y = CLAMP_INT(config.shadows_position_y, -1000, 1000);
-	focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
-	unfocused_opacity = CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
-	memcpy(shadowscolor, config.shadowscolor, sizeof(shadowscolor));
-
-	// 复制颜色数组
-	memcpy(rootcolor, config.rootcolor, sizeof(rootcolor));
-	memcpy(bordercolor, config.bordercolor, sizeof(bordercolor));
-	memcpy(focuscolor, config.focuscolor, sizeof(focuscolor));
-	memcpy(maximizescreencolor, config.maximizescreencolor,
-		   sizeof(maximizescreencolor));
-	memcpy(urgentcolor, config.urgentcolor, sizeof(urgentcolor));
-	memcpy(scratchpadcolor, config.scratchpadcolor, sizeof(scratchpadcolor));
-	memcpy(globalcolor, config.globalcolor, sizeof(globalcolor));
-	memcpy(overlaycolor, config.overlaycolor, sizeof(overlaycolor));
-
-	// 复制动画曲线
-	memcpy(animation_curve_move, config.animation_curve_move,
-		   sizeof(animation_curve_move));
-	memcpy(animation_curve_open, config.animation_curve_open,
-		   sizeof(animation_curve_open));
-	memcpy(animation_curve_tag, config.animation_curve_tag,
-		   sizeof(animation_curve_tag));
-	memcpy(animation_curve_close, config.animation_curve_close,
-		   sizeof(animation_curve_close));
-	memcpy(animation_curve_focus, config.animation_curve_focus,
-		   sizeof(animation_curve_focus));
-	memcpy(animation_curve_opafadein, config.animation_curve_opafadein,
-		   sizeof(animation_curve_opafadein));
-	memcpy(animation_curve_opafadeout, config.animation_curve_opafadeout,
-		   sizeof(animation_curve_opafadeout));
+	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
+	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
+	config.blur = CLAMP_INT(config.blur, 0, 1);
+	config.blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
+	config.blur_optimized = CLAMP_INT(config.blur_optimized, 0, 1);
+	config.border_radius = CLAMP_INT(config.border_radius, 0, 100);
+	config.blur_params.num_passes =
+		CLAMP_INT(config.blur_params.num_passes, 0, 10);
+	config.blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
+	config.blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
+	config.blur_params.brightness =
+		CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
+	config.blur_params.contrast =
+		CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
+	config.blur_params.saturation =
+		CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
+	config.shadows = CLAMP_INT(config.shadows, 0, 1);
+	config.shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
+	config.layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
+	config.shadows_size = CLAMP_INT(config.shadows_size, 0, 100);
+	config.shadows_blur = CLAMP_INT(config.shadows_blur, 0, 100);
+	config.shadows_position_x =
+		CLAMP_INT(config.shadows_position_x, -1000, 1000);
+	config.shadows_position_y =
+		CLAMP_INT(config.shadows_position_y, -1000, 1000);
+	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
+	config.unfocused_opacity =
+		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
 }
 
 void set_value_default() {
-	/* animaion */
-	config.animations = animations;					// 是否启用动画
-	config.layer_animations = layer_animations;		// 是否启用layer动画
-	config.animation_fade_in = animation_fade_in;	// Enable animation fade in
-	config.animation_fade_out = animation_fade_out; // Enable animation fade out
-	config.tag_animation_direction = tag_animation_direction; // 标签动画方向
-	config.zoom_initial_ratio = zoom_initial_ratio; // 动画起始窗口比例
-	config.zoom_end_ratio = zoom_end_ratio;			// 动画结束窗口比例
-	config.fadein_begin_opacity =
-		fadein_begin_opacity; // Begin opac window ratio for animations
-	config.fadeout_begin_opacity = fadeout_begin_opacity;
-	config.animation_duration_move =
-		animation_duration_move; // Animation move speed
-	config.animation_duration_open =
-		animation_duration_open; // Animation open speed
-	config.animation_duration_tag =
-		animation_duration_tag; // Animation tag speed
-	config.animation_duration_close =
-		animation_duration_close; // Animation tag speed
-	config.animation_duration_focus =
-		animation_duration_focus; // Animation focus opacity speed
+	config.animations = 1;
+	config.layer_animations = 0;
+	config.animation_fade_in = 1;
+	config.animation_fade_out = 1;
+	config.tag_animation_direction = HORIZONTAL;
+	config.zoom_initial_ratio = 0.4f;
+	config.zoom_end_ratio = 0.8f;
+	config.fadein_begin_opacity = 0.5f;
+	config.fadeout_begin_opacity = 0.5f;
+	config.animation_duration_move = 500;
+	config.animation_duration_open = 400;
+	config.animation_duration_tag = 300;
+	config.animation_duration_close = 300;
+	config.animation_duration_focus = 0;
 
-	/* appearance */
-	config.axis_bind_apply_timeout =
-		axis_bind_apply_timeout; // 滚轮绑定动作的触发的时间间隔
-	config.focus_on_activate =
-		focus_on_activate;				  // 收到窗口激活请求是否自动跳转聚焦
-	config.new_is_master = new_is_master; // 新窗口是否插在头部
-	config.default_mfact = default_mfact; // master 窗口比例
-	config.default_nmaster = default_nmaster; // 默认master数量
-	config.center_master_overspread =
-		center_master_overspread; // 中心master时是否铺满
-	config.center_when_single_stack =
-		center_when_single_stack; // 单个stack时是否居中
+	config.axis_bind_apply_timeout = 100;
+	config.focus_on_activate = 1;
+	config.new_is_master = 1;
+	config.default_mfact = 0.55f;
+	config.default_nmaster = 1;
+	config.center_master_overspread = 0;
+	config.center_when_single_stack = 1;
 
-	config.numlockon = numlockon; // 是否打开右边小键盘
+	config.log_level = WLR_ERROR;
+	config.numlockon = 0;
+	config.capslock = 0;
 
-	config.ov_tab_mode = ov_tab_mode;	// alt tab切换模式
-	config.hotarea_size = hotarea_size; // 热区大小,10x10
-	config.hotarea_corner = hotarea_corner;
-	config.enable_hotarea = enable_hotarea; // 是否启用鼠标热区
-	config.smartgaps = smartgaps;	  /* 1 means no outer gap when there is
-										 only one window */
-	config.sloppyfocus = sloppyfocus; /* focus follows mouse */
-	config.gappih = gappih;			  /* horiz inner gap between windows */
-	config.gappiv = gappiv;			  /* vert inner gap between windows */
-	config.gappoh =
-		gappoh; /* horiz outer gap between windows and screen edge */
-	config.gappov = gappov; /* vert outer gap between windows and screen edge */
-	config.scratchpad_width_ratio = scratchpad_width_ratio;
-	config.scratchpad_height_ratio = scratchpad_height_ratio;
+	config.ov_tab_mode = 0;
+	config.hotarea_size = 10;
+	config.hotarea_corner = BOTTOM_LEFT;
+	config.enable_hotarea = 1;
+	config.smartgaps = 0;
+	config.sloppyfocus = 1;
+	config.gappih = 5;
+	config.gappiv = 5;
+	config.gappoh = 10;
+	config.gappov = 10;
+	config.scratchpad_width_ratio = 0.8f;
+	config.scratchpad_height_ratio = 0.9f;
 
-	config.scroller_structs = scroller_structs;
-	config.scroller_default_proportion = scroller_default_proportion;
-	config.scroller_default_proportion_single =
-		scroller_default_proportion_single;
-	config.scroller_ignore_proportion_single =
-		scroller_ignore_proportion_single;
-	config.scroller_focus_center = scroller_focus_center;
-	config.scroller_prefer_center = scroller_prefer_center;
-	config.scroller_prefer_overspread = scroller_prefer_overspread;
-	config.edge_scroller_pointer_focus = edge_scroller_pointer_focus;
-	config.focus_cross_monitor = focus_cross_monitor;
-	config.exchange_cross_monitor = exchange_cross_monitor;
-	config.scratchpad_cross_monitor = scratchpad_cross_monitor;
-	config.focus_cross_tag = focus_cross_tag;
-	config.axis_scroll_factor = axis_scroll_factor;
-	config.view_current_to_back = view_current_to_back;
-	config.single_scratchpad = single_scratchpad;
-	config.xwayland_persistence = xwayland_persistence;
-	config.syncobj_enable = syncobj_enable;
-	config.drag_tile_refresh_interval = drag_tile_refresh_interval;
-	config.drag_floating_refresh_interval = drag_floating_refresh_interval;
-	config.allow_tearing = allow_tearing;
-	config.allow_shortcuts_inhibit = allow_shortcuts_inhibit;
-	config.allow_lock_transparent = allow_lock_transparent;
-	config.no_border_when_single = no_border_when_single;
-	config.no_radius_when_single = no_radius_when_single;
-	config.snap_distance = snap_distance;
-	config.drag_tile_to_tile = drag_tile_to_tile;
-	config.enable_floating_snap = enable_floating_snap;
-	config.swipe_min_threshold = swipe_min_threshold;
+	config.scroller_structs = 20;
+	config.scroller_default_proportion = 0.9f;
+	config.scroller_default_proportion_single = 1.0f;
+	config.scroller_ignore_proportion_single = 1;
+	config.scroller_focus_center = 0;
+	config.scroller_prefer_center = 0;
+	config.scroller_prefer_overspread = 1;
+	config.edge_scroller_pointer_focus = 1;
+	config.focus_cross_monitor = 0;
+	config.exchange_cross_monitor = 0;
+	config.scratchpad_cross_monitor = 0;
+	config.focus_cross_tag = 0;
+	config.axis_scroll_factor = 1.0;
+	config.view_current_to_back = 0;
+	config.single_scratchpad = 1;
+	config.xwayland_persistence = 1;
+	config.syncobj_enable = 0;
+	config.drag_tile_refresh_interval = 8.0f;
+	config.drag_floating_refresh_interval = 8.0f;
+	config.allow_tearing = TEARING_DISABLED;
+	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
+	config.allow_lock_transparent = 0;
+	config.no_border_when_single = 0;
+	config.no_radius_when_single = 0;
+	config.snap_distance = 30;
+	config.drag_tile_to_tile = 0;
+	config.enable_floating_snap = 0;
+	config.swipe_min_threshold = 1;
 
-	config.idleinhibit_ignore_visible =
-		idleinhibit_ignore_visible; /* 1 means idle inhibitors will
-									  disable idle tracking even if it's
-									  surface isn't visible
-									*/
+	config.idleinhibit_ignore_visible = 0;
 
-	config.borderpx = borderpx;
-	config.overviewgappi = overviewgappi; /* overview时 窗口与边缘 缝隙大小 */
-	config.overviewgappo = overviewgappo; /* overview时 窗口与窗口 缝隙大小 */
-	config.cursor_hide_timeout = cursor_hide_timeout;
+	config.borderpx = 4;
+	config.overviewgappi = 5;
+	config.overviewgappo = 30;
+	config.cursor_hide_timeout = 0;
 
-	config.warpcursor = warpcursor; /* Warp cursor to focused client */
-	config.drag_corner = drag_corner;
-	config.drag_warp_cursor = drag_warp_cursor;
+	config.warpcursor = 1;
+	config.drag_corner = 3;
+	config.drag_warp_cursor = 1;
 
-	config.repeat_rate = repeat_rate;
-	config.repeat_delay = repeat_delay;
+	config.repeat_rate = 25;
+	config.repeat_delay = 600;
 
-	/* Trackpad */
-	config.disable_trackpad = disable_trackpad;
-	config.tap_to_click = tap_to_click;
-	config.tap_and_drag = tap_and_drag;
-	config.drag_lock = drag_lock;
-	config.mouse_natural_scrolling = mouse_natural_scrolling;
-	config.cursor_size = cursor_size;
-	config.trackpad_natural_scrolling = trackpad_natural_scrolling;
-	config.disable_while_typing = disable_while_typing;
-	config.left_handed = left_handed;
-	config.middle_button_emulation = middle_button_emulation;
-	config.accel_profile = accel_profile;
-	config.accel_speed = accel_speed;
-	config.scroll_method = scroll_method;
-	config.scroll_button = scroll_button;
-	config.click_method = click_method;
-	config.send_events_mode = send_events_mode;
-	config.button_map = button_map;
+	config.disable_trackpad = 0;
+	config.tap_to_click = 1;
+	config.tap_and_drag = 1;
+	config.drag_lock = 1;
+	config.mouse_natural_scrolling = 0;
+	config.cursor_size = 24;
+	config.trackpad_natural_scrolling = 0;
+	config.disable_while_typing = 1;
+	config.left_handed = 0;
+	config.middle_button_emulation = 0;
+	config.accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.accel_speed = 0.0;
+	config.scroll_method = LIBINPUT_CONFIG_SCROLL_2FG;
+	config.scroll_button = 274;
+	config.click_method = LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
+	config.send_events_mode = LIBINPUT_CONFIG_SEND_EVENTS_ENABLED;
+	config.button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 
-	config.blur = blur;
-	config.blur_layer = blur_layer;
-	config.blur_optimized = blur_optimized;
-	config.border_radius = border_radius;
-	config.blur_params.num_passes = blur_params_num_passes;
-	config.blur_params.radius = blur_params_radius;
-	config.blur_params.noise = blur_params_noise;
-	config.blur_params.brightness = blur_params_brightness;
-	config.blur_params.contrast = blur_params_contrast;
-	config.blur_params.saturation = blur_params_saturation;
-	config.shadows = shadows;
-	config.shadow_only_floating = shadow_only_floating;
-	config.layer_shadows = layer_shadows;
-	config.shadows_size = shadows_size;
-	config.shadows_blur = shadows_blur;
-	config.shadows_position_x = shadows_position_x;
-	config.shadows_position_y = shadows_position_y;
-	config.focused_opacity = focused_opacity;
-	config.unfocused_opacity = unfocused_opacity;
-	memcpy(config.shadowscolor, shadowscolor, sizeof(shadowscolor));
+	config.blur = 0;
+	config.blur_layer = 0;
+	config.blur_optimized = 1;
+	config.border_radius = 0;
+	config.border_radius_location_default = CORNER_LOCATION_ALL;
+	config.blur_params.num_passes = 1;
+	config.blur_params.radius = 5;
+	config.blur_params.noise = 0.02f;
+	config.blur_params.brightness = 0.9f;
+	config.blur_params.contrast = 0.9f;
+	config.blur_params.saturation = 1.2f;
+	config.shadows = 0;
+	config.shadow_only_floating = 1;
+	config.layer_shadows = 0;
+	config.shadows_size = 10;
+	config.shadows_blur = 15.0f;
+	config.shadows_position_x = 0;
+	config.shadows_position_y = 0;
+	config.focused_opacity = 1.0f;
+	config.unfocused_opacity = 1.0f;
 
-	memcpy(config.animation_curve_move, animation_curve_move,
-		   sizeof(animation_curve_move));
-	memcpy(config.animation_curve_open, animation_curve_open,
-		   sizeof(animation_curve_open));
-	memcpy(config.animation_curve_tag, animation_curve_tag,
-		   sizeof(animation_curve_tag));
-	memcpy(config.animation_curve_close, animation_curve_close,
-		   sizeof(animation_curve_close));
-	memcpy(config.animation_curve_focus, animation_curve_focus,
-		   sizeof(animation_curve_focus));
-	memcpy(config.animation_curve_opafadein, animation_curve_opafadein,
-		   sizeof(animation_curve_opafadein));
-	memcpy(config.animation_curve_opafadeout, animation_curve_opafadeout,
-		   sizeof(animation_curve_opafadeout));
+	config.shadowscolor[0] = 0.0f;
+	config.shadowscolor[1] = 0.0f;
+	config.shadowscolor[2] = 0.0f;
+	config.shadowscolor[3] = 1.0f;
 
-	memcpy(config.rootcolor, rootcolor, sizeof(rootcolor));
-	memcpy(config.bordercolor, bordercolor, sizeof(bordercolor));
-	memcpy(config.focuscolor, focuscolor, sizeof(focuscolor));
-	memcpy(config.maximizescreencolor, maximizescreencolor,
-		   sizeof(maximizescreencolor));
-	memcpy(config.urgentcolor, urgentcolor, sizeof(urgentcolor));
-	memcpy(config.scratchpadcolor, scratchpadcolor, sizeof(scratchpadcolor));
-	memcpy(config.globalcolor, globalcolor, sizeof(globalcolor));
-	memcpy(config.overlaycolor, overlaycolor, sizeof(overlaycolor));
+	config.animation_curve_move[0] = 0.46;
+	config.animation_curve_move[1] = 1.0;
+	config.animation_curve_move[2] = 0.29;
+	config.animation_curve_move[3] = 0.99;
+	config.animation_curve_open[0] = 0.46;
+	config.animation_curve_open[1] = 1.0;
+	config.animation_curve_open[2] = 0.29;
+	config.animation_curve_open[3] = 0.99;
+	config.animation_curve_tag[0] = 0.46;
+	config.animation_curve_tag[1] = 1.0;
+	config.animation_curve_tag[2] = 0.29;
+	config.animation_curve_tag[3] = 0.99;
+	config.animation_curve_close[0] = 0.46;
+	config.animation_curve_close[1] = 1.0;
+	config.animation_curve_close[2] = 0.29;
+	config.animation_curve_close[3] = 0.99;
+	config.animation_curve_focus[0] = 0.46;
+	config.animation_curve_focus[1] = 1.0;
+	config.animation_curve_focus[2] = 0.29;
+	config.animation_curve_focus[3] = 0.99;
+	config.animation_curve_opafadein[0] = 0.46;
+	config.animation_curve_opafadein[1] = 1.0;
+	config.animation_curve_opafadein[2] = 0.29;
+	config.animation_curve_opafadein[3] = 0.99;
+	config.animation_curve_opafadeout[0] = 0.5;
+	config.animation_curve_opafadeout[1] = 0.5;
+	config.animation_curve_opafadeout[2] = 0.5;
+	config.animation_curve_opafadeout[3] = 0.5;
+
+	config.rootcolor[0] = 0x32 / 255.0f;
+	config.rootcolor[1] = 0x32 / 255.0f;
+	config.rootcolor[2] = 0x32 / 255.0f;
+	config.rootcolor[3] = 1.0f;
+	config.bordercolor[0] = 0x44 / 255.0f;
+	config.bordercolor[1] = 0x44 / 255.0f;
+	config.bordercolor[2] = 0x44 / 255.0f;
+	config.bordercolor[3] = 1.0f;
+	config.focuscolor[0] = 0xc6 / 255.0f;
+	config.focuscolor[1] = 0x6b / 255.0f;
+	config.focuscolor[2] = 0x25 / 255.0f;
+	config.focuscolor[3] = 1.0f;
+	config.maximizescreencolor[0] = 0x89 / 255.0f;
+	config.maximizescreencolor[1] = 0xaa / 255.0f;
+	config.maximizescreencolor[2] = 0x61 / 255.0f;
+	config.maximizescreencolor[3] = 1.0f;
+	config.urgentcolor[0] = 0xad / 255.0f;
+	config.urgentcolor[1] = 0x40 / 255.0f;
+	config.urgentcolor[2] = 0x1f / 255.0f;
+	config.urgentcolor[3] = 1.0f;
+	config.scratchpadcolor[0] = 0x51 / 255.0f;
+	config.scratchpadcolor[1] = 0x6c / 255.0f;
+	config.scratchpadcolor[2] = 0x93 / 255.0f;
+	config.scratchpadcolor[3] = 1.0f;
+	config.globalcolor[0] = 0xb1 / 255.0f;
+	config.globalcolor[1] = 0x53 / 255.0f;
+	config.globalcolor[2] = 0xa7 / 255.0f;
+	config.globalcolor[3] = 1.0f;
+	config.overlaycolor[0] = 0x14 / 255.0f;
+	config.overlaycolor[1] = 0xa5 / 255.0f;
+	config.overlaycolor[2] = 0x7c / 255.0f;
+	config.overlaycolor[3] = 1.0f;
 }
 
 void set_default_key_bindings(Config *config) {
@@ -3483,13 +3485,14 @@ bool parse_config(void) {
 
 	free_config();
 
-	// 重置config结构体，确保所有指针初始化为NULL
 	memset(&config, 0, sizeof(config));
-	memset(&xkb_rules_rules, 0, sizeof(xkb_rules_rules));
-	memset(&xkb_rules_model, 0, sizeof(xkb_rules_model));
-	memset(&xkb_rules_layout, 0, sizeof(xkb_rules_layout));
-	memset(&xkb_rules_variant, 0, sizeof(xkb_rules_variant));
-	memset(&xkb_rules_options, 0, sizeof(xkb_rules_options));
+
+	// 重新将xkb_rules指针指向静态数组
+	config.xkb_rules.layout = config.xkb_rules_layout;
+	config.xkb_rules.variant = config.xkb_rules_variant;
+	config.xkb_rules.options = config.xkb_rules_options;
+	config.xkb_rules.rules = config.xkb_rules_rules;
+	config.xkb_rules.model = config.xkb_rules_model;
 
 	// 初始化动态数组的指针为NULL，避免野指针
 	config.window_rules = NULL;
@@ -3553,7 +3556,7 @@ bool parse_config(void) {
 }
 
 void reset_blur_params(void) {
-	if (blur) {
+	if (config.blur) {
 		Monitor *m = NULL;
 		wl_list_for_each(m, &mons, link) {
 			if (m->blur != NULL) {
@@ -3563,9 +3566,9 @@ void reset_blur_params(void) {
 			wlr_scene_node_reparent(&m->blur->node, layers[LyrBlur]);
 			wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 			wlr_scene_set_blur_data(
-				scene, blur_params.num_passes, blur_params.radius,
-				blur_params.noise, blur_params.brightness, blur_params.contrast,
-				blur_params.saturation);
+				scene, config.blur_params.num_passes, config.blur_params.radius,
+				config.blur_params.noise, config.blur_params.brightness,
+				config.blur_params.contrast, config.blur_params.saturation);
 		}
 	} else {
 		Monitor *m = NULL;
@@ -3616,6 +3619,20 @@ void reapply_monitor_rules(void) {
 	updatemons(NULL, NULL);
 }
 
+void set_xcursor_env() {
+	if (config.cursor_size > 0) {
+		char size_str[16];
+		snprintf(size_str, sizeof(size_str), "%d", config.cursor_size);
+		setenv("XCURSOR_SIZE", size_str, 1);
+	} else {
+		setenv("XCURSOR_SIZE", "24", 1);
+	}
+
+	if (config.cursor_theme) {
+		setenv("XCURSOR_THEME", config.cursor_theme, 1);
+	}
+}
+
 void reapply_cursor_style(void) {
 	if (hide_cursor_source) {
 		wl_event_source_timer_update(hide_cursor_source, 0);
@@ -3632,17 +3649,10 @@ void reapply_cursor_style(void) {
 		cursor_mgr = NULL;
 	}
 
-	cursor_mgr = wlr_xcursor_manager_create(config.cursor_theme, cursor_size);
+	set_xcursor_env();
 
-	if (cursor_size > 0) {
-		char size_str[16];
-		snprintf(size_str, sizeof(size_str), "%d", cursor_size);
-		setenv("XCURSOR_SIZE", size_str, 1);
-	}
-
-	if (config.cursor_theme) {
-		setenv("XCURSOR_THEME", config.cursor_theme, 1);
-	}
+	cursor_mgr =
+		wlr_xcursor_manager_create(config.cursor_theme, config.cursor_size);
 
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
@@ -3657,11 +3667,13 @@ void reapply_cursor_style(void) {
 		wlr_cursor_unset_image(cursor);
 	} else {
 		wl_event_source_timer_update(hide_cursor_source,
-									 cursor_hide_timeout * 1000);
+									 config.cursor_hide_timeout * 1000);
 	}
 }
 
-void reapply_rootbg(void) { wlr_scene_rect_set_color(root_bg, rootcolor); }
+void reapply_rootbg(void) {
+	wlr_scene_rect_set_color(root_bg, config.rootcolor);
+}
 
 void reapply_border(void) {
 	Client *c = NULL;
@@ -3670,7 +3682,7 @@ void reapply_border(void) {
 	wl_list_for_each(c, &clients, link) {
 		if (c && !c->iskilling) {
 			if (!c->isnoborder && !c->isfullscreen) {
-				c->bw = borderpx;
+				c->bw = config.borderpx;
 			}
 		}
 	}
@@ -3683,7 +3695,7 @@ void reapply_keyboard(void) {
 			continue;
 		}
 		wlr_keyboard_set_repeat_info((struct wlr_keyboard *)id->device_data,
-									 repeat_rate, repeat_delay);
+									 config.repeat_rate, config.repeat_delay);
 	}
 }
 
@@ -3712,12 +3724,12 @@ void reapply_master(void) {
 			if (!m->wlr_output->enabled) {
 				continue;
 			}
-			m->pertag->nmasters[i] = default_nmaster;
-			m->pertag->mfacts[i] = default_mfact;
-			m->gappih = gappih;
-			m->gappiv = gappiv;
-			m->gappoh = gappoh;
-			m->gappov = gappov;
+			m->pertag->nmasters[i] = config.default_nmaster;
+			m->pertag->mfacts[i] = config.default_mfact;
+			m->gappih = config.gappih;
+			m->gappiv = config.gappiv;
+			m->gappoh = config.gappoh;
+			m->gappov = config.gappov;
 		}
 	}
 }
@@ -3729,8 +3741,8 @@ void parse_tagrule(Monitor *m) {
 	bool match_rule = false;
 
 	for (i = 0; i <= LENGTH(tags); i++) {
-		m->pertag->nmasters[i] = default_nmaster;
-		m->pertag->mfacts[i] = default_mfact;
+		m->pertag->nmasters[i] = config.default_nmaster;
+		m->pertag->mfacts[i] = config.default_mfact;
 	}
 
 	for (i = 0; i < config.tag_rules_count; i++) {
@@ -3783,6 +3795,8 @@ void parse_tagrule(Monitor *m) {
 				m->pertag->mfacts[tr.id] = tr.mfact;
 			if (tr.no_render_border >= 0)
 				m->pertag->no_render_border[tr.id] = tr.no_render_border;
+			if (tr.open_as_floating >= 0)
+				m->pertag->open_as_floating[tr.id] = tr.open_as_floating;
 		}
 	}
 

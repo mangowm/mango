@@ -15,7 +15,7 @@
   #:use-module (gnu packages ninja)
   #:use-module (gnu packages pkg-config)
   #:use-module (guix build-system meson)
-  #:use-module (guix licenses))
+  #:use-module ((guix licenses) #:prefix license:))
 
 
 (define-public mangowm-git
@@ -36,10 +36,13 @@
           (add-before 'configure 'patch-meson
             (lambda _
               (substitute* "meson.build"
+                ;; MangoWM ignores sysconfdir handling for NixOS.
+                ;; We also need to skip that sysconfdir edits.
+                (("is_nixos = false")
+                 "is_nixos = true")
+                ;; Unhardcode path.  Fixes loading default config.
                 (("'-DSYSCONFDIR=\\\"@0@\\\"'.format\\('/etc'\\)")
-                 "'-DSYSCONFDIR=\"@0@\"'.format(sysconfdir)")
-                (("sysconfdir = sysconfdir.substring\\(prefix.length\\(\\)\\)")
-                 "")))))))
+                 "'-DSYSCONFDIR=\"@0@\"'.format(sysconfdir)")))))))
     (inputs (list wayland
                   libinput
                   libdrm
@@ -52,14 +55,17 @@
                   pcre2
                   libxcb
                   xcb-util-wm
-                  wlroots
+                  wlroots-0.19
                   scenefx))
     (native-inputs (list pkg-config wayland-protocols))
-    (home-page "https://github.com/DreamMaoMao/mangowm")
+    (home-page "https://github.com/mangowm/mango")
     (synopsis "Wayland compositor based on wlroots and scenefx")
-    (description "A Wayland compositor based on wlroots and scenefx,
-inspired by dwl but aiming to be more feature-rich.")
-    (license gpl3)))
+    (description
+     "MangoWM is a modern, lightweight, high-performance Wayland compositor
+built on dwl — crafted for speed, flexibility, and a customizable desktop experience.")
+    (license (list license:gpl3 ;mangowm itself, dwl
+                   license:expat ;dwm, sway, wlroots
+                   license:cc0)))) ;tinywl
 
 (define-deprecated-package mangowc
   mangowm-git)

@@ -1,24 +1,22 @@
 bool check_hit_no_border(Client *c) {
-	int32_t i;
 	bool hit_no_border = false;
 	if (!render_border) {
 		hit_no_border = true;
 	}
 
-	for (i = 0; i < config.tag_rules_count; i++) {
-		if (c->tags & (1 << (config.tag_rules[i].id - 1)) &&
-			config.tag_rules[i].no_render_border) {
-			hit_no_border = true;
-		}
+	if (c->mon && !c->mon->isoverview &&
+		c->mon->pertag->no_render_border[get_tags_first_tag_num(c->tags)]) {
+		hit_no_border = true;
 	}
 
-	if (no_border_when_single && c && c->mon &&
+	if (config.no_border_when_single && c && c->mon &&
 		((ISSCROLLTILED(c) && c->mon->visible_scroll_tiling_clients == 1) ||
 		 c->mon->visible_clients == 1)) {
 		hit_no_border = true;
 	}
 	return hit_no_border;
 }
+
 Client *termforwin(Client *w) {
 	Client *c = NULL;
 
@@ -39,7 +37,7 @@ Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title) {
 	const char *appid, *title;
 	Client *c = NULL;
 	wl_list_for_each(c, &clients, link) {
-		if (!scratchpad_cross_monitor && c->mon != selmon) {
+		if (!config.scratchpad_cross_monitor && c->mon != selmon) {
 			continue;
 		}
 
@@ -167,7 +165,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating,
 	// 第一次遍历，计算客户端数量
 	wl_list_for_each(c, &clients, link) {
 		if (c && (findfloating || !c->isfloating) && !c->isunglobal &&
-			(focus_cross_monitor || c->mon == tc->mon) &&
+			(config.focus_cross_monitor || c->mon == tc->mon) &&
 			(c->tags & c->mon->tagset[c->mon->seltags])) {
 			last++;
 		}
@@ -188,7 +186,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating,
 	last = -1;
 	wl_list_for_each(c, &clients, link) {
 		if (c && (findfloating || !c->isfloating) && !c->isunglobal &&
-			(focus_cross_monitor || c->mon == tc->mon) &&
+			(config.focus_cross_monitor || c->mon == tc->mon) &&
 			(c->tags & c->mon->tagset[c->mon->seltags])) {
 			last++;
 			tempClients[last] = c;
@@ -511,21 +509,21 @@ Client *get_next_stack_client(Client *c, bool reverse) {
 float *get_border_color(Client *c) {
 
 	if (c->mon != selmon) {
-		return bordercolor;
+		return config.bordercolor;
 	} else if (c->isurgent) {
-		return urgentcolor;
+		return config.urgentcolor;
 	} else if (c->is_in_scratchpad && selmon && c == selmon->sel) {
-		return scratchpadcolor;
+		return config.scratchpadcolor;
 	} else if (c->isglobal && selmon && c == selmon->sel) {
-		return globalcolor;
+		return config.globalcolor;
 	} else if (c->isoverlay && selmon && c == selmon->sel) {
-		return overlaycolor;
+		return config.overlaycolor;
 	} else if (c->ismaximizescreen && selmon && c == selmon->sel) {
-		return maximizescreencolor;
+		return config.maximizescreencolor;
 	} else if (selmon && c == selmon->sel) {
-		return focuscolor;
+		return config.focuscolor;
 	} else {
-		return bordercolor;
+		return config.bordercolor;
 	}
 }
 
