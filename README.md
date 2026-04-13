@@ -81,7 +81,7 @@ makepkg -si
 then install mango
 
 ```bash
-git clone https://aur.archlinux.org/mangowc
+git clone https://aur.archlinux.org/mangowm
 #read the pkgbuild
 makepkg -si
 ```
