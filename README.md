@@ -99,7 +99,7 @@ emerge --ask --verbose gui-wm/mangowm
 The package is in the community-maintained repository called obs.
 
 ```bash
-sudo opi in mango
+sudo opi in mangowm
 ```
 ## Fedora Linux
 The package is in the third-party Terra repository.
