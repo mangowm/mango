@@ -1099,14 +1099,6 @@ int32_t tag(const Arg *arg) {
 	return 0;
 }
 
-int32_t tagmon(const Arg *arg) {
-	tagmon_general(arg, false);
-}
-
-int32_t tagmonsilent(const Arg *arg) {
-	tagmon_general(arg, true);
-}
-
 int32_t tagmon_general(const Arg *arg, bool silent) {
 	Monitor *m = NULL, *cm = NULL;
 	if (!selmon)
@@ -1154,6 +1146,10 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 
 	reset_foreign_tolevel(c);
 
+	if (silent) {
+		focusclient(focustop(selmon), 1);
+	}
+
 	c->float_geom.width =
 		(int32_t)(c->float_geom.width * c->mon->w.width / selmon->w.width);
 	c->float_geom.height =
@@ -1172,7 +1168,6 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 		}
 		resize(c, c->geom, 1);
 	} else {
-		selmon = c->mon;
 		if (!silent) {
 			target = get_tags_first_tag(c->tags);
 			view(&(Arg){.ui = target}, true);
@@ -1183,7 +1178,16 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 	if (config.warpcursor && !silent) {
 		warp_cursor_to_selmon(c->mon);
 	}
+
 	return 0;
+}
+
+int32_t tagmon(const Arg *arg) {
+	return tagmon_general(arg, false);
+}
+
+int32_t tagmonsilent(const Arg *arg) {
+	return tagmon_general(arg, true);
 }
 
 int32_t tagsilent(const Arg *arg) {
@@ -1489,12 +1493,15 @@ int32_t viewtoleft(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
-	uint32_t target = selmon->tagset[selmon->seltags];
-
 	if (selmon->isoverview || selmon->pertag->curtag == 0) {
 		return 0;
 	}
+	uint32_t target = selmon->tagset[selmon->seltags];
 
+	if (target & 1) {
+		// 1 wraps around to 9
+		target |= 1 << LENGTH(tags);
+	}
 	target >>= 1;
 
 	if (target == 0) {
@@ -1516,12 +1523,17 @@ int32_t viewtoright(const Arg *arg) {
 		return 0;
 	}
 	uint32_t target = selmon->tagset[selmon->seltags];
+
 	target <<= 1;
+	if (target & 1 << LENGTH(tags)) {
+		// 9 wraps around to 1
+		target |= 1;
+	}
 
 	if (!selmon || (target) == selmon->tagset[selmon->seltags])
 		return 0;
 	if (!(target & TAGMASK)) {
-		return 0;
+		target = 1;
 	}
 
 	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
