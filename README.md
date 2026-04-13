@@ -95,6 +95,12 @@ Finally, install the package:
 emerge --ask --verbose gui-wm/mangowm
 ```
 
+## openSUSE 
+The package is in the community-maintained repository called obs.
+
+```bash
+sudo opi in mango
+```
 ## Fedora Linux
 The package is in the third-party Terra repository.
 First, add the [Terra Repository](https://terra.fyralabs.com/).
