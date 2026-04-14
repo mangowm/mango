@@ -64,7 +64,7 @@ To get a fully functional desktop experience, we recommend installing the follow
 | Terminal Emulator | foot, wezterm, alacritty, kitty, ghostty |
 | Status Bar | waybar, eww, quickshell, ags |
 | Desktop Shell | Noctalia, DankMaterialShell |
-| Wallpaper Setup | swww, swaybg |
+| Wallpaper Setup | awww(swww), swaybg |
 | Notification Daemon | swaync, dunst, mako |
 | Desktop Portal | xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gtk |
 | Clipboard | wl-clipboard, wl-clip-persist, cliphist |
