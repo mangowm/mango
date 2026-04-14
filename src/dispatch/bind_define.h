@@ -1099,7 +1099,7 @@ int32_t tag(const Arg *arg) {
 	return 0;
 }
 
-int32_t tagmon_general(const Arg *arg, bool silent) {
+int32_t tagmon(const Arg *arg) {
 	Monitor *m = NULL, *cm = NULL;
 	if (!selmon)
 		return 0;
@@ -1131,9 +1131,7 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 	uint32_t target;
 
 	if (c->mon == m) {
-		if (!silent) {
-			view(&(Arg){.ui = newtags}, true);
-		}
+		view(&(Arg){.ui = newtags}, true);
 		return 0;
 	}
 
@@ -1141,14 +1139,10 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 		selmon->sel = NULL;
 	}
 
-	setmon(c, m, newtags, !silent);
+	setmon(c, m, newtags, true);
 	client_update_oldmonname_record(c, m);
 
 	reset_foreign_tolevel(c);
-
-	if (silent) {
-		focusclient(focustop(selmon), 1);
-	}
 
 	c->float_geom.width =
 		(int32_t)(c->float_geom.width * c->mon->w.width / selmon->w.width);
@@ -1161,33 +1155,21 @@ int32_t tagmon_general(const Arg *arg, bool silent) {
 	// 重新计算居中的坐标
 	if (c->isfloating) {
 		c->geom = c->float_geom;
-		if (!silent) {
-			target = get_tags_first_tag(c->tags);
-			view(&(Arg){.ui = target}, true);
-			focusclient(c, 1);
-		}
+		target = get_tags_first_tag(c->tags);
+		view(&(Arg){.ui = target}, true);
+		focusclient(c, 1);
 		resize(c, c->geom, 1);
 	} else {
-		if (!silent) {
-			target = get_tags_first_tag(c->tags);
-			view(&(Arg){.ui = target}, true);
-			focusclient(c, 1);
-		}
+		selmon = c->mon;
+		target = get_tags_first_tag(c->tags);
+		view(&(Arg){.ui = target}, true);
+		focusclient(c, 1);
 		arrange(selmon, false, false);
 	}
-	if (config.warpcursor && !silent) {
+	if (config.warpcursor) {
 		warp_cursor_to_selmon(c->mon);
 	}
-
 	return 0;
-}
-
-int32_t tagmon(const Arg *arg) {
-	return tagmon_general(arg, false);
-}
-
-int32_t tagmonsilent(const Arg *arg) {
-	return tagmon_general(arg, true);
 }
 
 int32_t tagsilent(const Arg *arg) {
