@@ -1211,46 +1211,64 @@ int32_t tagsilent(const Arg *arg) {
 	return 0;
 }
 
-int32_t tagtoleft(const Arg *arg) {
+int32_t tagtoleft_general(const Arg *arg, bool silent) {
 	if (!selmon)
 		return 0;
 
 	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] > 1) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] >> 1, .i = arg->i});
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1) {
+
+		uint32_t target = selmon->tagset[selmon->seltags];
+		if (target & 1) {
+			// 1 wraps around to 9
+			target |= 1 << LENGTH(tags);
+		}
+		target >>= 1;
+
+		if (silent)
+			tagsilent(&(Arg){.ui = target, .i = arg->i});
+		else
+			tag(&(Arg){.ui = target, .i = arg->i});
 	}
 	return 0;
 }
 
+int32_t tagtoleft(const Arg *arg) {
+	return tagtoleft_general(arg, false);
+}
+
 int32_t tagtoleftsilent(const Arg *arg) {
+	return tagtoleft_general(arg, true);
+}
+
+int32_t tagtoright_general(const Arg *arg, bool silent) {
+	if (!selmon)
+		return 0;
+
 	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] > 1) {
-		tagsilent(&(Arg){.ui = selmon->tagset[selmon->seltags] >> 1, .i = arg->i});
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1) {
+
+		uint32_t target = selmon->tagset[selmon->seltags];
+		target <<= 1;
+		if (target & 1 << LENGTH(tags)) {
+			// 9 wraps around to 1
+			target |= 1;
+		}
+
+		if (silent)
+			tagsilent(&(Arg){.ui = target, .i = arg->i});
+		else
+			tag(&(Arg){.ui = target, .i = arg->i});
 	}
 	return 0;
 }
 
 int32_t tagtoright(const Arg *arg) {
-	if (!selmon)
-		return 0;
-
-	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
-	}
-	return 0;
+	return tagtoright_general(arg, false);
 }
 
 int32_t tagtorightsilent(const Arg *arg) {
-	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
-		tagsilent(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
-	}
-	return 0;
+	return tagtoright_general(arg, true);
 }
 
 int32_t toggle_named_scratchpad(const Arg *arg) {
