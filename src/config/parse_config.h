@@ -1079,13 +1079,6 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		if ((*arg).i == UNDIR) {
 			(*arg).v = strdup(arg_value);
 		};
-	} else if (strcmp(func_name, "tagmonsilent") == 0) {
-		func = tagmonsilent;
-		(*arg).i = parse_direction(arg_value);
-		(*arg).i2 = atoi(arg_value2);
-		if ((*arg).i == UNDIR) {
-			(*arg).v = strdup(arg_value);
-		};
 	} else if (strcmp(func_name, "incgaps") == 0) {
 		func = incgaps;
 		(*arg).i = atoi(arg_value);
