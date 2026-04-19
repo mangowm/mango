@@ -41,11 +41,10 @@ blur_optimized=0
 
 ### My games are lagging or stuttering
 
-Try enabling **SyncObj** timeline support and **Adaptive Sync** (VRR) if your monitor supports it.
+Try enabling **SyncObj** timeline support.
 
 ```ini
 syncobj_enable=1
-adaptive_sync=1
 ```
 
 ---
