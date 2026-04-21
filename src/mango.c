@@ -1569,12 +1569,17 @@ void applyrules(Client *c) {
 	int32_t fullscreen_state_backup =
 		c->isfullscreen || client_wants_fullscreen(c);
 
-	setmon(c, mon, newtags,
-		   !c->isopensilent &&
-			   !(client_is_x11_popup(c) && client_should_ignore_focus(c)) &&
-			   mon &&
-			   (!c->istagsilent || !newtags ||
-				newtags & mon->tagset[mon->seltags]));
+	bool should_init_get_focus =
+		!c->isopensilent &&
+		!(client_is_x11_popup(c) && client_should_ignore_focus(c)) && mon &&
+		(!c->istagsilent || !newtags || newtags & mon->tagset[mon->seltags]);
+
+	setmon(c, mon, newtags, should_init_get_focus);
+
+	if (!should_init_get_focus) {
+		wl_list_remove(&c->flink);
+		wl_list_insert(fstack.prev, &c->flink);
+	}
 
 	if (!c->isfloating) {
 		c->old_stack_inner_per = c->stack_inner_per;
@@ -4211,6 +4216,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 		}
 	} else
 		wl_list_insert(clients.prev, &c->link); // 尾部入栈
+
 	wl_list_insert(&fstack, &c->flink);
 
 	applyrules(c);
