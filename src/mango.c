@@ -6339,10 +6339,14 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	}
 
 	if (arg->ui == UINT32_MAX) {
-		m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		m->seltags ^= 1; /* toggle sel tagset */
-		m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		goto toggleseltags;
+		if (m->tagset[0] != m->tagset[1]) {
+			m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			m->seltags ^= 1; /* toggle sel tagset */
+			m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			goto toggleseltags;
+		} else {
+			return;
+		}
 	}
 
 	if ((m->tagset[m->seltags] & arg->ui & TAGMASK) != 0) {
