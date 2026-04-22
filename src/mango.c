@@ -4314,20 +4314,23 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 		if (active_constraint && cursor_mode != CurResize &&
 			cursor_mode != CurMove) {
-			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
-			if (c && active_constraint->surface ==
-						 seat->pointer_state.focused_surface) {
-				sx = cursor->x - c->geom.x - c->bw;
-				sy = cursor->y - c->geom.y - c->bw;
-				if (wlr_region_confine(&active_constraint->region, sx, sy,
-									   sx + dx, sy + dy, &sx_confined,
-									   &sy_confined)) {
-					dx = sx_confined - sx;
-					dy = sy_confined - sy;
-				}
+			if (active_constraint->surface ==
+				seat->pointer_state.focused_surface) {
 
 				if (active_constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED)
 					return;
+
+				toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
+				if (c) {
+					sx = cursor->x - c->geom.x - c->bw;
+					sy = cursor->y - c->geom.y - c->bw;
+					if (wlr_region_confine(&active_constraint->region, sx, sy,
+										   sx + dx, sy + dy, &sx_confined,
+										   &sy_confined)) {
+						dx = sx_confined - sx;
+						dy = sy_confined - sy;
+					}
+				}
 			}
 		}
 
