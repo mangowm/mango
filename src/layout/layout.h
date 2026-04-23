@@ -14,7 +14,7 @@ static void vertical_deck(Monitor *mon);
 static void tgmix(Monitor *m);
 
 /* layout(s) */
-Layout overviewlayout = {"󰃇", overview, "overview"};
+Layout overviewlayout = {"O", overview, "overview"};
 
 enum {
 	TILE,
