@@ -1193,28 +1193,51 @@ int32_t tagsilent(const Arg *arg) {
 	return 0;
 }
 
-int32_t tagtoleft(const Arg *arg) {
+int32_t tagtoside_general(const Arg *arg, bool silent, bool left) {
 	if (!selmon)
 		return 0;
 
 	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] > 1) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] >> 1, .i = arg->i});
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1) {
+
+		uint32_t target = selmon->tagset[selmon->seltags];
+
+		if (left) {
+			if (target & 1) {
+				// 1 wraps around to 9
+				target |= 1 << LENGTH(tags);
+			}
+			target >>= 1;
+		} else {
+			target <<= 1;
+			if (target & 1 << LENGTH(tags)) {
+				// 9 wraps around to 1
+				target |= 1;
+			}
+		}
+
+		if (silent)
+			tagsilent(&(Arg){.ui = target, .i = arg->i});
+		else
+			tag(&(Arg){.ui = target, .i = arg->i});
 	}
 	return 0;
 }
 
-int32_t tagtoright(const Arg *arg) {
-	if (!selmon)
-		return 0;
+int32_t tagtoleft(const Arg *arg) {
+	return tagtoside_general(arg, false, true);
+}
 
-	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
-	}
-	return 0;
+int32_t tagtoleftsilent(const Arg *arg) {
+	return tagtoside_general(arg, true, true);
+}
+
+int32_t tagtoright(const Arg *arg) {
+	return tagtoside_general(arg, false, false);
+}
+
+int32_t tagtorightsilent(const Arg *arg) {
+	return tagtoside_general(arg, true, false);
 }
 
 int32_t toggle_named_scratchpad(const Arg *arg) {
@@ -1457,12 +1480,15 @@ int32_t viewtoleft(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
-	uint32_t target = selmon->tagset[selmon->seltags];
-
 	if (selmon->isoverview || selmon->pertag->curtag == 0) {
 		return 0;
 	}
+	uint32_t target = selmon->tagset[selmon->seltags];
 
+	if (target & 1) {
+		// 1 wraps around to 9
+		target |= 1 << LENGTH(tags);
+	}
 	target >>= 1;
 
 	if (target == 0) {
@@ -1484,12 +1510,17 @@ int32_t viewtoright(const Arg *arg) {
 		return 0;
 	}
 	uint32_t target = selmon->tagset[selmon->seltags];
+
 	target <<= 1;
+	if (target & 1 << LENGTH(tags)) {
+		// 9 wraps around to 1
+		target |= 1;
+	}
 
 	if (!selmon || (target) == selmon->tagset[selmon->seltags])
 		return 0;
 	if (!(target & TAGMASK)) {
-		return 0;
+		target = 1;
 	}
 
 	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
