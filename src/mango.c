@@ -315,6 +315,7 @@ struct Client {
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
 	struct wlr_scene_shadow *shadow;
+	struct wlr_scene_rect *shield;
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
 	struct wl_list flink;
@@ -381,6 +382,7 @@ struct Client {
 	int32_t iskilling;
 	int32_t istagswitching;
 	int32_t isnamedscratchpad;
+	int32_t shield_when_capture;
 	bool is_pending_open_animation;
 	bool is_restoring_from_ov;
 	float scroller_proportion;
@@ -554,6 +556,11 @@ typedef struct {
 	struct wl_listener unlock;
 	struct wl_listener destroy;
 } SessionLock;
+
+struct capture_session_tracker {
+	struct wl_listener session_destroy;
+	struct wlr_ext_image_copy_capture_session_v1 *session;
+};
 
 /* function declarations */
 static void applybounds(
@@ -798,6 +805,9 @@ static Client *get_focused_stack_client(Client *sc);
 static bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc);
 static void monitor_stop_skip_frame_timer(Monitor *m);
 static int monitor_skip_frame_timeout_callback(void *data);
+static void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
+												  void *data);
+
 static Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 static bool match_monitor_spec(char *spec, Monitor *m);
 static void last_cursor_surface_destroy(struct wl_listener *listener,
@@ -846,6 +856,7 @@ static struct wlr_keyboard_shortcuts_inhibit_manager_v1
 	*keyboard_shortcuts_inhibit;
 static struct wlr_virtual_pointer_manager_v1 *virtual_pointer_mgr;
 static struct wlr_output_power_manager_v1 *power_mgr;
+static struct wlr_ext_image_copy_capture_manager_v1 *ext_image_copy_capture_mgr;
 static struct wlr_pointer_gestures_v1 *pointer_gestures;
 static struct wlr_drm_lease_v1_manager *drm_lease_manager;
 struct mango_print_status_manager *print_status_manager;
@@ -910,6 +921,7 @@ static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
 static const char *cli_config_path = NULL;
+static int active_capture_count = 0;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
 	.mode = {'d', 'e', 'f', 'a', 'u', 'l', 't', '\0'},
@@ -972,6 +984,8 @@ static struct wl_listener output_mgr_apply = {.notify = outputmgrapply};
 static struct wl_listener output_mgr_test = {.notify = outputmgrtest};
 static struct wl_listener output_power_mgr_set_mode = {.notify =
 														   powermgrsetmode};
+static struct wl_listener ext_image_copy_capture_mgr_new_session = {
+	.notify = handle_iamge_copy_capture_new_session};
 static struct wl_listener request_activate = {.notify = urgent};
 static struct wl_listener request_cursor = {.notify = setcursor};
 static struct wl_listener request_set_psel = {.notify = setpsel};
@@ -1367,6 +1381,7 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, isnamedscratchpad);
 	APPLY_INT_PROP(c, r, isglobal);
 	APPLY_INT_PROP(c, r, isoverlay);
+	APPLY_INT_PROP(c, r, shield_when_capture);
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
 	APPLY_INT_PROP(c, r, isnosizehint);
@@ -4193,6 +4208,13 @@ mapnotify(struct wl_listener *listener, void *data) {
 	wlr_scene_node_lower_to_bottom(&c->shadow->node);
 	wlr_scene_node_set_enabled(&c->shadow->node, true);
 
+
+	c->shield = wlr_scene_rect_create(c->scene_surface, 0, 0,
+									  (float[4]){0, 0, 0, 0xff});
+	c->shield->node.data = c;
+	wlr_scene_node_lower_to_bottom(&c->shield->node);
+	wlr_scene_node_set_enabled(&c->shield->node, false);
+
 	if (config.new_is_master && selmon && !is_scroller_layout(selmon))
 		// tile at the top
 		wl_list_insert(&clients, &c->link); // 新窗口是master,头部入栈
@@ -4604,6 +4626,53 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 
 // 修改printstatus函数，接受掩码参数
 void printstatus(void) { wl_signal_emit(&mango_print_status, NULL); }
+
+// 会话销毁时的回调
+void handle_session_destroy(struct wl_listener *listener, void *data) {
+	struct capture_session_tracker *tracker =
+		wl_container_of(listener, tracker, session_destroy);
+	active_capture_count--;
+	wl_list_remove(&tracker->session_destroy.link);
+
+	Client *c = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (c->shield_when_capture && !c->iskilling && VISIBLEON(c, c->mon)) {
+			arrange(c->mon, false, false);
+		}
+	}
+
+	wlr_log(WLR_DEBUG, "Capture session ended, active count: %d",
+			active_capture_count);
+	free(tracker);
+}
+
+// 新会话创建时的回调
+void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
+										   void *data) {
+	struct wlr_ext_image_copy_capture_session_v1 *session = data;
+
+	struct capture_session_tracker *tracker = calloc(1, sizeof(*tracker));
+	if (!tracker) {
+		wlr_log(WLR_ERROR, "Failed to allocate capture session tracker");
+		return;
+	}
+	tracker->session = session;
+	tracker->session_destroy.notify = handle_session_destroy;
+	// 监听会话的 destroy 信号，以便在会话结束时减少计数
+	wl_signal_add(&session->events.destroy, &tracker->session_destroy);
+
+	active_capture_count++;
+
+	Client *c = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (c->shield_when_capture && !c->iskilling && VISIBLEON(c, c->mon)) {
+			arrange(c->mon, false, false);
+		}
+	}
+
+	wlr_log(WLR_DEBUG, "New capture session started, active count: %d",
+			active_capture_count);
+}
 
 void powermgrsetmode(struct wl_listener *listener, void *data) {
 	struct wlr_output_power_v1_set_mode_event *event = data;
@@ -5604,7 +5673,6 @@ void setup(void) {
 	compositor = wlr_compositor_create(dpy, 6, drw);
 	wlr_export_dmabuf_manager_v1_create(dpy);
 	wlr_screencopy_manager_v1_create(dpy);
-	wlr_ext_image_copy_capture_manager_v1_create(dpy, 1);
 	wlr_ext_output_image_capture_source_manager_v1_create(dpy, 1);
 	wlr_data_control_manager_v1_create(dpy);
 	wlr_data_device_manager_create(dpy);
@@ -5620,6 +5688,11 @@ void setup(void) {
 	// 在 setup 函数中
 	wl_signal_init(&mango_print_status);
 	wl_signal_add(&mango_print_status, &print_status_listener);
+
+	ext_image_copy_capture_mgr =
+		wlr_ext_image_copy_capture_manager_v1_create(dpy, 1);
+	wl_signal_add(&ext_image_copy_capture_mgr->events.new_session,
+				  &ext_image_copy_capture_mgr_new_session);
 
 	/* Initializes the interface used to implement urgency hints */
 	activation = wlr_xdg_activation_v1_create(dpy);

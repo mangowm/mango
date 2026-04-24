@@ -74,6 +74,7 @@ typedef struct {
 	int32_t isunglobal;
 	int32_t isglobal;
 	int32_t isoverlay;
+	int32_t shield_when_capture;
 	int32_t allow_shortcuts_inhibit;
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
@@ -2051,6 +2052,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->isunglobal = -1;
 		rule->isglobal = -1;
 		rule->isoverlay = -1;
+		rule->shield_when_capture = -1;
 		rule->allow_shortcuts_inhibit = -1;
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
@@ -2158,6 +2160,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->focused_opacity = atof(val);
 				} else if (strcmp(key, "isoverlay") == 0) {
 					rule->isoverlay = atoi(val);
+				} else if (strcmp(key, "shield_when_capture") == 0) {
+					rule->shield_when_capture = atoi(val);
 				} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
 					rule->allow_shortcuts_inhibit = atoi(val);
 				} else if (strcmp(key, "ignore_maximize") == 0) {
