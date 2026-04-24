@@ -836,10 +836,13 @@ int32_t centerwin(const Arg *arg) {
 }
 
 int32_t spawn_shell(const Arg *arg) {
+	pid_t pid;
+
 	if (!arg->v)
 		return 0;
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		// 1. 忽略可能导致 coredump 的信号
 		signal(SIGSEGV, SIG_IGN);
 		signal(SIGABRT, SIG_IGN);
@@ -859,14 +862,18 @@ int32_t spawn_shell(const Arg *arg) {
 				arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return 0;
 }
 
 int32_t spawn(const Arg *arg) {
+	pid_t pid;
 	if (!arg->v)
 		return 0;
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		// 1. 忽略可能导致 coredump 的信号
 		signal(SIGSEGV, SIG_IGN);
 		signal(SIGABRT, SIG_IGN);
@@ -891,6 +898,8 @@ int32_t spawn(const Arg *arg) {
 		wordfree(&p); // 释放 wordexp 分配的内存
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return 0;
 }
 
