@@ -396,6 +396,7 @@ struct Client {
 	pid_t pid;
 	Client *swallowing, *swallowedby;
 	bool is_clip_to_hide;
+	bool is_xwayland_hidden;
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
 	bool fake_no_border;
@@ -4070,6 +4071,7 @@ void init_client_properties(Client *c) {
 	c->is_scratchpad_show = 0;
 	c->need_float_size_reduce = 0;
 	c->is_clip_to_hide = 0;
+	c->is_xwayland_hidden = 0;
 	c->is_restoring_from_ov = 0;
 	c->isurgent = 0;
 	c->need_output_flush = 0;

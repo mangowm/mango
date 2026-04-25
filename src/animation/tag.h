@@ -33,8 +33,15 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 
 	if (!c->is_clip_to_hide || !ISTILED(c) || !is_scroller_layout(c->mon)) {
 		c->is_clip_to_hide = false;
-		wlr_scene_node_set_enabled(&c->scene->node, true);
-		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+		/* For XWayland clients that were hidden offscreen, just restore
+		 * border/shadow — the node stays enabled and position is fixed
+		 * by resize() below. For non-XWayland, re-enable normally. */
+		if (c->is_xwayland_hidden && config.xwayland_render_unfocused) {
+			xwayland_show_from_offscreen(c);
+		} else {
+			wlr_scene_node_set_enabled(&c->scene->node, true);
+			wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+		}
 	}
 	client_set_suspended(c, false);
 
@@ -89,7 +96,13 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		c->animation.tagining = false;
 		set_tagout_animation(m, c);
 	} else {
-		wlr_scene_node_set_enabled(&c->scene->node, false);
-		client_set_suspended(c, true);
+		/* For XWayland clients, hide offscreen instead of disabling the
+		 * scene node to keep frame callbacks flowing. */
+		if (client_is_x11(c) && config.xwayland_render_unfocused) {
+			xwayland_hide_offscreen(c);
+		} else {
+			wlr_scene_node_set_enabled(&c->scene->node, false);
+			client_set_suspended(c, true);
+		}
 	}
 }
