@@ -8,6 +8,29 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 	wlr_scene_rect_set_size(rect, GEZERO(width), GEZERO(height));
 }
 
+/* Keep node enabled offscreen so XWayland frame callbacks keep flowing,
+ * preventing games from stalling at 0 FPS when on a hidden workspace. */
+#define XWAYLAND_OFFSCREEN_OFFSET (-100000)
+
+void xwayland_hide_offscreen(Client *c) {
+	if (!client_is_x11(c))
+		return;
+	c->is_xwayland_hidden = true;
+	wlr_scene_node_set_enabled(&c->border->node, false);
+	wlr_scene_node_set_enabled(&c->shadow->node, false);
+	wlr_scene_node_set_position(&c->scene->node, XWAYLAND_OFFSCREEN_OFFSET,
+								XWAYLAND_OFFSCREEN_OFFSET);
+}
+
+void xwayland_show_from_offscreen(Client *c) {
+	if (!client_is_x11(c) || !c->is_xwayland_hidden)
+		return;
+	c->is_xwayland_hidden = false;
+	wlr_scene_node_set_enabled(&c->border->node, true);
+	wlr_scene_node_set_enabled(&c->shadow->node, true);
+	wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
+}
+
 enum corner_location set_client_corner_location(Client *c) {
 	enum corner_location current_corner_location = CORNER_LOCATION_ALL;
 	struct wlr_box target_geom =
@@ -501,10 +524,18 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 	if ((clip_box->width + bw <= 0 || clip_box->height + bw <= 0) &&
 		(ISSCROLLTILED(c) || c->animation.tagouting || c->animation.tagining)) {
 		c->is_clip_to_hide = true;
-		wlr_scene_node_set_enabled(&c->scene->node, false);
+		if (client_is_x11(c) && config.xwayland_render_unfocused) {
+			xwayland_hide_offscreen(c);
+		} else {
+			wlr_scene_node_set_enabled(&c->scene->node, false);
+		}
 	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon)) {
 		c->is_clip_to_hide = false;
-		wlr_scene_node_set_enabled(&c->scene->node, true);
+		if (client_is_x11(c) && config.xwayland_render_unfocused) {
+			xwayland_show_from_offscreen(c);
+		} else {
+			wlr_scene_node_set_enabled(&c->scene->node, true);
+		}
 	}
 
 	return offset;
@@ -737,8 +768,12 @@ void client_animation_next_tick(Client *c) {
 
 		if (c->animation.tagouting) {
 			c->animation.tagouting = false;
-			wlr_scene_node_set_enabled(&c->scene->node, false);
-			client_set_suspended(c, true);
+			if (client_is_x11(c) && config.xwayland_render_unfocused) {
+				xwayland_hide_offscreen(c);
+			} else {
+				wlr_scene_node_set_enabled(&c->scene->node, false);
+				client_set_suspended(c, true);
+			}
 			c->animation.tagouted = true;
 			c->animation.current = c->geom;
 		}
