@@ -72,6 +72,7 @@
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_switch.h>
+#include <wlr/types/wlr_touch.h>
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
@@ -451,6 +452,12 @@ typedef struct {
 	struct wl_listener destroy;
 } KeyboardGroup;
 
+typedef struct TouchGroup {
+	struct wl_list link;
+	struct wlr_touch *touch;
+	Monitor *m;
+} TouchGroup;
+
 typedef struct {
 	struct wlr_keyboard_shortcuts_inhibitor_v1 *inhibitor;
 	struct wl_listener destroy;
@@ -605,6 +612,7 @@ static void createpointerconstraint(struct wl_listener *listener, void *data);
 static void cursorconstrain(struct wlr_pointer_constraint_v1 *constraint);
 static void commitpopup(struct wl_listener *listener, void *data);
 static void createpopup(struct wl_listener *listener, void *data);
+static void createtouch(struct wlr_touch *touch);
 static void cursorframe(struct wl_listener *listener, void *data);
 static void cursorwarptohint(void);
 static void destroydecoration(struct wl_listener *listener, void *data);
@@ -680,6 +688,11 @@ static void setpsel(struct wl_listener *listener, void *data);
 static void setsel(struct wl_listener *listener, void *data);
 static void setup(void);
 static void startdrag(struct wl_listener *listener, void *data);
+
+static void touchdown(struct wl_listener *listener, void *data);
+static void touchup(struct wl_listener *listener, void *data);
+static void touchframe(struct wl_listener *listener, void *data);
+static void touchmotion(struct wl_listener *listener, void *data);
 
 static void unlocksession(struct wl_listener *listener, void *data);
 static void unmaplayersurfacenotify(struct wl_listener *listener, void *data);
@@ -881,6 +894,7 @@ static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
 static struct wl_list mons;
 static Monitor *selmon;
+static struct wl_list touches;
 
 static int32_t enablegaps = 1; /* enables gaps, used by togglegaps */
 static int32_t axis_apply_time = 0;
@@ -979,6 +993,10 @@ static struct wl_listener request_set_sel = {.notify = setsel};
 static struct wl_listener request_set_cursor_shape = {.notify = setcursorshape};
 static struct wl_listener request_start_drag = {.notify = requeststartdrag};
 static struct wl_listener start_drag = {.notify = startdrag};
+static struct wl_listener touch_down = {.notify = touchdown};
+static struct wl_listener touch_frame = {.notify = touchframe};
+static struct wl_listener touch_motion = {.notify = touchmotion};
+static struct wl_listener touch_up = {.notify = touchup};
 static struct wl_listener new_session_lock = {.notify = locksession};
 static struct wl_listener drm_lease_request = {.notify = requestdrmlease};
 static struct wl_listener keyboard_shortcuts_inhibit_new_inhibitor = {
@@ -2085,7 +2103,11 @@ buttonpress(struct wl_listener *listener, void *data) {
 	struct wlr_surface *old_pointer_focus_surface =
 		seat->pointer_state.focused_surface;
 
-	handlecursoractivity();
+	if (!event->pointer ||
+		event->pointer->base.type != WLR_INPUT_DEVICE_TOUCH) {
+		handlecursoractivity();
+	}
+
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	if (check_trackpad_disabled(event->pointer)) {
@@ -2278,6 +2300,10 @@ void cleanuplisteners(void) {
 	wl_list_remove(&request_set_cursor_shape.link);
 	wl_list_remove(&request_start_drag.link);
 	wl_list_remove(&start_drag.link);
+	wl_list_remove(&touch_down.link);
+	wl_list_remove(&touch_frame.link);
+	wl_list_remove(&touch_motion.link);
+	wl_list_remove(&touch_up.link);
 	wl_list_remove(&new_session_lock.link);
 	wl_list_remove(&tearing_new_object.link);
 	wl_list_remove(&keyboard_shortcuts_inhibit_new_inhibitor.link);
@@ -3342,6 +3368,14 @@ void createpointerconstraint(struct wl_listener *listener, void *data) {
 		   &pointer_constraint->destroy, destroypointerconstraint);
 }
 
+void createtouch(struct wlr_touch *wlr_touch) {
+	TouchGroup *touch = ecalloc(1, sizeof(TouchGroup));
+
+	touch->touch = wlr_touch;
+	wl_list_insert(&touches, &touch->link);
+	wlr_cursor_attach_input_device(cursor, &wlr_touch->base);
+}
+
 void cursorconstrain(struct wlr_pointer_constraint_v1 *constraint) {
 	if (active_constraint == constraint)
 		return;
@@ -3702,6 +3736,9 @@ void inputdevice(struct wl_listener *listener, void *data) {
 	case WLR_INPUT_DEVICE_SWITCH:
 		createswitch(wlr_switch_from_input_device(device));
 		break;
+	case WLR_INPUT_DEVICE_TOUCH:
+		createtouch(wlr_touch_from_input_device(device));
+		break;
 	default:
 		/* TODO handle other input device types */
 		break;
@@ -3715,6 +3752,8 @@ void inputdevice(struct wl_listener *listener, void *data) {
 	caps = WL_SEAT_CAPABILITY_POINTER;
 	if (!wl_list_empty(&kb_group->wlr_group->devices))
 		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+	if (!wl_list_empty(&touches))
+		caps |= WL_SEAT_CAPABILITY_TOUCH;
 	wlr_seat_set_capabilities(seat, caps);
 }
 
@@ -4405,7 +4444,9 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		}
 
 		wlr_cursor_move(cursor, device, dx, dy);
-		handlecursoractivity();
+		if (!device || device->type != WLR_INPUT_DEVICE_TOUCH) {
+			handlecursoractivity();
+		}
 		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 		/* Update selmon (even while dragging a window) */
@@ -5730,6 +5771,13 @@ void setup(void) {
 	wl_signal_add(&cursor->events.axis, &cursor_axis);
 	wl_signal_add(&cursor->events.frame, &cursor_frame);
 
+	wl_list_init(&touches);
+
+	wl_signal_add(&cursor->events.touch_down, &touch_down);
+	wl_signal_add(&cursor->events.touch_frame, &touch_frame);
+	wl_signal_add(&cursor->events.touch_motion, &touch_motion);
+	wl_signal_add(&cursor->events.touch_up, &touch_up);
+
 	// 这两句代码会造成obs窗口里的鼠标光标消失,不知道注释有什么影响
 	cursor_shape_mgr = wlr_cursor_shape_manager_v1_create(dpy, 1);
 	wl_signal_add(&cursor_shape_mgr->events.request_set_shape,
@@ -5842,6 +5890,163 @@ void startdrag(struct wl_listener *listener, void *data) {
 
 	drag->icon->data = &wlr_scene_drag_icon_create(drag_icon, drag->icon)->node;
 	LISTEN_STATIC(&drag->icon->events.destroy, destroydragicon);
+}
+
+void touchdown(struct wl_listener *listener, void *data) {
+	struct wlr_touch_down_event *event = data;
+	double lx, ly;
+	double sx, sy;
+	double dx, dy;
+	struct wlr_surface *surface;
+	Client *c = NULL;
+	Monitor *m;
+
+	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+
+	if (!cursor_hidden) {
+		hidecursor(NULL);
+	}
+
+	// Map the input to the appropriate output, to ensure that rotation is
+	// handled.
+	wl_list_for_each(m, &mons, link) {
+		if (m == NULL || m->wlr_output == NULL) {
+			continue;
+		}
+		if (event->touch->output_name != NULL &&
+			0 != strcmp(event->touch->output_name, m->wlr_output->name)) {
+			continue;
+		}
+
+		wlr_cursor_map_input_to_output(cursor, &event->touch->base,
+									   m->wlr_output);
+	}
+
+	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
+										 event->y, &lx, &ly);
+
+	/* Find the client under the pointer and send the event along. */
+	xytonode(lx, ly, &surface, &c, NULL, &sx, &sy);
+	if (surface != NULL && wlr_surface_accepts_touch(surface, seat)) {
+		if (sloppyfocus && c)
+			focusclient(c, 0);
+
+		wlr_seat_touch_notify_down(seat, surface, event->time_msec,
+								   event->touch_id, sx, sy);
+		emulating_pointer_from_touch = false;
+		return;
+	}
+
+	/* Emulate a mouse click if the touch event wasn't handled */
+	if (!emulating_pointer_from_touch) {
+		emulating_pointer_from_touch = true;
+		emulated_pointer_touch_id = event->touch_id;
+
+		wlr_cursor_warp_closest(cursor, &event->touch->base, lx, ly);
+		dx = lx - cursor->x;
+		dy = ly - cursor->y;
+		motionnotify(event->time_msec, &event->touch->base, dx, dy, dx, dy);
+
+		struct wlr_pointer_button_event button_event = {
+			.pointer = (struct wlr_pointer *)event->touch,
+			.time_msec = event->time_msec,
+			.button = BTN_LEFT,
+			.state = WL_POINTER_BUTTON_STATE_PRESSED};
+		buttonpress(listener, &button_event);
+	}
+}
+
+void touchup(struct wl_listener *listener, void *data) {
+	struct wlr_touch_up_event *event = data;
+
+	if (emulating_pointer_from_touch) {
+		if (emulated_pointer_touch_id == event->touch_id) {
+			struct wlr_pointer_button_event button_event = {
+				.pointer = (struct wlr_pointer *)event->touch,
+				.time_msec = event->time_msec,
+				.button = BTN_LEFT,
+				.state = WL_POINTER_BUTTON_STATE_RELEASED};
+			buttonpress(listener, &button_event);
+
+			emulating_pointer_from_touch = false;
+		}
+		return;
+	}
+
+	if (!wlr_seat_touch_get_point(seat, event->touch_id)) {
+		return;
+	}
+
+	wlr_seat_touch_notify_up(seat, event->time_msec, event->touch_id);
+	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+}
+
+void touchframe(struct wl_listener *listener, void *data) {
+	if (emulating_pointer_from_touch) {
+		wlr_seat_pointer_notify_frame(seat);
+	} else {
+		wlr_seat_touch_notify_frame(seat);
+	}
+	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+}
+
+void touchmotion(struct wl_listener *listener, void *data) {
+	struct wlr_touch_motion_event *event = data;
+	double lx, ly;
+	double sx, sy;
+	double dx, dy;
+	struct wlr_surface *surface;
+	Client *c = NULL;
+	struct wlr_touch_point *p = NULL;
+
+	if (emulating_pointer_from_touch) {
+		if (emulated_pointer_touch_id == event->touch_id) {
+			wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base,
+												 event->x, event->y, &lx, &ly);
+			dx = lx - cursor->x;
+			dy = ly - cursor->y;
+			motionnotify(event->time_msec, &event->touch->base, dx, dy, dx, dy);
+		}
+		return;
+	}
+
+	p = wlr_seat_touch_get_point(seat, event->touch_id);
+
+	if (!p) {
+		return;
+	}
+
+	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
+										 event->y, &lx, &ly);
+	surface = p->surface;
+	c = surface ? get_client_from_surface(surface) : NULL;
+
+	if (!c) {
+		if (sloppyfocus)
+			focusclient(NULL, 0);
+		wlr_seat_touch_point_clear_focus(seat, event->time_msec,
+										 event->touch_id);
+		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+		return;
+	}
+
+	if (c->type == XDGShell || c->type == X11) {
+		sx = lx - c->current.x;
+		sy = ly - c->current.y;
+		if (sloppyfocus)
+			focusclient(c, 0);
+	} else {
+		LayerSurface *l = (LayerSurface *)c;
+		sx = lx - l->current.x;
+		sy = ly - l->current.y;
+	}
+
+	wlr_seat_touch_point_focus(seat, surface, event->time_msec, event->touch_id,
+							   sx, sy);
+	wlr_seat_touch_notify_motion(seat, event->time_msec, event->touch_id, sx,
+								 sy);
+
+	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 }
 
 void tag_client(const Arg *arg, Client *target_client) {
