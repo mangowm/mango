@@ -85,7 +85,11 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
+#ifndef __OpenBSD__
 #include <wordexp.h>
+#else
+#include <glob.h>
+#endif
 #include <xkbcommon/xkbcommon.h>
 #ifdef XWAYLAND
 #include <X11/Xlib.h>
