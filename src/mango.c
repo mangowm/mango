@@ -1570,12 +1570,17 @@ void applyrules(Client *c) {
 	int32_t fullscreen_state_backup =
 		c->isfullscreen || client_wants_fullscreen(c);
 
-	setmon(c, mon, newtags,
-		   !c->isopensilent &&
-			   !(client_is_x11_popup(c) && client_should_ignore_focus(c)) &&
-			   mon &&
-			   (!c->istagsilent || !newtags ||
-				newtags & mon->tagset[mon->seltags]));
+	bool should_init_get_focus =
+		!c->isopensilent &&
+		!(client_is_x11_popup(c) && client_should_ignore_focus(c)) && mon &&
+		(!c->istagsilent || !newtags || newtags & mon->tagset[mon->seltags]);
+
+	if (!should_init_get_focus) {
+		wl_list_remove(&c->flink);
+		wl_list_insert(fstack.prev, &c->flink);
+	}
+
+	setmon(c, mon, newtags, should_init_get_focus);
 
 	if (!c->isfloating) {
 		c->old_stack_inner_per = c->stack_inner_per;
@@ -4219,6 +4224,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 		}
 	} else
 		wl_list_insert(clients.prev, &c->link); // 尾部入栈
+
 	wl_list_insert(&fstack, &c->flink);
 
 	applyrules(c);
@@ -4386,20 +4392,23 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 		if (active_constraint && cursor_mode != CurResize &&
 			cursor_mode != CurMove) {
-			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
-			if (c && active_constraint->surface ==
-						 seat->pointer_state.focused_surface) {
-				sx = cursor->x - c->geom.x - c->bw;
-				sy = cursor->y - c->geom.y - c->bw;
-				if (wlr_region_confine(&active_constraint->region, sx, sy,
-									   sx + dx, sy + dy, &sx_confined,
-									   &sy_confined)) {
-					dx = sx_confined - sx;
-					dy = sy_confined - sy;
-				}
+			if (active_constraint->surface ==
+				seat->pointer_state.focused_surface) {
 
 				if (active_constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED)
 					return;
+
+				toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
+				if (c) {
+					sx = cursor->x - c->geom.x - c->bw;
+					sy = cursor->y - c->geom.y - c->bw;
+					if (wlr_region_confine(&active_constraint->region, sx, sy,
+										   sx + dx, sy + dy, &sx_confined,
+										   &sy_confined)) {
+						dx = sx_confined - sx;
+						dy = sy_confined - sy;
+					}
+				}
 			}
 		}
 
@@ -6325,10 +6334,14 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	}
 
 	if (arg->ui == UINT32_MAX) {
-		m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		m->seltags ^= 1; /* toggle sel tagset */
-		m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		goto toggleseltags;
+		if (m->tagset[0] != m->tagset[1]) {
+			m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			m->seltags ^= 1; /* toggle sel tagset */
+			m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			goto toggleseltags;
+		} else {
+			return;
+		}
 	}
 
 	if ((m->tagset[m->seltags] & arg->ui & TAGMASK) != 0) {
