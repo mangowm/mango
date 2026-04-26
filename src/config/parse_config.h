@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "func_names_hash.h"
+#include "option_names_hash.h"
 
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
@@ -33,6 +35,12 @@ typedef struct {
 	MultiKeycode keycode;
 	int32_t type;
 } KeySymCode;
+
+typedef struct {
+    xkb_keysym_t sym;
+    xkb_keycode_t keycodes[3];
+    uint8_t count;
+} KeysymCacheEntry;
 
 typedef struct {
 	uint32_t mod;
@@ -386,6 +394,75 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state, int vrr, int custom);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
+static KeysymCacheEntry *keysym_cache = NULL;
+static size_t keysym_cache_size = 0;
+
+static int cmp_keysym_entry(const void *a, const void *b) {
+  xkb_keysym_t sym_a = ((const KeysymCacheEntry *)a)->sym;
+  xkb_keysym_t sym_b = ((const KeysymCacheEntry *)b)->sym;
+  return (sym_a > sym_b) - (sym_a < sym_b);
+}
+
+static void build_keysym_cache(struct xkb_keymap *keymap) {
+  xkb_keycode_t min = xkb_keymap_min_keycode(keymap);
+  xkb_keycode_t max = xkb_keymap_max_keycode(keymap);
+
+  // Temporary storage: we don't know how many distinct syms there are
+  // Use a simple dynamic array and reallocate as needed
+  size_t capacity = 64;
+  keysym_cache = malloc(capacity * sizeof(KeysymCacheEntry));
+  keysym_cache_size = 0;
+
+  for (xkb_keycode_t kc = min; kc <= max; kc++) {
+    const xkb_keysym_t *syms;
+    int num = xkb_keymap_key_get_syms_by_level(keymap, kc, 0, 0, &syms);
+    for (int i = 0; i < num; i++) {
+      xkb_keysym_t sym = syms[i];
+      // Find or insert entry for this sym
+      KeysymCacheEntry key = { .sym = sym };
+      KeysymCacheEntry *entry = bsearch(&key, keysym_cache, keysym_cache_size,
+                                        sizeof(KeysymCacheEntry), cmp_keysym_entry);
+      if (!entry) {
+        // Not found, add new entry
+        if (keysym_cache_size >= capacity) {
+          capacity *= 2;
+          keysym_cache = realloc(keysym_cache, capacity * sizeof(KeysymCacheEntry));
+        }
+        entry = &keysym_cache[keysym_cache_size++];
+        entry->sym = sym;
+        entry->count = 0;
+      }
+      if (entry->count < 3) {
+        entry->keycodes[entry->count++] = kc;
+      }
+    }
+  }
+
+  // Sort the cache by sym
+  qsort(keysym_cache, keysym_cache_size, sizeof(KeysymCacheEntry), cmp_keysym_entry);
+
+  // Merge duplicates that might have been added multiple times due to unsorted insertion
+  size_t j = 0;
+  for (size_t i = 1; i < keysym_cache_size; i++) {
+    if (keysym_cache[i].sym == keysym_cache[j].sym) {
+      // Merge keycodes
+      for (int k = 0; k < keysym_cache[i].count && keysym_cache[j].count < 3; k++) {
+        keysym_cache[j].keycodes[keysym_cache[j].count++] = keysym_cache[i].keycodes[k];
+      }
+    } else {
+      j++;
+      if (i != j) keysym_cache[j] = keysym_cache[i];
+    }
+  }
+  keysym_cache_size = j + 1;
+}
+
+static void destroy_keysym_cache(void) {
+  free(keysym_cache);
+  keysym_cache = NULL;
+  keysym_cache_size = 0;
+}
+
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
 	if (str == NULL || *str == '\0')
@@ -730,38 +807,52 @@ static int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap,
 	multi_kc->keycode2 = 0;
 	multi_kc->keycode3 = 0;
 
-	int32_t found_count = 0;
+  if (!keysym_cache) {
+    int32_t found_count = 0;
 
-	for (xkb_keycode_t keycode = min_keycode;
-		 keycode <= max_keycode && found_count < 3; keycode++) {
-		// 使用布局0和层级0
-		const xkb_keysym_t *syms;
-		int32_t num_syms =
-			xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
+    for (xkb_keycode_t keycode = min_keycode;
+      keycode <= max_keycode && found_count < 3; keycode++) {
+      // 使用布局0和层级0
+      const xkb_keysym_t *syms;
+      int32_t num_syms =
+        xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
 
-		for (int32_t i = 0; i < num_syms; i++) {
-			if (syms[i] == sym) {
-				switch (found_count) {
-				case 0:
-					multi_kc->keycode1 = keycode;
-					break;
-				case 1:
-					multi_kc->keycode2 = keycode;
-					break;
-				case 2:
-					multi_kc->keycode3 = keycode;
-					break;
-				}
-				found_count++;
-				break;
-			}
-		}
-	}
+      for (int32_t i = 0; i < num_syms; i++) {
+        if (syms[i] == sym) {
+          switch (found_count) {
+          case 0:
+            multi_kc->keycode1 = keycode;
+            break;
+          case 1:
+            multi_kc->keycode2 = keycode;
+            break;
+          case 2:
+            multi_kc->keycode3 = keycode;
+            break;
+          }
+          found_count++;
+          break;
+        }
+      }
+    }
 
-	return found_count;
+    return found_count;
+  }
+
+  KeysymCacheEntry key = { .sym = sym };
+  KeysymCacheEntry *entry = bsearch(&key, keysym_cache, keysym_cache_size,
+                                    sizeof(KeysymCacheEntry), cmp_keysym_entry);
+  if (entry) {
+    if (entry->count > 0) multi_kc->keycode1 = entry->keycodes[0];
+    if (entry->count > 1) multi_kc->keycode2 = entry->keycodes[1];
+    if (entry->count > 2) multi_kc->keycode3 = entry->keycodes[2];
+    return entry->count;
+  }
+  return 0;
 }
 
 void cleanup_config_keymap(void) {
+  destroy_keysym_cache();
 	if (config.keymap != NULL) {
 		xkb_keymap_unref(config.keymap);
 		config.keymap = NULL;
@@ -782,6 +873,9 @@ void create_config_keymap(void) {
 	if (config.keymap == NULL) {
 		config.keymap = xkb_keymap_new_from_names(
 			config.ctx, &xkb_fallback_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (config.keymap) {
+      build_keysym_cache(config.keymap);
+    }
 	}
 }
 
@@ -935,278 +1029,412 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	(*arg).v2 = NULL;
 	(*arg).v3 = NULL;
 
-	if (strcmp(func_name, "focusstack") == 0) {
-		func = focusstack;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "focusdir") == 0) {
-		func = focusdir;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "incnmaster") == 0) {
-		func = incnmaster;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "setmfact") == 0) {
-		func = setmfact;
-		(*arg).f = atof(arg_value);
-	} else if (strcmp(func_name, "zoom") == 0) {
-		func = zoom;
-	} else if (strcmp(func_name, "exchange_client") == 0) {
-		func = exchange_client;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "exchange_stack_client") == 0) {
-		func = exchange_stack_client;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "toggleglobal") == 0) {
-		func = toggleglobal;
-	} else if (strcmp(func_name, "toggleoverview") == 0) {
-		func = toggleoverview;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "set_proportion") == 0) {
-		func = set_proportion;
-		(*arg).f = atof(arg_value);
-	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
-		func = switch_proportion_preset;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "viewtoleft") == 0) {
-		func = viewtoleft;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "viewtoright") == 0) {
-		func = viewtoright;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "tagsilent") == 0) {
-		func = tagsilent;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-	} else if (strcmp(func_name, "tagtoleft") == 0) {
-		func = tagtoleft;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "tagtoright") == 0) {
-		func = tagtoright;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "killclient") == 0) {
-		func = killclient;
-	} else if (strcmp(func_name, "centerwin") == 0) {
-		func = centerwin;
-	} else if (strcmp(func_name, "focuslast") == 0) {
-		func = focuslast;
-	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
-		func = toggle_trackpad_enable;
-	} else if (strcmp(func_name, "setoption") == 0) {
-		func = setoption;
+  const struct func_entry *entry = lookup_func_name(func_name, strlen(func_name));
+  if (!entry) return NULL;
 
-		(*arg).v = strdup(arg_value);
+  switch (entry->id) {
+    case FUNC_FOCUSSTACK: {
+      func = focusstack;
+      (*arg).i = parse_circle_direction(arg_value);
+      break;
+    }
+    case FUNC_FOCUSDIR: {
+      func = focusdir;
+      (*arg).i = parse_direction(arg_value);
+      break;
+    }
+    case FUNC_INCNMASTER: {
+      func = incnmaster;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_SETMFACT: {
+      func = setmfact;
+      (*arg).f = atof(arg_value);
+      break;
+    }
+    case FUNC_ZOOM: {
+      func = zoom;
+      break;
+    }
+    case FUNC_EXCHANGE_CLIENT: {
+      func = exchange_client;
+      (*arg).i = parse_direction(arg_value);
+      break;
+    }
+    case FUNC_EXCHANGE_STACK_CLIENT: {
+      func = exchange_stack_client;
+      (*arg).i = parse_circle_direction(arg_value);
+      break;
+    }
+    case FUNC_TOGGLEGLOBAL: {
+      func = toggleglobal;
+      break;
+    }
+    case FUNC_TOGGLEOVERVIEW: {
+      func = toggleoverview;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_SET_PROPORTION: {
+      func = set_proportion;
+      (*arg).f = atof(arg_value);
+      break;
+    }
+    case FUNC_SWITCH_PROPORTION_PRESET: {
+      func = switch_proportion_preset;
+      (*arg).i = parse_circle_direction(arg_value);
+      break;
+    }
+    case FUNC_VIEWTOLEFT: {
+      func = viewtoleft;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_VIEWTORIGHT: {
+      func = viewtoright;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_TAGSILENT: {
+      func = tagsilent;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      break;
+    }
+    case FUNC_TAGTOLEFT: {
+      func = tagtoleft;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_TAGTORIGHT: {
+      func = tagtoright;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_KILLCLIENT: {
+      func = killclient;
+      break;
+    }
+    case FUNC_CENTERWIN: {
+      func = centerwin;
+      break;
+    }
+    case FUNC_FOCUSLAST: {
+      func = focuslast;
+      break;
+    }
+    case FUNC_TOGGLE_TRACKPAD_ENABLE: {
+      func = toggle_trackpad_enable;
+      break;
+    }
+    case FUNC_SETOPTION: {
+      func = setoption;
 
-		// 收集需要拼接的参数
-		const char *non_empty_params[4] = {NULL};
-		int32_t param_index = 0;
+      (*arg).v = strdup(arg_value);
 
-		if (arg_value2 && arg_value2[0] != '\0')
-			non_empty_params[param_index++] = arg_value2;
-		if (arg_value3 && arg_value3[0] != '\0')
-			non_empty_params[param_index++] = arg_value3;
-		if (arg_value4 && arg_value4[0] != '\0')
-			non_empty_params[param_index++] = arg_value4;
-		if (arg_value5 && arg_value5[0] != '\0')
-			non_empty_params[param_index++] = arg_value5;
+      // 收集需要拼接的参数
+      const char *non_empty_params[4] = {NULL};
+      int32_t param_index = 0;
 
-		// 处理拼接
-		if (param_index == 0) {
-			(*arg).v2 = strdup("");
-		} else {
-			// 计算总长度
-			size_t len = 0;
-			for (int32_t i = 0; i < param_index; i++) {
-				len += strlen(non_empty_params[i]);
-			}
-			len += (param_index - 1) + 1; // 逗号数 + null终止符
+      if (arg_value2 && arg_value2[0] != '\0')
+        non_empty_params[param_index++] = arg_value2;
+      if (arg_value3 && arg_value3[0] != '\0')
+        non_empty_params[param_index++] = arg_value3;
+      if (arg_value4 && arg_value4[0] != '\0')
+        non_empty_params[param_index++] = arg_value4;
+      if (arg_value5 && arg_value5[0] != '\0')
+        non_empty_params[param_index++] = arg_value5;
 
-			char *temp = malloc(len);
-			if (temp) {
-				char *cursor = temp;
-				for (int32_t i = 0; i < param_index; i++) {
-					if (i > 0) {
-						*cursor++ = ',';
-					}
-					size_t param_len = strlen(non_empty_params[i]);
-					memcpy(cursor, non_empty_params[i], param_len);
-					cursor += param_len;
-				}
-				*cursor = '\0';
-				(*arg).v2 = temp;
-			}
-		}
-	} else if (strcmp(func_name, "setkeymode") == 0) {
-		func = setkeymode;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "switch_keyboard_layout") == 0) {
-		func = switch_keyboard_layout;
-		(*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
-	} else if (strcmp(func_name, "setlayout") == 0) {
-		func = setlayout;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "switch_layout") == 0) {
-		func = switch_layout;
-	} else if (strcmp(func_name, "togglefloating") == 0) {
-		func = togglefloating;
-	} else if (strcmp(func_name, "togglefullscreen") == 0) {
-		func = togglefullscreen;
-	} else if (strcmp(func_name, "togglefakefullscreen") == 0) {
-		func = togglefakefullscreen;
-	} else if (strcmp(func_name, "toggleoverlay") == 0) {
-		func = toggleoverlay;
-	} else if (strcmp(func_name, "minimized") == 0) {
-		func = minimized;
-	} else if (strcmp(func_name, "restore_minimized") == 0) {
-		func = restore_minimized;
-	} else if (strcmp(func_name, "toggle_scratchpad") == 0) {
-		func = toggle_scratchpad;
-	} else if (strcmp(func_name, "toggle_render_border") == 0) {
-		func = toggle_render_border;
-	} else if (strcmp(func_name, "focusmon") == 0) {
-		func = focusmon;
-		(*arg).i = parse_direction(arg_value);
-		if ((*arg).i == UNDIR) {
-			(*arg).v = strdup(arg_value);
-		}
-	} else if (strcmp(func_name, "tagmon") == 0) {
-		func = tagmon;
-		(*arg).i = parse_direction(arg_value);
-		(*arg).i2 = atoi(arg_value2);
-		if ((*arg).i == UNDIR) {
-			(*arg).v = strdup(arg_value);
-		};
-	} else if (strcmp(func_name, "incgaps") == 0) {
-		func = incgaps;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "togglegaps") == 0) {
-		func = togglegaps;
-	} else if (strcmp(func_name, "chvt") == 0) {
-		func = chvt;
-		(*arg).ui = atoi(arg_value);
-	} else if (strcmp(func_name, "spawn") == 0) {
-		func = spawn;
-		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
-						  arg_value5};
-		(*arg).v = combine_args_until_empty(values, 5);
-	} else if (strcmp(func_name, "spawn_shell") == 0) {
-		func = spawn_shell;
-		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
-						  arg_value5};
-		(*arg).v = combine_args_until_empty(values, 5);
-	} else if (strcmp(func_name, "spawn_on_empty") == 0) {
-		func = spawn_on_empty;
-		(*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
-		(*arg).ui = 1 << (atoi(arg_value2) - 1);
-	} else if (strcmp(func_name, "quit") == 0) {
-		func = quit;
-	} else if (strcmp(func_name, "create_virtual_output") == 0) {
-		func = create_virtual_output;
-	} else if (strcmp(func_name, "destroy_all_virtual_output") == 0) {
-		func = destroy_all_virtual_output;
-	} else if (strcmp(func_name, "moveresize") == 0) {
-		func = moveresize;
-		(*arg).ui = parse_mouse_action(arg_value);
-	} else if (strcmp(func_name, "togglemaximizescreen") == 0) {
-		func = togglemaximizescreen;
-	} else if (strcmp(func_name, "viewtoleft_have_client") == 0) {
-		func = viewtoleft_have_client;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "viewtoright_have_client") == 0) {
-		func = viewtoright_have_client;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "reload_config") == 0) {
-		func = reload_config;
-	} else if (strcmp(func_name, "tag") == 0) {
-		func = tag;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-		(*arg).i = atoi(arg_value2);
-	} else if (strcmp(func_name, "view") == 0) {
-		func = bind_to_view;
+      // 处理拼接
+      if (param_index == 0) {
+        (*arg).v2 = strdup("");
+      } else {
+        // 计算总长度
+        size_t len = 0;
+        for (int32_t i = 0; i < param_index; i++) {
+          len += strlen(non_empty_params[i]);
+        }
+        len += (param_index - 1) + 1; // 逗号数 + null终止符
 
-		uint32_t mask = 0;
-		char *token;
-		char *arg_copy = strdup(arg_value);
+        char *temp = malloc(len);
+        if (temp) {
+          char *cursor = temp;
+          for (int32_t i = 0; i < param_index; i++) {
+            if (i > 0) {
+              *cursor++ = ',';
+            }
+            size_t param_len = strlen(non_empty_params[i]);
+            memcpy(cursor, non_empty_params[i], param_len);
+            cursor += param_len;
+          }
+          *cursor = '\0';
+          (*arg).v2 = temp;
+        }
+      }
+      break;
+    }
+    case FUNC_SETKEYMODE : {
+      func = setkeymode;
+      (*arg).v = strdup(arg_value);
+      break;
+    }
+    case FUNC_SWITCH_KEYBOARD_LAYOUT: {
+      func = switch_keyboard_layout;
+      (*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
+      break;
+    }
+    case FUNC_SETLAYOUT: {
+      func = setlayout;
+      (*arg).v = strdup(arg_value);
+      break;
+    }
+    case FUNC_SWITCH_LAYOUT: {
+      func = switch_layout;
+      break;
+    }
+    case FUNC_TOGGLEFLOATING: {
+      func = togglefloating;
+      break;
+    }
+    case FUNC_TOGGLEFULLSCREEN: {
+      func = togglefullscreen;
+      break;
+    }
+    case FUNC_TOGGLEFAKEFULLSCREEN: {
+      func = togglefakefullscreen;
+      break;
+    }
+    case FUNC_TOGGLEOVERLAY: {
+      func = toggleoverlay;
+      break;
+    }
+    case FUNC_MINIMIZED: {
+      func = minimized;
+      break;
+    }
+    case FUNC_RESTORE_MINIMIZED: {
+      func = restore_minimized;
+      break;
+    }
+    case FUNC_TOGGLE_SCRATCHPAD: {
+      func = toggle_scratchpad;
+      break;
+    }
+    case FUNC_TOGGLE_RENDER_BORDER: {
+      func = toggle_render_border;
+      break;
+    }
+    case FUNC_FOCUSMON: {
+      func = focusmon;
+      (*arg).i = parse_direction(arg_value);
+      if ((*arg).i == UNDIR) {
+        (*arg).v = strdup(arg_value);
+      }
+      break;
+    }
+    case FUNC_TAGMON: {
+      func = tagmon;
+      (*arg).i = parse_direction(arg_value);
+      (*arg).i2 = atoi(arg_value2);
+      if ((*arg).i == UNDIR) {
+        (*arg).v = strdup(arg_value);
+      };
+      break;
+    }
+    case FUNC_INCGAPS: {
+      func = incgaps;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_TOGGLEGAPS: {
+      func = togglegaps;
+      break;
+    }
+    case FUNC_CHVT: {
+      func = chvt;
+      (*arg).ui = atoi(arg_value);
+      break;
+    }
+    case FUNC_SPAWN: {
+      func = spawn;
+      char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+                arg_value5};
+      (*arg).v = combine_args_until_empty(values, 5);
+      break;
+    }
+    case FUNC_SPAWN_SHELL: {
+      func = spawn_shell;
+      char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+                arg_value5};
+      (*arg).v = combine_args_until_empty(values, 5);
+      break;
+    }
+    case FUNC_SPAWN_ON_EMPTY: {
+      func = spawn_on_empty;
+      (*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
+      (*arg).ui = 1 << (atoi(arg_value2) - 1);
+      break;
+    }
+    case FUNC_QUIT: {
+      func = quit;
+      break;
+    }
+    case FUNC_CREATE_VIRTUAL_OUTPUT: {
+      func = create_virtual_output;
+      break;
+    }
+    case FUNC_DESTROY_ALL_VIRTUAL_OUTPUT: {
+      func = destroy_all_virtual_output;
+      break;
+    }
+    case FUNC_MOVERESIZE: {
+      func = moveresize;
+      (*arg).ui = parse_mouse_action(arg_value);
+      break;
+    }
+    case FUNC_TOGGLEMAXIMIZESCREEN: {
+      func = togglemaximizescreen;
+      break;
+    }
+    case FUNC_VIEWTOLEFT_HAVE_CLIENT: {
+      func = viewtoleft_have_client;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_VIEWTORIGHT_HAVE_CLIENT: {
+      func = viewtoright_have_client;
+      (*arg).i = atoi(arg_value);
+      break;
+    }
+    case FUNC_RELOAD_CONFIG: {
+      func = reload_config;
+      break;
+    }
+    case FUNC_TAG: {
+      func = tag;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      (*arg).i = atoi(arg_value2);
+      break;
+    }
+    case FUNC_VIEW: {
+      func = bind_to_view;
 
-		if (arg_copy != NULL) {
-			char *saveptr = NULL;
-			token = strtok_r(arg_copy, "|", &saveptr);
+      uint32_t mask = 0;
+      char *token;
+      char *arg_copy = strdup(arg_value);
 
-			while (token != NULL) {
-				int32_t num = atoi(token);
-				if (num > 0 && num <= LENGTH(tags)) {
-					mask |= (1 << (num - 1));
-				}
-				token = strtok_r(NULL, "|", &saveptr);
-			}
+      if (arg_copy != NULL) {
+        char *saveptr = NULL;
+        token = strtok_r(arg_copy, "|", &saveptr);
 
-			free(arg_copy);
-		}
+        while (token != NULL) {
+          int32_t num = atoi(token);
+          if (num > 0 && num <= LENGTH(tags)) {
+            mask |= (1 << (num - 1));
+          }
+          token = strtok_r(NULL, "|", &saveptr);
+        }
 
-		if (mask) {
-			(*arg).ui = mask;
-		} else {
-			(*arg).ui = atoi(arg_value);
-		}
-		(*arg).i = atoi(arg_value2);
-	} else if (strcmp(func_name, "viewcrossmon") == 0) {
-		func = viewcrossmon;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-		(*arg).v = strdup(arg_value2);
-	} else if (strcmp(func_name, "tagcrossmon") == 0) {
-		func = tagcrossmon;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-		(*arg).v = strdup(arg_value2);
-	} else if (strcmp(func_name, "toggletag") == 0) {
-		func = toggletag;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-	} else if (strcmp(func_name, "toggleview") == 0) {
-		func = toggleview;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-	} else if (strcmp(func_name, "comboview") == 0) {
-		func = comboview;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
-	} else if (strcmp(func_name, "smartmovewin") == 0) {
-		func = smartmovewin;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "smartresizewin") == 0) {
-		func = smartresizewin;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "resizewin") == 0) {
-		func = resizewin;
-		(*arg).ui = parse_num_type(arg_value);
-		(*arg).ui2 = parse_num_type(arg_value2);
-		(*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
-												 : atoi(arg_value + 1);
-		(*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
-												   : atoi(arg_value2 + 1);
-	} else if (strcmp(func_name, "movewin") == 0) {
-		func = movewin;
-		(*arg).ui = parse_num_type(arg_value);
-		(*arg).ui2 = parse_num_type(arg_value2);
-		(*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
-												 : atoi(arg_value + 1);
-		(*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
-												   : atoi(arg_value2 + 1);
-	} else if (strcmp(func_name, "toggle_named_scratchpad") == 0) {
-		func = toggle_named_scratchpad;
-		(*arg).v = strdup(arg_value);
-		(*arg).v2 = strdup(arg_value2);
-		(*arg).v3 = strdup(arg_value3);
-	} else if (strcmp(func_name, "disable_monitor") == 0) {
-		func = disable_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "enable_monitor") == 0) {
-		func = enable_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "toggle_monitor") == 0) {
-		func = toggle_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "scroller_stack") == 0) {
-		func = scroller_stack;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
-		func = toggle_all_floating;
-	} else {
-		return NULL;
-	}
+        free(arg_copy);
+      }
+
+      if (mask) {
+        (*arg).ui = mask;
+      } else {
+        (*arg).ui = atoi(arg_value);
+      }
+      (*arg).i = atoi(arg_value2);
+      break;
+    }
+    case FUNC_VIEWCROSSMON: {
+      func = viewcrossmon;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      (*arg).v = strdup(arg_value2);
+      break;
+    }
+    case FUNC_TAGCROSSMON: {
+      func = tagcrossmon;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      (*arg).v = strdup(arg_value2);
+      break;
+    }
+    case FUNC_TOGGLETAG: {
+      func = toggletag;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      break;
+    }
+    case FUNC_TOGGLEVIEW: {
+      func = toggleview;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      break;
+    }
+    case FUNC_COMBOVIEW: {
+      func = comboview;
+      (*arg).ui = 1 << (atoi(arg_value) - 1);
+      break;
+    }
+    case FUNC_SMARTMOVEWIN: {
+      func = smartmovewin;
+      (*arg).i = parse_direction(arg_value);
+      break;
+    }
+    case FUNC_SMARTRESIZEWIN: {
+      func = smartresizewin;
+      (*arg).i = parse_direction(arg_value);
+      break;
+    }
+    case FUNC_RESIZEWIN: {
+      func = resizewin;
+      (*arg).ui = parse_num_type(arg_value);
+      (*arg).ui2 = parse_num_type(arg_value2);
+      (*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
+                          : atoi(arg_value + 1);
+      (*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
+                            : atoi(arg_value2 + 1);
+      break;
+    }
+    case FUNC_MOVEWIN: {
+      func = movewin;
+      (*arg).ui = parse_num_type(arg_value);
+      (*arg).ui2 = parse_num_type(arg_value2);
+      (*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
+                          : atoi(arg_value + 1);
+      (*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
+                            : atoi(arg_value2 + 1);
+      break;
+    }
+    case FUNC_TOGGLE_NAMED_SCRATCHPAD: {
+      func = toggle_named_scratchpad;
+      (*arg).v = strdup(arg_value);
+      (*arg).v2 = strdup(arg_value2);
+      (*arg).v3 = strdup(arg_value3);
+      break;
+    }
+    case FUNC_DISABLE_MONITOR: {
+      func = disable_monitor;
+      (*arg).v = strdup(arg_value);
+      break;
+    }
+    case FUNC_ENABLE_MONITOR: {
+      func = enable_monitor;
+      (*arg).v = strdup(arg_value);
+      break;
+    }
+    case FUNC_TOGGLE_MONITOR: {
+      func = toggle_monitor;
+      (*arg).v = strdup(arg_value);
+      break;
+    }
+    case FUNC_SCROLLER_STACK: {
+      func = scroller_stack;
+      (*arg).i = parse_direction(arg_value);
+      break;
+    }
+    case FUNC_TOGGLE_ALL_FLOATING: {
+      func = toggle_all_floating;
+      break;
+    }
+  }
 	return func;
 }
 
@@ -1235,1063 +1463,8 @@ void run_exec_once() {
 }
 
 bool parse_option(Config *config, char *key, char *value) {
-	if (strcmp(key, "keymode") == 0) {
-		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
-	} else if (strcmp(key, "animations") == 0) {
-		config->animations = atoi(value);
-	} else if (strcmp(key, "layer_animations") == 0) {
-		config->layer_animations = atoi(value);
-	} else if (strcmp(key, "animation_type_open") == 0) {
-		snprintf(config->animation_type_open,
-				 sizeof(config->animation_type_open), "%.9s",
-				 value); // string limit to 9 char
-	} else if (strcmp(key, "animation_type_close") == 0) {
-		snprintf(config->animation_type_close,
-				 sizeof(config->animation_type_close), "%.9s",
-				 value); // string limit to 9 char
-	} else if (strcmp(key, "layer_animation_type_open") == 0) {
-		snprintf(config->layer_animation_type_open,
-				 sizeof(config->layer_animation_type_open), "%.9s",
-				 value); // string limit to 9 char
-	} else if (strcmp(key, "layer_animation_type_close") == 0) {
-		snprintf(config->layer_animation_type_close,
-				 sizeof(config->layer_animation_type_close), "%.9s",
-				 value); // string limit to 9 char
-	} else if (strcmp(key, "animation_fade_in") == 0) {
-		config->animation_fade_in = atoi(value);
-	} else if (strcmp(key, "animation_fade_out") == 0) {
-		config->animation_fade_out = atoi(value);
-	} else if (strcmp(key, "tag_animation_direction") == 0) {
-		config->tag_animation_direction = atoi(value);
-	} else if (strcmp(key, "zoom_initial_ratio") == 0) {
-		config->zoom_initial_ratio = atof(value);
-	} else if (strcmp(key, "zoom_end_ratio") == 0) {
-		config->zoom_end_ratio = atof(value);
-	} else if (strcmp(key, "fadein_begin_opacity") == 0) {
-		config->fadein_begin_opacity = atof(value);
-	} else if (strcmp(key, "fadeout_begin_opacity") == 0) {
-		config->fadeout_begin_opacity = atof(value);
-	} else if (strcmp(key, "animation_duration_move") == 0) {
-		config->animation_duration_move = atoi(value);
-	} else if (strcmp(key, "animation_duration_open") == 0) {
-		config->animation_duration_open = atoi(value);
-	} else if (strcmp(key, "animation_duration_tag") == 0) {
-		config->animation_duration_tag = atoi(value);
-	} else if (strcmp(key, "animation_duration_close") == 0) {
-		config->animation_duration_close = atoi(value);
-	} else if (strcmp(key, "animation_duration_focus") == 0) {
-		config->animation_duration_focus = atoi(value);
-	} else if (strcmp(key, "animation_curve_move") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_move, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_move: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_open") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_open, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_open: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_tag") == 0) {
-		int32_t num = parse_double_array(value, config->animation_curve_tag, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_tag: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_close") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_close, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_close: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_focus") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_focus, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_focus: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_opafadein") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_opafadein, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_opafadein: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "animation_curve_opafadeout") == 0) {
-		int32_t num =
-			parse_double_array(value, config->animation_curve_opafadeout, 4);
-		if (num != 4) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
-					"animation_curve_opafadeout: %s\n",
-					value);
-			return false;
-		}
-	} else if (strcmp(key, "scroller_structs") == 0) {
-		config->scroller_structs = atoi(value);
-	} else if (strcmp(key, "scroller_default_proportion") == 0) {
-		config->scroller_default_proportion = atof(value);
-	} else if (strcmp(key, "scroller_default_proportion_single") == 0) {
-		config->scroller_default_proportion_single = atof(value);
-	} else if (strcmp(key, "scroller_ignore_proportion_single") == 0) {
-		config->scroller_ignore_proportion_single = atoi(value);
-	} else if (strcmp(key, "scroller_focus_center") == 0) {
-		config->scroller_focus_center = atoi(value);
-	} else if (strcmp(key, "scroller_prefer_center") == 0) {
-		config->scroller_prefer_center = atoi(value);
-	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
-		config->scroller_prefer_overspread = atoi(value);
-	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
-		config->edge_scroller_pointer_focus = atoi(value);
-	} else if (strcmp(key, "focus_cross_monitor") == 0) {
-		config->focus_cross_monitor = atoi(value);
-	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
-		config->exchange_cross_monitor = atoi(value);
-	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
-		config->scratchpad_cross_monitor = atoi(value);
-	} else if (strcmp(key, "focus_cross_tag") == 0) {
-		config->focus_cross_tag = atoi(value);
-	} else if (strcmp(key, "view_current_to_back") == 0) {
-		config->view_current_to_back = atoi(value);
-	} else if (strcmp(key, "blur") == 0) {
-		config->blur = atoi(value);
-	} else if (strcmp(key, "blur_layer") == 0) {
-		config->blur_layer = atoi(value);
-	} else if (strcmp(key, "blur_optimized") == 0) {
-		config->blur_optimized = atoi(value);
-	} else if (strcmp(key, "border_radius") == 0) {
-		config->border_radius = atoi(value);
-	} else if (strcmp(key, "blur_params_num_passes") == 0) {
-		config->blur_params.num_passes = atoi(value);
-	} else if (strcmp(key, "blur_params_radius") == 0) {
-		config->blur_params.radius = atoi(value);
-	} else if (strcmp(key, "blur_params_noise") == 0) {
-		config->blur_params.noise = atof(value);
-	} else if (strcmp(key, "blur_params_brightness") == 0) {
-		config->blur_params.brightness = atof(value);
-	} else if (strcmp(key, "blur_params_contrast") == 0) {
-		config->blur_params.contrast = atof(value);
-	} else if (strcmp(key, "blur_params_saturation") == 0) {
-		config->blur_params.saturation = atof(value);
-	} else if (strcmp(key, "shadows") == 0) {
-		config->shadows = atoi(value);
-	} else if (strcmp(key, "shadow_only_floating") == 0) {
-		config->shadow_only_floating = atoi(value);
-	} else if (strcmp(key, "layer_shadows") == 0) {
-		config->layer_shadows = atoi(value);
-	} else if (strcmp(key, "shadows_size") == 0) {
-		config->shadows_size = atoi(value);
-	} else if (strcmp(key, "shadows_blur") == 0) {
-		config->shadows_blur = atof(value);
-	} else if (strcmp(key, "shadows_position_x") == 0) {
-		config->shadows_position_x = atoi(value);
-	} else if (strcmp(key, "shadows_position_y") == 0) {
-		config->shadows_position_y = atoi(value);
-	} else if (strcmp(key, "single_scratchpad") == 0) {
-		config->single_scratchpad = atoi(value);
-	} else if (strcmp(key, "xwayland_persistence") == 0) {
-		config->xwayland_persistence = atoi(value);
-	} else if (strcmp(key, "syncobj_enable") == 0) {
-		config->syncobj_enable = atoi(value);
-	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
-		config->drag_tile_refresh_interval = atof(value);
-	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
-		config->drag_floating_refresh_interval = atof(value);
-	} else if (strcmp(key, "allow_tearing") == 0) {
-		config->allow_tearing = atoi(value);
-	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
-		config->allow_shortcuts_inhibit = atoi(value);
-	} else if (strcmp(key, "allow_lock_transparent") == 0) {
-		config->allow_lock_transparent = atoi(value);
-	} else if (strcmp(key, "no_border_when_single") == 0) {
-		config->no_border_when_single = atoi(value);
-	} else if (strcmp(key, "no_radius_when_single") == 0) {
-		config->no_radius_when_single = atoi(value);
-	} else if (strcmp(key, "snap_distance") == 0) {
-		config->snap_distance = atoi(value);
-	} else if (strcmp(key, "enable_floating_snap") == 0) {
-		config->enable_floating_snap = atoi(value);
-	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
-		config->drag_tile_to_tile = atoi(value);
-	} else if (strcmp(key, "swipe_min_threshold") == 0) {
-		config->swipe_min_threshold = atoi(value);
-	} else if (strcmp(key, "focused_opacity") == 0) {
-		config->focused_opacity = atof(value);
-	} else if (strcmp(key, "unfocused_opacity") == 0) {
-		config->unfocused_opacity = atof(value);
-	} else if (strcmp(key, "xkb_rules_rules") == 0) {
-		strncpy(config->xkb_rules_rules, value,
-				sizeof(config->xkb_rules_rules) - 1);
-		config->xkb_rules_rules[sizeof(config->xkb_rules_rules) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_model") == 0) {
-		strncpy(config->xkb_rules_model, value,
-				sizeof(config->xkb_rules_model) - 1);
-		config->xkb_rules_model[sizeof(config->xkb_rules_model) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_layout") == 0) {
-		strncpy(config->xkb_rules_layout, value,
-				sizeof(config->xkb_rules_layout) - 1);
-		config->xkb_rules_layout[sizeof(config->xkb_rules_layout) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_variant") == 0) {
-		strncpy(config->xkb_rules_variant, value,
-				sizeof(config->xkb_rules_variant) - 1);
-		config->xkb_rules_variant[sizeof(config->xkb_rules_variant) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_options") == 0) {
-		strncpy(config->xkb_rules_options, value,
-				sizeof(config->xkb_rules_options) - 1);
-		config->xkb_rules_options[sizeof(config->xkb_rules_options) - 1] = '\0';
-	} else if (strcmp(key, "scroller_proportion_preset") == 0) {
-		// 1. 统计 value 中有多少个逗号，确定需要解析的浮点数个数
-		int32_t count = 0; // 初始化为 0
-		for (const char *p = value; *p; p++) {
-			if (*p == ',')
-				count++;
-		}
-		int32_t float_count = count + 1; // 浮点数的数量是逗号数量加 1
 
-		// 2. 动态分配内存，存储浮点数
-		config->scroller_proportion_preset =
-			(float *)malloc(float_count * sizeof(float));
-		if (!config->scroller_proportion_preset) {
-			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
-							"allocation failed\n");
-			return false;
-		}
-
-		// 3. 解析 value 中的浮点数
-		char *value_copy =
-			strdup(value); // 复制 value，因为 strtok 会修改原字符串
-		char *token = strtok(value_copy, ",");
-		int32_t i = 0;
-		float value_set;
-
-		while (token != NULL && i < float_count) {
-			if (sscanf(token, "%f", &value_set) != 1) {
-				fprintf(stderr,
-						"\033[1m\033[31m[ERROR]:\033[33m Invalid float "
-						"value in "
-						"scroller_proportion_preset: %s\n",
-						token);
-				free(value_copy);
-				free(config->scroller_proportion_preset);
-				config->scroller_proportion_preset = NULL;
-				return false;
-			}
-
-			// Clamp the value between 0.0 and 1.0 (or your desired
-			// range)
-			config->scroller_proportion_preset[i] =
-				CLAMP_FLOAT(value_set, 0.1f, 1.0f);
-
-			token = strtok(NULL, ",");
-			i++;
-		}
-
-		// 4. 检查解析的浮点数数量是否匹配
-		if (i != float_count) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"scroller_proportion_preset format: %s\n",
-					value);
-			free(value_copy);
-			free(config->scroller_proportion_preset);  // 释放已分配的内存
-			config->scroller_proportion_preset = NULL; // 防止野指针
-			config->scroller_proportion_preset_count = 0;
-			return false;
-		}
-		config->scroller_proportion_preset_count = float_count;
-
-		// 5. 释放临时复制的字符串
-		free(value_copy);
-	} else if (strcmp(key, "circle_layout") == 0) {
-		// 1. 统计 value 中有多少个逗号，确定需要解析的字符串个数
-		int32_t count = 0; // 初始化为 0
-		for (const char *p = value; *p; p++) {
-			if (*p == ',')
-				count++;
-		}
-		int32_t string_count = count + 1; // 字符串的数量是逗号数量加 1
-
-		// 2. 动态分配内存，存储字符串指针
-		config->circle_layout = (char **)malloc(string_count * sizeof(char *));
-		memset(config->circle_layout, 0, string_count * sizeof(char *));
-		if (!config->circle_layout) {
-			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
-							"allocation failed\n");
-			return false;
-		}
-
-		// 3. 解析 value 中的字符串
-		char *value_copy =
-			strdup(value); // 复制 value，因为 strtok 会修改原字符串
-		char *token = strtok(value_copy, ",");
-		int32_t i = 0;
-		char *cleaned_token;
-		while (token != NULL && i < string_count) {
-			// 为每个字符串分配内存并复制内容
-			cleaned_token = sanitize_string(token);
-			config->circle_layout[i] = strdup(cleaned_token);
-			if (!config->circle_layout[i]) {
-				fprintf(stderr,
-						"\033[1m\033[31m[ERROR]:\033[33m Memory allocation "
-						"failed for "
-						"string: %s\n",
-						token);
-				// 释放之前分配的内存
-				for (int32_t j = 0; j < i; j++) {
-					free(config->circle_layout[j]);
-				}
-				free(config->circle_layout);
-				free(value_copy);
-				config->circle_layout = NULL; // 防止野指针
-				config->circle_layout_count = 0;
-				return false;
-			}
-			token = strtok(NULL, ",");
-			i++;
-		}
-
-		// 4. 检查解析的字符串数量是否匹配
-		if (i != string_count) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid circle_layout "
-					"format: %s\n",
-					value);
-			// 释放之前分配的内存
-			for (int32_t j = 0; j < i; j++) {
-				free(config->circle_layout[j]);
-			}
-			free(config->circle_layout);
-			free(value_copy);
-			config->circle_layout = NULL; // 防止野指针
-			config->circle_layout_count = 0;
-			return false;
-		}
-		config->circle_layout_count = string_count;
-
-		// 5. 释放临时复制的字符串
-		free(value_copy);
-	} else if (strcmp(key, "new_is_master") == 0) {
-		config->new_is_master = atoi(value);
-	} else if (strcmp(key, "default_mfact") == 0) {
-		config->default_mfact = atof(value);
-	} else if (strcmp(key, "default_nmaster") == 0) {
-		config->default_nmaster = atoi(value);
-	} else if (strcmp(key, "center_master_overspread") == 0) {
-		config->center_master_overspread = atoi(value);
-	} else if (strcmp(key, "center_when_single_stack") == 0) {
-		config->center_when_single_stack = atoi(value);
-	} else if (strcmp(key, "hotarea_size") == 0) {
-		config->hotarea_size = atoi(value);
-	} else if (strcmp(key, "hotarea_corner") == 0) {
-		config->hotarea_corner = atoi(value);
-	} else if (strcmp(key, "enable_hotarea") == 0) {
-		config->enable_hotarea = atoi(value);
-	} else if (strcmp(key, "ov_tab_mode") == 0) {
-		config->ov_tab_mode = atoi(value);
-	} else if (strcmp(key, "overviewgappi") == 0) {
-		config->overviewgappi = atoi(value);
-	} else if (strcmp(key, "overviewgappo") == 0) {
-		config->overviewgappo = atoi(value);
-	} else if (strcmp(key, "cursor_hide_timeout") == 0) {
-		config->cursor_hide_timeout = atoi(value);
-	} else if (strcmp(key, "axis_bind_apply_timeout") == 0) {
-		config->axis_bind_apply_timeout = atoi(value);
-	} else if (strcmp(key, "focus_on_activate") == 0) {
-		config->focus_on_activate = atoi(value);
-	} else if (strcmp(key, "numlockon") == 0) {
-		config->numlockon = atoi(value);
-	} else if (strcmp(key, "idleinhibit_ignore_visible") == 0) {
-		config->idleinhibit_ignore_visible = atoi(value);
-	} else if (strcmp(key, "sloppyfocus") == 0) {
-		config->sloppyfocus = atoi(value);
-	} else if (strcmp(key, "warpcursor") == 0) {
-		config->warpcursor = atoi(value);
-	} else if (strcmp(key, "drag_corner") == 0) {
-		config->drag_corner = atoi(value);
-	} else if (strcmp(key, "drag_warp_cursor") == 0) {
-		config->drag_warp_cursor = atoi(value);
-	} else if (strcmp(key, "smartgaps") == 0) {
-		config->smartgaps = atoi(value);
-	} else if (strcmp(key, "repeat_rate") == 0) {
-		config->repeat_rate = atoi(value);
-	} else if (strcmp(key, "repeat_delay") == 0) {
-		config->repeat_delay = atoi(value);
-	} else if (strcmp(key, "disable_trackpad") == 0) {
-		config->disable_trackpad = atoi(value);
-	} else if (strcmp(key, "tap_to_click") == 0) {
-		config->tap_to_click = atoi(value);
-	} else if (strcmp(key, "tap_and_drag") == 0) {
-		config->tap_and_drag = atoi(value);
-	} else if (strcmp(key, "drag_lock") == 0) {
-		config->drag_lock = atoi(value);
-	} else if (strcmp(key, "mouse_natural_scrolling") == 0) {
-		config->mouse_natural_scrolling = atoi(value);
-	} else if (strcmp(key, "trackpad_natural_scrolling") == 0) {
-		config->trackpad_natural_scrolling = atoi(value);
-	} else if (strcmp(key, "cursor_size") == 0) {
-		config->cursor_size = atoi(value);
-	} else if (strcmp(key, "cursor_theme") == 0) {
-		config->cursor_theme = strdup(value);
-	} else if (strcmp(key, "disable_while_typing") == 0) {
-		config->disable_while_typing = atoi(value);
-	} else if (strcmp(key, "left_handed") == 0) {
-		config->left_handed = atoi(value);
-	} else if (strcmp(key, "middle_button_emulation") == 0) {
-		config->middle_button_emulation = atoi(value);
-	} else if (strcmp(key, "accel_profile") == 0) {
-		config->accel_profile = atoi(value);
-	} else if (strcmp(key, "accel_speed") == 0) {
-		config->accel_speed = atof(value);
-	} else if (strcmp(key, "scroll_method") == 0) {
-		config->scroll_method = atoi(value);
-	} else if (strcmp(key, "scroll_button") == 0) {
-		config->scroll_button = atoi(value);
-	} else if (strcmp(key, "click_method") == 0) {
-		config->click_method = atoi(value);
-	} else if (strcmp(key, "send_events_mode") == 0) {
-		config->send_events_mode = atoi(value);
-	} else if (strcmp(key, "button_map") == 0) {
-		config->button_map = atoi(value);
-	} else if (strcmp(key, "axis_scroll_factor") == 0) {
-		config->axis_scroll_factor = atof(value);
-	} else if (strcmp(key, "gappih") == 0) {
-		config->gappih = atoi(value);
-	} else if (strcmp(key, "gappiv") == 0) {
-		config->gappiv = atoi(value);
-	} else if (strcmp(key, "gappoh") == 0) {
-		config->gappoh = atoi(value);
-	} else if (strcmp(key, "gappov") == 0) {
-		config->gappov = atoi(value);
-	} else if (strcmp(key, "scratchpad_width_ratio") == 0) {
-		config->scratchpad_width_ratio = atof(value);
-	} else if (strcmp(key, "scratchpad_height_ratio") == 0) {
-		config->scratchpad_height_ratio = atof(value);
-	} else if (strcmp(key, "borderpx") == 0) {
-		config->borderpx = atoi(value);
-	} else if (strcmp(key, "rootcolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid rootcolor "
-					"format: "
-					"%s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->rootcolor, color);
-		}
-
-	} else if (strcmp(key, "shadowscolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid shadowscolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->shadowscolor, color);
-		}
-	} else if (strcmp(key, "bordercolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid bordercolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->bordercolor, color);
-		}
-	} else if (strcmp(key, "focuscolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid focuscolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->focuscolor, color);
-		}
-	} else if (strcmp(key, "maximizescreencolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"maximizescreencolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->maximizescreencolor, color);
-		}
-	} else if (strcmp(key, "urgentcolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid urgentcolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->urgentcolor, color);
-		}
-	} else if (strcmp(key, "scratchpadcolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"scratchpadcolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->scratchpadcolor, color);
-		}
-	} else if (strcmp(key, "globalcolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid globalcolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->globalcolor, color);
-		}
-	} else if (strcmp(key, "overlaycolor") == 0) {
-		int64_t color = parse_color(value);
-		if (color == -1) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid overlaycolor "
-					"format: %s\n",
-					value);
-			return false;
-		} else {
-			convert_hex_to_rgba(config->overlaycolor, color);
-		}
-	} else if (strcmp(key, "monitorrule") == 0) {
-		config->monitor_rules =
-			realloc(config->monitor_rules, (config->monitor_rules_count + 1) *
-											   sizeof(ConfigMonitorRule));
-		if (!config->monitor_rules) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for monitor rules\n");
-			return false;
-		}
-
-		ConfigMonitorRule *rule =
-			&config->monitor_rules[config->monitor_rules_count];
-		memset(rule, 0, sizeof(ConfigMonitorRule));
-
-		// 设置默认值
-		rule->name = NULL;
-		rule->make = NULL;
-		rule->model = NULL;
-		rule->serial = NULL;
-		rule->rr = 0;
-		rule->scale = 1.0f;
-		rule->x = INT32_MAX;
-		rule->y = INT32_MAX;
-		rule->width = -1;
-		rule->height = -1;
-		rule->refresh = 0.0f;
-		rule->vrr = 0;
-		rule->custom = 0;
-
-		bool parse_error = false;
-		char *token = strtok(value, ",");
-		while (token != NULL) {
-			char *colon = strchr(token, ':');
-			if (colon != NULL) {
-				*colon = '\0';
-				char *key = token;
-				char *val = colon + 1;
-
-				trim_whitespace(key);
-				trim_whitespace(val);
-
-				if (strcmp(key, "name") == 0) {
-					rule->name = strdup(val);
-				} else if (strcmp(key, "make") == 0) {
-					rule->make = strdup(val);
-				} else if (strcmp(key, "model") == 0) {
-					rule->model = strdup(val);
-				} else if (strcmp(key, "serial") == 0) {
-					rule->serial = strdup(val);
-				} else if (strcmp(key, "rr") == 0) {
-					rule->rr = CLAMP_INT(atoi(val), 0, 7);
-				} else if (strcmp(key, "scale") == 0) {
-					rule->scale = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
-				} else if (strcmp(key, "x") == 0) {
-					rule->x = atoi(val);
-				} else if (strcmp(key, "y") == 0) {
-					rule->y = atoi(val);
-				} else if (strcmp(key, "width") == 0) {
-					rule->width = CLAMP_INT(atoi(val), 1, INT32_MAX);
-				} else if (strcmp(key, "height") == 0) {
-					rule->height = CLAMP_INT(atoi(val), 1, INT32_MAX);
-				} else if (strcmp(key, "refresh") == 0) {
-					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
-				} else if (strcmp(key, "vrr") == 0) {
-					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "custom") == 0) {
-					rule->custom = CLAMP_INT(atoi(val), 0, 1);
-				} else {
-					fprintf(stderr,
-							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
-							"monitor rule "
-							"option:\033[1m\033[31m %s\n",
-							key);
-					parse_error = true;
-				}
-			}
-			token = strtok(NULL, ",");
-		}
-
-		if (!rule->name && !rule->make && !rule->model && !rule->serial) {
-			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Monitor rule "
-							"must have at least one of the following "
-							"options: name, make, model, serial\n");
-			return false;
-		}
-
-		config->monitor_rules_count++;
-		return !parse_error;
-	} else if (strcmp(key, "tagrule") == 0) {
-		config->tag_rules =
-			realloc(config->tag_rules,
-					(config->tag_rules_count + 1) * sizeof(ConfigTagRule));
-		if (!config->tag_rules) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for tag rules\n");
-			return false;
-		}
-
-		ConfigTagRule *rule = &config->tag_rules[config->tag_rules_count];
-		memset(rule, 0, sizeof(ConfigTagRule));
-
-		// 设置默认值
-		rule->id = 0;
-		rule->layout_name = NULL;
-		rule->monitor_name = NULL;
-		rule->monitor_make = NULL;
-		rule->monitor_model = NULL;
-		rule->monitor_serial = NULL;
-		rule->nmaster = 0;
-		rule->mfact = 0.0f;
-		rule->no_render_border = 0;
-		rule->open_as_floating = 0;
-		rule->no_hide = 0;
-
-		bool parse_error = false;
-		char *token = strtok(value, ",");
-		while (token != NULL) {
-			char *colon = strchr(token, ':');
-			if (colon != NULL) {
-				*colon = '\0';
-				char *key = token;
-				char *val = colon + 1;
-
-				trim_whitespace(key);
-				trim_whitespace(val);
-
-				if (strcmp(key, "id") == 0) {
-					rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
-				} else if (strcmp(key, "layout_name") == 0) {
-					rule->layout_name = strdup(val);
-				} else if (strcmp(key, "monitor_name") == 0) {
-					rule->monitor_name = strdup(val);
-				} else if (strcmp(key, "monitor_make") == 0) {
-					rule->monitor_make = strdup(val);
-				} else if (strcmp(key, "monitor_model") == 0) {
-					rule->monitor_model = strdup(val);
-				} else if (strcmp(key, "monitor_serial") == 0) {
-					rule->monitor_serial = strdup(val);
-				} else if (strcmp(key, "no_render_border") == 0) {
-					rule->no_render_border = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "open_as_floating") == 0) {
-					rule->open_as_floating = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "no_hide") == 0) {
-					rule->no_hide = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "nmaster") == 0) {
-					rule->nmaster = CLAMP_INT(atoi(val), 1, 99);
-				} else if (strcmp(key, "mfact") == 0) {
-					rule->mfact = CLAMP_FLOAT(atof(val), 0.1f, 0.9f);
-				} else {
-					fprintf(stderr,
-							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
-							"tag rule "
-							"option:\033[1m\033[31m %s\n",
-							key);
-					parse_error = true;
-				}
-			}
-			token = strtok(NULL, ",");
-		}
-
-		config->tag_rules_count++;
-		return !parse_error;
-	} else if (strcmp(key, "layerrule") == 0) {
-		config->layer_rules =
-			realloc(config->layer_rules,
-					(config->layer_rules_count + 1) * sizeof(ConfigLayerRule));
-		if (!config->layer_rules) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for layer rules\n");
-			return false;
-		}
-
-		ConfigLayerRule *rule = &config->layer_rules[config->layer_rules_count];
-		memset(rule, 0, sizeof(ConfigLayerRule));
-
-		// 设置默认值
-		rule->layer_name = NULL;
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
-		rule->noblur = 0;
-		rule->noanim = 0;
-		rule->noshadow = 0;
-
-		bool parse_error = false;
-		char *token = strtok(value, ",");
-		while (token != NULL) {
-			char *colon = strchr(token, ':');
-			if (colon != NULL) {
-				*colon = '\0';
-				char *key = token;
-				char *val = colon + 1;
-
-				trim_whitespace(key);
-				trim_whitespace(val);
-
-				if (strcmp(key, "layer_name") == 0) {
-					rule->layer_name = strdup(val);
-				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
-				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
-				} else if (strcmp(key, "noblur") == 0) {
-					rule->noblur = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "noanim") == 0) {
-					rule->noanim = CLAMP_INT(atoi(val), 0, 1);
-				} else if (strcmp(key, "noshadow") == 0) {
-					rule->noshadow = CLAMP_INT(atoi(val), 0, 1);
-				} else {
-					fprintf(stderr,
-							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
-							"layer rule "
-							"option:\033[1m\033[31m %s\n",
-							key);
-					parse_error = true;
-				}
-			}
-			token = strtok(NULL, ",");
-		}
-
-		// 如果没有指定布局名称，则使用默认值
-		if (rule->layer_name == NULL) {
-			rule->layer_name = strdup("default");
-		}
-
-		config->layer_rules_count++;
-		return !parse_error;
-	} else if (strcmp(key, "windowrule") == 0) {
-		config->window_rules =
-			realloc(config->window_rules,
-					(config->window_rules_count + 1) * sizeof(ConfigWinRule));
-		if (!config->window_rules) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for window rules\n");
-			return false;
-		}
-
-		ConfigWinRule *rule = &config->window_rules[config->window_rules_count];
-		memset(rule, 0, sizeof(ConfigWinRule));
-
-		// int32_t rule value, relay to a client property
-		rule->isfloating = -1;
-		rule->isfullscreen = -1;
-		rule->isfakefullscreen = -1;
-		rule->isnoborder = -1;
-		rule->isnoshadow = -1;
-		rule->isnoradius = -1;
-		rule->isnoanimation = -1;
-		rule->isopensilent = -1;
-		rule->istagsilent = -1;
-		rule->isnamedscratchpad = -1;
-		rule->isunglobal = -1;
-		rule->isglobal = -1;
-		rule->isoverlay = -1;
-		rule->allow_shortcuts_inhibit = -1;
-		rule->ignore_maximize = -1;
-		rule->ignore_minimize = -1;
-		rule->isnosizehint = -1;
-		rule->indleinhibit_when_focus = -1;
-		rule->isterm = -1;
-		rule->allow_csd = -1;
-		rule->force_fakemaximize = -1;
-		rule->force_tiled_state = -1;
-		rule->force_tearing = -1;
-		rule->noswallow = -1;
-		rule->noblur = -1;
-		rule->nofocus = -1;
-		rule->nofadein = -1;
-		rule->nofadeout = -1;
-		rule->no_force_center = -1;
-
-		// string rule value, relay to a client property
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
-
-		// float rule value, relay to a client property
-		rule->focused_opacity = 0;
-		rule->unfocused_opacity = 0;
-		rule->scroller_proportion_single = 0.0f;
-		rule->scroller_proportion = 0;
-
-		// special rule value,not directly set to client property
-		rule->tags = 0;
-		rule->offsetx = 0;
-		rule->offsety = 0;
-		rule->width = 0;
-		rule->height = 0;
-		rule->monitor = NULL;
-		rule->id = NULL;
-		rule->title = NULL;
-
-		rule->globalkeybinding = (KeyBinding){0};
-
-		bool parse_error = false;
-		char *token = strtok(value, ",");
-		while (token != NULL) {
-			char *colon = strchr(token, ':');
-			if (colon != NULL) {
-				*colon = '\0';
-				char *key = token;
-				char *val = colon + 1;
-
-				trim_whitespace(key);
-				trim_whitespace(val);
-
-				if (strcmp(key, "isfloating") == 0) {
-					rule->isfloating = atoi(val);
-				} else if (strcmp(key, "title") == 0) {
-					rule->title = strdup(val);
-				} else if (strcmp(key, "appid") == 0) {
-					rule->id = strdup(val);
-				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
-				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
-				} else if (strcmp(key, "tags") == 0) {
-					rule->tags = 1 << (atoi(val) - 1);
-				} else if (strcmp(key, "monitor") == 0) {
-					rule->monitor = strdup(val);
-				} else if (strcmp(key, "offsetx") == 0) {
-					rule->offsetx = atoi(val);
-				} else if (strcmp(key, "offsety") == 0) {
-					rule->offsety = atoi(val);
-				} else if (strcmp(key, "nofocus") == 0) {
-					rule->nofocus = atoi(val);
-				} else if (strcmp(key, "nofadein") == 0) {
-					rule->nofadein = atoi(val);
-				} else if (strcmp(key, "nofadeout") == 0) {
-					rule->nofadeout = atoi(val);
-				} else if (strcmp(key, "no_force_center") == 0) {
-					rule->no_force_center = atoi(val);
-				} else if (strcmp(key, "width") == 0) {
-					rule->width = atoi(val);
-				} else if (strcmp(key, "height") == 0) {
-					rule->height = atoi(val);
-				} else if (strcmp(key, "isnoborder") == 0) {
-					rule->isnoborder = atoi(val);
-				} else if (strcmp(key, "isnoshadow") == 0) {
-					rule->isnoshadow = atoi(val);
-				} else if (strcmp(key, "isnoradius") == 0) {
-					rule->isnoradius = atoi(val);
-				} else if (strcmp(key, "isnoanimation") == 0) {
-					rule->isnoanimation = atoi(val);
-				} else if (strcmp(key, "isopensilent") == 0) {
-					rule->isopensilent = atoi(val);
-				} else if (strcmp(key, "istagsilent") == 0) {
-					rule->istagsilent = atoi(val);
-				} else if (strcmp(key, "isnamedscratchpad") == 0) {
-					rule->isnamedscratchpad = atoi(val);
-				} else if (strcmp(key, "isunglobal") == 0) {
-					rule->isunglobal = atoi(val);
-				} else if (strcmp(key, "isglobal") == 0) {
-					rule->isglobal = atoi(val);
-				} else if (strcmp(key, "scroller_proportion_single") == 0) {
-					rule->scroller_proportion_single = atof(val);
-				} else if (strcmp(key, "unfocused_opacity") == 0) {
-					rule->unfocused_opacity = atof(val);
-				} else if (strcmp(key, "focused_opacity") == 0) {
-					rule->focused_opacity = atof(val);
-				} else if (strcmp(key, "isoverlay") == 0) {
-					rule->isoverlay = atoi(val);
-				} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
-					rule->allow_shortcuts_inhibit = atoi(val);
-				} else if (strcmp(key, "ignore_maximize") == 0) {
-					rule->ignore_maximize = atoi(val);
-				} else if (strcmp(key, "ignore_minimize") == 0) {
-					rule->ignore_minimize = atoi(val);
-				} else if (strcmp(key, "isnosizehint") == 0) {
-					rule->isnosizehint = atoi(val);
-				} else if (strcmp(key, "indleinhibit_when_focus") == 0) {
-					rule->indleinhibit_when_focus = atoi(val);
-				} else if (strcmp(key, "isterm") == 0) {
-					rule->isterm = atoi(val);
-				} else if (strcmp(key, "allow_csd") == 0) {
-					rule->allow_csd = atoi(val);
-				} else if (strcmp(key, "force_fakemaximize") == 0) {
-					rule->force_fakemaximize = atoi(val);
-				} else if (strcmp(key, "force_tiled_state") == 0) {
-					rule->force_tiled_state = atoi(val);
-				} else if (strcmp(key, "force_tearing") == 0) {
-					rule->force_tearing = atoi(val);
-				} else if (strcmp(key, "noswallow") == 0) {
-					rule->noswallow = atoi(val);
-				} else if (strcmp(key, "noblur") == 0) {
-					rule->noblur = atoi(val);
-				} else if (strcmp(key, "scroller_proportion") == 0) {
-					rule->scroller_proportion = atof(val);
-				} else if (strcmp(key, "isfullscreen") == 0) {
-					rule->isfullscreen = atoi(val);
-				} else if (strcmp(key, "isfakefullscreen") == 0) {
-					rule->isfakefullscreen = atoi(val);
-				} else if (strcmp(key, "globalkeybinding") == 0) {
-					char mod_str[256], keysym_str[256];
-					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
-					trim_whitespace(mod_str);
-					trim_whitespace(keysym_str);
-					rule->globalkeybinding.mod = parse_mod(mod_str);
-					rule->globalkeybinding.keysymcode =
-						parse_key(keysym_str, false);
-					if (rule->globalkeybinding.mod == UINT32_MAX) {
-						return false;
-					}
-					if (rule->globalkeybinding.keysymcode.type ==
-							KEY_TYPE_SYM &&
-						rule->globalkeybinding.keysymcode.keysym ==
-							XKB_KEY_NoSymbol) {
-						return false;
-					}
-				} else {
-					fprintf(stderr,
-							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
-							"window rule "
-							"option:\033[1m\033[31m %s\n",
-							key);
-					parse_error = true;
-				}
-			}
-			token = strtok(NULL, ",");
-		}
-		config->window_rules_count++;
-		return !parse_error;
-	} else if (strncmp(key, "env", 3) == 0) {
-
-		char env_type[256], env_value[256];
-		if (sscanf(value, "%255[^,],%255[^\n]", env_type, env_value) < 2) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
-					"\033[1m\033[31m%s\n",
-					value);
-			return false;
-		}
-		trim_whitespace(env_type);
-		trim_whitespace(env_value);
-
-		ConfigEnv *env = calloc(1, sizeof(ConfigEnv));
-		env->type = strdup(env_type);
-		env->value = strdup(env_value);
-
-		config->env =
-			realloc(config->env, (config->env_count + 1) * sizeof(ConfigEnv));
-		if (!config->env) {
-			free(env->type);
-			free(env->value);
-			free(env);
-			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
-							"allocate memory for env\n");
-			return false;
-		}
-
-		config->env[config->env_count] = env;
-		config->env_count++;
-
-	} else if (strncmp(key, "exec", 9) == 0) {
-		char **new_exec =
-			realloc(config->exec, (config->exec_count + 1) * sizeof(char *));
-		if (!new_exec) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for exec\n");
-			return false;
-		}
-		config->exec = new_exec;
-
-		config->exec[config->exec_count] = strdup(value);
-		if (!config->exec[config->exec_count]) {
-			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
-							"duplicate exec string\n");
-			return false;
-		}
-
-		config->exec_count++;
-
-	} else if (strncmp(key, "exec-once", 9) == 0) {
-
-		char **new_exec_once = realloc(
-			config->exec_once, (config->exec_once_count + 1) * sizeof(char *));
-		if (!new_exec_once) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"memory for exec_once\n");
-			return false;
-		}
-		config->exec_once = new_exec_once;
-
-		config->exec_once[config->exec_once_count] = strdup(value);
-		if (!config->exec_once[config->exec_once_count]) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to duplicate "
-					"exec_once string\n");
-			return false;
-		}
-
-		config->exec_once_count++;
-
-	} else if (regex_match("^bind[s|l|r|p]*$", key)) {
+  if (strncmp(key, "bind", 4) == 0) {
 		config->key_bindings =
 			realloc(config->key_bindings,
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
@@ -2384,7 +1557,88 @@ bool parse_option(Config *config, char *key, char *value) {
 			config->key_bindings_count++;
 		}
 
-	} else if (strncmp(key, "mousebind", 9) == 0) {
+    return true;
+
+	} else if (strncmp(key, "env", 3) == 0) {
+
+		char env_type[256], env_value[256];
+		if (sscanf(value, "%255[^,],%255[^\n]", env_type, env_value) < 2) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
+		}
+		trim_whitespace(env_type);
+		trim_whitespace(env_value);
+
+		ConfigEnv *env = calloc(1, sizeof(ConfigEnv));
+		env->type = strdup(env_type);
+		env->value = strdup(env_value);
+
+		config->env =
+			realloc(config->env, (config->env_count + 1) * sizeof(ConfigEnv));
+		if (!config->env) {
+			free(env->type);
+			free(env->value);
+			free(env);
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"allocate memory for env\n");
+			return false;
+		}
+
+		config->env[config->env_count] = env;
+		config->env_count++;
+
+    return true;
+
+	} else if (strncmp(key, "exec", 9) == 0) {
+		char **new_exec =
+			realloc(config->exec, (config->exec_count + 1) * sizeof(char *));
+		if (!new_exec) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec\n");
+			return false;
+		}
+		config->exec = new_exec;
+
+		config->exec[config->exec_count] = strdup(value);
+		if (!config->exec[config->exec_count]) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"duplicate exec string\n");
+			return false;
+		}
+
+		config->exec_count++;
+
+    return true;
+
+	} else if (strncmp(key, "exec-once", 9) == 0) {
+
+		char **new_exec_once = realloc(
+			config->exec_once, (config->exec_once_count + 1) * sizeof(char *));
+		if (!new_exec_once) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec_once\n");
+			return false;
+		}
+		config->exec_once = new_exec_once;
+
+		config->exec_once[config->exec_once_count] = strdup(value);
+		if (!config->exec_once[config->exec_once_count]) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to duplicate "
+					"exec_once string\n");
+			return false;
+		}
+
+		config->exec_once_count++;
+
+    return true;
+
+	}  else if (strncmp(key, "mousebind", 9) == 0) {
 		config->mouse_bindings =
 			realloc(config->mouse_bindings,
 					(config->mouse_bindings_count + 1) * sizeof(MouseBinding));
@@ -2475,6 +1729,9 @@ bool parse_option(Config *config, char *key, char *value) {
 		} else {
 			config->mouse_bindings_count++;
 		}
+
+    return true;
+
 	} else if (strncmp(key, "axisbind", 8) == 0) {
 		config->axis_bindings =
 			realloc(config->axis_bindings,
@@ -2549,7 +1806,9 @@ bool parse_option(Config *config, char *key, char *value) {
 			config->axis_bindings_count++;
 		}
 
-	} else if (strncmp(key, "switchbind", 10) == 0) {
+    return true;
+
+	}  else if (strncmp(key, "switchbind", 10) == 0) {
 		config->switch_bindings = realloc(config->switch_bindings,
 										  (config->switch_bindings_count + 1) *
 											  sizeof(SwitchBinding));
@@ -2699,16 +1958,1292 @@ bool parse_option(Config *config, char *key, char *value) {
 			config->gesture_bindings_count++;
 		}
 
+    return true;
+
 	} else if (strncmp(key, "source-optional", 15) == 0) {
 		parse_config_file(config, value, false);
+
+    return true;
+
 	} else if (strncmp(key, "source", 6) == 0) {
 		parse_config_file(config, value, true);
-	} else {
-		fprintf(stderr,
-				"\033[1m\033[31m[ERROR]:\033[33m Unknown keyword: "
-				"\033[1m\033[31m%s\n",
-				key);
-		return false;
+
+    return true;
+
+	}
+
+  const struct option_entry *entry = lookup_option_name(key, strlen(key));
+
+  if (!entry) {
+    fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Unknown keyword: \033[1m\033[31m%s\n", key);
+    return false;
+  }
+
+  switch (entry->id) {
+    case OPT_KEYMODE: {
+      snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
+      break;
+    }
+    case OPT_ANIMATIONS: {
+      config->animations = atoi(value);
+      break;
+    }
+    case OPT_LAYER_ANIMATIONS: {
+      config->layer_animations = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_TYPE_OPEN: {
+      snprintf(config->animation_type_open,
+          sizeof(config->animation_type_open), "%.9s",
+          value); // string limit to 9 char
+      break;
+    }
+    case OPT_ANIMATION_TYPE_CLOSE: {
+      snprintf(config->animation_type_close,
+          sizeof(config->animation_type_close), "%.9s",
+          value); // string limit to 9 char
+      break;
+    }
+    case OPT_LAYER_ANIMATION_TYPE_OPEN: {
+      snprintf(config->layer_animation_type_open,
+          sizeof(config->layer_animation_type_open), "%.9s",
+          value); // string limit to 9 char
+      break;
+    }
+    case OPT_LAYER_ANIMATION_TYPE_CLOSE: {
+      snprintf(config->layer_animation_type_close,
+            sizeof(config->layer_animation_type_close), "%.9s",
+            value); // string limit to 9 char
+      break;
+    }
+    case OPT_ANIMATION_FADE_IN: {
+      config->animation_fade_in = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_FADE_OUT: {
+      config->animation_fade_out = atoi(value);
+      break;
+    }
+    case OPT_TAG_ANIMATION_DIRECTION: {
+      config->tag_animation_direction = atoi(value);
+      break;
+    }
+    case OPT_ZOOM_INITIAL_RATIO: {
+      config->zoom_initial_ratio = atof(value);
+      break;
+    }
+    case OPT_ZOOM_END_RATIO: {
+      config->zoom_end_ratio = atof(value);
+      break;
+    }
+    case OPT_FADEIN_BEGIN_OPACITY: {
+      config->fadein_begin_opacity = atof(value);
+      break;
+    }
+    case OPT_FADEOUT_BEGIN_OPACITY: {
+      config->fadeout_begin_opacity = atof(value);
+      break;
+    }
+    case OPT_ANIMATION_DURATION_MOVE: {
+      config->animation_duration_move = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_DURATION_OPEN: {
+      config->animation_duration_open = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_DURATION_TAG: {
+      config->animation_duration_tag = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_DURATION_CLOSE: {
+      config->animation_duration_close = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_DURATION_FOCUS: {
+      config->animation_duration_focus = atoi(value);
+      break;
+    }
+    case OPT_ANIMATION_CURVE_MOVE: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_move, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_move: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_OPEN: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_open, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_open: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_TAG: {
+      int32_t num = parse_double_array(value, config->animation_curve_tag, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_tag: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_CLOSE: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_close, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_close: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_FOCUS: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_focus, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_focus: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_OPAFADEIN: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_opafadein, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_opafadein: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_ANIMATION_CURVE_OPAFADEOUT: {
+      int32_t num =
+        parse_double_array(value, config->animation_curve_opafadeout, 4);
+      if (num != 4) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+            "animation_curve_opafadeout: %s\n",
+            value);
+        return false;
+      }
+      break;
+    }
+    case OPT_SCROLLER_STRUCTS: {
+      config->scroller_structs = atoi(value);
+      break;
+    }
+    case OPT_SCROLLER_DEFAULT_PROPORTION: {
+      config->scroller_default_proportion = atof(value);
+      break;
+    }
+    case OPT_SCROLLER_DEFAULT_PROPORTION_SINGLE: {
+      config->scroller_default_proportion_single = atof(value);
+      break;
+    }
+    case OPT_SCROLLER_IGNORE_PROPORTION_SINGLE: {
+      config->scroller_ignore_proportion_single = atoi(value);
+      break;
+    }
+    case OPT_SCROLLER_FOCUS_CENTER: {
+      config->scroller_focus_center = atoi(value);
+      break;
+    }
+    case OPT_SCROLLER_PREFER_CENTER: {
+      config->scroller_prefer_center = atoi(value);
+      break;
+    }
+    case OPT_SCROLLER_PREFER_OVERSPREAD: {
+      config->scroller_prefer_overspread = atoi(value);
+      break;
+    }
+    case OPT_EDGE_SCROLLER_POINTER_FOCUS: {
+      config->edge_scroller_pointer_focus = atoi(value);
+      break;
+    }
+    case OPT_FOCUS_CROSS_MONITOR: {
+      config->focus_cross_monitor = atoi(value);
+      break;
+    }
+    case OPT_EXCHANGE_CROSS_MONITOR: {
+      config->exchange_cross_monitor = atoi(value);
+      break;
+    }
+    case OPT_SCRATCHPAD_CROSS_MONITOR: {
+      config->scratchpad_cross_monitor = atoi(value);
+      break;
+    }
+    case OPT_FOCUS_CROSS_TAG: {
+      config->focus_cross_tag = atoi(value);
+      break;
+    }
+    case OPT_VIEW_CURRENT_TO_BACK: {
+      config->view_current_to_back = atoi(value);
+      break;
+    }
+    case OPT_BLUR: {
+      config->blur = atoi(value);
+      break;
+    }
+    case OPT_BLUR_LAYER: {
+      config->blur_layer = atoi(value);
+      break;
+    }
+    case OPT_BLUR_OPTIMIZED: {
+      config->blur_optimized = atoi(value);
+      break;
+    }
+    case OPT_BORDER_RADIUS: {
+      config->border_radius = atoi(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_NUM_PASSES: {
+      config->blur_params.num_passes = atoi(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_RADIUS: {
+      config->blur_params.radius = atoi(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_NOISE: {
+      config->blur_params.noise = atof(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_BRIGHTNESS: {
+      config->blur_params.brightness = atof(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_CONTRAST: {
+      config->blur_params.contrast = atof(value);
+      break;
+    }
+    case OPT_BLUR_PARAMS_SATURATION: {
+      config->blur_params.saturation = atof(value);
+      break;
+    }
+    case OPT_SHADOWS: {
+      config->shadows = atoi(value);
+      break;
+    }
+    case OPT_SHADOW_ONLY_FLOATING: {
+      config->shadow_only_floating = atoi(value);
+      break;
+    }
+    case OPT_LAYER_SHADOWS: {
+      config->layer_shadows = atoi(value);
+      break;
+    }
+    case OPT_SHADOWS_SIZE: {
+      config->shadows_size = atoi(value);
+      break;
+    }
+    case OPT_SHADOWS_BLUR: {
+      config->shadows_blur = atof(value);
+      break;
+    }
+    case OPT_SHADOWS_POSITION_X: {
+      config->shadows_position_x = atoi(value);
+      break;
+    }
+    case OPT_SHADOWS_POSITION_Y: {
+      config->shadows_position_y = atoi(value);
+      break;
+    }
+    case OPT_SINGLE_SCRATCHPAD: {
+      config->single_scratchpad = atoi(value);
+      break;
+    }
+    case OPT_XWAYLAND_PERSISTENCE: {
+      config->xwayland_persistence = atoi(value);
+      break;
+    }
+    case OPT_SYNCOBJ_ENABLE: {
+      config->syncobj_enable = atoi(value);
+      break;
+    }
+    case OPT_DRAG_TILE_REFRESH_INTERVAL: {
+      config->drag_tile_refresh_interval = atof(value);
+      break;
+    }
+    case OPT_DRAG_FLOATING_REFRESH_INTERVAL: {
+      config->drag_floating_refresh_interval = atof(value);
+      break;
+    }
+    case OPT_ALLOW_TEARING: {
+      config->allow_tearing = atoi(value);
+      break;
+    }
+    case OPT_ALLOW_SHORTCUTS_INHIBIT: {
+      config->allow_shortcuts_inhibit = atoi(value);
+      break;
+    }
+    case OPT_ALLOW_LOCK_TRANSPARENT: {
+      config->allow_lock_transparent = atoi(value);
+      break;
+    }
+    case OPT_NO_BORDER_WHEN_SINGLE: {
+      config->no_border_when_single = atoi(value);
+      break;
+    }
+    case OPT_NO_RADIUS_WHEN_SINGLE: {
+      config->no_radius_when_single = atoi(value);
+      break;
+    }
+    case OPT_SNAP_DISTANCE: {
+      config->snap_distance = atoi(value);
+      break;
+    }
+    case OPT_ENABLE_FLOATING_SNAP: {
+      config->enable_floating_snap = atoi(value);
+      break;
+    }
+    case OPT_DRAG_TILE_TO_TILE: {
+      config->drag_tile_to_tile = atoi(value);
+      break;
+    }
+    case OPT_SWIPE_MIN_THRESHOLD: {
+      config->swipe_min_threshold = atoi(value);
+      break;
+    }
+    case OPT_FOCUSED_OPACITY: {
+      config->focused_opacity = atof(value);
+      break;
+    }
+    case OPT_UNFOCUSED_OPACITY: {
+      config->unfocused_opacity = atof(value);
+      break;
+    }
+    case OPT_XKB_RULES_RULES: {
+      strncpy(config->xkb_rules_rules, value,
+          sizeof(config->xkb_rules_rules) - 1);
+      config->xkb_rules_rules[sizeof(config->xkb_rules_rules) - 1] = '\0';
+      break;
+    }
+    case OPT_XKB_RULES_MODEL: {
+      strncpy(config->xkb_rules_model, value,
+          sizeof(config->xkb_rules_model) - 1);
+      config->xkb_rules_model[sizeof(config->xkb_rules_model) - 1] = '\0';
+      break;
+    }
+    case OPT_XKB_RULES_LAYOUT: {
+      strncpy(config->xkb_rules_layout, value,
+          sizeof(config->xkb_rules_layout) - 1);
+      config->xkb_rules_layout[sizeof(config->xkb_rules_layout) - 1] = '\0';
+      break;
+    }
+    case OPT_XKB_RULES_VARIANT: {
+      strncpy(config->xkb_rules_variant, value,
+          sizeof(config->xkb_rules_variant) - 1);
+      config->xkb_rules_variant[sizeof(config->xkb_rules_variant) - 1] = '\0';
+      break;
+    }
+    case OPT_XKB_RULES_OPTIONS: {
+      strncpy(config->xkb_rules_options, value,
+          sizeof(config->xkb_rules_options) - 1);
+      config->xkb_rules_options[sizeof(config->xkb_rules_options) - 1] = '\0';
+      break;
+    }
+    case OPT_SCROLLER_PROPORTION_PRESET: {
+      // 1. 统计 value 中有多少个逗号，确定需要解析的浮点数个数
+      int32_t count = 0; // 初始化为 0
+      for (const char *p = value; *p; p++) {
+        if (*p == ',')
+          count++;
+      }
+      int32_t float_count = count + 1; // 浮点数的数量是逗号数量加 1
+
+      // 2. 动态分配内存，存储浮点数
+      config->scroller_proportion_preset =
+        (float *)malloc(float_count * sizeof(float));
+      if (!config->scroller_proportion_preset) {
+        fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+                "allocation failed\n");
+        return false;
+      }
+
+      // 3. 解析 value 中的浮点数
+      char *value_copy =
+        strdup(value); // 复制 value，因为 strtok 会修改原字符串
+      char *token = strtok(value_copy, ",");
+      int32_t i = 0;
+      float value_set;
+
+      while (token != NULL && i < float_count) {
+        if (sscanf(token, "%f", &value_set) != 1) {
+          fprintf(stderr,
+              "\033[1m\033[31m[ERROR]:\033[33m Invalid float "
+              "value in "
+              "scroller_proportion_preset: %s\n",
+              token);
+          free(value_copy);
+          free(config->scroller_proportion_preset);
+          config->scroller_proportion_preset = NULL;
+          return false;
+        }
+
+        // Clamp the value between 0.0 and 1.0 (or your desired
+        // range)
+        config->scroller_proportion_preset[i] =
+          CLAMP_FLOAT(value_set, 0.1f, 1.0f);
+
+        token = strtok(NULL, ",");
+        i++;
+      }
+
+      // 4. 检查解析的浮点数数量是否匹配
+      if (i != float_count) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid "
+            "scroller_proportion_preset format: %s\n",
+            value);
+        free(value_copy);
+        free(config->scroller_proportion_preset);  // 释放已分配的内存
+        config->scroller_proportion_preset = NULL; // 防止野指针
+        config->scroller_proportion_preset_count = 0;
+        return false;
+      }
+      config->scroller_proportion_preset_count = float_count;
+
+      // 5. 释放临时复制的字符串
+      free(value_copy);
+      break;
+    }
+    case OPT_CIRCLE_LAYOUT: {
+      // 1. 统计 value 中有多少个逗号，确定需要解析的字符串个数
+      int32_t count = 0; // 初始化为 0
+      for (const char *p = value; *p; p++) {
+        if (*p == ',')
+          count++;
+      }
+      int32_t string_count = count + 1; // 字符串的数量是逗号数量加 1
+
+      // 2. 动态分配内存，存储字符串指针
+      config->circle_layout = (char **)malloc(string_count * sizeof(char *));
+      memset(config->circle_layout, 0, string_count * sizeof(char *));
+      if (!config->circle_layout) {
+        fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+                "allocation failed\n");
+        return false;
+      }
+
+      // 3. 解析 value 中的字符串
+      char *value_copy =
+        strdup(value); // 复制 value，因为 strtok 会修改原字符串
+      char *token = strtok(value_copy, ",");
+      int32_t i = 0;
+      char *cleaned_token;
+      while (token != NULL && i < string_count) {
+        // 为每个字符串分配内存并复制内容
+        cleaned_token = sanitize_string(token);
+        config->circle_layout[i] = strdup(cleaned_token);
+        if (!config->circle_layout[i]) {
+          fprintf(stderr,
+              "\033[1m\033[31m[ERROR]:\033[33m Memory allocation "
+              "failed for "
+              "string: %s\n",
+              token);
+          // 释放之前分配的内存
+          for (int32_t j = 0; j < i; j++) {
+            free(config->circle_layout[j]);
+          }
+          free(config->circle_layout);
+          free(value_copy);
+          config->circle_layout = NULL; // 防止野指针
+          config->circle_layout_count = 0;
+          return false;
+        }
+        token = strtok(NULL, ",");
+        i++;
+      }
+
+      // 4. 检查解析的字符串数量是否匹配
+      if (i != string_count) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid circle_layout "
+            "format: %s\n",
+            value);
+        // 释放之前分配的内存
+        for (int32_t j = 0; j < i; j++) {
+          free(config->circle_layout[j]);
+        }
+        free(config->circle_layout);
+        free(value_copy);
+        config->circle_layout = NULL; // 防止野指针
+        config->circle_layout_count = 0;
+        return false;
+      }
+      config->circle_layout_count = string_count;
+
+      // 5. 释放临时复制的字符串
+      free(value_copy);
+      break;
+    }
+    case OPT_NEW_IS_MASTER: {
+      config->new_is_master = atoi(value);
+      break;
+    }
+    case OPT_DEFAULT_MFACT: {
+      config->default_mfact = atof(value);
+      break;
+    }
+    case OPT_DEFAULT_NMASTER: {
+      config->default_nmaster = atoi(value);
+      break;
+    }
+    case OPT_CENTER_MASTER_OVERSPREAD: {
+      config->center_master_overspread = atoi(value);
+      break;
+    }
+    case OPT_CENTER_WHEN_SINGLE_STACK: {
+      config->center_when_single_stack = atoi(value);
+      break;
+    }
+    case OPT_HOTAREA_SIZE: {
+      config->hotarea_size = atoi(value);
+      break;
+    }
+    case OPT_HOTAREA_CORNER: {
+      config->hotarea_corner = atoi(value);
+      break;
+    }
+    case OPT_ENABLE_HOTAREA: {
+      config->enable_hotarea = atoi(value);
+      break;
+    }
+    case OPT_OV_TAB_MODE: {
+      config->ov_tab_mode = atoi(value);
+      break;
+    }
+    case OPT_OVERVIEWGAPPI: {
+      config->overviewgappi = atoi(value);
+      break;
+    }
+    case OPT_OVERVIEWGAPPO: {
+      config->overviewgappo = atoi(value);
+      break;
+    }
+    case OPT_CURSOR_HIDE_TIMEOUT: {
+      config->cursor_hide_timeout = atoi(value);
+      break;
+    }
+    case OPT_AXIS_BIND_APPLY_TIMEOUT: {
+      config->axis_bind_apply_timeout = atoi(value);
+      break;
+    }
+    case OPT_FOCUS_ON_ACTIVATE: {
+      config->focus_on_activate = atoi(value);
+      break;
+    }
+    case OPT_NUMLOCKON: {
+      config->numlockon = atoi(value);
+      break;
+    }
+    case OPT_IDLEINHIBIT_IGNORE_VISIBLE: {
+      config->idleinhibit_ignore_visible = atoi(value);
+      break;
+    }
+    case OPT_SLOPPYFOCUS: {
+      config->sloppyfocus = atoi(value);
+      break;
+    }
+    case OPT_WARPCURSOR: {
+      config->warpcursor = atoi(value);
+      break;
+    }
+    case OPT_DRAG_CORNER: {
+      config->drag_corner = atoi(value);
+      break;
+    }
+    case OPT_DRAG_WARP_CURSOR: {
+      config->drag_warp_cursor = atoi(value);
+      break;
+    }
+    case OPT_SMARTGAPS: {
+      config->smartgaps = atoi(value);
+      break;
+    }
+    case OPT_REPEAT_RATE: {
+      config->repeat_rate = atoi(value);
+      break;
+    }
+    case OPT_REPEAT_DELAY: {
+      config->repeat_delay = atoi(value);
+      break;
+    }
+    case OPT_DISABLE_TRACKPAD: {
+      config->disable_trackpad = atoi(value);
+      break;
+    }
+    case OPT_TAP_TO_CLICK: {
+      config->tap_to_click = atoi(value);
+      break;
+    }
+    case OPT_TAP_AND_DRAG: {
+      config->tap_and_drag = atoi(value);
+      break;
+    }
+    case OPT_DRAG_LOCK: {
+      config->drag_lock = atoi(value);
+      break;
+    }
+    case OPT_MOUSE_NATURAL_SCROLLING: {
+      config->mouse_natural_scrolling = atoi(value);
+      break;
+    }
+    case OPT_TRACKPAD_NATURAL_SCROLLING: {
+      config->trackpad_natural_scrolling = atoi(value);
+      break;
+    }
+    case OPT_CURSOR_SIZE: {
+      config->cursor_size = atoi(value);
+      break;
+    }
+    case OPT_CURSOR_THEME: {
+      config->cursor_theme = strdup(value);
+      break;
+    }
+    case OPT_DISABLE_WHILE_TYPING: {
+      config->disable_while_typing = atoi(value);
+      break;
+    }
+    case OPT_LEFT_HANDED: {
+      config->left_handed = atoi(value);
+      break;
+    }
+    case OPT_MIDDLE_BUTTON_EMULATION: {
+      config->middle_button_emulation = atoi(value);
+      break;
+    }
+    case OPT_ACCEL_PROFILE: {
+      config->accel_profile = atoi(value);
+      break;
+    }
+    case OPT_ACCEL_SPEED: {
+      config->accel_speed = atof(value);
+      break;
+    }
+    case OPT_SCROLL_METHOD: {
+      config->scroll_method = atoi(value);
+      break;
+    }
+    case OPT_SCROLL_BUTTON: {
+      config->scroll_button = atoi(value);
+      break;
+    }
+    case OPT_CLICK_METHOD: {
+      config->click_method = atoi(value);
+      break;
+    }
+    case OPT_SEND_EVENTS_MODE: {
+      config->send_events_mode = atoi(value);
+      break;
+    }
+    case OPT_BUTTON_MAP: {
+      config->button_map = atoi(value);
+      break;
+    }
+    case OPT_AXIS_SCROLL_FACTOR: {
+      config->axis_scroll_factor = atof(value);
+      break;
+    }
+    case OPT_GAPPIH: {
+      config->gappih = atoi(value);
+      break;
+    }
+    case OPT_GAPPIV: {
+      config->gappiv = atoi(value);
+      break;
+    }
+    case OPT_GAPPOH: {
+      config->gappoh = atoi(value);
+      break;
+    }
+    case OPT_GAPPOV: {
+      config->gappov = atoi(value);
+      break;
+    }
+    case OPT_SCRATCHPAD_WIDTH_RATIO: {
+      config->scratchpad_width_ratio = atof(value);
+      break;
+    }
+    case OPT_SCRATCHPAD_HEIGHT_RATIO: {
+      config->scratchpad_height_ratio = atof(value);
+      break;
+    }
+    case OPT_BORDERPX: {
+      config->borderpx = atoi(value);
+      break;
+    }
+    case OPT_ROOTCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid rootcolor "
+            "format: "
+            "%s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->rootcolor, color);
+      }
+      break;
+    }
+    case OPT_SHADOWSCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid shadowscolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->shadowscolor, color);
+      }
+      break;
+    }
+    case OPT_BORDERCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid bordercolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->bordercolor, color);
+      }
+      break;
+    }
+    case OPT_FOCUSCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid focuscolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->focuscolor, color);
+      }
+      break;
+    }
+    case OPT_MAXIMIZESCREENCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid "
+            "maximizescreencolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->maximizescreencolor, color);
+      }
+      break;
+    }
+    case OPT_URGENTCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid urgentcolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->urgentcolor, color);
+      }
+      break;
+    }
+    case OPT_SCRATCHPADCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid "
+            "scratchpadcolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->scratchpadcolor, color);
+      }
+      break;
+    }
+    case OPT_GLOBALCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid globalcolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->globalcolor, color);
+      }
+      break;
+    }
+    case OPT_OVERLAYCOLOR: {
+      int64_t color = parse_color(value);
+      if (color == -1) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Invalid overlaycolor "
+            "format: %s\n",
+            value);
+        return false;
+      } else {
+        convert_hex_to_rgba(config->overlaycolor, color);
+      }
+      break;
+    }
+    case OPT_MONITORRULE: {
+      config->monitor_rules =
+        realloc(config->monitor_rules, (config->monitor_rules_count + 1) *
+                          sizeof(ConfigMonitorRule));
+      if (!config->monitor_rules) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+            "memory for monitor rules\n");
+        return false;
+      }
+
+      ConfigMonitorRule *rule =
+        &config->monitor_rules[config->monitor_rules_count];
+      memset(rule, 0, sizeof(ConfigMonitorRule));
+
+      // 设置默认值
+      rule->name = NULL;
+      rule->make = NULL;
+      rule->model = NULL;
+      rule->serial = NULL;
+      rule->rr = 0;
+      rule->scale = 1.0f;
+      rule->x = INT32_MAX;
+      rule->y = INT32_MAX;
+      rule->width = -1;
+      rule->height = -1;
+      rule->refresh = 0.0f;
+      rule->vrr = 0;
+      rule->custom = 0;
+
+      bool parse_error = false;
+      char *token = strtok(value, ",");
+      while (token != NULL) {
+        char *colon = strchr(token, ':');
+        if (colon != NULL) {
+          *colon = '\0';
+          char *key = token;
+          char *val = colon + 1;
+
+          trim_whitespace(key);
+          trim_whitespace(val);
+
+          if (strcmp(key, "name") == 0) {
+            rule->name = strdup(val);
+          } else if (strcmp(key, "make") == 0) {
+            rule->make = strdup(val);
+          } else if (strcmp(key, "model") == 0) {
+            rule->model = strdup(val);
+          } else if (strcmp(key, "serial") == 0) {
+            rule->serial = strdup(val);
+          } else if (strcmp(key, "rr") == 0) {
+            rule->rr = CLAMP_INT(atoi(val), 0, 7);
+          } else if (strcmp(key, "scale") == 0) {
+            rule->scale = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
+          } else if (strcmp(key, "x") == 0) {
+            rule->x = atoi(val);
+          } else if (strcmp(key, "y") == 0) {
+            rule->y = atoi(val);
+          } else if (strcmp(key, "width") == 0) {
+            rule->width = CLAMP_INT(atoi(val), 1, INT32_MAX);
+          } else if (strcmp(key, "height") == 0) {
+            rule->height = CLAMP_INT(atoi(val), 1, INT32_MAX);
+          } else if (strcmp(key, "refresh") == 0) {
+            rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
+          } else if (strcmp(key, "vrr") == 0) {
+            rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "custom") == 0) {
+            rule->custom = CLAMP_INT(atoi(val), 0, 1);
+          } else {
+            fprintf(stderr,
+                "\033[1m\033[31m[ERROR]:\033[33m Unknown "
+                "monitor rule "
+                "option:\033[1m\033[31m %s\n",
+                key);
+            parse_error = true;
+          }
+        }
+        token = strtok(NULL, ",");
+      }
+
+      if (!rule->name && !rule->make && !rule->model && !rule->serial) {
+        fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Monitor rule "
+                "must have at least one of the following "
+                "options: name, make, model, serial\n");
+        return false;
+      }
+
+      config->monitor_rules_count++;
+      return !parse_error;
+      break;
+    }
+    case OPT_TAGRULE: {
+      config->tag_rules =
+        realloc(config->tag_rules,
+            (config->tag_rules_count + 1) * sizeof(ConfigTagRule));
+      if (!config->tag_rules) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+            "memory for tag rules\n");
+        return false;
+      }
+
+      ConfigTagRule *rule = &config->tag_rules[config->tag_rules_count];
+      memset(rule, 0, sizeof(ConfigTagRule));
+
+      // 设置默认值
+      rule->id = 0;
+      rule->layout_name = NULL;
+      rule->monitor_name = NULL;
+      rule->monitor_make = NULL;
+      rule->monitor_model = NULL;
+      rule->monitor_serial = NULL;
+      rule->nmaster = 0;
+      rule->mfact = 0.0f;
+      rule->no_render_border = 0;
+      rule->open_as_floating = 0;
+      rule->no_hide = 0;
+
+      bool parse_error = false;
+      char *token = strtok(value, ",");
+      while (token != NULL) {
+        char *colon = strchr(token, ':');
+        if (colon != NULL) {
+          *colon = '\0';
+          char *key = token;
+          char *val = colon + 1;
+
+          trim_whitespace(key);
+          trim_whitespace(val);
+
+          if (strcmp(key, "id") == 0) {
+            rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
+          } else if (strcmp(key, "layout_name") == 0) {
+            rule->layout_name = strdup(val);
+          } else if (strcmp(key, "monitor_name") == 0) {
+            rule->monitor_name = strdup(val);
+          } else if (strcmp(key, "monitor_make") == 0) {
+            rule->monitor_make = strdup(val);
+          } else if (strcmp(key, "monitor_model") == 0) {
+            rule->monitor_model = strdup(val);
+          } else if (strcmp(key, "monitor_serial") == 0) {
+            rule->monitor_serial = strdup(val);
+          } else if (strcmp(key, "no_render_border") == 0) {
+            rule->no_render_border = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "open_as_floating") == 0) {
+            rule->open_as_floating = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "no_hide") == 0) {
+            rule->no_hide = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "nmaster") == 0) {
+            rule->nmaster = CLAMP_INT(atoi(val), 1, 99);
+          } else if (strcmp(key, "mfact") == 0) {
+            rule->mfact = CLAMP_FLOAT(atof(val), 0.1f, 0.9f);
+          } else {
+            fprintf(stderr,
+                "\033[1m\033[31m[ERROR]:\033[33m Unknown "
+                "tag rule "
+                "option:\033[1m\033[31m %s\n",
+                key);
+            parse_error = true;
+          }
+        }
+        token = strtok(NULL, ",");
+      }
+
+      config->tag_rules_count++;
+      return !parse_error;
+      break;
+    }
+    case OPT_LAYERRULE: {
+      config->layer_rules =
+        realloc(config->layer_rules,
+            (config->layer_rules_count + 1) * sizeof(ConfigLayerRule));
+      if (!config->layer_rules) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+            "memory for layer rules\n");
+        return false;
+      }
+
+      ConfigLayerRule *rule = &config->layer_rules[config->layer_rules_count];
+      memset(rule, 0, sizeof(ConfigLayerRule));
+
+      // 设置默认值
+      rule->layer_name = NULL;
+      rule->animation_type_open = NULL;
+      rule->animation_type_close = NULL;
+      rule->noblur = 0;
+      rule->noanim = 0;
+      rule->noshadow = 0;
+
+      bool parse_error = false;
+      char *token = strtok(value, ",");
+      while (token != NULL) {
+        char *colon = strchr(token, ':');
+        if (colon != NULL) {
+          *colon = '\0';
+          char *key = token;
+          char *val = colon + 1;
+
+          trim_whitespace(key);
+          trim_whitespace(val);
+
+          if (strcmp(key, "layer_name") == 0) {
+            rule->layer_name = strdup(val);
+          } else if (strcmp(key, "animation_type_open") == 0) {
+            rule->animation_type_open = strdup(val);
+          } else if (strcmp(key, "animation_type_close") == 0) {
+            rule->animation_type_close = strdup(val);
+          } else if (strcmp(key, "noblur") == 0) {
+            rule->noblur = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "noanim") == 0) {
+            rule->noanim = CLAMP_INT(atoi(val), 0, 1);
+          } else if (strcmp(key, "noshadow") == 0) {
+            rule->noshadow = CLAMP_INT(atoi(val), 0, 1);
+          } else {
+            fprintf(stderr,
+                "\033[1m\033[31m[ERROR]:\033[33m Unknown "
+                "layer rule "
+                "option:\033[1m\033[31m %s\n",
+                key);
+            parse_error = true;
+          }
+        }
+        token = strtok(NULL, ",");
+      }
+
+      // 如果没有指定布局名称，则使用默认值
+      if (rule->layer_name == NULL) {
+        rule->layer_name = strdup("default");
+      }
+
+      config->layer_rules_count++;
+      return !parse_error;
+      break;
+    }
+    case OPT_WINDOWRULE: {
+      config->window_rules =
+        realloc(config->window_rules,
+            (config->window_rules_count + 1) * sizeof(ConfigWinRule));
+      if (!config->window_rules) {
+        fprintf(stderr,
+            "\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+            "memory for window rules\n");
+        return false;
+      }
+
+      ConfigWinRule *rule = &config->window_rules[config->window_rules_count];
+      memset(rule, 0, sizeof(ConfigWinRule));
+
+      // int32_t rule value, relay to a client property
+      rule->isfloating = -1;
+      rule->isfullscreen = -1;
+      rule->isfakefullscreen = -1;
+      rule->isnoborder = -1;
+      rule->isnoshadow = -1;
+      rule->isnoradius = -1;
+      rule->isnoanimation = -1;
+      rule->isopensilent = -1;
+      rule->istagsilent = -1;
+      rule->isnamedscratchpad = -1;
+      rule->isunglobal = -1;
+      rule->isglobal = -1;
+      rule->isoverlay = -1;
+      rule->allow_shortcuts_inhibit = -1;
+      rule->ignore_maximize = -1;
+      rule->ignore_minimize = -1;
+      rule->isnosizehint = -1;
+      rule->indleinhibit_when_focus = -1;
+      rule->isterm = -1;
+      rule->allow_csd = -1;
+      rule->force_fakemaximize = -1;
+      rule->force_tiled_state = -1;
+      rule->force_tearing = -1;
+      rule->noswallow = -1;
+      rule->noblur = -1;
+      rule->nofocus = -1;
+      rule->nofadein = -1;
+      rule->nofadeout = -1;
+      rule->no_force_center = -1;
+
+      // string rule value, relay to a client property
+      rule->animation_type_open = NULL;
+      rule->animation_type_close = NULL;
+
+      // float rule value, relay to a client property
+      rule->focused_opacity = 0;
+      rule->unfocused_opacity = 0;
+      rule->scroller_proportion_single = 0.0f;
+      rule->scroller_proportion = 0;
+
+      // special rule value,not directly set to client property
+      rule->tags = 0;
+      rule->offsetx = 0;
+      rule->offsety = 0;
+      rule->width = 0;
+      rule->height = 0;
+      rule->monitor = NULL;
+      rule->id = NULL;
+      rule->title = NULL;
+
+      rule->globalkeybinding = (KeyBinding){0};
+
+      bool parse_error = false;
+      char *token = strtok(value, ",");
+      while (token != NULL) {
+        char *colon = strchr(token, ':');
+        if (colon != NULL) {
+          *colon = '\0';
+          char *key = token;
+          char *val = colon + 1;
+
+          trim_whitespace(key);
+          trim_whitespace(val);
+
+          if (strcmp(key, "isfloating") == 0) {
+            rule->isfloating = atoi(val);
+          } else if (strcmp(key, "title") == 0) {
+            rule->title = strdup(val);
+          } else if (strcmp(key, "appid") == 0) {
+            rule->id = strdup(val);
+          } else if (strcmp(key, "animation_type_open") == 0) {
+            rule->animation_type_open = strdup(val);
+          } else if (strcmp(key, "animation_type_close") == 0) {
+            rule->animation_type_close = strdup(val);
+          } else if (strcmp(key, "tags") == 0) {
+            rule->tags = 1 << (atoi(val) - 1);
+          } else if (strcmp(key, "monitor") == 0) {
+            rule->monitor = strdup(val);
+          } else if (strcmp(key, "offsetx") == 0) {
+            rule->offsetx = atoi(val);
+          } else if (strcmp(key, "offsety") == 0) {
+            rule->offsety = atoi(val);
+          } else if (strcmp(key, "nofocus") == 0) {
+            rule->nofocus = atoi(val);
+          } else if (strcmp(key, "nofadein") == 0) {
+            rule->nofadein = atoi(val);
+          } else if (strcmp(key, "nofadeout") == 0) {
+            rule->nofadeout = atoi(val);
+          } else if (strcmp(key, "no_force_center") == 0) {
+            rule->no_force_center = atoi(val);
+          } else if (strcmp(key, "width") == 0) {
+            rule->width = atoi(val);
+          } else if (strcmp(key, "height") == 0) {
+            rule->height = atoi(val);
+          } else if (strcmp(key, "isnoborder") == 0) {
+            rule->isnoborder = atoi(val);
+          } else if (strcmp(key, "isnoshadow") == 0) {
+            rule->isnoshadow = atoi(val);
+          } else if (strcmp(key, "isnoradius") == 0) {
+            rule->isnoradius = atoi(val);
+          } else if (strcmp(key, "isnoanimation") == 0) {
+            rule->isnoanimation = atoi(val);
+          } else if (strcmp(key, "isopensilent") == 0) {
+            rule->isopensilent = atoi(val);
+          } else if (strcmp(key, "istagsilent") == 0) {
+            rule->istagsilent = atoi(val);
+          } else if (strcmp(key, "isnamedscratchpad") == 0) {
+            rule->isnamedscratchpad = atoi(val);
+          } else if (strcmp(key, "isunglobal") == 0) {
+            rule->isunglobal = atoi(val);
+          } else if (strcmp(key, "isglobal") == 0) {
+            rule->isglobal = atoi(val);
+          } else if (strcmp(key, "scroller_proportion_single") == 0) {
+            rule->scroller_proportion_single = atof(val);
+          } else if (strcmp(key, "unfocused_opacity") == 0) {
+            rule->unfocused_opacity = atof(val);
+          } else if (strcmp(key, "focused_opacity") == 0) {
+            rule->focused_opacity = atof(val);
+          } else if (strcmp(key, "isoverlay") == 0) {
+            rule->isoverlay = atoi(val);
+          } else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
+            rule->allow_shortcuts_inhibit = atoi(val);
+          } else if (strcmp(key, "ignore_maximize") == 0) {
+            rule->ignore_maximize = atoi(val);
+          } else if (strcmp(key, "ignore_minimize") == 0) {
+            rule->ignore_minimize = atoi(val);
+          } else if (strcmp(key, "isnosizehint") == 0) {
+            rule->isnosizehint = atoi(val);
+          } else if (strcmp(key, "indleinhibit_when_focus") == 0) {
+            rule->indleinhibit_when_focus = atoi(val);
+          } else if (strcmp(key, "isterm") == 0) {
+            rule->isterm = atoi(val);
+          } else if (strcmp(key, "allow_csd") == 0) {
+            rule->allow_csd = atoi(val);
+          } else if (strcmp(key, "force_fakemaximize") == 0) {
+            rule->force_fakemaximize = atoi(val);
+          } else if (strcmp(key, "force_tiled_state") == 0) {
+            rule->force_tiled_state = atoi(val);
+          } else if (strcmp(key, "force_tearing") == 0) {
+            rule->force_tearing = atoi(val);
+          } else if (strcmp(key, "noswallow") == 0) {
+            rule->noswallow = atoi(val);
+          } else if (strcmp(key, "noblur") == 0) {
+            rule->noblur = atoi(val);
+          } else if (strcmp(key, "scroller_proportion") == 0) {
+            rule->scroller_proportion = atof(val);
+          } else if (strcmp(key, "isfullscreen") == 0) {
+            rule->isfullscreen = atoi(val);
+          } else if (strcmp(key, "isfakefullscreen") == 0) {
+            rule->isfakefullscreen = atoi(val);
+          } else if (strcmp(key, "globalkeybinding") == 0) {
+            char mod_str[256], keysym_str[256];
+            sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
+            trim_whitespace(mod_str);
+            trim_whitespace(keysym_str);
+            rule->globalkeybinding.mod = parse_mod(mod_str);
+            rule->globalkeybinding.keysymcode =
+              parse_key(keysym_str, false);
+            if (rule->globalkeybinding.mod == UINT32_MAX) {
+              return false;
+            }
+            if (rule->globalkeybinding.keysymcode.type ==
+                KEY_TYPE_SYM &&
+              rule->globalkeybinding.keysymcode.keysym ==
+                XKB_KEY_NoSymbol) {
+              return false;
+            }
+          } else {
+            fprintf(stderr,
+                "\033[1m\033[31m[ERROR]:\033[33m Unknown "
+                "window rule "
+                "option:\033[1m\033[31m %s\n",
+                key);
+            parse_error = true;
+          }
+        }
+        token = strtok(NULL, ",");
+      }
+      config->window_rules_count++;
+      return !parse_error;
+      break;
+    }
 	}
 
 	return true;

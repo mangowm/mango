@@ -39,7 +39,7 @@ libinput_dep = dependency('libinput',version: '>=1.27.1')
 libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
 libscenefx_dep = dependency('scenefx-0.4',version: '>=0.4.1')
-
+gperf = find_program('gperf', required : true)
 
 # 获取版本信息
 git = find_program('git', required : false)
@@ -94,11 +94,28 @@ if get_option('asan')
   link_args += '-fsanitize=address'
 endif
 
+# Generate hash files
+func_names_hash = custom_target(
+  'func_names_hash',
+  input: 'src/config/func_names.gperf',
+  output: 'func_names_hash.h',
+  command: [gperf, '@INPUT@', '--output-file', '@OUTPUT@']
+)
+
+option_names_hash = custom_target(
+  'option_names_hash',
+  input: 'src/config/option_names.gperf',
+  output: 'option_names_hash.h',
+  command: [gperf, '@INPUT@', '--output-file', '@OUTPUT@']
+)
+
 executable('mango',
   'src/mango.c',
   'src/common/util.c',
   'src/ext-protocol/wlr_ext_workspace_v1.c',
   wayland_sources,
+  func_names_hash,
+  option_names_hash,
   dependencies : [
     libm,
     xcb,
