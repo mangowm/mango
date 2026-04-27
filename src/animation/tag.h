@@ -36,7 +36,6 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 	}
-	client_set_suspended(c, false);
 
 	if (!c->animation.tag_from_rule && want_animation &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
@@ -90,6 +89,5 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		set_tagout_animation(m, c);
 	} else {
 		wlr_scene_node_set_enabled(&c->scene->node, false);
-		client_set_suspended(c, true);
 	}
 }
