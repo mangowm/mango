@@ -41,6 +41,7 @@
 #include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_export_dmabuf_v1.h>
 #include <wlr/types/wlr_ext_data_control_v1.h>
+#include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_ext_image_capture_source_v1.h>
 #include <wlr/types/wlr_ext_image_copy_capture_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
@@ -316,6 +317,11 @@ struct Client {
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
+
+	struct wlr_scene_tree *image_capture_tree;
+	struct wlr_scene *image_capture_scene;
+	struct wlr_ext_image_capture_source_v1 *image_capture_source;
+
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -407,6 +413,7 @@ struct Client {
 	float focused_opacity;
 	float unfocused_opacity;
 	char oldmonname[128];
+	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
 	int32_t noblur;
 	double master_mfact_per, master_inner_per, stack_inner_per;
 	double old_master_mfact_per, old_master_inner_per, old_stack_inner_per;
@@ -876,6 +883,11 @@ static int32_t grabcx, grabcy;						   /* client-relative */
 static int32_t drag_begin_cursorx, drag_begin_cursory; /* client-relative */
 static bool start_drag_window = false;
 static int32_t last_apply_drap_time = 0;
+
+static struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1
+	*ext_foreign_toplevel_image_capture_source_manager_v1;
+static struct wl_listener new_foreign_toplevel_capture_request;
+static struct wlr_ext_foreign_toplevel_list_v1 *foreign_toplevel_list;
 
 static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
@@ -2279,6 +2291,7 @@ void cleanuplisteners(void) {
 	wl_list_remove(&request_start_drag.link);
 	wl_list_remove(&start_drag.link);
 	wl_list_remove(&new_session_lock.link);
+	wl_list_remove(&new_foreign_toplevel_capture_request.link);
 	wl_list_remove(&tearing_new_object.link);
 	wl_list_remove(&keyboard_shortcuts_inhibit_new_inhibitor.link);
 	if (drm_lease_manager) {
@@ -4157,8 +4170,22 @@ mapnotify(struct wl_listener *listener, void *data) {
 	c->geom.width += 2 * c->bw;
 	c->geom.height += 2 * c->bw;
 
+	struct wlr_ext_foreign_toplevel_handle_v1_state foreign_toplevel_state = {
+		.app_id = client_get_appid(c),
+		.title = client_get_title(c),
+	};
+
+	c->image_capture_scene = wlr_scene_create();
+	c->ext_foreign_toplevel = wlr_ext_foreign_toplevel_handle_v1_create(
+		foreign_toplevel_list, &foreign_toplevel_state);
+	c->ext_foreign_toplevel->data = c;
+	c->image_capture_tree = c->type == XDGShell
+		? wlr_scene_xdg_surface_create(&c->image_capture_scene->tree, c->surface.xdg)
+		: wlr_scene_subsurface_tree_create(&c->image_capture_scene->tree, client_surface(c));
+
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
+
 	if (client_is_unmanaged(c)) {
 		/* Unmanaged clients always are floating */
 #ifdef XWAYLAND
@@ -4504,6 +4531,26 @@ void motionrelative(struct wl_listener *listener, void *data) {
 void outputmgrapply(struct wl_listener *listener, void *data) {
 	struct wlr_output_configuration_v1 *config = data;
 	outputmgrapplyortest(config, 0);
+}
+
+static void
+handle_new_foreign_toplevel_capture_request(struct wl_listener *listener,
+											void *data) {
+	struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request
+		*request = data;
+	Client *c = request->toplevel_handle->data;
+
+	if (c->image_capture_source == NULL) {
+		c->image_capture_source =
+			wlr_ext_image_capture_source_v1_create_with_scene_node(
+				&c->image_capture_scene->tree.node, event_loop, alloc, drw);
+		if (c->image_capture_source == NULL) {
+			return;
+		}
+	}
+
+	wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_accept(
+		request, c->image_capture_source);
 }
 
 void // 0.7 custom
@@ -5631,6 +5678,14 @@ void setup(void) {
 	power_mgr = wlr_output_power_manager_v1_create(dpy);
 	wl_signal_add(&power_mgr->events.set_mode, &output_power_mgr_set_mode);
 
+	foreign_toplevel_list = wlr_ext_foreign_toplevel_list_v1_create(dpy, 1);
+	ext_foreign_toplevel_image_capture_source_manager_v1 =
+		wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(dpy, 1);
+	new_foreign_toplevel_capture_request.notify =
+		handle_new_foreign_toplevel_capture_request;
+	wl_signal_add(&ext_foreign_toplevel_image_capture_source_manager_v1->events
+					   .new_request,
+				  &new_foreign_toplevel_capture_request);
 	tearing_control = wlr_tearing_control_manager_v1_create(dpy, 1);
 	tearing_new_object.notify = handle_tearing_new_object;
 	wl_signal_add(&tearing_control->events.new_object, &tearing_new_object);
@@ -6119,6 +6174,11 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->foreign_toplevel = NULL;
 	}
 
+	if (c->ext_foreign_toplevel) {
+		wlr_ext_foreign_toplevel_handle_v1_destroy(c->ext_foreign_toplevel);
+		c->ext_foreign_toplevel = NULL;
+	}
+
 	if (c->swallowedby) {
 		setmaximizescreen(c->swallowedby, c->ismaximizescreen);
 		setfullscreen(c->swallowedby, c->isfullscreen);
@@ -6130,6 +6190,16 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->swallowing->swallowedby = NULL;
 		c->swallowing = NULL;
 	}
+
+	if (c->image_capture_tree) {
+		wlr_scene_node_destroy(&c->image_capture_tree->node);
+		c->image_capture_tree = NULL;
+	}
+	if (c->image_capture_scene) {
+		wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
+		c->image_capture_scene = NULL;
+	}
+	c->image_capture_source = NULL;
 
 	c->stack_proportion = 0.0f;
 	c->next_in_stack = NULL;
@@ -6288,6 +6358,14 @@ void updatetitle(struct wl_listener *listener, void *data) {
 	title = client_get_title(c);
 	if (title && c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
+	if (title && c->ext_foreign_toplevel) {
+		wlr_ext_foreign_toplevel_handle_v1_update_state(
+			c->ext_foreign_toplevel,
+			&(struct wlr_ext_foreign_toplevel_handle_v1_state){
+				.title = title,
+				.app_id = c->ext_foreign_toplevel->app_id,
+			});
+	}
 	if (c == focustop(c->mon))
 		printstatus();
 }
