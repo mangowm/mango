@@ -117,20 +117,20 @@ bindr=Super,Super_L,spawn,rofi -show run
 
 | Command | Param | Description |
 | :--- | :--- | :--- |
-| `view` | `-1/0/1-9` or `mask [,synctag]` | View tag. `-1` = previous tagset, `0` = all tags, `1-9` = specific tag, mask e.g. `1\|3\|5`. Optional `synctag` (0/1) syncs the action to all monitors. |
+| `view` | `-1/0/[1, tag_count]` or `mask [,synctag]` | View tag. `-1` = previous tagset, `0` = all tags, mask e.g. `1\|3\|5`. Optional `synctag` (0/1) syncs the action to all monitors. |
 | `viewtoleft` | `[synctag]` | View previous tag. Optional `synctag` (0/1) syncs to all monitors. |
 | `viewtoright` | `[synctag]` | View next tag. Optional `synctag` (0/1) syncs to all monitors. |
 | `viewtoleft_have_client` | `[synctag]` | View left tag and focus client if present. Optional `synctag` (0/1). |
 | `viewtoright_have_client` | `[synctag]` | View right tag and focus client if present. Optional `synctag` (0/1). |
 | `viewcrossmon` | `tag,monitor_spec` | View specified tag on specified monitor. |
-| `tag` | `1-9 [,synctag]` | Move window to tag. Optional `synctag` (0/1) syncs to all monitors. |
-| `tagsilent` | `1-9` | Move window to tag without focusing it. |
+| `tag` | `[1, tag_count] [,synctag]` | Move window to tag. Optional `synctag` (0/1) syncs to all monitors. |
+| `tagsilent` | `[1, tag_count]` | Move window to tag without focusing it. |
 | `tagtoleft` | `[synctag]` | Move window to left tag. Optional `synctag` (0/1). |
 | `tagtoright` | `[synctag]` | Move window to right tag. Optional `synctag` (0/1). |
 | `tagcrossmon` | `tag,monitor_spec` | Move window to specified tag on specified monitor. |
-| `toggletag` | `0-9` | Toggle tag on window (0 means all tags). |
-| `toggleview` | `1-9` | Toggle tag view. |
-| `comboview` | `1-9` | View multi tags pressed simultaneously. |
+| `toggletag` | `[0, tag_count]` | Toggle tag on window (0 means all tags). |
+| `toggleview` | `[1, tag_count]` | Toggle tag view. |
+| `comboview` | `[1, tag_count]` | View multi tags pressed simultaneously. |
 | `focusmon` | `left/right/up/down/monitor_spec` | Focus monitor by direction or [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `tagmon` | `left/right/up/down/monitor_spec,[keeptag]` | Move window to monitor by direction or [monitor spec](/docs/configuration/monitors#monitor-spec-format). `keeptag` is 0 or 1. |
 
