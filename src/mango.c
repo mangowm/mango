@@ -1001,7 +1001,7 @@ static void setgeometrynotify(struct wl_listener *listener, void *data);
 static struct wl_listener new_xwayland_surface = {.notify = createnotifyx11};
 static struct wl_listener xwayland_ready = {.notify = xwaylandready};
 static struct wlr_xwayland *xwayland;
-static struct wl_event_source *sync_keymap;
+// static struct wl_event_source *sync_keymap;
 #endif
 
 #include "animation/client.h"
@@ -5830,8 +5830,8 @@ void setup(void) {
 		fprintf(stderr,
 				"failed to setup XWayland X server, continuing without it\n");
 	}
-	sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  synckeymap, NULL);
+	// sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+	// 									  synckeymap, NULL);
 #endif
 }
 
@@ -6492,13 +6492,13 @@ void fix_xwayland_unmanaged_coordinate(Client *c) {
 	c->geom = setclient_coordinate_center(c, selmon, c->geom, 0, 0);
 }
 
-int32_t synckeymap(void *data) {
-	reset_keyboard_layout();
-	// we only need to sync keymap once
-	wlr_log(WLR_INFO, "timer to synckeymap done");
-	wl_event_source_timer_update(sync_keymap, 0);
-	return 0;
-}
+// int32_t synckeymap(void *data) {
+// 	reset_keyboard_layout();
+// 	// we only need to sync keymap once
+// 	wlr_log(WLR_INFO, "timer to synckeymap done");
+// 	wl_event_source_timer_update(sync_keymap, 0);
+// 	return 0;
+// }
 
 void activatex11(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, activate);
@@ -6648,7 +6648,7 @@ void xwaylandready(struct wl_listener *listener, void *data) {
 	/* xwayland can't auto sync the keymap, so we do it manually
 	  and we need to wait the xwayland completely inited
 	*/
-	wl_event_source_timer_update(sync_keymap, 500);
+	// wl_event_source_timer_update(sync_keymap, 500);
 }
 
 static void setgeometrynotify(struct wl_listener *listener, void *data) {
