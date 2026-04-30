@@ -3191,6 +3191,12 @@ void destroyinputdevice(struct wl_listener *listener, void *data) {
 			free(sw);
 			break;
 		}
+		case WLR_INPUT_DEVICE_KEYBOARD: {
+			struct wlr_keyboard *keyboard =
+				(struct wlr_keyboard *)input_dev->device_data;
+			wlr_keyboard_group_remove_keyboard(kb_group->wlr_group, keyboard);
+			break;
+		}
 		// 可以添加其他设备类型的清理代码
 		default:
 			break;
