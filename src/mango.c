@@ -3192,9 +3192,12 @@ void destroyinputdevice(struct wl_listener *listener, void *data) {
 			break;
 		}
 		case WLR_INPUT_DEVICE_KEYBOARD: {
-			struct wlr_keyboard *keyboard =
-				(struct wlr_keyboard *)input_dev->device_data;
-			wlr_keyboard_group_remove_keyboard(kb_group->wlr_group, keyboard);
+			if (kb_group) {
+				struct wlr_keyboard *keyboard =
+					(struct wlr_keyboard *)input_dev->device_data;
+				wlr_keyboard_group_remove_keyboard(kb_group->wlr_group,
+												   keyboard);
+			}
 			break;
 		}
 		// 可以添加其他设备类型的清理代码
@@ -3504,6 +3507,10 @@ void destroysessionlock(struct wl_listener *listener, void *data) {
 
 void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
+
+	if (group == kb_group)
+		kb_group = NULL;
+
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
