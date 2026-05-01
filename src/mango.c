@@ -5802,7 +5802,8 @@ void setup(void) {
 		wlr_log(WLR_INFO, "VR will not be available.");
 	}
 
-	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 2, NULL,
+
+  wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 3, NULL,
 					 dwl_ipc_manager_bind);
 
 	// 创建顶层管理句柄
