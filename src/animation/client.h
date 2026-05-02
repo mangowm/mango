@@ -995,6 +995,12 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->fake_no_border = true;
 	}
 
+	if (config.blur && c->blur && !c->noblur) {
+		wlr_scene_blur_set_size(c->blur,
+			c->geom.width - 2 * c->bw,
+			c->geom.height - 2 * c->bw);
+	}
+
 	// c->geom 是真实的窗口大小和位置，跟过度的动画无关，用于计算布局
 	c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
 										  c->geom.height - 2 * c->bw);
