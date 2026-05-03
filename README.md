@@ -154,7 +154,7 @@ meson build -Dprefix=/usr
 sudo ninja -C build install
 
 git clone https://github.com/mangowm/mango.git
-cd mangowm
+cd mango
 meson build -Dprefix=/usr
 sudo ninja -C build install
 ```
