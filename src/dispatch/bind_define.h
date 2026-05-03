@@ -863,7 +863,6 @@ int32_t spawn_shell(const Arg *arg) {
 }
 
 int32_t spawn(const Arg *arg) {
-
 	if (!arg->v)
 		return 0;
 
@@ -876,28 +875,21 @@ int32_t spawn(const Arg *arg) {
 		dup2(STDERR_FILENO, STDOUT_FILENO);
 		setsid();
 
-		// 2. 解析参数
-		char *argv[64];
-		int32_t argc = 0;
-		char *token = strtok((char *)arg->v, " ");
-		while (token != NULL && argc < 63) {
-			wordexp_t p;
-			if (wordexp(token, &p, 0) == 0) {
-				argv[argc++] = p.we_wordv[0];
-			} else {
-				argv[argc++] = token;
-			}
-			token = strtok(NULL, " ");
+		// 2. 对整个参数字符串进行单词展开
+		wordexp_t p;
+		if (wordexp(arg->v, &p, 0) != 0) {
+			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n", arg->v);
+			_exit(EXIT_FAILURE);
 		}
-		argv[argc] = NULL;
 
-		// 3. 执行命令
-		execvp(argv[0], argv);
+		// 3. 执行命令（p.we_wordv 已经是 argv 数组）
+		execvp(p.we_wordv[0], p.we_wordv);
 
-		// 4. execvp 失败时：打印错误并直接退出（避免 coredump）
-		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", argv[0],
+		// 4. execvp 失败时：打印错误，释放 wordexp 资源，然后退出
+		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
 				strerror(errno));
-		_exit(EXIT_FAILURE); // 使用 _exit 避免缓冲区刷新等操作
+		wordfree(&p); // 释放 wordexp 分配的内存
+		_exit(EXIT_FAILURE);
 	}
 	return 0;
 }
