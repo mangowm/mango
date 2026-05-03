@@ -1,6 +1,5 @@
 #ifdef __OpenBSD__
 #define SPAWN_MAX_ARGS 64
-#define SPAWN_MAX_TOKENS (SPAWN_MAX_ARGS - 1)
 #endif
 
 int32_t bind_to_view(const Arg *arg) {
@@ -902,7 +901,7 @@ int32_t spawn(const Arg *arg) {
 
 		char *token = strtok_r((char *)arg->v, " ", &last);
 
-		while (token != NULL && argc < SPAWN_MAX_TOKENS) {
+		while (token != NULL && argc < SPAWN_MAX_ARGS - 1) {
 			glob_t p;
 			if (glob(token, GLOB_DOOFFS, NULL, &p) == 0 && p.gl_pathc > 0) {
 				argv[argc] = strdup(p.gl_pathv[0]);
