@@ -25,7 +25,6 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `drag_corner` | `3` | Corner for drag-to-tile detection (0: none, 1–3: corners, 4: auto-detect). |
 | `drag_warp_cursor` | `1` | Warp cursor when dragging windows to tile. |
 | `axis_bind_apply_timeout` | `100` | Timeout (ms) for detecting consecutive scroll events for axis bindings. |
-| `axis_scroll_factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
 
 ## Multi-Monitor & Tags
 
