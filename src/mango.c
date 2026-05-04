@@ -1910,13 +1910,13 @@ axisnotify(struct wl_listener *listener, void *data) {
 	/* Notify the client with pointer focus of the axis event. */
 
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
-							   ? config.axis_scroll_factor
-							   : config.trackpad_scroll_factor;
+							   ? config.trackpad_scroll_factor
+							   : config.axis_scroll_factor;
 
 	wlr_seat_pointer_notify_axis(
 		seat, // 滚轮事件发送给客户端也就是窗口
 		event->time_msec, event->orientation,
-		event->delta * config.axis_scroll_factor,
+		event->delta * target_scroll_factor,
 		roundf(event->delta_discrete * target_scroll_factor), event->source,
 		event->relative_direction);
 }
