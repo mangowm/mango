@@ -35,6 +35,19 @@ xkb_rules_options=caps:escape,ctrl:nocaps
 
 ---
 
+### Mouse Settings
+
+Configuration for external mice.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `mouse_natural_scrolling` | `0` | Invert scrolling direction. |
+| `mouse_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `mouse_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
+| `left_handed` | `0` | Swap left and right buttons. |
+| `axis_scroll_factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
+---
+
 ### Trackpad Settings
 
 Specific settings for laptop touchpads. Some settings may require a relogin to take effect.
@@ -45,15 +58,19 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
 | `tap_to_click` | `1` | Tap to trigger a left click. |
 | `tap_and_drag` | `1` | Tap and hold to drag items. |
 | `trackpad_natural_scrolling` | `0` | Invert scrolling direction (natural scrolling). |
+| `trackpad_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `trackpad_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
 | `scroll_button` | `274` | The mouse button that use for scrolling(272 to 279).
 | `scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
 | `click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
+| `send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
 | `drag_lock` | `1` | Lock dragging after tapping. |
 | `disable_while_typing` | `1` | Disable trackpad while typing. |
 | `left_handed` | `0` | Swap left/right buttons. |
 | `middle_button_emulation` | `0` | Emulate middle button. |
-| `swipe_min_threshold` | `1` | Minimum swipe threshold. |
-
+| `swipe_min_threshold` | `1` | Minimum swipe threshold when use gesture. |
+| `button_map` | `0` | `0` (Left/right/middle), `1` (Left/middle/right). |
+| `trackpad_scroll_factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
 ---
 
 **Detailed descriptions:**
@@ -79,9 +96,9 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
   - `1` — Button areas: use software-defined areas on the touchpad to generate button events.
   - `2` — Clickfinger: the number of fingers determines which button is pressed.
 
-- `accel_profile` values:
+- `mouse_accel_profile` or `trackpad_scroll_profile` values:
   - `0` — No acceleration.
-  - `1` — Flat: no dynamic acceleration. Pointer speed = original input speed × (1 + `accel_speed`).
+  - `1` — Flat: no dynamic acceleration. Pointer speed = original input speed × (1 + `mouse_accel_speed`).
   - `2` — Adaptive: slow movement results in less acceleration, fast movement results in more.
 
 - `button_map` values:
@@ -94,24 +111,6 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
   - `2` — Disable this device when an external pointer device is plugged in.
 
 ---
-
-### Mouse Settings
-
-Configuration for external mice.
-
-| Setting | Default | Description |
-| :--- | :--- | :--- |
-| `mouse_natural_scrolling` | `0` | Invert scrolling direction. |
-| `accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
-| `accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
-| `left_handed` | `0` | Swap left and right buttons. |
-| `middle_button_emulation` | `0` | Emulate middle button. |
-| `swipe_min_threshold` | `1` | Minimum swipe threshold. |
-| `send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
-| `button_map` | `0` | `0` (Left/right/middle), `1` (Left/middle/right). |
-
----
-
 ---
 
 ## Keyboard Layout Switching

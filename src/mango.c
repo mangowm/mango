@@ -1838,9 +1838,21 @@ void arrangelayers(Monitor *m) {
 		arrangelayer(m, &m->layers[i], &usable_area, 0);
 }
 
+bool pointer_is_trackpad(struct wlr_pointer *pointer) {
+	struct libinput_device *device;
+
+	if (wlr_input_device_is_libinput(&pointer->base) &&
+		(device = wlr_libinput_get_device_handle(&pointer->base))) {
+		if (libinput_device_config_tap_get_finger_count(device) > 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void // 鼠标滚轮事件
 axisnotify(struct wl_listener *listener, void *data) {
-
 	/* This event is forwarded by the cursor when a pointer emits an axis event,
 	 * for example when you move the scroll wheel. */
 	struct wlr_pointer_axis_event *event = data;
@@ -1849,6 +1861,7 @@ axisnotify(struct wl_listener *listener, void *data) {
 	AxisBinding *a;
 	int32_t ji;
 	uint32_t adir;
+	double target_scroll_factor;
 	// IDLE_NOTIFY_ACTIVITY;
 	handlecursoractivity();
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
@@ -1895,12 +1908,17 @@ axisnotify(struct wl_listener *listener, void *data) {
 	 * implemented checking the event's orientation and the delta of the event
 	 */
 	/* Notify the client with pointer focus of the axis event. */
+
+	target_scroll_factor = pointer_is_trackpad(event->pointer)
+							   ? config.axis_scroll_factor
+							   : config.trackpad_scroll_factor;
+
 	wlr_seat_pointer_notify_axis(
 		seat, // 滚轮事件发送给客户端也就是窗口
 		event->time_msec, event->orientation,
 		event->delta * config.axis_scroll_factor,
-		roundf(event->delta_discrete * config.axis_scroll_factor),
-		event->source, event->relative_direction);
+		roundf(event->delta_discrete * target_scroll_factor), event->source,
+		event->relative_direction);
 }
 
 int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
@@ -2054,21 +2072,11 @@ void place_drag_tile_client(Client *c) {
 }
 
 bool check_trackpad_disabled(struct wlr_pointer *pointer) {
-	struct libinput_device *device;
-
-	if (!config.disable_trackpad)
+	if (!config.disable_trackpad) {
 		return false;
-
-	if (wlr_input_device_is_libinput(&pointer->base) &&
-		(device = wlr_libinput_get_device_handle(&pointer->base))) {
-
-		// 如果是触摸板且被禁用，忽略事件
-		if (libinput_device_config_tap_get_finger_count(device) > 0) {
-			return true; // 不处理事件
-		}
 	}
 
-	return false;
+	return pointer_is_trackpad(pointer);
 }
 
 void // 鼠标按键事件
@@ -3206,6 +3214,22 @@ void destroyinputdevice(struct wl_listener *listener, void *data) {
 	free(input_dev);
 }
 
+void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
+					   uint32_t mouse_accel_profile, double mouse_accel_speed) {
+	libinput_device_config_scroll_set_natural_scroll_enabled(device,
+															 natural_scrolling);
+	if (mouse_accel_profile &&
+		libinput_device_config_accel_is_available(device)) {
+		libinput_device_config_accel_set_profile(device, mouse_accel_profile);
+		libinput_device_config_accel_set_speed(device, mouse_accel_speed);
+	} else {
+		// profile cannot be directly applied to 0, need to set to 1 first
+		libinput_device_config_accel_set_profile(device, 1);
+		libinput_device_config_accel_set_profile(device, 0);
+		libinput_device_config_accel_set_speed(device, 0);
+	}
+}
+
 void configure_pointer(struct libinput_device *device) {
 	if (libinput_device_config_tap_get_finger_count(device)) {
 		libinput_device_config_tap_set_enabled(device, config.tap_to_click);
@@ -3214,11 +3238,12 @@ void configure_pointer(struct libinput_device *device) {
 		libinput_device_config_tap_set_drag_lock_enabled(device,
 														 config.drag_lock);
 		libinput_device_config_tap_set_button_map(device, config.button_map);
-		libinput_device_config_scroll_set_natural_scroll_enabled(
-			device, config.trackpad_natural_scrolling);
+		pointer_set_accel(device, config.trackpad_natural_scrolling,
+						  config.trackpad_accel_profile,
+						  config.trackpad_accel_speed);
 	} else {
-		libinput_device_config_scroll_set_natural_scroll_enabled(
-			device, config.mouse_natural_scrolling);
+		pointer_set_accel(device, config.mouse_natural_scrolling,
+						  config.mouse_accel_profile, config.mouse_accel_speed);
 	}
 
 	if (libinput_device_config_dwt_is_available(device))
@@ -3246,17 +3271,6 @@ void configure_pointer(struct libinput_device *device) {
 	if (libinput_device_config_send_events_get_modes(device))
 		libinput_device_config_send_events_set_mode(device,
 													config.send_events_mode);
-
-	if (config.accel_profile &&
-		libinput_device_config_accel_is_available(device)) {
-		libinput_device_config_accel_set_profile(device, config.accel_profile);
-		libinput_device_config_accel_set_speed(device, config.accel_speed);
-	} else {
-		// profile cannot be directly applied to 0, need to set to 1 first
-		libinput_device_config_accel_set_profile(device, 1);
-		libinput_device_config_accel_set_profile(device, 0);
-		libinput_device_config_accel_set_speed(device, 0);
-	}
 }
 
 void createpointer(struct wlr_pointer *pointer) {
