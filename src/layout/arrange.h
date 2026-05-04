@@ -929,5 +929,10 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		checkidleinhibitor(NULL);
 	}
 
+	if (m->is_jump_mode) {
+		destroy_jump_hints(m);
+		create_jump_hints(m);
+	}
+
 	printstatus();
 }

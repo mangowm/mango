@@ -245,6 +245,7 @@ typedef struct {
 	uint32_t hotarea_corner;
 	uint32_t enable_hotarea;
 	uint32_t ov_tab_mode;
+	uint32_t jump_mode;
 	int32_t overviewgappi;
 	int32_t overviewgappo;
 	uint32_t cursor_hide_timeout;
@@ -960,6 +961,11 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
 		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "togglejump") == 0) {
+		func = togglejump;
+		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "toggle_scratchpad") == 0) {
+		func = toggle_scratchpad;
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);
@@ -1611,6 +1617,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->enable_hotarea = atoi(value);
 	} else if (strcmp(key, "ov_tab_mode") == 0) {
 		config->ov_tab_mode = atoi(value);
+	} else if (strcmp(key, "jump_mode") == 0) {
+		config->jump_mode = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
@@ -3154,6 +3162,13 @@ void override_config(void) {
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
 	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
+	config.jump_mode = CLAMP_INT(config.jump_mode, 0, 1);
+
+	// 如果开启了 jump_mode，则自动关闭 ov_tab_mode，因为两者冲突
+	if (config.jump_mode) {
+		config.ov_tab_mode = 0;
+	}
+
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
@@ -3286,6 +3301,7 @@ void set_value_default() {
 	config.capslock = 0;
 
 	config.ov_tab_mode = 0;
+	config.jump_mode = 0;
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
 	config.enable_hotarea = 1;

@@ -1704,6 +1704,10 @@ int32_t toggleoverview(const Arg *arg) {
 				overview_backup(c);
 		}
 	} else {
+		if (selmon->is_jump_mode) {
+			destroy_jump_hints(selmon);
+			selmon->is_jump_mode = 0;
+		}
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !c->iskilling &&
 				!client_is_unmanaged(c) && !c->isunglobal &&
@@ -1715,6 +1719,35 @@ int32_t toggleoverview(const Arg *arg) {
 	view(&(Arg){.ui = target}, false);
 	fix_mon_tagset_from_overview(selmon);
 	refresh_monitors_workspaces_status(selmon);
+
+	if (selmon->isoverview && config.jump_mode) {
+		selmon->is_jump_mode = 1;
+		create_jump_hints(selmon);
+	}
+
+	return 0;
+}
+
+int32_t togglejump(const Arg *arg) {
+	if (!selmon)
+		return 0;
+
+	if (selmon->is_jump_mode) {
+		destroy_jump_hints(selmon);
+		selmon->is_jump_mode = 0;
+		toggleoverview(arg);
+		return 0;
+	}
+
+	if (!selmon->isoverview) {
+		toggleoverview(arg);
+	}
+
+	if (selmon->isoverview) {
+		selmon->is_jump_mode = 1;
+		create_jump_hints(selmon);
+	}
+
 	return 0;
 }
 
