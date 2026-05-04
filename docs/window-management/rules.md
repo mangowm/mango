@@ -45,7 +45,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
 | `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
-| `tags` | integer | 1-9 | Assign to specific tag |
+| `tags` | integer | `[1, tag_count]` | Assign to specific tag |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
 
@@ -172,7 +172,7 @@ tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | integer | 0-9 | Match by tag id, 0 means the ~0 tag |
+| `id` | integer | `[1, tag_count]` | Match by tag id, 0 means the ~0 tag |
 | `monitor_name` | string | monitor name | Match by monitor name |
 | `monitor_make` | string | monitor make | Match by monitor manufacturer |
 | `monitor_model` | string | monitor model | Match by monitor model |

@@ -30,6 +30,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
+| `tag_count` | `9` | Number of tags/workspaces available. Supports range `[1–32]`. **Requires restart to take effect.** |
 | `focus_cross_monitor` | `0` | Allow directional focus to cross monitor boundaries. |
 | `exchange_cross_monitor` | `0` | Allow exchanging clients across monitor boundaries. |
 | `focus_cross_tag` | `0` | Allow directional focus to cross into other tags. |
@@ -48,3 +49,4 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `idleinhibit_ignore_visible` | `0` | Allow invisible clients (e.g., background audio players) to inhibit idle. |
 | `drag_tile_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh tiled window resize during drag. Too small may cause application lag. |
 | `drag_floating_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh floating window resize during drag. Too small may cause application lag. |
+

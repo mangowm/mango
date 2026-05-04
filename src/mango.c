@@ -117,7 +117,7 @@
 	((C) && (M) && (C)->mon == (M) && ((C)->tags & (M)->tagset[(M)->seltags]))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
-#define TAGMASK ((1 << LENGTH(tags)) - 1)
+#define TAGMASK (config.tag_count == 32 ? ~0u : ((1u << config.tag_count) - 1))
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 #define ISFULLSCREEN(A)                                                        \
 	((A)->isfullscreen || (A)->ismaximizescreen ||                             \
@@ -934,14 +934,13 @@ static struct {
 #include "config/preset.h"
 
 struct Pertag {
-	uint32_t curtag, prevtag;			/* current and previous tag */
-	int32_t nmasters[LENGTH(tags) + 1]; /* number of windows in master area */
-	float mfacts[LENGTH(tags) + 1];		/* mfacts per tag */
-	int32_t no_hide[LENGTH(tags) + 1];	/* no_hide per tag */
-	int32_t no_render_border[LENGTH(tags) + 1]; /* no_render_border per tag */
-	int32_t open_as_floating[LENGTH(tags) + 1]; /* open_as_floating per tag */
-	const Layout
-		*ltidxs[LENGTH(tags) + 1]; /* matrix of tags and layouts indexes  */
+	uint32_t curtag, prevtag;  /* current and previous tag */
+	int32_t *nmasters;		   /* number of windows in master area */
+	float *mfacts;			   /* mfacts per tag */
+	bool *no_hide;			   /* no_hide per tag */
+	bool *no_render_border;	   /* no_render_border per tag */
+	int32_t *open_as_floating; /* open_as_floating per tag */
+	const Layout **ltidxs;	   /* matrix of tags and layouts indexes  */
 };
 
 #include "config/parse_config.h"
@@ -2363,6 +2362,12 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		m->skip_frame_timeout = NULL;
 	}
 	m->wlr_output->data = NULL;
+	free(m->pertag->nmasters);
+	free(m->pertag->mfacts);
+	free(m->pertag->no_hide);
+	free(m->pertag->no_render_border);
+	free(m->pertag->open_as_floating);
+	free(m->pertag->ltidxs);
 	free(m->pertag);
 	free(m);
 }
@@ -3098,7 +3103,20 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 
 	wl_list_insert(&mons, &m->link);
+	if (active_tag_count == 0)
+		active_tag_count = config.tag_count;
 	m->pertag = calloc(1, sizeof(Pertag));
+	if (!m->pertag)
+		die("pertag calloc failed");
+	m->pertag->nmasters = calloc(config.tag_count + 1, sizeof(int32_t));
+	m->pertag->mfacts = calloc(config.tag_count + 1, sizeof(float));
+	m->pertag->no_hide = calloc(config.tag_count + 1, sizeof(bool));
+	m->pertag->no_render_border = calloc(config.tag_count + 1, sizeof(bool));
+	m->pertag->open_as_floating = calloc(config.tag_count + 1, sizeof(int32_t));
+	m->pertag->ltidxs = calloc(config.tag_count + 1, sizeof(const Layout *));
+	if (!m->pertag->nmasters || !m->pertag->mfacts || !m->pertag->no_hide ||
+		!m->pertag->no_render_border || !m->pertag->open_as_floating || !m->pertag->ltidxs)
+		die("pertag member calloc failed");
 	if (chvt_backup_tag &&
 		regex_match(chvt_backup_selmon, m->wlr_output->name)) {
 		m->tagset[0] = m->tagset[1] = (1 << (chvt_backup_tag - 1)) & TAGMASK;
@@ -3110,7 +3128,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		m->pertag->curtag = m->pertag->prevtag = 1;
 	}
 
-	for (i = 0; i <= LENGTH(tags); i++) {
+	for (i = 0; i <= config.tag_count; i++) {
 		m->pertag->nmasters[i] = config.default_nmaster;
 		m->pertag->mfacts[i] = config.default_mfact;
 		m->pertag->ltidxs[i] = &layouts[0];
@@ -3150,7 +3168,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		ext_manager, EXT_WORKSPACE_ENABLE_CAPS);
 	wlr_ext_workspace_group_handle_v1_output_enter(m->ext_group, m->wlr_output);
 
-	for (i = 1; i <= LENGTH(tags); i++) {
+	for (i = 1; i <= config.tag_count; i++) {
 		add_workspace_by_tag(i, m);
 	}
 
@@ -6363,10 +6381,10 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 		if (arg->ui == (~0 & TAGMASK))
 			m->pertag->curtag = 0;
 		else {
-			for (i = 0; !(arg->ui & 1 << i) && i < LENGTH(tags) && arg->ui != 0;
+			for (i = 0; !(arg->ui & 1u << i) && i < config.tag_count && arg->ui != 0;
 				 i++)
 				;
-			m->pertag->curtag = i >= LENGTH(tags) ? LENGTH(tags) : i + 1;
+			m->pertag->curtag = i >= config.tag_count ? config.tag_count : i + 1;
 		}
 
 		m->pertag->prevtag =
