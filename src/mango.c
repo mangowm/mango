@@ -539,6 +539,7 @@ struct Monitor {
 	struct wlr_scene_optimized_blur *blur;
 	char last_surface_ws_name[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
+	bool iscleanuping;
 };
 
 typedef struct {
@@ -1824,6 +1825,9 @@ void arrangelayers(Monitor *m) {
 	if (!m->wlr_output->enabled)
 		return;
 
+	if (m->iscleanuping)
+		return;
+
 	/* Arrange exclusive surfaces from top->bottom */
 	for (i = 3; i >= 0; i--)
 		arrangelayer(m, &m->layers[i], &usable_area, 1);
@@ -2330,6 +2334,8 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	Monitor *m = wl_container_of(listener, m, destroy);
 	LayerSurface *l = NULL, *tmp = NULL;
 	uint32_t i;
+
+	m->iscleanuping = true;
 
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {
@@ -3032,6 +3038,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	struct wl_event_loop *loop = wl_display_get_event_loop(dpy);
 	m = wlr_output->data = ecalloc(1, sizeof(*m));
 
+	m->iscleanuping = false;
 	m->skip_frame_timeout =
 		wl_event_loop_add_timer(loop, monitor_skip_frame_timeout_callback, m);
 	m->skiping_frame = false;
