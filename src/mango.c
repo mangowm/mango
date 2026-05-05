@@ -510,7 +510,9 @@ struct Monitor {
 	struct wl_listener destroy;
 	struct wl_listener request_state;
 	struct wl_listener destroy_lock_surface;
+	struct wl_listener commit_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;
+	struct wlr_scene_tree *lock_scene_tree;
 	struct wl_event_source *skip_frame_timeout;
 	struct wlr_box m;		  /* monitor area, layout-relative */
 	struct wlr_box w;		  /* window area, layout-relative */
@@ -2912,6 +2914,14 @@ void createlayersurface(struct wl_listener *listener, void *data) {
 	wlr_surface_send_enter(surface, layer_surface->output);
 }
 
+void commitlocksurface(struct wl_listener *listener, void *data) {
+	Monitor *m = wl_container_of(listener, m, commit_lock_surface);
+	if (!m->lock_scene_tree || !config.blur || !config.blur_lockscreen)
+		return;
+	wlr_scene_node_for_each_buffer(&m->lock_scene_tree->node,
+								   iter_layer_scene_buffers, NULL);
+}
+
 void createlocksurface(struct wl_listener *listener, void *data) {
 	SessionLock *lock = wl_container_of(listener, lock, new_surface);
 	struct wlr_session_lock_surface_v1 *lock_surface = data;
@@ -2919,11 +2929,14 @@ void createlocksurface(struct wl_listener *listener, void *data) {
 	struct wlr_scene_tree *scene_tree = lock_surface->surface->data =
 		wlr_scene_subsurface_tree_create(lock->scene, lock_surface->surface);
 	m->lock_surface = lock_surface;
+	m->lock_scene_tree = scene_tree;
 
 	wlr_scene_node_set_position(&scene_tree->node, m->m.x, m->m.y);
 	wlr_session_lock_surface_v1_configure(lock_surface, m->m.width,
 										  m->m.height);
 
+	LISTEN(&lock_surface->surface->events.commit, &m->commit_lock_surface,
+		   commitlocksurface);
 	LISTEN(&lock_surface->events.destroy, &m->destroy_lock_surface,
 		   destroylocksurface);
 
@@ -3447,6 +3460,8 @@ void destroylocksurface(struct wl_listener *listener, void *data) {
 		*lock_surface = m->lock_surface;
 
 	m->lock_surface = NULL;
+	m->lock_scene_tree = NULL;
+	wl_list_remove(&m->commit_lock_surface.link);
 	wl_list_remove(&m->destroy_lock_surface.link);
 
 	if (lock_surface->surface != seat->keyboard_state.focused_surface) {

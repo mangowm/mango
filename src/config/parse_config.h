@@ -372,6 +372,7 @@ typedef struct {
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
+	int32_t blur_lockscreen;
 
 	struct xkb_rule_names xkb_rules;
 	char xkb_rules_rules[128];
@@ -1434,6 +1435,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->allow_shortcuts_inhibit = atoi(value);
 	} else if (strcmp(key, "allow_lock_transparent") == 0) {
 		config->allow_lock_transparent = atoi(value);
+	} else if (strcmp(key, "blur_lockscreen") == 0) {
+		config->blur_lockscreen = atoi(value);
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
@@ -3182,6 +3185,7 @@ void override_config(void) {
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
+	config.blur_lockscreen = CLAMP_INT(config.blur_lockscreen, 0, 1);
 	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
@@ -3342,6 +3346,7 @@ void set_value_default() {
 	config.allow_tearing = TEARING_DISABLED;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	config.allow_lock_transparent = 0;
+	config.blur_lockscreen = 1;
 	config.no_border_when_single = 0;
 	config.no_radius_when_single = 0;
 	config.snap_distance = 30;
