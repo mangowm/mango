@@ -67,7 +67,7 @@ monitorrule=name:HEADLESS-.*,width:1920,height:1080,refresh:60,x:1926,y:0,scale:
 
 ## Monitor Spec Format
 
-Several commands (`focusmon`, `tagmon`, `disable_monitor`, `enable_monitor`, `toggle_monitor`, `viewcrossmon`, `tagcrossmon`) accept a **monitor_spec** string to identify a monitor.
+Several commands (`focusmon`, `tagmon`, `disable_monitor`, `enable_monitor`, `toggle_monitor`, `sleep_monitor`, `viewcrossmon`, `tagcrossmon`) accept a **monitor_spec** string to identify a monitor.
 
 **Format:**
 
@@ -173,6 +173,9 @@ mmsg -d enable_monitor,eDP-1
 
 # Toggle
 mmsg -d toggle_monitor,eDP-1
+
+# Turn off and wake automatically on next keypress or mouse movement
+mmsg -d sleep_monitor,eDP-1
 ```
 
 You can also use `wlr-randr` for monitor management:

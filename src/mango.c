@@ -537,6 +537,7 @@ struct Monitor {
 	int32_t isoverview;
 	int32_t is_in_hotarea;
 	int32_t asleep;
+	int32_t wake_on_input;
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
@@ -751,6 +752,7 @@ static void set_rect_size(struct wlr_scene_rect *rect, int32_t width,
 						  int32_t height);
 static Client *center_tiled_select(Monitor *m);
 static void handlecursoractivity(void);
+static void wakesleepingmons(void);
 static int32_t hidecursor(void *data);
 static bool check_hit_no_border(Client *c);
 static void reset_keyboard_layout(void);
@@ -2228,6 +2230,9 @@ buttonpress(struct wl_listener *listener, void *data) {
 	if (check_trackpad_disabled(event->pointer)) {
 		return;
 	}
+
+	if (event->state == WL_POINTER_BUTTON_STATE_PRESSED)
+		wakesleepingmons();
 
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
@@ -4053,6 +4058,9 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+		wakesleepingmons();
+
 	// ov tab mode detect moe key release
 	if (config.ov_tab_mode && !locked && group == kb_group &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
@@ -4536,6 +4544,7 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 	/* time is 0 in internal calls meant to restore pointer focus. */
 	if (time) {
+		wakesleepingmons();
 		wlr_relative_pointer_manager_v1_send_relative_motion(
 			relative_pointer_mgr, seat, (uint64_t)time * 1000, dx, dy,
 			dx_unaccel, dy_unaccel);
@@ -6148,6 +6157,22 @@ void handlecursoractivity(void) {
 	else if (last_cursor.surface)
 		wlr_cursor_set_surface(cursor, last_cursor.surface,
 							   last_cursor.hotspot_x, last_cursor.hotspot_y);
+}
+
+void wakesleepingmons(void) {
+	Monitor *m;
+	struct wlr_output_state state;
+	wl_list_for_each(m, &mons, link) {
+		if (!m->wake_on_input)
+			continue;
+		wlr_output_state_init(&state);
+		wlr_output_state_set_enabled(&state, true);
+		wlr_output_commit_state(m->wlr_output, &state);
+		wlr_output_state_finish(&state);
+		m->asleep = 0;
+		m->wake_on_input = 0;
+		updatemons(NULL, NULL);
+	}
 }
 
 int32_t hidecursor(void *data) {
