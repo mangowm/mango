@@ -401,6 +401,7 @@ struct Client {
 	bool scratchpad_switching_mon;
 	bool fake_no_border;
 	int32_t nofocus;
+	int32_t stayfocused;
 	int32_t nofadein;
 	int32_t nofadeout;
 	int32_t no_force_center;
@@ -1359,6 +1360,7 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, force_tearing);
 	APPLY_INT_PROP(c, r, noswallow);
 	APPLY_INT_PROP(c, r, nofocus);
+	APPLY_INT_PROP(c, r, stayfocused);
 	APPLY_INT_PROP(c, r, nofadein);
 	APPLY_INT_PROP(c, r, nofadeout);
 	APPLY_INT_PROP(c, r, no_force_center);
@@ -3681,6 +3683,11 @@ void focusclient(Client *c, int32_t lift) {
 	if (c && c->nofocus)
 		return;
 
+	/* Don't change focus away from a stayfocused window while it's visible */
+	if (selmon && selmon->sel && selmon->sel != c && selmon->sel->stayfocused &&
+		VISIBLEON(selmon->sel, selmon) && client_surface(selmon->sel)->mapped)
+		return;
+
 	/* Raise client in stacking order if requested */
 	if (c && lift)
 		wlr_scene_node_raise_to_top(&c->scene->node); // 将视图提升到顶层
@@ -3728,6 +3735,10 @@ void focusclient(Client *c, int32_t lift) {
 
 		// change border color
 		c->isurgent = 0;
+
+		// set exclusive_focus for stayfocused windows
+		if (c->stayfocused)
+			exclusive_focus = c;
 	}
 
 	// update other monitor focus disappear
@@ -3757,7 +3768,9 @@ void focusclient(Client *c, int32_t lift) {
 			l->layer_surface->current.layer >= ZWLR_LAYER_SHELL_V1_LAYER_TOP &&
 			l == exclusive_focus) {
 			return;
-		} else if (w && w == exclusive_focus && client_wants_focus(w)) {
+		} else if (w && w == exclusive_focus &&
+				   (client_wants_focus(w) || w->stayfocused) && w->mon &&
+				   VISIBLEON(w, w->mon) && client_surface(w)->mapped) {
 			return;
 			/* Don't deactivate old_keyboard_focus_surface client if the new
 			 * one wants focus, as this causes issues with winecfg and
@@ -4235,6 +4248,7 @@ void init_client_properties(Client *c) {
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
 	c->nofocus = 0;
+	c->stayfocused = 0;
 	c->nofadein = 0;
 	c->nofadeout = 0;
 	c->no_force_center = 0;
@@ -6259,6 +6273,9 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 			m->prevsel = NULL;
 		}
 	}
+
+	if (c->stayfocused && c == exclusive_focus)
+		exclusive_focus = NULL;
 
 	if (c->mon && c->mon == selmon) {
 		if (next_in_stack && !c->swallowedby) {
