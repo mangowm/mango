@@ -93,6 +93,7 @@
 #include <xcb/xcb_icccm.h>
 #endif
 #include "common/util.h"
+#include "data/jump_font.h"
 
 /* macros */
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
@@ -422,6 +423,8 @@ struct Client {
 	bool isfocusing;
 	struct Client *next_in_stack;
 	struct Client *prev_in_stack;
+	char jump_char;
+	struct wlr_scene_tree *jump_overlay;
 };
 
 typedef struct {
@@ -531,6 +534,7 @@ struct Monitor {
 	uint32_t ovbk_prev_tagset;
 	Client *sel, *prevsel;
 	int32_t isoverview;
+	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t asleep;
 	uint32_t visible_clients;
@@ -810,6 +814,9 @@ static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
 static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
+
+static void create_jump_hints(Monitor *m);
+static void destroy_jump_hints(Monitor *m);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -3922,6 +3929,27 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
+	if (selmon && selmon->is_jump_mode &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		for (i = 0; i < nsyms; i++) {
+			xkb_keysym_t sym = xkb_keysym_to_lower(syms[i]);
+			if (sym >= XKB_KEY_a && sym <= XKB_KEY_z) {
+				char c_char = 'A' + (sym - XKB_KEY_a);
+				Client *c;
+				wl_list_for_each(c, &clients, link) {
+					if (c->mon == selmon && c->jump_char == c_char) {
+						focusclient(c, 1);
+						toggleoverview(NULL);
+						return;
+					}
+				}
+			} else if (sym == XKB_KEY_Escape) {
+				togglejump(NULL);
+				return;
+			}
+		}
+	}
+
 	// ov tab mode detect moe key release
 	if (config.ov_tab_mode && !locked && group == kb_group &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
@@ -6156,6 +6184,11 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->next_in_stack = NULL;
 	c->prev_in_stack = NULL;
 
+	if (c->jump_overlay) {
+		wlr_scene_node_destroy(&c->jump_overlay->node);
+		c->jump_overlay = NULL;
+	}
+
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus();
 	motionnotify(0, NULL, 0, 0, 0, 0);
@@ -6680,6 +6713,64 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 	motionnotify(0, NULL, 0, 0, 0, 0);
 }
 #endif
+
+void create_jump_hints(Monitor *m) {
+	const char jump_labels[] = "HJKLASDFGQWERTYUIOPZXCVBNM";
+	int label_idx = 0;
+	Client *c;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) &&
+			((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+			if (label_idx >= 26)
+				break;
+			char c_char = jump_labels[label_idx];
+			c->jump_char = c_char;
+			c->jump_overlay = wlr_scene_tree_create(layers[LyrOverlay]);
+			c->jump_overlay->node.data = c;
+
+			float bg_color[] = {0.1f, 0.1f, 0.1f, 0.6f};
+			struct wlr_scene_rect *bg = wlr_scene_rect_create(
+				c->jump_overlay, c->geom.width, c->geom.height, bg_color);
+			wlr_scene_node_set_position(&bg->node, c->geom.x, c->geom.y);
+
+			int char_idx = c_char - 'A';
+			if (char_idx >= 0 && char_idx < 26) {
+				int pixel_size = 6;
+				int char_w = 5 * pixel_size;
+				int char_h = 7 * pixel_size;
+				int start_x = c->geom.x + (c->geom.width - char_w) / 2;
+				int start_y = c->geom.y + (c->geom.height - char_h) / 2;
+				float fg_color[] = {1.0f, 1.0f, 1.0f, 1.0f};
+
+				for (int row = 0; row < 7; row++) {
+					for (int col = 0; col < 5; col++) {
+						if ((font5x7[char_idx][row] >> (4 - col)) & 1) {
+							struct wlr_scene_rect *pixel =
+								wlr_scene_rect_create(c->jump_overlay,
+													  pixel_size, pixel_size,
+													  fg_color);
+							wlr_scene_node_set_position(
+								&pixel->node, start_x + col * pixel_size,
+								start_y + row * pixel_size);
+						}
+					}
+				}
+			}
+			label_idx++;
+		}
+	}
+}
+
+void destroy_jump_hints(Monitor *m) {
+	Client *c;
+	wl_list_for_each(c, &clients, link) {
+		if (c->jump_overlay) {
+			wlr_scene_node_destroy(&c->jump_overlay->node);
+			c->jump_overlay = NULL;
+		}
+		c->jump_char = 0;
+	}
+}
 
 int32_t main(int32_t argc, char *argv[]) {
 	char *startup_cmd = NULL;

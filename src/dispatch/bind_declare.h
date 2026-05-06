@@ -3,6 +3,7 @@ int32_t restore_minimized(const Arg *arg);
 int32_t toggle_scratchpad(const Arg *arg);
 int32_t focusdir(const Arg *arg);
 int32_t toggleoverview(const Arg *arg);
+int32_t togglejump(const Arg *arg);
 int32_t set_proportion(const Arg *arg);
 int32_t switch_proportion_preset(const Arg *arg);
 int32_t zoom(const Arg *arg);
