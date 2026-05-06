@@ -53,6 +53,12 @@ typedef struct {
 } ConfigEnv;
 
 typedef struct {
+	char app_id[256];
+	char title[512];
+	char command[1024];
+} ConfigSessionLaunchRule;
+
+typedef struct {
 	const char *id;
 	const char *title;
 	uint32_t tags;
@@ -251,6 +257,7 @@ typedef struct {
 
 	uint32_t axis_bind_apply_timeout;
 	uint32_t focus_on_activate;
+	int32_t session_restore;
 	int32_t idleinhibit_ignore_visible;
 	int32_t sloppyfocus;
 	int32_t warpcursor;
@@ -360,6 +367,8 @@ typedef struct {
 
 	char **exec_once;
 	int32_t exec_once_count;
+	ConfigSessionLaunchRule *session_launch_rules;
+	int32_t session_launch_rules_count;
 
 	char *cursor_theme;
 	uint32_t cursor_size;
@@ -1434,6 +1443,71 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->allow_shortcuts_inhibit = atoi(value);
 	} else if (strcmp(key, "allow_lock_transparent") == 0) {
 		config->allow_lock_transparent = atoi(value);
+	} else if (strcmp(key, "session_restore") == 0) {
+		config->session_restore = atoi(value);
+	} else if (strcmp(key, "session_launch") == 0) {
+		ConfigSessionLaunchRule rule = {0};
+		ConfigSessionLaunchRule *new_rules = NULL;
+		char *first_sep = strchr(value, '|');
+		char *second_sep = NULL;
+		size_t app_len, title_len = 0, cmd_len;
+
+		if (!first_sep) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid session_launch "
+					"format. Expected app_id|command or "
+					"app_id|title|command\033[0m\n");
+			return false;
+		}
+
+		second_sep = strchr(first_sep + 1, '|');
+		app_len = (size_t)(first_sep - value);
+		if (second_sep) {
+			title_len = (size_t)(second_sep - (first_sep + 1));
+			cmd_len = strlen(second_sep + 1);
+		} else {
+			cmd_len = strlen(first_sep + 1);
+		}
+
+		if (app_len == 0 || cmd_len == 0 || app_len >= sizeof(rule.app_id) ||
+			cmd_len >= sizeof(rule.command) ||
+			title_len >= sizeof(rule.title)) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid session_launch "
+					"entry length\033[0m\n");
+			return false;
+		}
+
+		memcpy(rule.app_id, value, app_len);
+		rule.app_id[app_len] = '\0';
+		if (second_sep) {
+			memcpy(rule.title, first_sep + 1, title_len);
+			rule.title[title_len] = '\0';
+			memcpy(rule.command, second_sep + 1, cmd_len + 1);
+		} else {
+			memcpy(rule.command, first_sep + 1, cmd_len + 1);
+		}
+		trim_whitespace(rule.app_id);
+		trim_whitespace(rule.title);
+		trim_whitespace(rule.command);
+		if (rule.app_id[0] == '\0' || rule.command[0] == '\0') {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m session_launch requires "
+					"both app_id and command\033[0m\n");
+			return false;
+		}
+
+		new_rules = realloc(config->session_launch_rules,
+							sizeof(*config->session_launch_rules) *
+								(config->session_launch_rules_count + 1));
+		if (!new_rules) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"session_launch rules\033[0m\n");
+			return false;
+		}
+		config->session_launch_rules = new_rules;
+		config->session_launch_rules[config->session_launch_rules_count++] = rule;
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
@@ -2840,6 +2914,14 @@ void free_circle_layout(Config *config) {
 	config->circle_layout_count = 0; // 重置计数
 }
 
+void free_session_launch_rules(Config *config) {
+	if (config->session_launch_rules) {
+		free(config->session_launch_rules);
+		config->session_launch_rules = NULL;
+	}
+	config->session_launch_rules_count = 0;
+}
+
 void free_baked_points(void) {
 	if (baked_points_move) {
 		free(baked_points_move);
@@ -3110,6 +3192,7 @@ void free_config(void) {
 
 	// 释放 circle_layout
 	free_circle_layout(&config);
+	free_session_launch_rules(&config);
 
 	// 释放动画资源
 	free_baked_points();
@@ -3185,6 +3268,7 @@ void override_config(void) {
 	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
+	config.session_restore = CLAMP_INT(config.session_restore, 0, 1);
 	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
 	config.sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
@@ -3296,6 +3380,9 @@ void set_value_default() {
 
 	config.axis_bind_apply_timeout = 100;
 	config.focus_on_activate = 1;
+	config.session_restore = 0;
+	config.session_launch_rules = NULL;
+	config.session_launch_rules_count = 0;
 	config.new_is_master = 1;
 	config.default_mfact = 0.55f;
 	config.default_nmaster = 1;
@@ -3535,6 +3622,8 @@ bool parse_config(void) {
 	config.exec_count = 0;
 	config.exec_once = NULL;
 	config.exec_once_count = 0;
+	config.session_launch_rules = NULL;
+	config.session_launch_rules_count = 0;
 	config.scroller_proportion_preset = NULL;
 	config.scroller_proportion_preset_count = 0;
 	config.circle_layout = NULL;
