@@ -511,7 +511,6 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 }
 
 void client_set_drop_area(Client *c) {
-
 	bool first_draw = false;
 	int32_t drop_direction = UNDIR;
 
@@ -539,56 +538,55 @@ void client_set_drop_area(Client *c) {
 
 	struct wlr_box drop_box;
 
-	// 左边缘：x 在 0~30% 客户区宽度，且 y 在 30%~70% 客户区高度
-	if (rel_x < client_width * 0.3 && rel_y > client_height * 0.3 &&
-		rel_y < client_height * 0.7) {
-		drop_box.x = bw;
-		drop_box.y = bw;
-		drop_box.width = client_width * 0.3;
-		drop_box.height = client_height;
-		drop_direction = LEFT;
-	}
-	// 右边缘：x 在 70%~100% 客户区宽度，且 y 在 30%~70% 客户区高度
-	else if (rel_x > client_width * 0.7 && rel_y > client_height * 0.3 &&
-			 rel_y < client_height * 0.7) {
-		drop_box.x = bw + client_width * 0.7;
-		drop_box.y = bw;
-		drop_box.width = client_width * 0.3;
-		drop_box.height = client_height;
-		drop_direction = RIGHT;
-	}
-	// 上边缘：x 在 30%~70% 客户区宽度，且 y 在 0~30% 客户区高度
-	else if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&
-			 rel_y < client_height * 0.3) {
-		drop_box.x = bw;
-		drop_box.y = bw;
-		drop_box.width = client_width;
-		drop_box.height = client_height * 0.3;
-		drop_direction = UP;
-	}
-	// 下边缘：x 在 30%~70% 客户区宽度，且 y 在 70%~100% 客户区高度
-	else if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&
-			 rel_y > client_height * 0.7) {
-		drop_box.x = bw;
-		drop_box.y = bw + client_height * 0.7;
-		drop_box.width = client_width;
-		drop_box.height = client_height * 0.3;
-		drop_direction = DOWN;
-	}
-	// 中心（或其他角落）：显示在中间区域
-	else {
+	// 中心区域：x和y都在30%~70%之间 → 无方向
+	if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&
+		rel_y > client_height * 0.3 && rel_y < client_height * 0.7) {
 		drop_box.x = bw + client_width * 0.3;
 		drop_box.y = bw + client_height * 0.3;
 		drop_box.width = client_width * 0.4;
 		drop_box.height = client_height * 0.4;
 		drop_direction = UNDIR;
+	} else {
+		// 否则根据到各边的距离决定方向
+		double dist_left = rel_x;
+		double dist_right = client_width - rel_x;
+		double dist_top = rel_y;
+		double dist_bottom = client_height - rel_y;
+
+		// 找出最小距离的方向（相等时按左、右、上、下的优先级顺序）
+		if (dist_left <= dist_right && dist_left <= dist_top &&
+			dist_left <= dist_bottom) {
+			drop_direction = LEFT;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width * 0.3;
+			drop_box.height = client_height;
+		} else if (dist_right <= dist_top && dist_right <= dist_bottom) {
+			drop_direction = RIGHT;
+			drop_box.x = bw + client_width * 0.7;
+			drop_box.y = bw;
+			drop_box.width = client_width * 0.3;
+			drop_box.height = client_height;
+		} else if (dist_top <= dist_bottom) {
+			drop_direction = UP;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width;
+			drop_box.height = client_height * 0.3;
+		} else {
+			drop_direction = DOWN;
+			drop_box.x = bw;
+			drop_box.y = bw + client_height * 0.7;
+			drop_box.width = client_width;
+			drop_box.height = client_height * 0.3;
+		}
 	}
 
+	// 如果方向和上次相同且不是第一次绘制，则跳过更新
 	if (!first_draw && c->drop_direction == drop_direction) {
 		return;
-	} else {
-		c->drop_direction = drop_direction;
 	}
+	c->drop_direction = drop_direction;
 
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
