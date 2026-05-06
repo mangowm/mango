@@ -366,6 +366,7 @@ typedef struct {
 
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
+	int32_t xwayland_render_unfocused;
 	int32_t syncobj_enable;
 	float drag_tile_refresh_interval;
 	float drag_floating_refresh_interval;
@@ -1422,6 +1423,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->single_scratchpad = atoi(value);
 	} else if (strcmp(key, "xwayland_persistence") == 0) {
 		config->xwayland_persistence = atoi(value);
+	} else if (strcmp(key, "xwayland_render_unfocused") == 0) {
+		config->xwayland_render_unfocused = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
 	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
@@ -3171,6 +3174,7 @@ void override_config(void) {
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
+	config.xwayland_render_unfocused = CLAMP_INT(config.xwayland_render_unfocused, 0, 1);
 	config.syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
 	config.drag_tile_refresh_interval =
 		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
@@ -3336,6 +3340,7 @@ void set_value_default() {
 	config.view_current_to_back = 0;
 	config.single_scratchpad = 1;
 	config.xwayland_persistence = 1;
+	config.xwayland_render_unfocused = 1;
 	config.syncobj_enable = 0;
 	config.drag_tile_refresh_interval = 8.0f;
 	config.drag_floating_refresh_interval = 8.0f;
