@@ -221,6 +221,7 @@ typedef struct {
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t drag_tile_to_tile;
+	int32_t drag_tile_small;
 	uint32_t swipe_min_threshold;
 	float focused_opacity;
 	float unfocused_opacity;
@@ -1388,6 +1389,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->enable_floating_snap = atoi(value);
 	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
+	} else if (strcmp(key, "drag_tile_small") == 0) {
+		config->drag_tile_small = atoi(value);
 	} else if (strcmp(key, "swipe_min_threshold") == 0) {
 		config->swipe_min_threshold = atoi(value);
 	} else if (strcmp(key, "focused_opacity") == 0) {
@@ -3102,6 +3105,7 @@ void override_config(void) {
 	config.drag_floating_refresh_interval =
 		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	config.allow_shortcuts_inhibit =
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
@@ -3245,6 +3249,7 @@ void set_value_default() {
 	config.no_border_when_single = 0;
 	config.snap_distance = 30;
 	config.drag_tile_to_tile = 0;
+	config.drag_tile_small = 1;
 	config.enable_floating_snap = 0;
 	config.swipe_min_threshold = 1;
 

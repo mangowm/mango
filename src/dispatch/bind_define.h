@@ -379,9 +379,18 @@ int32_t moveresize(const Arg *arg) {
 		grabc->drag_to_tile = true;
 		exit_scroller_stack(grabc);
 		setfloating(grabc, 1);
+		grabc->drag_tile_float_backup_geom = grabc->float_geom;
 		grabc->old_stack_inner_per = 0.0f;
 		grabc->old_master_inner_per = 0.0f;
 		set_size_per(grabc->mon, grabc);
+	}
+
+	if (grabc && grabc->drag_to_tile && config.drag_tile_small) {
+		grabc->geom.x = cursor->x - 150;
+		grabc->geom.y = cursor->y - 150;
+		grabc->geom.width = 300;
+		grabc->geom.height = 300;
+		resize(grabc, grabc->geom, 1);
 	}
 
 	switch (cursor_mode = arg->ui) {
