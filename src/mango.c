@@ -6661,11 +6661,14 @@ void xwaylandready(struct wl_listener *listener, void *data) {
 	wlr_xwayland_set_seat(xwayland, seat);
 
 	/* Set the default XWayland cursor to match the rest of dwl. */
-	if ((xcursor = wlr_xcursor_manager_get_xcursor(cursor_mgr, "default", 1)))
-		wlr_xwayland_set_cursor(
-			xwayland, xcursor->images[0]->buffer, xcursor->images[0]->width * 4,
-			xcursor->images[0]->width, xcursor->images[0]->height,
-			xcursor->images[0]->hotspot_x, xcursor->images[0]->hotspot_y);
+
+	if ((xcursor = wlr_xcursor_manager_get_xcursor(cursor_mgr, "default", 1))) {
+		struct wlr_xcursor_image *image = xcursor->images[0];
+		struct wlr_buffer *buffer = wlr_xcursor_image_get_buffer(image);
+		wlr_xwayland_set_cursor(xwayland, buffer, xcursor->images[0]->hotspot_x,
+								xcursor->images[0]->hotspot_y);
+	}
+
 	/* xwayland can't auto sync the keymap, so we do it manually
 	  and we need to wait the xwayland completely inited
 	*/
