@@ -988,8 +988,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "tagtoleft") == 0) {
 		func = tagtoleft;
 		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "tagtoleftsilent") == 0) {
+		func = tagtoleftsilent;
+		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "tagtoright") == 0) {
 		func = tagtoright;
+		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "tagtorightsilent") == 0) {
+		func = tagtorightsilent;
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
