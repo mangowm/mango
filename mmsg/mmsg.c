@@ -546,6 +546,19 @@ static void usage(void) {
 }
 
 int32_t main(int32_t argc, char *argv[]) {
+
+	const char *env_XDG_DEKSTOP = getenv("XDG_CURRENT_DESKTOP");
+
+	/*
+	 * https://specifications.freedesktop.org/mime-apps/latest/file.html
+	 * can be more than just 'mango' but 'mango,mangowm,wlroots'
+	 */
+	if (!env_XDG_DEKSTOP || !strstr(env_XDG_DEKSTOP, "mango")) {
+		fprintf(stderr, "wrong dekstop, wanted 'mango' have '%s'\n",
+				env_XDG_DEKSTOP);
+		exit(EXIT_FAILURE);
+	}
+
 	ARGBEGIN {
 	case 'q':
 		qflag = 1;
