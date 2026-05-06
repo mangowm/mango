@@ -425,6 +425,7 @@ struct Client {
 	struct Client *prev_in_stack;
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
+	struct wlr_box drag_tile_float_backup_geom;
 };
 
 typedef struct {
@@ -2313,6 +2314,7 @@ buttonpress(struct wl_listener *listener, void *data) {
 			last_apply_drap_time = 0;
 			if (tmpc->drag_to_tile && config.drag_tile_to_tile) {
 				place_drag_tile_client(tmpc);
+				tmpc->float_geom = tmpc->drag_tile_float_backup_geom;
 			} else {
 				apply_window_snap(tmpc);
 			}
