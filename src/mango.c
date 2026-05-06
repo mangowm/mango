@@ -822,6 +822,8 @@ static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
 static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
+static void scroller_insert_stack(Client *c, Client *target_client,
+								  bool insert_before);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -2064,33 +2066,155 @@ void hold_end(struct wl_listener *listener, void *data) {
 										  event->time_msec, event->cancelled);
 }
 
-void place_drag_tile_client(Client *c) {
-	Client *tc = NULL;
-	Client *closest_client = NULL;
-	long min_distant = LONG_MAX;
-	long temp_distant;
-	int32_t x, y;
+Client *find_closest_tiled_client(Client *c) {
+	Client *tc, *closest = NULL;
+	long min_dist = LONG_MAX;
 
 	wl_list_for_each(tc, &clients, link) {
-		if (tc != c && ISTILED(tc) && VISIBLEON(tc, c->mon)) {
-			x = tc->geom.x + (int32_t)(tc->geom.width / 2) - cursor->x;
-			y = tc->geom.y + (int32_t)(tc->geom.height / 2) - cursor->y;
-			temp_distant = x * x + y * y;
-			if (temp_distant < min_distant) {
-				min_distant = temp_distant;
-				closest_client = tc;
-			}
+		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, c->mon))
+			continue;
+
+		int32_t dx = tc->geom.x + (int32_t)(tc->geom.width / 2) - cursor->x;
+		int32_t dy = tc->geom.y + (int32_t)(tc->geom.height / 2) - cursor->y;
+		long dist = (long)dx * dx + (long)dy * dy;
+
+		if (dist < min_dist) {
+			min_dist = dist;
+			closest = tc;
 		}
 	}
-	if (closest_client && closest_client->link.prev != &c->link) {
-		wl_list_remove(&c->link);
-		c->link.next = &closest_client->link;
-		c->link.prev = closest_client->link.prev;
-		closest_client->link.prev->next = &c->link;
-		closest_client->link.prev = &c->link;
-	} else if (closest_client) {
-		exchange_two_client(c, closest_client);
+
+	return closest;
+}
+
+void scroller_insert_stack(Client *c, Client *target_client,
+						   bool insert_before) {
+	Client *stack_head = NULL;
+
+	if (!target_client || target_client->mon != c->mon) {
+		return;
+	} else {
+		c->isglobal = target_client->isglobal = 0;
+		c->isunglobal = target_client->isunglobal = 0;
+		c->tags = target_client->tags = get_tags_first_tag(target_client->tags);
 	}
+
+	if (c->isfullscreen) {
+		setfullscreen(c, 0);
+	}
+
+	if (c->ismaximizescreen) {
+		setmaximizescreen(c, 0);
+	}
+
+	exit_scroller_stack(c);
+	stack_head = get_scroll_stack_head(target_client);
+
+	if (insert_before) {
+		if (target_client->prev_in_stack) {
+			target_client->prev_in_stack->next_in_stack = c;
+		}
+		c->prev_in_stack = target_client->prev_in_stack;
+		c->next_in_stack = target_client;
+		target_client->prev_in_stack = c;
+
+	} else {
+		if (target_client->next_in_stack) {
+			target_client->next_in_stack->prev_in_stack = c;
+		}
+		c->next_in_stack = target_client->next_in_stack;
+		c->prev_in_stack = target_client;
+		target_client->next_in_stack = c;
+	}
+
+	if (stack_head->ismaximizescreen) {
+		setmaximizescreen(stack_head, 0);
+	}
+
+	if (stack_head->isfullscreen) {
+		setfullscreen(stack_head, 0);
+	}
+
+	arrange(c->mon, false, false);
+
+	return;
+}
+
+void try_scroller_drop(Client *c, Client *closest, int vertical) {
+	double ratio_main, ratio_cross;
+	int32_t main_pos, cross_pos;
+	int32_t main_size, cross_size;
+	Client *stack_head = NULL;
+
+	if (vertical) {
+		main_pos = cursor->y;
+		cross_pos = cursor->x;
+		main_size = closest->geom.height;
+		cross_size = closest->geom.width;
+	} else {
+		main_pos = cursor->x;
+		cross_pos = cursor->y;
+		main_size = closest->geom.width;
+		cross_size = closest->geom.height;
+	}
+
+	ratio_main =
+		(double)(main_pos - (vertical ? closest->geom.y : closest->geom.x)) /
+		main_size;
+	ratio_cross =
+		(double)(cross_pos - (vertical ? closest->geom.x : closest->geom.y)) /
+		cross_size;
+
+	if (ratio_main > 0.3 && ratio_main < 0.7 &&
+		(ratio_cross < 0.3 || ratio_cross > 0.7)) {
+		setfloating(c, 0);
+		if (ratio_cross < 0.3) {
+			scroller_insert_stack(c, closest, true);
+		} else {
+			scroller_insert_stack(c, closest, false);
+		}
+		return;
+	}
+
+	stack_head = get_scroll_stack_head(closest);
+
+	if (ratio_main < 0.3) {
+		wl_list_remove(&c->link);
+		wl_list_insert(stack_head->link.prev, &c->link);
+	} else {
+		wl_list_remove(&c->link);
+		wl_list_insert(&stack_head->link, &c->link);
+	}
+
+	setfloating(c, 0);
+}
+
+void place_drag_tile_client(Client *c) {
+	Client *closest = find_closest_tiled_client(c);
+
+	if (closest && closest->mon) {
+		const Layout *layout =
+			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
+
+		if (layout) {
+			if (layout->id == SCROLLER) {
+				try_scroller_drop(c, closest, 0);
+				return;
+			}
+			if (layout->id == VERTICAL_SCROLLER) {
+				try_scroller_drop(c, closest, 1);
+				return;
+			}
+		}
+
+		if (closest->link.prev != &c->link) {
+			wl_list_remove(&c->link);
+			wl_list_insert(closest->link.prev, &c->link);
+		} else {
+			exchange_two_client(c, closest);
+		}
+	}
+
 	setfloating(c, 0);
 }
 
