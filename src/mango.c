@@ -453,6 +453,7 @@ typedef struct {
 	struct wl_listener modifiers;
 	struct wl_listener key;
 	struct wl_listener destroy;
+	xkb_layout_index_t last_group;
 } KeyboardGroup;
 
 typedef struct {
@@ -2963,6 +2964,7 @@ KeyboardGroup *createkeyboardgroup(void) {
 
 	group->wlr_group = wlr_keyboard_group_create();
 	group->wlr_group->data = group;
+	group->last_group = XKB_LAYOUT_INVALID;
 
 	context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	if (!(keymap = xkb_keymap_new_from_names(context, &config.xkb_rules,
@@ -4119,13 +4121,18 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
+	struct wlr_keyboard_modifiers *mods = &group->wlr_group->keyboard.modifiers;
 
 	if (!dwl_im_keyboard_grab_forward_modifiers(group)) {
 
 		wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
 		/* Send modifiers to the client. */
-		wlr_seat_keyboard_notify_modifiers(
-			seat, &group->wlr_group->keyboard.modifiers);
+		wlr_seat_keyboard_notify_modifiers(seat, mods);
+	}
+
+	if (mods->group != group->last_group) {
+		group->last_group = mods->group;
+		printstatus();
 	}
 }
 
