@@ -2125,6 +2125,7 @@ void scroller_insert_stack(Client *c, Client *target_client,
 }
 
 void try_scroller_drop(Client *c, Client *closest, int vertical) {
+
 	Client *stack_head = get_scroll_stack_head(closest);
 
 	if (vertical) {
@@ -2171,22 +2172,32 @@ void place_drag_tile_client(Client *c) {
 		const Layout *layout =
 			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
 
-		if (layout) {
-			if (layout->id == SCROLLER) {
-				try_scroller_drop(c, closest, 0);
-				return;
-			}
-			if (layout->id == VERTICAL_SCROLLER) {
-				try_scroller_drop(c, closest, 1);
-				return;
-			}
+		if (closest->drop_direction == UNDIR) {
+			exchange_two_client(c, closest);
+			setfloating(c, 0);
+			return;
 		}
 
-		if (closest->link.prev != &c->link) {
-			wl_list_remove(&c->link);
-			wl_list_insert(closest->link.prev, &c->link);
-		} else {
+		if (layout->id == SCROLLER) {
+			try_scroller_drop(c, closest, 0);
+			return;
+		}
+		if (layout->id == VERTICAL_SCROLLER) {
+			try_scroller_drop(c, closest, 1);
+			return;
+		}
+
+		if (closest->ismaster) {
 			exchange_two_client(c, closest);
+		} else {
+			if (closest->drop_direction == LEFT ||
+				closest->drop_direction == UP) {
+				wl_list_remove(&c->link);
+				wl_list_insert(closest->link.prev, &c->link);
+			} else {
+				wl_list_remove(&c->link);
+				wl_list_insert(&closest->link, &c->link);
+			}
 		}
 	}
 
