@@ -314,6 +314,7 @@ struct Client {
 	Monitor *mon;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
+	struct wlr_scene_rect *droparea;
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
@@ -422,6 +423,8 @@ struct Client {
 	bool isfocusing;
 	struct Client *next_in_stack;
 	struct Client *prev_in_stack;
+	bool enable_drop_area_draw;
+	int32_t drop_direction;
 };
 
 typedef struct {
@@ -873,7 +876,7 @@ static KeyboardGroup *kb_group;
 static struct wl_list inputdevices;
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
-static Client *grabc;
+static Client *grabc, *dropc;
 static int32_t rzcorner;
 static int32_t grabcx, grabcy;						   /* client-relative */
 static int32_t drag_begin_cursorx, drag_begin_cursory; /* client-relative */
@@ -2122,49 +2125,40 @@ void scroller_insert_stack(Client *c, Client *target_client,
 }
 
 void try_scroller_drop(Client *c, Client *closest, int vertical) {
-	double ratio_main, ratio_cross;
-	int32_t main_pos, cross_pos;
-	int32_t main_size, cross_size;
-	Client *stack_head = NULL;
+	Client *stack_head = get_scroll_stack_head(closest);
 
 	if (vertical) {
-		main_pos = cursor->y;
-		cross_pos = cursor->x;
-		main_size = closest->geom.height;
-		cross_size = closest->geom.width;
-	} else {
-		main_pos = cursor->x;
-		cross_pos = cursor->y;
-		main_size = closest->geom.width;
-		cross_size = closest->geom.height;
-	}
-
-	ratio_main =
-		(double)(main_pos - (vertical ? closest->geom.y : closest->geom.x)) /
-		main_size;
-	ratio_cross =
-		(double)(cross_pos - (vertical ? closest->geom.x : closest->geom.y)) /
-		cross_size;
-
-	if (ratio_main > 0.3 && ratio_main < 0.7 &&
-		(ratio_cross < 0.3 || ratio_cross > 0.7)) {
-		setfloating(c, 0);
-		if (ratio_cross < 0.3) {
+		if (closest->drop_direction == LEFT) {
+			setfloating(c, 0);
 			scroller_insert_stack(c, closest, true);
-		} else {
+			return;
+		} else if (closest->drop_direction == RIGHT) {
+			setfloating(c, 0);
 			scroller_insert_stack(c, closest, false);
+			return;
+		} else if (closest->drop_direction == UP) {
+			wl_list_remove(&c->link);
+			wl_list_insert(stack_head->link.prev, &c->link);
+		} else if (closest->drop_direction == DOWN) {
+			wl_list_remove(&c->link);
+			wl_list_insert(&stack_head->link, &c->link);
 		}
-		return;
-	}
-
-	stack_head = get_scroll_stack_head(closest);
-
-	if (ratio_main < 0.3) {
-		wl_list_remove(&c->link);
-		wl_list_insert(stack_head->link.prev, &c->link);
 	} else {
-		wl_list_remove(&c->link);
-		wl_list_insert(&stack_head->link, &c->link);
+		if (closest->drop_direction == UP) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, true);
+			return;
+		} else if (closest->drop_direction == DOWN) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, false);
+			return;
+		} else if (closest->drop_direction == LEFT) {
+			wl_list_remove(&c->link);
+			wl_list_insert(stack_head->link.prev, &c->link);
+		} else if (closest->drop_direction == RIGHT) {
+			wl_list_remove(&c->link);
+			wl_list_insert(&stack_head->link, &c->link);
+		}
 	}
 
 	setfloating(c, 0);
@@ -2317,6 +2311,11 @@ buttonpress(struct wl_listener *listener, void *data) {
 				apply_window_snap(tmpc);
 			}
 			tmpc->drag_to_tile = false;
+			if (dropc) {
+				dropc->enable_drop_area_draw = false;
+				client_set_drop_area(dropc);
+				dropc = NULL;
+			}
 			return;
 		} else {
 			cursor_mode = CurNormal;
@@ -4182,6 +4181,8 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 }
 
 void init_client_properties(Client *c) {
+	c->drop_direction = UNDIR;
+	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
 	c->isfloating = 0;
 	c->isfakefullscreen = 0;
@@ -4323,6 +4324,12 @@ mapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	// extra node
+
+	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.bordercolor);
+	wlr_scene_node_lower_to_bottom(&c->droparea->node);
+	wlr_scene_node_set_position(&c->droparea->node, 0, 0);
+	wlr_scene_node_set_enabled(&c->droparea->node, false);
+
 	c->border = wlr_scene_rect_create(
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
@@ -4513,6 +4520,7 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 				  double dy, double dx_unaccel, double dy_unaccel) {
 	double sx = 0, sy = 0, sx_confined, sy_confined;
 	Client *c = NULL, *w = NULL;
+	Client *closet_drop_client = NULL;
 	LayerSurface *l = NULL;
 	struct wlr_surface *surface = NULL;
 	struct wlr_pointer_constraint_v1 *constraint;
@@ -4584,6 +4592,20 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 							 .y = (int32_t)round(cursor->y) - grabcy,
 							 .width = grabc->geom.width,
 							 .height = grabc->geom.height};
+		if (config.drag_tile_to_tile && grabc->drag_to_tile) {
+			closet_drop_client = find_closest_tiled_client(grabc);
+			if (dropc && closet_drop_client != dropc) {
+				dropc->enable_drop_area_draw = false;
+				client_set_drop_area(dropc);
+				dropc = closet_drop_client;
+				dropc->enable_drop_area_draw = true;
+				client_set_drop_area(dropc);
+			} else {
+				dropc = closet_drop_client;
+				dropc->enable_drop_area_draw = true;
+				client_set_drop_area(dropc);
+			}
+		}
 		resize(grabc, grabc->float_geom, 1);
 		return;
 	} else if (cursor_mode == CurResize) {
@@ -6208,6 +6230,10 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	if (c == grabc) {
 		cursor_mode = CurNormal;
 		grabc = NULL;
+	}
+
+	if (c == dropc) {
+		dropc = NULL;
 	}
 
 	wl_list_for_each(m, &mons, link) {
