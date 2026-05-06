@@ -4336,7 +4336,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 
 	// extra node
 
-	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.bordercolor);
+	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
 	wlr_scene_node_set_position(&c->droparea->node, 0, 0);
 	wlr_scene_node_set_enabled(&c->droparea->node, false);
