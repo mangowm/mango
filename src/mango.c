@@ -653,8 +653,7 @@ static void motionnotify(uint32_t time, struct wlr_input_device *device,
 						 double sy_unaccel);
 static void motionrelative(struct wl_listener *listener, void *data);
 
-static void reset_foreign_tolevel(Client *c);
-static void remove_foreign_topleve(Client *c);
+static void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
 static void add_foreign_topleve(Client *c);
 static void exchange_two_client(Client *c1, Client *c2);
 static void outputmgrapply(struct wl_listener *listener, void *data);
@@ -1159,8 +1158,12 @@ void swallow(Client *c, Client *w) {
 	wl_list_insert(&w->link, &c->link);
 	wl_list_insert(&w->flink, &c->flink);
 
-	if (w->foreign_toplevel)
-		remove_foreign_topleve(w);
+	if (w->foreign_toplevel) {
+		wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
+													w->mon->wlr_output);
+		wlr_foreign_toplevel_handle_v1_destroy(w->foreign_toplevel);
+		w->foreign_toplevel = NULL;
+	}
 
 	wlr_scene_node_set_enabled(&w->scene->node, false);
 	wlr_scene_node_set_enabled(&c->scene->node, true);
@@ -1168,6 +1171,10 @@ void swallow(Client *c, Client *w) {
 
 	if (!c->foreign_toplevel && c->mon)
 		add_foreign_toplevel(c);
+	else if (c->foreign_toplevel && c->mon) {
+		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
+													c->mon->wlr_output);
+	}
 
 	client_pending_fullscreen_state(c, w->isfullscreen);
 	client_pending_maximized_state(c, w->ismaximizescreen);
@@ -1182,7 +1189,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		Monitor *oldmon = c->mon;
 		c->scratchpad_switching_mon = true;
 		c->mon = selmon;
-		reset_foreign_tolevel(c);
+		reset_foreign_tolevel(c, oldmon, c->mon);
 		client_update_oldmonname_record(c, selmon);
 
 		// 根据新monitor调整窗口尺寸
@@ -2524,7 +2531,13 @@ void closemon(Monitor *m) {
 		if (c->mon == m) {
 
 			if (selmon == NULL) {
-				remove_foreign_topleve(c);
+				if (c->foreign_toplevel) {
+					wlr_foreign_toplevel_handle_v1_output_leave(
+						c->foreign_toplevel, c->mon->wlr_output);
+					wlr_foreign_toplevel_handle_v1_destroy(c->foreign_toplevel);
+					c->foreign_toplevel = NULL;
+				}
+
 				c->mon = NULL;
 			} else {
 				client_change_mon(c, selmon);
@@ -4452,7 +4465,11 @@ void set_minimized(Client *c) {
 	c->is_scratchpad_show = 0;
 	focusclient(focustop(selmon), 1);
 	arrange(c->mon, false, false);
-	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, false);
+
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel,
+													 false);
+
 	wl_list_remove(&c->link);				// 从原来位置移除
 	wl_list_insert(clients.prev, &c->link); // 插入尾部
 }
@@ -5612,7 +5629,7 @@ void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		arrange(oldmon, false, false);
 	if (m) {
 		/* Make sure window actually overlaps with the monitor */
-		reset_foreign_tolevel(c);
+		reset_foreign_tolevel(c, oldmon, m);
 		resize(c, c->geom, 0);
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
@@ -5659,7 +5676,9 @@ void show_hide_client(Client *c) {
 	}
 	client_pending_minimized_state(c, 0);
 	focusclient(c, 1);
-	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
+
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
 }
 
 void create_output(struct wlr_backend *backend, void *data) {
@@ -6436,7 +6455,7 @@ void updatemons(struct wl_listener *listener, void *data) {
 		wl_list_for_each(c, &clients, link) {
 			if (!c->mon && client_surface(c)->mapped) {
 				c->mon = selmon;
-				reset_foreign_tolevel(c);
+				reset_foreign_tolevel(c, NULL, c->mon);
 			}
 			if (c->tags == 0 && !c->is_in_scratchpad) {
 				c->tags = selmon->tagset[selmon->seltags];

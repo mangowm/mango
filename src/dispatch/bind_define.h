@@ -1109,13 +1109,15 @@ int32_t tag(const Arg *arg) {
 }
 
 int32_t tagmon(const Arg *arg) {
-	Monitor *m = NULL, *cm = NULL;
+	Monitor *m = NULL, *cm = NULL, *oldmon = NULL;
 	if (!selmon)
 		return 0;
 	Client *c = focustop(selmon);
 
 	if (!c)
 		return 0;
+
+	oldmon = c->mon;
 
 	if (arg->i != UNDIR) {
 		m = dirtomon(arg->i);
@@ -1151,12 +1153,12 @@ int32_t tagmon(const Arg *arg) {
 	setmon(c, m, newtags, true);
 	client_update_oldmonname_record(c, m);
 
-	reset_foreign_tolevel(c);
+	reset_foreign_tolevel(c, oldmon, c->mon);
 
 	c->float_geom.width =
-		(int32_t)(c->float_geom.width * c->mon->w.width / selmon->w.width);
+		(int32_t)(c->float_geom.width * c->mon->w.width / oldmon->w.width);
 	c->float_geom.height =
-		(int32_t)(c->float_geom.height * c->mon->w.height / selmon->w.height);
+		(int32_t)(c->float_geom.height * c->mon->w.height / oldmon->w.height);
 	selmon = c->mon;
 	c->float_geom = setclient_coordinate_center(c, c->mon, c->float_geom, 0, 0);
 
