@@ -3700,8 +3700,14 @@ void focusclient(Client *c, int32_t lift) {
 	wl_list_for_each(um, &mons, link) {
 		if (um->wlr_output->enabled && um != selmon && um->sel &&
 			!um->sel->iskilling && um->sel->isfocusing) {
+
 			um->sel->isfocusing = false;
 			client_set_unfocused_opacity_animation(um->sel);
+
+			if (um->sel->foreign_toplevel) {
+				wlr_foreign_toplevel_handle_v1_set_activated(
+					um->sel->foreign_toplevel, false);
+			}
 		}
 	}
 
