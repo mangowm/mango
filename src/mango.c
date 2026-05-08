@@ -172,7 +172,7 @@ enum {
 	NetLast
 }; /* EWMH atoms */
 #endif
-enum { UP, DOWN, LEFT, RIGHT, UNDIR, CONSUME, EXPEL }; /* smartmovewin */
+enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
 enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { PREV, NEXT };

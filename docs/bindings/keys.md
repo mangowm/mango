@@ -145,8 +145,8 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `set_proportion` | `float` | Set scroller window proportion (0.0–1.0). |
 | `switch_proportion_preset` | - | Cycle proportion presets of scroller window. |
 | `scroller_stack` | `left/right/up/down` | Move window inside/outside scroller stack by direction. |
-| `scroller_stack` | `consume` | Add the adjacent neighbor into the current stack. |
-| `scroller_stack` | `expel` | Remove the last window from the current stack. |
+| `scroller_stack_consume` | - | Add the adjacent neighbor into the current stack. |
+| `scroller_stack_expel` | - | Remove the last window from the current stack. |
 | `incgaps` | `+/-value` | Adjust gap size. |
 | `togglegaps` | - | Toggle gaps. |
 

@@ -1855,44 +1855,58 @@ int32_t scroller_stack(const Arg *arg) {
 	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
 		return 0;
 
-	if (arg->i == CONSUME) {
-		bool is_horizontal_layout =
-			c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == SCROLLER;
-		int32_t consume_dir = is_horizontal_layout ? RIGHT : DOWN;
+	Client *target_client = find_client_by_direction(c, arg, false, true);
 
-		Client *target_client = find_client_by_direction(c, &(Arg){.i = consume_dir}, false, true);
+	return scroller_apply_stack(c, target_client, arg->i);
+}
 
-		if (target_client) {
-			Client *stack_tail = get_scroll_stack_head(c);
-			while (stack_tail->next_in_stack) {
-				stack_tail = stack_tail->next_in_stack;
-			}
-
-			scroller_insert_stack(target_client, stack_tail, false);
-		}
+int32_t scroller_stack_consume(const Arg *arg) {
+	if (!selmon)
 		return 0;
-	}
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
+		return 0;
 
-	if (arg->i == EXPEL) {
-		Client *stack_head = get_scroll_stack_head(c);
-		Client *stack_tail = stack_head;
+	bool is_horizontal_layout =
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == SCROLLER;
+	int32_t consume_dir = is_horizontal_layout ? RIGHT : DOWN;
 
+	Client *target_client = find_client_by_direction(c, &(Arg){.i = consume_dir}, false, true);
+
+	if (target_client) {
+		Client *stack_tail = get_scroll_stack_head(c);
 		while (stack_tail->next_in_stack) {
 			stack_tail = stack_tail->next_in_stack;
 		}
 
-		if (stack_tail != stack_head) {
-			exit_scroller_stack(stack_tail);
-			wl_list_remove(&stack_tail->link);
-			wl_list_insert(&stack_head->link, &stack_tail->link);
-			arrange(selmon, false, false);
+		if (target_client != stack_tail) {
+			scroller_insert_stack(target_client, stack_tail, false);
 		}
+	}
+	return 0;
+}
+
+int32_t scroller_stack_expel(const Arg *arg) {
+	if (!selmon)
 		return 0;
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
+		return 0;
+
+	Client *stack_head = get_scroll_stack_head(c);
+	Client *stack_tail = stack_head;
+
+	while (stack_tail->next_in_stack) {
+		stack_tail = stack_tail->next_in_stack;
 	}
 
-	Client *target_client = find_client_by_direction(c, arg, false, true);
-
-	return scroller_apply_stack(c, target_client, arg->i);
+	if (stack_tail != stack_head) {
+		exit_scroller_stack(stack_tail);
+		wl_list_remove(&stack_tail->link);
+		wl_list_insert(&stack_head->link, &stack_tail->link);
+		arrange(selmon, false, false);
+	}
+	return 0;
 }
 
 int32_t toggle_all_floating(const Arg *arg) {

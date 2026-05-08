@@ -537,10 +537,6 @@ int32_t parse_direction(const char *str) {
 		return LEFT;
 	} else if (strcmp(lowerStr, "right") == 0) {
 		return RIGHT;
-	} else if (strcmp(lowerStr, "consume") == 0) {
-		return CONSUME;
-	} else if (strcmp(lowerStr, "expel") == 0) {
-		return EXPEL;
 	} else {
 		return UNDIR;
 	}
@@ -1216,6 +1212,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "scroller_stack_consume") == 0) {
+		func = scroller_stack_consume;
+	} else if (strcmp(func_name, "scroller_stack_expel") == 0) {
+		func = scroller_stack_expel;
 	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
 		func = toggle_all_floating;
 	} else {
