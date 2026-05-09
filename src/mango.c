@@ -2220,6 +2220,8 @@ void place_drag_tile_client(Client *c) {
 								 closest->drop_direction == UP;
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
 						   config.dwindle_split_ratio, insert_before);
+			setfloating(c, 0);
+			return;
 		}
 
 		if (closest->drop_direction == LEFT || closest->drop_direction == UP) {
