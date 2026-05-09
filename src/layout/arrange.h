@@ -707,8 +707,7 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 	const Layout *current_layout =
 		grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag];
 	if (current_layout->id == TILE || current_layout->id == DECK ||
-		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE ||
-		(current_layout->id == TGMIX && grabc->mon->visible_tiling_clients <= 3)
+		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE
 
 	) {
 		resize_tile_master_horizontal(grabc, isdrag, offsetx, offsety, time,

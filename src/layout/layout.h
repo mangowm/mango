@@ -11,7 +11,6 @@ static void vertical_overview(Monitor *m);
 static void vertical_grid(Monitor *m);
 static void vertical_scroller(Monitor *m);
 static void vertical_deck(Monitor *mon);
-static void tgmix(Monitor *m);
 static void dwindle(Monitor *m);
 
 /* layout(s) */
@@ -29,7 +28,6 @@ enum {
 	VERTICAL_GRID,
 	VERTICAL_DECK,
 	RIGHT_TILE,
-	TGMIX,
 	DWINDLE,
 };
 
@@ -48,6 +46,5 @@ Layout layouts[] = {
 	{"VT", vertical_tile, "vertical_tile", VERTICAL_TILE}, // 垂直平铺布局
 	{"VG", vertical_grid, "vertical_grid", VERTICAL_GRID}, // 垂直格子布局
 	{"VK", vertical_deck, "vertical_deck", VERTICAL_DECK}, // 垂直卡片布局
-	{"TG", tgmix, "tgmix", TGMIX},						   // 混合布局
 	{"DW", dwindle, "dwindle", DWINDLE},
 };

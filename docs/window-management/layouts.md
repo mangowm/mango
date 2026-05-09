@@ -18,7 +18,7 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `vertical_scroller`
 - `vertical_grid`
 - `vertical_deck`
-- `tgmix`
+- `dwindle`
 
 ---
 

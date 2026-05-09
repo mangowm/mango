@@ -64,7 +64,7 @@ mmsg -s -t 2^
 
 ### Layouts
 
-Switch layouts programmatically. Layout codes: `S` (Scroller), `T` (Tile), `G` (Grid), `M` (Monocle), `K` (Deck), `CT` (Center Tile), `RT` (Right Tile), `VS` (Vertical Scroller), `VT` (Vertical Tile), `VG` (Vertical Grid), `VK` (Vertical Deck), `TG` (TGMix).
+Switch layouts programmatically. Layout codes: `S` (Scroller), `T` (Tile), `G` (Grid), `M` (Monocle), `K` (Deck), `CT` (Center Tile), `RT` (Right Tile), `VS` (Vertical Scroller), `VT` (Vertical Tile), `VG` (Vertical Grid), `VK` (Vertical Deck), `DW` (Dwindle).
 
 ```bash
 # Switch to Scroller
