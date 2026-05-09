@@ -3751,7 +3751,7 @@ void reapply_rootbg(void) {
 	wlr_scene_rect_set_color(root_bg, config.rootcolor);
 }
 
-void reapply_border(void) {
+void reapply_property(void) {
 	Client *c = NULL;
 
 	// reset border width when config change
@@ -3760,6 +3760,8 @@ void reapply_border(void) {
 			if (!c->isnoborder && !c->isfullscreen) {
 				c->bw = config.borderpx;
 			}
+
+			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
 		}
 	}
 }
@@ -3905,7 +3907,7 @@ void reset_option(void) {
 	run_exec();
 
 	reapply_cursor_style();
-	reapply_border();
+	reapply_property();
 	reapply_rootbg();
 	reapply_keyboard();
 	reapply_pointer();
