@@ -560,6 +560,8 @@ typedef struct {
 	struct wl_listener destroy;
 } SessionLock;
 
+typedef struct DwindleNode DwindleNode;
+
 /* function declarations */
 static void applybounds(
 	Client *c,
@@ -815,6 +817,11 @@ static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
 static void scroller_insert_stack(Client *c, Client *target_client,
 								  bool insert_before);
+static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
+								float ratio, int32_t dir);
+static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
+									   int32_t dy);
+static void dwindle_resize_client(Monitor *m, Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -946,6 +953,7 @@ struct Pertag {
 	int32_t no_hide[LENGTH(tags) + 1];	/* no_hide per tag */
 	int32_t no_render_border[LENGTH(tags) + 1]; /* no_render_border per tag */
 	int32_t open_as_floating[LENGTH(tags) + 1]; /* open_as_floating per tag */
+	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
 	const Layout
 		*ltidxs[LENGTH(tags) + 1]; /* matrix of tags and layouts indexes  */
 };
@@ -1018,6 +1026,7 @@ static struct wl_event_source *sync_keymap;
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
 #include "layout/arrange.h"
+#include "layout/dwindle.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
 
@@ -1179,6 +1188,17 @@ void swallow(Client *c, Client *w) {
 	client_pending_fullscreen_state(c, w->isfullscreen);
 	client_pending_maximized_state(c, w->ismaximizescreen);
 	client_pending_minimized_state(c, w->isminimized);
+
+	Monitor *m;
+	wl_list_for_each(m, &mons, link) {
+		for (uint32_t t = 0; t < LENGTH(tags) + 1; t++) {
+			DwindleNode **root = &m->pertag->dwindle_root[t];
+			dwindle_remove(root, c);
+			DwindleNode *wn = dwindle_find_leaf(*root, w);
+			if (wn)
+				wn->client = c;
+		}
+	}
 }
 
 bool switch_scratchpad_client_state(Client *c) {
@@ -2181,8 +2201,8 @@ void place_drag_tile_client(Client *c) {
 			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
 
 		if (closest->drop_direction == UNDIR) {
-			exchange_two_client(c, closest);
 			setfloating(c, 0);
+			exchange_two_client(c, closest);
 			return;
 		}
 
@@ -2192,6 +2212,15 @@ void place_drag_tile_client(Client *c) {
 		}
 		if (layout->id == VERTICAL_SCROLLER) {
 			try_scroller_drop(c, closest, 1);
+			return;
+		}
+		if (layout->id == DWINDLE) {
+			setfloating(c, 0);
+			uint32_t tag = c->mon->pertag->curtag;
+			bool insert_before = closest->drop_direction == LEFT ||
+								 closest->drop_direction == UP;
+			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
+						   config.dwindle_split_ratio, insert_before);
 			return;
 		}
 
@@ -2507,6 +2536,9 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		m->skip_frame_timeout = NULL;
 	}
 	m->wlr_output->data = NULL;
+
+	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
+		dwindle_free_tree(m->pertag->dwindle_root[t]);
 	free(m->pertag);
 	free(m);
 }
@@ -5101,10 +5133,20 @@ void exchange_two_client(Client *c1, Client *c2) {
 		tmp_tags = c2->tags;
 		setmon(c2, c1->mon, c1->tags, false);
 		setmon(c1, tmp_mon, tmp_tags, false);
+		if (c1->mon &&
+			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
+			dwindle_swap_clients(
+				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
+				c2);
 		arrange(c1->mon, false, false);
 		arrange(c2->mon, false, false);
 		focusclient(c1, 0);
 	} else {
+		if (c1->mon &&
+			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
+			dwindle_swap_clients(
+				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
+				c2);
 		arrange(c1->mon, false, false);
 	}
 
@@ -6343,6 +6385,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->next_in_stack = NULL;
 	c->prev_in_stack = NULL;
 
+	dwindle_remove_client(c);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus();
 	motionnotify(0, NULL, 0, 0, 0, 0);

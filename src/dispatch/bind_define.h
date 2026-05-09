@@ -112,6 +112,10 @@ int32_t exchange_client(const Arg *arg) {
 
 	Client *tc = direction_select(arg);
 	tc = get_focused_stack_client(tc);
+
+	if (!tc)
+		return 0;
+
 	exchange_two_client(c, tc);
 	return 0;
 }
