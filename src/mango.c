@@ -2216,10 +2216,13 @@ void place_drag_tile_client(Client *c) {
 		}
 		if (layout->id == DWINDLE) {
 			uint32_t tag = c->mon->pertag->curtag;
-			bool insert_before = closest->drop_direction == LEFT ||
-								 closest->drop_direction == UP;
+			bool insert_before = (closest->drop_direction == LEFT ||
+								  closest->drop_direction == UP);
+			bool split_h = (closest->drop_direction == LEFT ||
+							closest->drop_direction == RIGHT);
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
-						   config.dwindle_split_ratio, insert_before);
+						   config.dwindle_split_ratio, insert_before, split_h,
+						   true);
 			setfloating(c, 0);
 			return;
 		}

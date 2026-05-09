@@ -50,7 +50,8 @@ static void dwindle_free_tree(DwindleNode *node) {
 }
 
 static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
-						   float ratio, bool as_first) {
+						   float ratio, bool as_first, bool split_h,
+						   bool lock) {
 	DwindleNode *new_leaf = dwindle_new_leaf(new_c);
 
 	if (!*root) {
@@ -65,6 +66,9 @@ static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 	DwindleNode *split = calloc(1, sizeof(DwindleNode));
 	split->is_split = true;
 	split->ratio = ratio;
+	split->split_h = split_h;
+	split->split_locked = lock;
+
 	if (as_first) {
 		split->first = new_leaf;
 		split->second = target;
@@ -164,7 +168,8 @@ static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
 		return;
 	dwindle_remove(root, c);
 	bool as_first = (dir == UP || dir == LEFT);
-	dwindle_insert(root, c, target, ratio, as_first);
+	bool split_h = (dir == LEFT || dir == RIGHT);
+	dwindle_insert(root, c, target, ratio, as_first, split_h, true);
 }
 
 static void dwindle_swap_clients(DwindleNode **root, Client *a, Client *b) {
@@ -315,6 +320,8 @@ static void dwindle_remove_client(Client *c) {
 static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 									   Client *focused, float ratio) {
 	bool as_first = false;
+	bool split_h = false;
+	bool lock = false;
 
 	if (focused) {
 		struct wlr_box *fg = &focused->geom;
@@ -322,44 +329,36 @@ static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 		double fcy = fg->y + fg->height * 0.5;
 
 		if (config.dwindle_smart_split) {
-			/* Divide the focused window into 4 triangles using its diagonals.
-			 * The triangle the cursor falls in determines both the split axis
-			 * and which side the new window appears on. */
 			double nx = (cursor->x - fcx) / (fg->width * 0.5);
 			double ny = (cursor->y - fcy) / (fg->height * 0.5);
-			bool do_split_h;
-			if (fabs(ny) > fabs(nx)) {
-				do_split_h = false;
-				as_first = (ny < 0); /* top triangle → new window on top */
-			} else {
-				do_split_h = true;
-				as_first = (nx < 0); /* left triangle → new window on left */
-			}
-			dwindle_insert(root, new_c, focused, ratio, as_first);
-			DwindleNode *leaf = dwindle_find_leaf(*root, new_c);
-			if (leaf && leaf->parent) {
-				leaf->parent->split_h = do_split_h;
-				leaf->parent->split_locked = true;
-			}
-			return;
-		}
 
-		/* Predict likely split direction from the focused window's shape. */
-		bool likely_h = (fg->width >= fg->height);
-		if (likely_h) {
-			if (config.dwindle_hsplit == 0)
-				as_first = (cursor->x < fcx); /* follow mouse */
-			else
-				as_first = (config.dwindle_hsplit == 2); /* 2=left, 1=right */
+			if (fabs(ny) > fabs(nx)) {
+				split_h = false;	 // vertical split
+				as_first = (ny < 0); // top → new window on top
+			} else {
+				split_h = true;		 // horizontal split
+				as_first = (nx < 0); // left → new window on left
+			}
+			lock = true; // lock split direction
 		} else {
-			if (config.dwindle_vsplit == 0)
-				as_first = (cursor->y < fcy); /* follow mouse */
-			else
-				as_first = (config.dwindle_vsplit == 2); /* 2=top, 1=bottom */
+			// normal mode, auto split
+			bool likely_h = (fg->width >= fg->height);
+			if (likely_h) {
+				if (config.dwindle_hsplit == 0)
+					as_first = (cursor->x < fcx);
+				else
+					as_first = (config.dwindle_hsplit == 2);
+			} else {
+				if (config.dwindle_vsplit == 0)
+					as_first = (cursor->y < fcy);
+				else
+					as_first = (config.dwindle_vsplit == 2);
+			}
+			// split_h and lock are false, decided by width/height ratio
 		}
 	}
 
-	dwindle_insert(root, new_c, focused, ratio, as_first);
+	dwindle_insert(root, new_c, focused, ratio, as_first, split_h, lock);
 }
 
 void dwindle(Monitor *m) {
