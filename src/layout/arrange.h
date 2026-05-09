@@ -491,23 +491,15 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
 						 int32_t offsety, uint32_t time, bool isvertical) {
 
-	if (!start_drag_window) {
+	if (!isdrag) {
 		dwindle_resize_client_step(grabc->mon, grabc, offsetx, offsety);
+		return;
 	}
 
-	if (isdrag) {
-		int32_t dx = (int32_t)round(cursor->x) - drag_begin_cursorx;
-		int32_t dy = (int32_t)round(cursor->y) - drag_begin_cursory;
-		dwindle_resize_client(grabc->mon, grabc, dx, dy);
-	} else if (last_apply_drap_time == 0 ||
-			   time - last_apply_drap_time >
-				   config.drag_tile_refresh_interval) {
+	if (last_apply_drap_time == 0 ||
+		time - last_apply_drap_time > config.drag_tile_refresh_interval) {
 		dwindle_resize_client(grabc->mon, grabc, offsetx, offsety);
 		last_apply_drap_time = time;
-	}
-
-	if (!isdrag) {
-		start_drag_window = false;
 	}
 }
 

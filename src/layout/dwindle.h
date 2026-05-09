@@ -187,6 +187,8 @@ static void dwindle_resize_client(Monitor *m, Client *c, int32_t dx,
 		start_drag_window = true;
 		dwindle_locked_h_node = NULL;
 		dwindle_locked_v_node = NULL;
+		drag_begin_cursorx = cursor->x;
+		drag_begin_cursory = cursor->y;
 		DwindleNode *node = leaf->parent;
 		while (node) {
 			if (node->split_h && !dwindle_locked_h_node) {
@@ -262,8 +264,6 @@ static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 	DwindleNode *h_node = NULL;
 	DwindleNode *v_node = NULL;
 	DwindleNode *node = leaf->parent;
-	drag_begin_cursorx = cursor->x;
-	drag_begin_cursory = cursor->y;
 
 	while (node) {
 		if (node->split_h && !h_node)
