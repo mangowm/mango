@@ -2201,8 +2201,8 @@ void place_drag_tile_client(Client *c) {
 			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
 
 		if (closest->drop_direction == UNDIR) {
-			exchange_two_client(c, closest);
 			setfloating(c, 0);
+			exchange_two_client(c, closest);
 			return;
 		}
 
