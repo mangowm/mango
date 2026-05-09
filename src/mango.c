@@ -2086,6 +2086,13 @@ Client *find_closest_tiled_client(Client *c) {
 		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, c->mon))
 			continue;
 
+		if (cursor->x >= tc->geom.x &&
+			cursor->x < tc->geom.x + tc->geom.width &&
+			cursor->y >= tc->geom.y &&
+			cursor->y < tc->geom.y + tc->geom.height) {
+			return tc;
+		}
+
 		int32_t dx = tc->geom.x + (int32_t)(tc->geom.width / 2) - cursor->x;
 		int32_t dy = tc->geom.y + (int32_t)(tc->geom.height / 2) - cursor->y;
 		long dist = (long)dx * dx + (long)dy * dy;
