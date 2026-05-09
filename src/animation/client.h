@@ -582,6 +582,63 @@ void client_set_drop_area(Client *c) {
 		}
 	}
 
+	if (c->mon && drop_direction != UNDIR) {
+		const Layout *layout =
+			c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+		if (layout->id == DWINDLE) {
+			double fcx = c->geom.x + c->geom.width * 0.5;
+			double fcy = c->geom.y + c->geom.height * 0.5;
+
+			if (config.dwindle_smart_split) {
+				double nx = (cursor->x - fcx) / (c->geom.width * 0.5);
+				double ny = (cursor->y - fcy) / (c->geom.height * 0.5);
+				if (fabs(ny) > fabs(nx))
+					drop_direction = (ny < 0) ? UP : DOWN;
+				else
+					drop_direction = (nx < 0) ? LEFT : RIGHT;
+			} else {
+				bool likely_h = (c->geom.width >= c->geom.height);
+				if (likely_h) {
+					if (config.dwindle_hsplit == 0)
+						drop_direction = (cursor->x < fcx) ? LEFT : RIGHT;
+					else
+						drop_direction = (config.dwindle_hsplit == 2)
+										 ? LEFT
+										 : RIGHT;
+				} else {
+					if (config.dwindle_vsplit == 0)
+						drop_direction = (cursor->y < fcy) ? UP : DOWN;
+					else
+						drop_direction = (config.dwindle_vsplit == 2)
+										 ? UP
+										 : DOWN;
+				}
+			}
+
+			if (drop_direction == LEFT) {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width * 0.3;
+				drop_box.height = client_height;
+			} else if (drop_direction == RIGHT) {
+				drop_box.x = bw + client_width * 0.7;
+				drop_box.y = bw;
+				drop_box.width = client_width * 0.3;
+				drop_box.height = client_height;
+			} else if (drop_direction == UP) {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = client_height * 0.3;
+			} else if (drop_direction == DOWN) {
+				drop_box.x = bw;
+				drop_box.y = bw + client_height * 0.7;
+				drop_box.width = client_width;
+				drop_box.height = client_height * 0.3;
+			}
+		}
+	}
+
 	// 如果方向和上次相同且不是第一次绘制，则跳过更新
 	if (!first_draw && c->drop_direction == drop_direction) {
 		return;
