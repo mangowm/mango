@@ -538,9 +538,47 @@ void client_set_drop_area(Client *c) {
 
 	struct wlr_box drop_box;
 
-	// 中心区域：x和y都在30%~70%之间 → 无方向
-	if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&
-		rel_y > client_height * 0.3 && rel_y < client_height * 0.7) {
+	const Layout *cur_layout =
+		(c->mon ? c->mon->pertag->ltidxs[c->mon->pertag->curtag] : NULL);
+	bool is_dwindle = cur_layout && cur_layout->id == DWINDLE;
+
+	if (is_dwindle) {
+		// Mirror dwindle_assign's split-axis rule (split_h = aw >= ah) so the
+		// preview matches the actual tile that will be created on drop.
+		bool split_h = c->geom.width >= c->geom.height;
+		float ratio = config.dwindle_split_ratio;
+		if (split_h) {
+			if (rel_x < client_width * 0.5) {
+				drop_direction = LEFT;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = (int32_t)(client_width * ratio);
+				drop_box.height = client_height;
+			} else {
+				drop_direction = RIGHT;
+				drop_box.x = bw + (int32_t)(client_width * ratio);
+				drop_box.y = bw;
+				drop_box.width = client_width - (int32_t)(client_width * ratio);
+				drop_box.height = client_height;
+			}
+		} else {
+			if (rel_y < client_height * 0.5) {
+				drop_direction = UP;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = (int32_t)(client_height * ratio);
+			} else {
+				drop_direction = DOWN;
+				drop_box.x = bw;
+				drop_box.y = bw + (int32_t)(client_height * ratio);
+				drop_box.width = client_width;
+				drop_box.height = client_height - (int32_t)(client_height * ratio);
+			}
+		}
+	} else if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&
+			   rel_y > client_height * 0.3 && rel_y < client_height * 0.7) {
+		// 中心区域：x和y都在30%~70%之间 → 无方向
 		drop_box.x = bw + client_width * 0.3;
 		drop_box.y = bw + client_height * 0.3;
 		drop_box.width = client_width * 0.4;
