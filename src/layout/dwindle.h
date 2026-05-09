@@ -176,8 +176,7 @@ static void dwindle_swap_clients(DwindleNode **root, Client *a, Client *b) {
 	lb->client = a;
 }
 
-static void dwindle_resize_client(Monitor *m, Client *c, int32_t dx,
-								  int32_t dy) {
+static void dwindle_resize_client(Monitor *m, Client *c) {
 	uint32_t tag = m->pertag->curtag;
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
 	if (!leaf)

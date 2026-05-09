@@ -498,7 +498,7 @@ void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
 
 	if (last_apply_drap_time == 0 ||
 		time - last_apply_drap_time > config.drag_tile_refresh_interval) {
-		dwindle_resize_client(grabc->mon, grabc, offsetx, offsety);
+		dwindle_resize_client(grabc->mon, grabc);
 		last_apply_drap_time = time;
 	}
 }

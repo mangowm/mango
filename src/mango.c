@@ -821,8 +821,7 @@ static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
 								float ratio, int32_t dir);
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy);
-static void dwindle_resize_client(Monitor *m, Client *c, int32_t dx,
-								  int32_t dy);
+static void dwindle_resize_client(Monitor *m, Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
