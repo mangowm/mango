@@ -488,6 +488,29 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
+void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
+						 int32_t offsety, uint32_t time, bool isvertical) {
+
+	if (!start_drag_window) {
+		dwindle_resize_client_step(grabc->mon, grabc, offsetx, offsety);
+	}
+
+	if (isdrag) {
+		int32_t dx = (int32_t)round(cursor->x) - drag_begin_cursorx;
+		int32_t dy = (int32_t)round(cursor->y) - drag_begin_cursory;
+		dwindle_resize_client(grabc->mon, grabc, dx, dy);
+	} else if (last_apply_drap_time == 0 ||
+			   time - last_apply_drap_time >
+				   config.drag_tile_refresh_interval) {
+		dwindle_resize_client(grabc->mon, grabc, offsetx, offsety);
+		last_apply_drap_time = time;
+	}
+
+	if (!isdrag) {
+		start_drag_window = false;
+	}
+}
+
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
 	Client *tc = NULL;
@@ -706,6 +729,8 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 		resize_tile_scroller(grabc, isdrag, offsetx, offsety, time, false);
 	} else if (current_layout->id == VERTICAL_SCROLLER) {
 		resize_tile_scroller(grabc, isdrag, offsetx, offsety, time, true);
+	} else if (current_layout->id == DWINDLE) {
+		resize_tile_dwindle(grabc, isdrag, offsetx, offsety, time, true);
 	}
 }
 
