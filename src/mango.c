@@ -2229,7 +2229,7 @@ void place_drag_tile_client(Client *c) {
 							closest->drop_direction == RIGHT);
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
 						   config.dwindle_split_ratio, insert_before, split_h,
-						   config.dwindle_smart_drop);
+						   !config.dwindle_drop_simple_split);
 			setfloating(c, 0);
 			return;
 		}

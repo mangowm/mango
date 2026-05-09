@@ -540,8 +540,8 @@ void client_set_drop_area(Client *c) {
 
 	const Layout *cur_layout =
 		c->mon ? c->mon->pertag->ltidxs[c->mon->pertag->curtag] : NULL;
-	bool dwindle_familiar =
-		cur_layout && cur_layout->id == DWINDLE && !config.dwindle_smart_drop;
+	bool dwindle_familiar = cur_layout && cur_layout->id == DWINDLE &&
+							config.dwindle_drop_simple_split;
 
 	// 中心区域：x和y都在30%~70%之间 → 无方向
 	if (rel_x > client_width * 0.3 && rel_x < client_width * 0.7 &&

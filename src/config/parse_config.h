@@ -248,7 +248,7 @@ typedef struct {
 	int32_t dwindle_preserve_split;
 	int32_t dwindle_smart_split;
 	int32_t dwindle_smart_resize;
-	int32_t dwindle_smart_drop;
+	int32_t dwindle_drop_simple_split;
 	float dwindle_split_ratio;
 
 	uint32_t hotarea_size;
@@ -1634,8 +1634,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->dwindle_smart_split = atoi(value);
 	} else if (strcmp(key, "dwindle_smart_resize") == 0) {
 		config->dwindle_smart_resize = atoi(value);
-	} else if (strcmp(key, "dwindle_smart_drop") == 0) {
-		config->dwindle_smart_drop = atoi(value);
+	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
+		config->dwindle_drop_simple_split = atoi(value);
 	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
 		config->dwindle_split_ratio = atof(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
@@ -3208,7 +3208,8 @@ void override_config(void) {
 		CLAMP_INT(config.dwindle_preserve_split, 0, 1);
 	config.dwindle_smart_split = CLAMP_INT(config.dwindle_smart_split, 0, 1);
 	config.dwindle_smart_resize = CLAMP_INT(config.dwindle_smart_resize, 0, 1);
-	config.dwindle_smart_drop = CLAMP_INT(config.dwindle_smart_drop, 0, 1);
+	config.dwindle_drop_simple_split =
+		CLAMP_INT(config.dwindle_drop_simple_split, 0, 1);
 	config.dwindle_split_ratio =
 		CLAMP_FLOAT(config.dwindle_split_ratio, 0.05f, 0.95f);
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
@@ -3355,7 +3356,7 @@ void set_value_default() {
 	config.dwindle_preserve_split = 0;
 	config.dwindle_smart_split = 0;
 	config.dwindle_smart_resize = 0;
-	config.dwindle_smart_drop = 1;
+	config.dwindle_drop_simple_split = 0;
 	config.dwindle_split_ratio = 0.5f;
 
 	config.log_level = WLR_ERROR;
