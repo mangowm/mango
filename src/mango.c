@@ -2535,6 +2535,9 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		m->skip_frame_timeout = NULL;
 	}
 	m->wlr_output->data = NULL;
+
+	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
+		dwindle_free_tree(m->pertag->dwindle_root[t]);
 	free(m->pertag);
 	free(m);
 }
