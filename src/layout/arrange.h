@@ -505,36 +505,51 @@ void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
 
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
-	Client *tc = NULL;
+	if (!grabc || grabc->isfullscreen || grabc->ismaximizescreen)
+		return;
+	if (grabc->mon->isoverview)
+		return;
+
+	Monitor *m = grabc->mon;
+	uint32_t tag = m->pertag->curtag;
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
+	if (!st)
+		return;
+
+	struct ScrollerStackNode *curnode = find_scroller_node(st, grabc);
+	if (!curnode)
+		return;
+
+	struct ScrollerStackNode *headnode = curnode;
+	while (headnode->prev_in_stack)
+		headnode = headnode->prev_in_stack;
+
+	Client *stack_head_client = headnode->client;
+
+	if (m->visible_tiling_clients == 1 &&
+		!config.scroller_ignore_proportion_single)
+		return;
+
 	float delta_x, delta_y;
 	float new_scroller_proportion;
 	float new_stack_proportion;
-	Client *stack_head = get_scroll_stack_head(grabc);
-
-	if (grabc && grabc->mon->visible_tiling_clients == 1 &&
-		!config.scroller_ignore_proportion_single)
-		return;
 
 	if (!start_drag_window && isdrag) {
 		drag_begin_cursorx = cursor->x;
 		drag_begin_cursory = cursor->y;
 		start_drag_window = true;
 
-		// 记录初始状态
-		stack_head->old_scroller_pproportion = stack_head->scroller_proportion;
-		grabc->old_stack_proportion = grabc->stack_proportion;
+		headnode->client->old_scroller_pproportion =
+			headnode->scroller_proportion;
+		grabc->old_stack_proportion = curnode->stack_proportion;
 
 		grabc->cursor_in_left_half =
 			cursor->x < grabc->geom.x + grabc->geom.width / 2;
 		grabc->cursor_in_upper_half =
 			cursor->y < grabc->geom.y + grabc->geom.height / 2;
-		// 记录初始几何信息
 		grabc->drag_begin_geom = grabc->geom;
 	} else {
-		// 计算相对于屏幕尺寸的比例变化
-		// 计算相对于屏幕尺寸的比例变化
 		if (isdrag) {
-
 			offsetx = cursor->x - drag_begin_cursorx;
 			offsety = cursor->y - drag_begin_cursory;
 		} else {
@@ -542,37 +557,33 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 			grabc->old_master_inner_per = grabc->master_inner_per;
 			grabc->old_stack_inner_per = grabc->stack_inner_per;
 			grabc->drag_begin_geom = grabc->geom;
-			stack_head->old_scroller_pproportion =
-				stack_head->scroller_proportion;
-			grabc->old_stack_proportion = grabc->stack_proportion;
+			stack_head_client->old_scroller_pproportion =
+				headnode->scroller_proportion;
+			grabc->old_stack_proportion = curnode->stack_proportion;
 			grabc->cursor_in_upper_half = false;
 			grabc->cursor_in_left_half = false;
 		}
 
 		if (isvertical) {
 			delta_y = (float)(offsety) *
-					  (stack_head->old_scroller_pproportion) /
+					  (headnode->client->old_scroller_pproportion) /
 					  grabc->drag_begin_geom.height;
 			delta_x = (float)(offsetx) * (grabc->old_stack_proportion) /
 					  grabc->drag_begin_geom.width;
 		} else {
 			delta_x = (float)(offsetx) *
-					  (stack_head->old_scroller_pproportion) /
+					  (headnode->client->old_scroller_pproportion) /
 					  grabc->drag_begin_geom.width;
 			delta_y = (float)(offsety) * (grabc->old_stack_proportion) /
 					  grabc->drag_begin_geom.height;
 		}
 
-		bool moving_up;
-		bool moving_down;
-		bool moving_left;
-		bool moving_right;
-
+		bool moving_up, moving_down, moving_left, moving_right;
 		if (!isdrag) {
-			moving_up = offsety < 0 ? true : false;
-			moving_down = offsety > 0 ? true : false;
-			moving_left = offsetx < 0 ? true : false;
-			moving_right = offsetx > 0 ? true : false;
+			moving_up = offsety < 0;
+			moving_down = offsety > 0;
+			moving_left = offsetx < 0;
+			moving_right = offsetx > 0;
 		} else {
 			moving_up = cursor->y < drag_begin_cursory;
 			moving_down = cursor->y > drag_begin_cursory;
@@ -582,10 +593,8 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 
 		if ((grabc->cursor_in_upper_half && moving_up) ||
 			(!grabc->cursor_in_upper_half && moving_down)) {
-			// 光标在窗口上方且向上移动，或在窗口下方且向下移动 → 增加高度
 			delta_y = fabsf(delta_y);
 		} else {
-			// 其他情况 → 减小高度
 			delta_y = -fabsf(delta_y);
 		}
 
@@ -597,99 +606,93 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		if (isvertical) {
-			if (!grabc->next_in_stack && grabc->prev_in_stack && !isdrag) {
+			if (!curnode->next_in_stack && curnode->prev_in_stack && !isdrag) {
 				delta_x = delta_x * -1.0f;
 			}
-			if (!grabc->next_in_stack && grabc->prev_in_stack && isdrag) {
-				if (moving_right) {
+			if (!curnode->next_in_stack && curnode->prev_in_stack && isdrag) {
+				if (moving_right)
 					delta_x = -fabsf(delta_x);
-				} else {
+				else
 					delta_x = fabsf(delta_x);
-				}
 			}
-			if (!grabc->prev_in_stack && grabc->next_in_stack && isdrag) {
-				if (moving_left) {
+			if (!curnode->prev_in_stack && curnode->next_in_stack && isdrag) {
+				if (moving_left)
 					delta_x = -fabsf(delta_x);
-				} else {
+				else
 					delta_x = fabsf(delta_x);
-				}
 			}
-
 			if (isdrag) {
-				if (moving_up) {
+				if (moving_up)
 					delta_y = -fabsf(delta_y);
-				} else {
+				else
 					delta_y = fabsf(delta_y);
-				}
 			}
-
 		} else {
-			if (!grabc->next_in_stack && grabc->prev_in_stack && !isdrag) {
+			if (!curnode->next_in_stack && curnode->prev_in_stack && !isdrag) {
 				delta_y = delta_y * -1.0f;
 			}
-			if (!grabc->next_in_stack && grabc->prev_in_stack && isdrag) {
-				if (moving_down) {
+			if (!curnode->next_in_stack && curnode->prev_in_stack && isdrag) {
+				if (moving_down)
 					delta_y = -fabsf(delta_y);
-				} else {
+				else
 					delta_y = fabsf(delta_y);
-				}
 			}
-			if (!grabc->prev_in_stack && grabc->next_in_stack && isdrag) {
-				if (moving_up) {
+			if (!curnode->prev_in_stack && curnode->next_in_stack && isdrag) {
+				if (moving_up)
 					delta_y = -fabsf(delta_y);
-				} else {
+				else
 					delta_y = fabsf(delta_y);
-				}
 			}
-
 			if (isdrag) {
-				if (moving_left) {
+				if (moving_left)
 					delta_x = -fabsf(delta_x);
-				} else {
+				else
 					delta_x = fabsf(delta_x);
-				}
 			}
 		}
 
-		// 直接设置新的比例，基于初始值 + 变化量
 		if (isvertical) {
 			new_scroller_proportion =
-				stack_head->old_scroller_pproportion + delta_y;
+				headnode->client->old_scroller_pproportion + delta_y;
 			new_stack_proportion = grabc->old_stack_proportion + delta_x;
-
 		} else {
 			new_scroller_proportion =
-				stack_head->old_scroller_pproportion + delta_x;
+				headnode->client->old_scroller_pproportion + delta_x;
 			new_stack_proportion = grabc->old_stack_proportion + delta_y;
 		}
 
-		// 应用限制，确保比例在合理范围内
 		new_scroller_proportion =
 			fmaxf(0.1f, fminf(1.0f, new_scroller_proportion));
 		new_stack_proportion = fmaxf(0.1f, fminf(0.9f, new_stack_proportion));
 
-		grabc->stack_proportion = new_stack_proportion;
+		curnode->stack_proportion = new_stack_proportion;
+		headnode->scroller_proportion = new_scroller_proportion;
 
-		stack_head->scroller_proportion = new_scroller_proportion;
-
-		wl_list_for_each(tc, &clients, link) {
-			if (!isdrag && new_stack_proportion != 1.0f &&
-				grabc->old_stack_proportion != 1.0f && tc != grabc &&
-				ISTILED(tc) && get_scroll_stack_head(tc) == stack_head) {
-				tc->stack_proportion = (1.0f - new_stack_proportion) /
-									   (1.0f - grabc->old_stack_proportion) *
-									   tc->stack_proportion;
+		/* 调整同一堆叠内其他节点的 stack_proportion */
+		/* 调整整个堆叠内除当前窗口外的所有节点 */
+		if (!isdrag && grabc->old_stack_proportion != 1.0f) {
+			for (struct ScrollerStackNode *tc = headnode; tc;
+				 tc = tc->next_in_stack) {
+				if (tc != curnode) {
+					tc->stack_proportion =
+						(1.0f - new_stack_proportion) /
+						(1.0f - grabc->old_stack_proportion) *
+						tc->stack_proportion;
+				}
 			}
 		}
 
+		/* 同步回全局字段*/
+		sync_scroller_state_to_clients(m, tag);
+
 		if (!isdrag) {
-			arrange(grabc->mon, false, false);
+			arrange(m, false, false);
 			return;
 		}
 
 		if (last_apply_drap_time == 0 ||
 			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
-			arrange(grabc->mon, false, false);
+			arrange(m, false, false);
 			last_apply_drap_time = time;
 		}
 	}
@@ -834,11 +837,15 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 	m->visible_tiling_clients = 0;
 	m->visible_scroll_tiling_clients = 0;
 
-	wl_list_for_each(c, &clients, link) {
+	uint32_t tag = m->pertag->curtag;
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
 
-		if (!client_only_in_one_tag(c) || c->isglobal || c->isunglobal) {
-			exit_scroller_stack(c);
-		}
+	const Layout *cur_layout = m->pertag->ltidxs[m->pertag->curtag];
+	if (cur_layout->id == SCROLLER || cur_layout->id == VERTICAL_SCROLLER) {
+		update_scroller_state(m);
+	}
+
+	wl_list_for_each(c, &clients, link) {
 
 		if (from_view && (c->isglobal || c->isunglobal)) {
 			set_size_per(m, c);
@@ -862,10 +869,15 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 
 			if (ISTILED(c)) {
 				m->visible_tiling_clients++;
-			}
 
-			if (ISSCROLLTILED(c) && !c->prev_in_stack) {
-				m->visible_scroll_tiling_clients++;
+				/* 更新可见滚动客户端计数 */
+				if (st) {
+					struct ScrollerStackNode *n = find_scroller_node(st, c);
+					if (n && !n->prev_in_stack) /* 是堆叠头部 */
+						m->visible_scroll_tiling_clients++;
+				} else if (ISSCROLLTILED(c)) {
+					m->visible_scroll_tiling_clients++;
+				}
 			}
 		}
 	}
@@ -879,7 +891,6 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 		if (c->mon == m) {
 			if (VISIBLEON(c, m)) {
 				if (ISTILED(c)) {
-
 					if (i < nmasters) {
 						master_num++;
 						total_master_inner_percent += c->master_inner_per;
@@ -898,7 +909,6 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 								c->stack_inner_per;
 						}
 					}
-
 					i++;
 				}
 

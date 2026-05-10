@@ -672,7 +672,6 @@ uint32_t parse_mod(const char *mod_str) {
 				}
 			}
 		} else {
-			// 完整的 modifier 检查（保留原始所有检查项）
 			if (!strcmp(token, "super") || !strcmp(token, "super_l") ||
 				!strcmp(token, "super_r")) {
 				mod |= WLR_MODIFIER_LOGO;
