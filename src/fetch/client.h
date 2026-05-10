@@ -539,15 +539,22 @@ bool client_only_in_one_tag(Client *c) {
 }
 
 Client *get_scroll_stack_head(Client *c) {
-	Client *scroller_stack_head = c;
-
-	if (!scroller_stack_head)
-		return NULL;
-
-	while (scroller_stack_head->prev_in_stack) {
-		scroller_stack_head = scroller_stack_head->prev_in_stack;
+	if (!c || !c->mon)
+		return c;
+	uint32_t tag = c->mon->pertag->curtag;
+	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
+	if (st) {
+		struct ScrollerStackNode *n = find_scroller_node(st, c);
+		if (n) {
+			while (n->prev_in_stack)
+				n = n->prev_in_stack;
+			return n->client;
+		}
 	}
-	return scroller_stack_head;
+	/* 如果 tag 状态未初始化或节点丢失，使用 client 字段 */
+	while (c->prev_in_stack)
+		c = c->prev_in_stack;
+	return c;
 }
 
 bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {

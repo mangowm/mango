@@ -561,6 +561,21 @@ typedef struct {
 } SessionLock;
 
 typedef struct DwindleNode DwindleNode;
+struct ScrollerStackNode {
+	Client *client;
+	float scroller_proportion;
+	float stack_proportion;
+	float scroller_proportion_single;
+
+	struct ScrollerStackNode *next_in_stack;
+	struct ScrollerStackNode *prev_in_stack;
+	struct ScrollerStackNode *all_next;
+};
+
+struct TagScrollerState {
+	struct ScrollerStackNode *all_first; /* 所有节点的单链表头 */
+	int count;
+};
 
 /* function declarations */
 static void applybounds(
@@ -823,6 +838,15 @@ static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy);
 static void dwindle_resize_client(Monitor *m, Client *c);
 
+static struct TagScrollerState *ensure_scroller_state(Monitor *m, uint32_t tag);
+static struct ScrollerStackNode *find_scroller_node(struct TagScrollerState *st,
+													Client *c);
+static void sync_scroller_state_to_clients(Monitor *m, uint32_t tag);
+static void scroller_node_remove(struct TagScrollerState *st,
+								 struct ScrollerStackNode *target);
+static struct ScrollerStackNode *
+scroller_node_create(struct TagScrollerState *st, Client *c);
+
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
 #include "layout/layout.h"
@@ -945,19 +969,17 @@ static struct {
 
 #include "client/client.h"
 #include "config/preset.h"
-
 struct Pertag {
-	uint32_t curtag, prevtag;			/* current and previous tag */
-	int32_t nmasters[LENGTH(tags) + 1]; /* number of windows in master area */
-	float mfacts[LENGTH(tags) + 1];		/* mfacts per tag */
-	int32_t no_hide[LENGTH(tags) + 1];	/* no_hide per tag */
-	int32_t no_render_border[LENGTH(tags) + 1]; /* no_render_border per tag */
-	int32_t open_as_floating[LENGTH(tags) + 1]; /* open_as_floating per tag */
+	uint32_t curtag, prevtag;
+	int32_t nmasters[LENGTH(tags) + 1];
+	float mfacts[LENGTH(tags) + 1];
+	int32_t no_hide[LENGTH(tags) + 1];
+	int32_t no_render_border[LENGTH(tags) + 1];
+	int32_t open_as_floating[LENGTH(tags) + 1];
 	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
-	const Layout
-		*ltidxs[LENGTH(tags) + 1]; /* matrix of tags and layouts indexes  */
+	const Layout *ltidxs[LENGTH(tags) + 1];
+	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];
 };
-
 #include "config/parse_config.h"
 
 static struct wl_signal mango_print_status;
@@ -1028,6 +1050,7 @@ static struct wl_event_source *sync_keymap;
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
+#include "layout/scroll.h"
 #include "layout/vertical.h"
 
 void client_change_mon(Client *c, Monitor *m) {
@@ -1160,11 +1183,14 @@ void swallow(Client *c, Client *w) {
 	c->prev_in_stack = w->prev_in_stack;
 	c->isglobal = w->isglobal;
 
+	/* 调整 w 的邻居指针，让它们指向 c */
 	if (w->next_in_stack)
 		w->next_in_stack->prev_in_stack = c;
 	if (w->prev_in_stack)
 		w->prev_in_stack->next_in_stack = c;
 	c->stack_proportion = w->stack_proportion;
+
+	/* 全局链表替换 */
 	wl_list_insert(&w->link, &c->link);
 	wl_list_insert(&w->flink, &c->flink);
 
@@ -1190,15 +1216,38 @@ void swallow(Client *c, Client *w) {
 	client_pending_maximized_state(c, w->ismaximizescreen);
 	client_pending_minimized_state(c, w->isminimized);
 
+	/* ---------- 跨 tag 同步：dwindle 与 scroller ---------- */
 	Monitor *m;
 	wl_list_for_each(m, &mons, link) {
 		for (uint32_t t = 0; t < LENGTH(tags) + 1; t++) {
+			/* dwindle */
 			DwindleNode **root = &m->pertag->dwindle_root[t];
 			dwindle_remove(root, c);
-			DwindleNode *wn = dwindle_find_leaf(*root, w);
+			DwindleNode *dnode = dwindle_find_leaf(*root, w);
+			if (dnode)
+				dnode->client = c;
+
+			/* scroller */
+			struct TagScrollerState *st = m->pertag->scroller_state[t];
+			if (!st)
+				continue;
+
+			/* 先移除 c 在任意 tag 中的旧节点 */
+			struct ScrollerStackNode *cn = find_scroller_node(st, c);
+			if (cn)
+				scroller_node_remove(st, cn);
+
+			/* 将 w 的节点（如果存在）转给 c */
+			struct ScrollerStackNode *wn = find_scroller_node(st, w);
 			if (wn)
 				wn->client = c;
 		}
+	}
+
+	/* 同步当前活动 tag 的全局客户端字段 */
+	if (c->mon) {
+		uint32_t curtag = c->mon->pertag->curtag;
+		sync_scroller_state_to_clients(c->mon, curtag);
 	}
 }
 
@@ -2109,55 +2158,56 @@ Client *find_closest_tiled_client(Client *c) {
 
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before) {
-	Client *stack_head = NULL;
-
-	if (!target_client || target_client->mon != c->mon) {
+	if (!target_client || target_client->mon != c->mon)
 		return;
-	} else {
-		c->isglobal = target_client->isglobal = 0;
-		c->isunglobal = target_client->isunglobal = 0;
-		c->tags = target_client->tags = get_tags_first_tag(target_client->tags);
-	}
 
-	if (c->isfullscreen) {
+	if (c->isfullscreen)
 		setfullscreen(c, 0);
-	}
-
-	if (c->ismaximizescreen) {
+	if (c->ismaximizescreen)
 		setmaximizescreen(c, 0);
-	}
 
-	exit_scroller_stack(c);
-	stack_head = get_scroll_stack_head(target_client);
+	Monitor *m = c->mon;
+	uint32_t tag = m->pertag->curtag;
+	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 
+	struct ScrollerStackNode *cnode = find_scroller_node(st, c);
+	if (cnode)
+		scroller_node_remove(st, cnode);
+
+	struct ScrollerStackNode *tnode = find_scroller_node(st, target_client);
+	if (!tnode)
+		tnode = scroller_node_create(st, target_client);
+
+	struct ScrollerStackNode *newnode = scroller_node_create(st, c);
+	/* 将新节点插入到 tnode 的前面或后面 */
 	if (insert_before) {
-		if (target_client->prev_in_stack) {
-			target_client->prev_in_stack->next_in_stack = c;
-		}
-		c->prev_in_stack = target_client->prev_in_stack;
-		c->next_in_stack = target_client;
-		target_client->prev_in_stack = c;
-
+		newnode->next_in_stack = tnode;
+		newnode->prev_in_stack = tnode->prev_in_stack;
+		if (tnode->prev_in_stack)
+			tnode->prev_in_stack->next_in_stack = newnode;
+		tnode->prev_in_stack = newnode;
 	} else {
-		if (target_client->next_in_stack) {
-			target_client->next_in_stack->prev_in_stack = c;
-		}
-		c->next_in_stack = target_client->next_in_stack;
-		c->prev_in_stack = target_client;
-		target_client->next_in_stack = c;
+		newnode->prev_in_stack = tnode;
+		newnode->next_in_stack = tnode->next_in_stack;
+		if (tnode->next_in_stack)
+			tnode->next_in_stack->prev_in_stack = newnode;
+		tnode->next_in_stack = newnode;
 	}
 
-	if (stack_head->ismaximizescreen) {
+	/* 处理堆叠头部的全屏/最大化状态*/
+	struct ScrollerStackNode *head = tnode;
+	while (head->prev_in_stack)
+		head = head->prev_in_stack;
+	Client *stack_head = head->client;
+	if (stack_head->ismaximizescreen)
 		setmaximizescreen(stack_head, 0);
-	}
-
-	if (stack_head->isfullscreen) {
+	if (stack_head->isfullscreen)
 		setfullscreen(stack_head, 0);
-	}
 
-	arrange(c->mon, false, false);
+	/* 同步到 Client 字段 */
+	sync_scroller_state_to_clients(m, tag);
 
-	return;
+	arrange(m, false, false);
 }
 
 void try_scroller_drop(Client *c, Client *closest, int vertical) {
@@ -2550,6 +2600,9 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 
 	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
+
+	cleanup_monitor_scroller(m);
+
 	free(m->pertag);
 	free(m);
 }
@@ -3292,7 +3345,11 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 
 	wl_list_insert(&mons, &m->link);
+
 	m->pertag = calloc(1, sizeof(Pertag));
+	for (int i = 0; i < LENGTH(tags) + 1; i++)
+		m->pertag->scroller_state[i] = NULL;
+
 	if (chvt_backup_tag &&
 		regex_match(chvt_backup_selmon, m->wlr_output->name)) {
 		m->tagset[0] = m->tagset[1] = (1 << (chvt_backup_tag - 1)) & TAGMASK;
@@ -5027,7 +5084,6 @@ void setborder_color(Client *c) {
 }
 
 void exchange_two_client(Client *c1, Client *c2) {
-
 	Monitor *tmp_mon = NULL;
 	uint32_t tmp_tags;
 	double master_inner_per = 0.0f;
@@ -5041,6 +5097,237 @@ void exchange_two_client(Client *c1, Client *c2) {
 		return;
 	}
 
+	bool c1_scroller = c1->mon && is_scroller_layout(c1->mon);
+	bool c2_scroller = c2->mon && is_scroller_layout(c2->mon);
+
+	if (c1_scroller && c2_scroller) {
+		Monitor *m1 = c1->mon;
+		Monitor *m2 = c2->mon;
+		uint32_t tag1 = m1->pertag->curtag;
+		uint32_t tag2 = m2->pertag->curtag;
+
+		/* 跨显示器且任一方有堆叠关系时不允许交换 */
+		if (m1 != m2 && (c1->prev_in_stack || c2->prev_in_stack ||
+						 c1->next_in_stack || c2->next_in_stack))
+			return;
+
+		struct TagScrollerState *st1 = ensure_scroller_state(m1, tag1);
+		struct TagScrollerState *st2 =
+			(m1 == m2) ? st1 : ensure_scroller_state(m2, tag2);
+
+		struct ScrollerStackNode *n1 = find_scroller_node(st1, c1);
+		struct ScrollerStackNode *n2 = find_scroller_node(st2, c2);
+
+		if (!n1 || !n2)
+			goto non_scroller_fallback;
+
+		/* 获取各自的堆叠头节点 */
+		struct ScrollerStackNode *head1 = n1;
+		while (head1->prev_in_stack)
+			head1 = head1->prev_in_stack;
+		struct ScrollerStackNode *head2 = n2;
+		while (head2->prev_in_stack)
+			head2 = head2->prev_in_stack;
+
+		/* 同一堆叠内交换 */
+		if (head1 == head2) {
+			float tmp_scroller = n1->scroller_proportion;
+			float tmp_stack = n1->stack_proportion;
+			n1->scroller_proportion = n2->scroller_proportion;
+			n1->stack_proportion = n2->stack_proportion;
+			n2->scroller_proportion = tmp_scroller;
+			n2->stack_proportion = tmp_stack;
+
+			/* 交换堆叠链表指针 */
+			struct ScrollerStackNode *p1 = n1->prev_in_stack;
+			struct ScrollerStackNode *next1 = n1->next_in_stack;
+			struct ScrollerStackNode *p2 = n2->prev_in_stack;
+			struct ScrollerStackNode *next2 = n2->next_in_stack;
+
+			if (n1->next_in_stack == n2) {
+				n1->next_in_stack = next2;
+				n2->prev_in_stack = p1;
+				n1->prev_in_stack = n2;
+				n2->next_in_stack = n1;
+				if (p1)
+					p1->next_in_stack = n2;
+				if (next2)
+					next2->prev_in_stack = n1;
+			} else if (n2->next_in_stack == n1) {
+				n2->next_in_stack = next1;
+				n1->prev_in_stack = p2;
+				n2->prev_in_stack = n1;
+				n1->next_in_stack = n2;
+				if (p2)
+					p2->next_in_stack = n1;
+				if (next1)
+					next1->prev_in_stack = n2;
+			} else {
+				if (p1)
+					p1->next_in_stack = n2;
+				if (next1)
+					next1->prev_in_stack = n2;
+				if (p2)
+					p2->next_in_stack = n1;
+				if (next2)
+					next2->prev_in_stack = n1;
+				n1->prev_in_stack = p2;
+				n1->next_in_stack = next2;
+				n2->prev_in_stack = p1;
+				n2->next_in_stack = next1;
+			}
+
+			sync_scroller_state_to_clients(m1, tag1);
+		} else {
+			/* 不同堆叠：交换两个堆叠整体位置 */
+			if (n1 != head1 || n2 != head2) {
+				/* 当前不是头部，递归交换头部 */
+				exchange_two_client(head1->client, head2->client);
+				focusclient(c1, 0);
+				return;
+			}
+
+			/* 两者都是头部，直接交换两个堆叠的头部客户端 */
+			float tmp_scroller = head1->scroller_proportion;
+			head1->scroller_proportion = head2->scroller_proportion;
+			head2->scroller_proportion = tmp_scroller;
+
+			/* 交换布局通用参数 */
+			master_inner_per = c1->master_inner_per;
+			master_mfact_per = c1->master_mfact_per;
+			stack_inner_per = c1->stack_inner_per;
+			c1->master_inner_per = c2->master_inner_per;
+			c1->master_mfact_per = c2->master_mfact_per;
+			c1->stack_inner_per = c2->stack_inner_per;
+			c2->master_inner_per = master_inner_per;
+			c2->master_mfact_per = master_mfact_per;
+			c2->stack_inner_per = stack_inner_per;
+
+			/* 交换全局链表位置 */
+			struct wl_list *tmp1_prev = c1->link.prev;
+			struct wl_list *tmp2_prev = c2->link.prev;
+			struct wl_list *tmp1_next = c1->link.next;
+			struct wl_list *tmp2_next = c2->link.next;
+
+			if (c1->link.next == &c2->link) {
+				c1->link.next = c2->link.next;
+				c1->link.prev = &c2->link;
+				c2->link.next = &c1->link;
+				c2->link.prev = tmp1_prev;
+				tmp1_prev->next = &c2->link;
+				tmp2_next->prev = &c1->link;
+			} else if (c2->link.next == &c1->link) {
+				c2->link.next = c1->link.next;
+				c2->link.prev = &c1->link;
+				c1->link.next = &c2->link;
+				c1->link.prev = tmp2_prev;
+				tmp2_prev->next = &c1->link;
+				tmp1_next->prev = &c2->link;
+			} else {
+				c2->link.next = tmp1_next;
+				c2->link.prev = tmp1_prev;
+				c1->link.next = tmp2_next;
+				c1->link.prev = tmp2_prev;
+				tmp1_prev->next = &c2->link;
+				tmp1_next->prev = &c2->link;
+				tmp2_prev->next = &c1->link;
+				tmp2_next->prev = &c1->link;
+			}
+
+			/* 跨显示器交换处理 */
+			if (config.exchange_cross_monitor && m1 != m2) {
+				tmp_mon = m2;
+				tmp_tags = c2->tags;
+				setmon(c2, m1, c1->tags, false);
+				setmon(c1, tmp_mon, tmp_tags, false);
+
+				if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
+					dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1,
+										 c2);
+				if (m2->pertag->ltidxs[tag2]->id == DWINDLE)
+					dwindle_swap_clients(&m2->pertag->dwindle_root[tag2], c2,
+										 c1);
+
+				sync_scroller_state_to_clients(m1, tag1);
+				sync_scroller_state_to_clients(m2, tag2);
+				arrange(m1, false, false);
+				arrange(m2, false, false);
+			} else {
+				if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
+					dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1,
+										 c2);
+				sync_scroller_state_to_clients(m1, tag1);
+				arrange(m1, false, false);
+			}
+
+			wl_list_remove(&c2->flink);
+			wl_list_insert(&c1->flink, &c2->flink);
+			focusclient(c1, 0);
+			return;
+		}
+
+		/* 同一堆叠交换完成后的公共处理（全局链表、跨显示器等） */
+		struct wl_list *tmp1_prev = c1->link.prev;
+		struct wl_list *tmp2_prev = c2->link.prev;
+		struct wl_list *tmp1_next = c1->link.next;
+		struct wl_list *tmp2_next = c2->link.next;
+
+		if (c1->link.next == &c2->link) {
+			c1->link.next = c2->link.next;
+			c1->link.prev = &c2->link;
+			c2->link.next = &c1->link;
+			c2->link.prev = tmp1_prev;
+			tmp1_prev->next = &c2->link;
+			tmp2_next->prev = &c1->link;
+		} else if (c2->link.next == &c1->link) {
+			c2->link.next = c1->link.next;
+			c2->link.prev = &c1->link;
+			c1->link.next = &c2->link;
+			c1->link.prev = tmp2_prev;
+			tmp2_prev->next = &c1->link;
+			tmp1_next->prev = &c2->link;
+		} else {
+			c2->link.next = tmp1_next;
+			c2->link.prev = tmp1_prev;
+			c1->link.next = tmp2_next;
+			c1->link.prev = tmp2_prev;
+			tmp1_prev->next = &c2->link;
+			tmp1_next->prev = &c2->link;
+			tmp2_prev->next = &c1->link;
+			tmp2_next->prev = &c1->link;
+		}
+
+		/* 跨显示器交换处理 */
+		if (config.exchange_cross_monitor && m1 != m2) {
+			tmp_mon = m2;
+			tmp_tags = c2->tags;
+			setmon(c2, m1, c1->tags, false);
+			setmon(c1, tmp_mon, tmp_tags, false);
+
+			if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
+				dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1, c2);
+			if (m2->pertag->ltidxs[tag2]->id == DWINDLE)
+				dwindle_swap_clients(&m2->pertag->dwindle_root[tag2], c2, c1);
+
+			sync_scroller_state_to_clients(m1, tag1);
+			sync_scroller_state_to_clients(m2, tag2);
+			arrange(m1, false, false);
+			arrange(m2, false, false);
+		} else {
+			if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
+				dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1, c2);
+			sync_scroller_state_to_clients(m1, tag1);
+			arrange(m1, false, false);
+		}
+
+		wl_list_remove(&c2->flink);
+		wl_list_insert(&c1->flink, &c2->flink);
+		focusclient(c1, 0);
+		return;
+	}
+
+non_scroller_fallback:
+	/* 原有的非 scroller 逻辑保持不变 */
 	if (c1->mon != c2->mon && (c1->prev_in_stack || c2->prev_in_stack ||
 							   c1->next_in_stack || c2->next_in_stack))
 		return;
@@ -5048,11 +5335,9 @@ void exchange_two_client(Client *c1, Client *c2) {
 	Client *c1head = get_scroll_stack_head(c1);
 	Client *c2head = get_scroll_stack_head(c2);
 
-	// 交换布局参数
 	if (c1head == c2head) {
 		scroller_proportion = c1->scroller_proportion;
 		stack_proportion = c1->stack_proportion;
-
 		c1->scroller_proportion = c2->scroller_proportion;
 		c1->stack_proportion = c2->stack_proportion;
 		c2->scroller_proportion = scroller_proportion;
@@ -5062,22 +5347,18 @@ void exchange_two_client(Client *c1, Client *c2) {
 	master_inner_per = c1->master_inner_per;
 	master_mfact_per = c1->master_mfact_per;
 	stack_inner_per = c1->stack_inner_per;
-
 	c1->master_inner_per = c2->master_inner_per;
 	c1->master_mfact_per = c2->master_mfact_per;
 	c1->stack_inner_per = c2->stack_inner_per;
-
 	c2->master_inner_per = master_inner_per;
 	c2->master_mfact_per = master_mfact_per;
 	c2->stack_inner_per = stack_inner_per;
 
-	// 交换栈链表连接
 	Client *tmp1_next_in_stack = c1->next_in_stack;
 	Client *tmp1_prev_in_stack = c1->prev_in_stack;
 	Client *tmp2_next_in_stack = c2->next_in_stack;
 	Client *tmp2_prev_in_stack = c2->prev_in_stack;
 
-	// 处理相邻节点的情况
 	if (c1->next_in_stack == c2) {
 		c1->next_in_stack = tmp2_next_in_stack;
 		c2->next_in_stack = c1;
@@ -5105,13 +5386,11 @@ void exchange_two_client(Client *c1, Client *c2) {
 		return;
 	}
 
-	// 交换全局链表连接
 	struct wl_list *tmp1_prev = c1->link.prev;
 	struct wl_list *tmp2_prev = c2->link.prev;
 	struct wl_list *tmp1_next = c1->link.next;
 	struct wl_list *tmp2_next = c2->link.next;
 
-	// 处理相邻节点的情况
 	if (c1->link.next == &c2->link) {
 		c1->link.next = c2->link.next;
 		c1->link.prev = &c2->link;
@@ -5126,19 +5405,17 @@ void exchange_two_client(Client *c1, Client *c2) {
 		c1->link.prev = tmp2_prev;
 		tmp2_prev->next = &c1->link;
 		tmp1_next->prev = &c2->link;
-	} else { // 不为相邻节点
+	} else {
 		c2->link.next = tmp1_next;
 		c2->link.prev = tmp1_prev;
 		c1->link.next = tmp2_next;
 		c1->link.prev = tmp2_prev;
-
 		tmp1_prev->next = &c2->link;
 		tmp1_next->prev = &c2->link;
 		tmp2_prev->next = &c1->link;
 		tmp2_next->prev = &c1->link;
 	}
 
-	// 处理跨监视器交换
 	if (config.exchange_cross_monitor) {
 		tmp_mon = c2->mon;
 		tmp_tags = c2->tags;
@@ -5161,8 +5438,6 @@ void exchange_two_client(Client *c1, Client *c2) {
 		arrange(c1->mon, false, false);
 	}
 
-	// In order to facilitate repeated exchanges for get_focused_stack_client
-	// set c2 focus order behind c1
 	wl_list_remove(&c2->flink);
 	wl_list_insert(&c1->flink, &c2->flink);
 }
@@ -5427,24 +5702,28 @@ void reset_maximizescreen_size(Client *c) {
 }
 
 void exit_scroller_stack(Client *c) {
-	// If c is already in a stack, remove it.
+	if (!c || !c->mon)
+		return;
+
+	uint32_t tag = c->mon->pertag->curtag;
+	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
+	if (st) {
+		struct ScrollerStackNode *n = find_scroller_node(st, c);
+		if (n) {
+			scroller_node_remove(st, n);
+			return; /* 节点已移除，客户端指针已在函数内清空 */
+		}
+	}
+
+	/* 没有节点时也要确保客户端脱离堆叠 */
 	if (c->prev_in_stack) {
 		c->prev_in_stack->next_in_stack = c->next_in_stack;
 	}
-
-	if (!c->prev_in_stack && c->next_in_stack) {
-		c->next_in_stack->scroller_proportion = c->scroller_proportion;
-		wl_list_remove(&c->next_in_stack->link);
-		wl_list_insert(&c->link, &c->next_in_stack->link);
-	}
-
 	if (c->next_in_stack) {
 		c->next_in_stack->prev_in_stack = c->prev_in_stack;
 	}
-
 	c->prev_in_stack = NULL;
 	c->next_in_stack = NULL;
-	c->stack_proportion = 0.0f;
 }
 
 void setmaximizescreen(Client *c, int32_t maximizescreen) {
@@ -6105,7 +6384,6 @@ void tag_client(const Arg *arg, Client *target_client) {
 	Client *fc = NULL;
 	if (target_client && arg->ui & TAGMASK) {
 
-		exit_scroller_stack(target_client);
 		target_client->tags = arg->ui & TAGMASK;
 		target_client->istagswitching = 1;
 
@@ -6314,7 +6592,8 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->swallowedby->mon = c->mon;
 		swallow(c->swallowedby, c);
 	} else {
-		exit_scroller_stack(c);
+		scroller_remove_client(c);
+		dwindle_remove_client(c);
 	}
 
 	if (c == grabc) {
@@ -6396,7 +6675,6 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->next_in_stack = NULL;
 	c->prev_in_stack = NULL;
 
-	dwindle_remove_client(c);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus();
 	motionnotify(0, NULL, 0, 0, 0, 0);
