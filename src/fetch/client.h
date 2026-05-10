@@ -538,18 +538,6 @@ bool client_only_in_one_tag(Client *c) {
 	}
 }
 
-Client *get_scroll_stack_head(Client *c) {
-	Client *scroller_stack_head = c;
-
-	if (!scroller_stack_head)
-		return NULL;
-
-	while (scroller_stack_head->prev_in_stack) {
-		scroller_stack_head = scroller_stack_head->prev_in_stack;
-	}
-	return scroller_stack_head;
-}
-
 bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 	if (!sc || !tc)
 		return false;
@@ -562,10 +550,11 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 		return false;
 
 	if (id == SCROLLER || id == VERTICAL_SCROLLER) {
-		Client *source_stack_head = get_scroll_stack_head(sc);
-		Client *target_stack_head = get_scroll_stack_head(tc);
-		Client *fc_head = fc ? get_scroll_stack_head(fc) : NULL;
-		if (fc && fc->prev_in_stack && fc_head == source_stack_head)
+		Client *source_stack_head = scroll_get_stack_head_client(sc);
+		Client *target_stack_head = scroll_get_stack_head_client(tc);
+		Client *fc_head = fc ? scroll_get_stack_head_client(fc) : NULL;
+
+		if (fc && fc_head == source_stack_head)
 			return false;
 		if (source_stack_head == target_stack_head)
 			return true;
