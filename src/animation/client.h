@@ -450,7 +450,6 @@ void apply_split_border(Client *c, bool hit_no_border) {
 	}
 
 	struct wlr_box fullgeom = c->animation.current;
-	// 一但在GEZERO如果使用无符号，那么其他数据也会转换为无符号导致没有负数出错
 	int32_t bw = (int32_t)c->bw;
 
 	int32_t right_offset, bottom_offset, left_offset, top_offset;
@@ -503,6 +502,75 @@ void apply_split_border(Client *c, bool hit_no_border) {
 								border_right_y);
 }
 
+static int32_t titlebar_active_height(void) {
+	return config.enable_titlebars ? (int32_t)config.titlebar_height : 0;
+}
+
+void update_titlebar_hover(Client *c);
+
+void apply_titlebar(Client *c, int32_t rect_width,
+					enum corner_location corners) {
+	int32_t tb = titlebar_active_height();
+	bool show_titlebar = tb > 0 && !c->isfullscreen;
+	if (!c->titlebar_bg)
+		return;
+	wlr_scene_node_set_enabled(&c->titlebar_bg->node, show_titlebar);
+	if (show_titlebar) {
+		int32_t tb_margin = (int32_t)config.titlebar_button_margin;
+		int32_t tb_btn_size = (int32_t)config.titlebar_button_size;
+
+		wlr_scene_rect_set_size(c->titlebar_bg, rect_width, tb);
+		wlr_scene_node_set_position(&c->titlebar_bg->node, 0, 0);
+		wlr_scene_rect_set_corner_radius(c->titlebar_bg, config.border_radius,
+										 corners & ~CORNER_LOCATION_BOTTOM);
+
+		if (c->titlebar_close) {
+			int32_t btn_x = rect_width - tb_margin - tb_btn_size;
+			int32_t btn_y = tb_margin;
+			int32_t btn_h = tb - 2 * tb_margin;
+			wlr_scene_rect_set_size(c->titlebar_close, tb_btn_size, btn_h);
+			wlr_scene_node_set_position(&c->titlebar_close->node, btn_x, btn_y);
+			update_titlebar_hover(c);
+			wlr_scene_node_set_enabled(&c->titlebar_close->node, true);
+		}
+	} else if (c->titlebar_close) {
+		wlr_scene_node_set_enabled(&c->titlebar_close->node, false);
+	}
+}
+
+void update_titlebar_hover(Client *c) {
+	if (!c || !c->titlebar_close || !c->titlebar_bg)
+		return;
+	int32_t tb = titlebar_active_height();
+	if (tb <= 0 || c->isfullscreen) {
+		wlr_scene_node_set_enabled(&c->titlebar_close->node, false);
+		return;
+	}
+	wlr_scene_node_set_enabled(&c->titlebar_close->node, true);
+
+	int32_t tb_margin = (int32_t)config.titlebar_button_margin;
+	int32_t tb_btn_size = (int32_t)config.titlebar_button_size;
+	int32_t btn_x = c->animation.current.width - tb_margin - tb_btn_size;
+	int32_t btn_y = tb_margin;
+	int32_t btn_h = tb - 2 * tb_margin;
+
+	bool hover = cursor->x >= c->animation.current.x + btn_x &&
+				 cursor->x < c->animation.current.x + btn_x + tb_btn_size &&
+				 cursor->y >= c->animation.current.y + btn_y &&
+				 cursor->y < c->animation.current.y + btn_y + btn_h;
+
+	if (hover) {
+		float hover_color[4] = {config.title_close_color[0] * 0.5f + 0.5f,
+								config.title_close_color[1] * 0.5f + 0.5f,
+								config.title_close_color[2] * 0.5f + 0.5f,
+								config.title_close_color[3]};
+		wlr_scene_rect_set_color(c->titlebar_close, hover_color);
+	} else {
+		wlr_scene_rect_set_color(c->titlebar_close, config.title_close_color);
+	}
+}
+}
+
 void apply_border(Client *c) {
 	if (!c || c->iskilling || !client_surface(c)->mapped)
 		return;
@@ -536,8 +604,10 @@ void apply_border(Client *c) {
 		c->fake_no_border = true;
 	} else if (hit_no_border && !config.smartgaps) {
 		wlr_scene_rect_set_size(c->border, 0, 0);
-		wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
+		wlr_scene_node_set_position(&c->scene_surface->node, c->bw,
+									c->bw + titlebar_active_height());
 		c->fake_no_border = true;
+		apply_titlebar(c, c->animation.current.width, current_corner_location);
 		return;
 	} else if (!c->isfullscreen && VISIBLEON(c, c->mon)) {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
@@ -606,12 +676,16 @@ void apply_border(Client *c) {
 		.corners = current_corner_location,
 	};
 
-	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
+	int32_t tb = titlebar_active_height();
+	int32_t surf_y_off = tb > 0 ? tb : c->bw;
+	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, surf_y_off);
 	wlr_scene_rect_set_size(c->border, rect_width, rect_height);
 	wlr_scene_node_set_position(&c->border->node, rect_x, rect_y);
 	wlr_scene_rect_set_corner_radius(c->border, config.border_radius,
 									 current_corner_location);
 	wlr_scene_rect_set_clipped_region(c->border, clipped_region);
+
+	apply_titlebar(c, c->animation.current.width, current_corner_location);
 }
 
 struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
@@ -892,6 +966,7 @@ void client_apply_clip(Client *c, float factor) {
 			c->geom;
 
 		client_get_clip(c, &clip_box);
+		clip_box.height = GEZERO(clip_box.height - titlebar_active_height());
 
 		offset = clip_to_hide(c, &clip_box);
 
@@ -924,7 +999,7 @@ void client_apply_clip(Client *c, float factor) {
 		.x = geometry.x,
 		.y = geometry.y,
 		.width = width,
-		.height = height,
+		.height = height - titlebar_active_height(),
 	};
 
 	if (client_is_x11(c)) {
@@ -1364,7 +1439,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	// c->geom 是真实的窗口大小和位置，跟过度的动画无关，用于计算布局
 	if (!c->mon->isoverview || !config.ov_no_resize) {
 		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
-											  c->geom.height - 2 * c->bw);
+				c->geom.height - 2 * c->bw - titlebar_active_height());
 	}
 
 	if (c->configure_serial != 0) {
@@ -1382,6 +1457,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		client_draw_shadow(c);
 		apply_border(c);
 		client_get_clip(c, &clip);
+		clip.height = GEZERO(clip.height - titlebar_active_height());
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
 		return;
 	}

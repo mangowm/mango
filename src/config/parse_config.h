@@ -346,6 +346,14 @@ typedef struct {
 	float globalcolor[4];
 	float overlaycolor[4];
 
+	int32_t enable_titlebars;
+	uint32_t titlebar_height;
+	uint32_t titlebar_button_size;
+	uint32_t titlebar_button_margin;
+	float title_color[4];
+	float title_unfocused_color[4];
+	float title_close_color[4];
+
 	int32_t log_level;
 	uint32_t capslock;
 
@@ -2078,6 +2086,47 @@ bool parse_option(Config *config, char *key, char *value) {
 		} else {
 			convert_hex_to_rgba(config->overlaycolor, color);
 		}
+	} else if (strcmp(key, "enable_titlebars") == 0) {
+		config->enable_titlebars = atoi(value);
+	} else if (strcmp(key, "titlebar_height") == 0) {
+		config->titlebar_height = atoi(value);
+	} else if (strcmp(key, "titlebar_button_size") == 0) {
+		config->titlebar_button_size = atoi(value);
+	} else if (strcmp(key, "titlebar_button_margin") == 0) {
+		config->titlebar_button_margin = atoi(value);
+	} else if (strcmp(key, "title_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid title_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_color, color);
+		}
+	} else if (strcmp(key, "title_unfocused_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"title_unfocused_color format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_unfocused_color, color);
+		}
+	} else if (strcmp(key, "title_close_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid title_close_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_close_color, color);
+		}
 	} else if (strcmp(key, "monitorrule") == 0) {
 		config->monitor_rules =
 			realloc(config->monitor_rules, (config->monitor_rules_count + 1) *
@@ -3597,7 +3646,6 @@ void override_config(void) {
 	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
-
 	config.tabdata.border_width =
 		CLAMP_INT(config.tabdata.border_width, 0, 100);
 	config.tabdata.corner_radius =
@@ -3613,6 +3661,12 @@ void override_config(void) {
 		CLAMP_INT(config.jumplabeldata.padding_x, 0, 100);
 	config.jumplabeldata.padding_y =
 		CLAMP_INT(config.jumplabeldata.padding_y, 0, 100);
+	config.enable_titlebars = CLAMP_INT(config.enable_titlebars, 0, 1);
+	config.titlebar_height = CLAMP_INT(config.titlebar_height, 10, 200);
+	config.titlebar_button_size =
+		CLAMP_INT(config.titlebar_button_size, 4, 100);
+	config.titlebar_button_margin =
+		CLAMP_INT(config.titlebar_button_margin, 0, 50);
 }
 
 void set_value_default() {
@@ -3879,6 +3933,23 @@ void set_value_default() {
 	config.overlaycolor[1] = 0xa5 / 255.0f;
 	config.overlaycolor[2] = 0x7c / 255.0f;
 	config.overlaycolor[3] = 1.0f;
+
+	config.enable_titlebars = 0;
+	config.titlebar_height = 30;
+	config.titlebar_button_size = 16;
+	config.titlebar_button_margin = 4;
+	config.title_color[0] = 0xc6 / 255.0f;
+	config.title_color[1] = 0x6b / 255.0f;
+	config.title_color[2] = 0x25 / 255.0f;
+	config.title_color[3] = 1.0f;
+	config.title_unfocused_color[0] = 0x44 / 255.0f;
+	config.title_unfocused_color[1] = 0x44 / 255.0f;
+	config.title_unfocused_color[2] = 0x44 / 255.0f;
+	config.title_unfocused_color[3] = 1.0f;
+	config.title_close_color[0] = 0xad / 255.0f;
+	config.title_close_color[1] = 0x40 / 255.0f;
+	config.title_close_color[2] = 0x1f / 255.0f;
+	config.title_close_color[3] = 1.0f;
 }
 
 void set_default_key_bindings(Config *config) {
