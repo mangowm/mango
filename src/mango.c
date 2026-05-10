@@ -922,6 +922,10 @@ static struct wl_event_source *hide_cursor_source;
 static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
+
+/* set when a bind fires while modifiers held; cleared on modifier press */
+static bool mod_used_for_bind = false;
+
 static const char *cli_config_path = NULL;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
@@ -2332,6 +2336,7 @@ buttonpress(struct wl_listener *listener, void *data) {
 				event->button == m->button && m->func &&
 				(CLEANMASK(m->mod) != 0 ||
 				 (event->button != BTN_LEFT && event->button != BTN_RIGHT))) {
+				mod_used_for_bind = true;
 				m->func(&m->arg);
 				return;
 			}
@@ -3996,6 +4001,9 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			state != WL_KEYBOARD_KEY_STATE_RELEASED)
 			continue;
 
+		if (config.key_bindings[ji].ismodonly)
+			continue;
+
 		k = &config.key_bindings[ji];
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
@@ -4013,6 +4021,9 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 				handled = 1;
 			else
 				handled = 0;
+
+			if (!k->ispassapply)
+				mod_used_for_bind = true;
 
 			isbreak = k->func(&k->arg);
 
@@ -4115,6 +4126,15 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
+	bool is_modifier_key =
+		(keycode == 133 || keycode == 134 ||
+		 keycode == 37  || keycode == 105 ||
+		 keycode == 64  || keycode == 108 ||
+		 keycode == 50  || keycode == 62);
+
+	if (is_modifier_key && event->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+		mod_used_for_bind = false;
+
 	// ov tab mode detect moe key release
 	if (config.ov_tab_mode && !locked && group == kb_group &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
@@ -4131,6 +4151,31 @@ void keypress(struct wl_listener *listener, void *data) {
 	for (i = 0; i < nsyms; i++)
 		handled =
 			keybinding(event->state, locked, mods, syms[i], keycode) || handled;
+
+	/* bindm: fire mod-only binds on release if no combo fired */
+	if (is_modifier_key && event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+		!mod_used_for_bind) {
+		int32_t ji;
+		for (ji = 0; ji < config.key_bindings_count; ji++) {
+			const KeyBinding *k = &config.key_bindings[ji];
+
+			if (!k->ismodonly)
+				continue;
+			if (locked && !k->islockapply)
+				continue;
+			if (!(k->iscommonmode ||
+				  (k->isdefaultmode && keymode.isdefault) ||
+				  (strcmp(keymode.mode, k->mode) == 0)))
+				continue;
+			if (CLEANMASK(mods) != CLEANMASK(k->mod))
+				continue;
+			if (!k->func)
+				continue;
+
+			handled = 1;
+			k->func(&k->arg);
+		}
+	}
 
 	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
 		tag_combo = false;

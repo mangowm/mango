@@ -45,6 +45,7 @@ typedef struct {
 	bool islockapply;
 	bool isreleaseapply;
 	bool ispassapply;
+	bool ismodonly;
 } KeyBinding;
 
 typedef struct {
@@ -2430,6 +2431,92 @@ bool parse_option(Config *config, char *key, char *value) {
 						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
 						"dispatch in bind: "
 						"\033[1m\033[31m%s\n",
+						func_name);
+			return false;
+		} else {
+			config->key_bindings_count++;
+		}
+
+	} else if (regex_match("^bindm[lp]*$", key)) {
+		/* bindm: fire on modifier release if no other bind used the hold
+		 * format: bindm[flags]=MODIFIERS,,COMMAND,PARAMS */
+		config->key_bindings =
+			realloc(config->key_bindings,
+					(config->key_bindings_count + 1) * sizeof(KeyBinding));
+		if (!config->key_bindings) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for key bindings (bindm)\n");
+			return false;
+		}
+
+		KeyBinding *binding = &config->key_bindings[config->key_bindings_count];
+		memset(binding, 0, sizeof(KeyBinding));
+
+		char mod_str[256], func_name[256],
+			arg_value[256] = "0\0", arg_value2[256] = "0\0",
+			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
+			arg_value5[256] = "0\0";
+
+		if (sscanf(value,
+				   "%255[^,],,%255[^,],%255[^,],%255[^,],%255[^,],%255[^\n]",
+				   mod_str, func_name, arg_value, arg_value2,
+				   arg_value3, arg_value4) < 2) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bindm format "
+					"(expected MODIFIERS,,COMMAND,...): "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
+		}
+		trim_whitespace(mod_str);
+		trim_whitespace(func_name);
+		trim_whitespace(arg_value);
+		trim_whitespace(arg_value2);
+		trim_whitespace(arg_value3);
+		trim_whitespace(arg_value4);
+		trim_whitespace(arg_value5);
+
+		strcpy(binding->mode, config->keymode);
+		if (strcmp(binding->mode, "common") == 0) {
+			binding->iscommonmode = true;
+			binding->isdefaultmode = false;
+		} else if (strcmp(binding->mode, "default") == 0) {
+			binding->isdefaultmode = true;
+			binding->iscommonmode = false;
+		} else {
+			binding->isdefaultmode = false;
+			binding->iscommonmode = false;
+		}
+
+		for (const char *f = key + 5; *f != '\0'; f++) {
+			if (*f == 'l') binding->islockapply = true;
+			if (*f == 'p') binding->ispassapply = true;
+		}
+
+		binding->mod = parse_mod(mod_str);
+		binding->ismodonly = true;
+
+		binding->func =
+			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
+							arg_value3, arg_value4, arg_value5);
+		if (!binding->func || binding->mod == UINT32_MAX) {
+			if (binding->arg.v) {
+				free(binding->arg.v);
+				binding->arg.v = NULL;
+			}
+			if (binding->arg.v2) {
+				free(binding->arg.v2);
+				binding->arg.v2 = NULL;
+			}
+			if (binding->arg.v3) {
+				free(binding->arg.v3);
+				binding->arg.v3 = NULL;
+			}
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown dispatch in "
+						"bindm: \033[1m\033[31m%s\n",
 						func_name);
 			return false;
 		} else {
