@@ -314,6 +314,7 @@ struct Client {
 	Monitor *mon;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
+	struct wlr_scene_rect *droparea;
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
@@ -422,6 +423,9 @@ struct Client {
 	bool isfocusing;
 	struct Client *next_in_stack;
 	struct Client *prev_in_stack;
+	bool enable_drop_area_draw;
+	int32_t drop_direction;
+	struct wlr_box drag_tile_float_backup_geom;
 };
 
 typedef struct {
@@ -539,6 +543,7 @@ struct Monitor {
 	struct wlr_scene_optimized_blur *blur;
 	char last_surface_ws_name[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
+	bool iscleanuping;
 };
 
 typedef struct {
@@ -554,6 +559,8 @@ typedef struct {
 	struct wl_listener unlock;
 	struct wl_listener destroy;
 } SessionLock;
+
+typedef struct DwindleNode DwindleNode;
 
 /* function declarations */
 static void applybounds(
@@ -648,8 +655,7 @@ static void motionnotify(uint32_t time, struct wlr_input_device *device,
 						 double sy_unaccel);
 static void motionrelative(struct wl_listener *listener, void *data);
 
-static void reset_foreign_tolevel(Client *c);
-static void remove_foreign_topleve(Client *c);
+static void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
 static void add_foreign_topleve(Client *c);
 static void exchange_two_client(Client *c1, Client *c2);
 static void outputmgrapply(struct wl_listener *listener, void *data);
@@ -809,6 +815,13 @@ static void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
 static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
+static void scroller_insert_stack(Client *c, Client *target_client,
+								  bool insert_before);
+static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
+								float ratio, int32_t dir);
+static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
+									   int32_t dy);
+static void dwindle_resize_client(Monitor *m, Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -870,7 +883,7 @@ static KeyboardGroup *kb_group;
 static struct wl_list inputdevices;
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
-static Client *grabc;
+static Client *grabc, *dropc;
 static int32_t rzcorner;
 static int32_t grabcx, grabcy;						   /* client-relative */
 static int32_t drag_begin_cursorx, drag_begin_cursory; /* client-relative */
@@ -940,6 +953,7 @@ struct Pertag {
 	int32_t no_hide[LENGTH(tags) + 1];	/* no_hide per tag */
 	int32_t no_render_border[LENGTH(tags) + 1]; /* no_render_border per tag */
 	int32_t open_as_floating[LENGTH(tags) + 1]; /* open_as_floating per tag */
+	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
 	const Layout
 		*ltidxs[LENGTH(tags) + 1]; /* matrix of tags and layouts indexes  */
 };
@@ -1012,6 +1026,7 @@ static struct wl_event_source *sync_keymap;
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
 #include "layout/arrange.h"
+#include "layout/dwindle.h"
 #include "layout/horizontal.h"
 #include "layout/vertical.h"
 
@@ -1143,6 +1158,7 @@ void swallow(Client *c, Client *w) {
 	c->scroller_proportion = w->scroller_proportion;
 	c->next_in_stack = w->next_in_stack;
 	c->prev_in_stack = w->prev_in_stack;
+	c->isglobal = w->isglobal;
 
 	if (w->next_in_stack)
 		w->next_in_stack->prev_in_stack = c;
@@ -1152,8 +1168,12 @@ void swallow(Client *c, Client *w) {
 	wl_list_insert(&w->link, &c->link);
 	wl_list_insert(&w->flink, &c->flink);
 
-	if (w->foreign_toplevel)
-		remove_foreign_topleve(w);
+	if (w->foreign_toplevel) {
+		wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
+													w->mon->wlr_output);
+		wlr_foreign_toplevel_handle_v1_destroy(w->foreign_toplevel);
+		w->foreign_toplevel = NULL;
+	}
 
 	wlr_scene_node_set_enabled(&w->scene->node, false);
 	wlr_scene_node_set_enabled(&c->scene->node, true);
@@ -1161,10 +1181,25 @@ void swallow(Client *c, Client *w) {
 
 	if (!c->foreign_toplevel && c->mon)
 		add_foreign_toplevel(c);
+	else if (c->foreign_toplevel && c->mon) {
+		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
+													c->mon->wlr_output);
+	}
 
 	client_pending_fullscreen_state(c, w->isfullscreen);
 	client_pending_maximized_state(c, w->ismaximizescreen);
 	client_pending_minimized_state(c, w->isminimized);
+
+	Monitor *m;
+	wl_list_for_each(m, &mons, link) {
+		for (uint32_t t = 0; t < LENGTH(tags) + 1; t++) {
+			DwindleNode **root = &m->pertag->dwindle_root[t];
+			dwindle_remove(root, c);
+			DwindleNode *wn = dwindle_find_leaf(*root, w);
+			if (wn)
+				wn->client = c;
+		}
+	}
 }
 
 bool switch_scratchpad_client_state(Client *c) {
@@ -1175,7 +1210,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		Monitor *oldmon = c->mon;
 		c->scratchpad_switching_mon = true;
 		c->mon = selmon;
-		reset_foreign_tolevel(c);
+		reset_foreign_tolevel(c, oldmon, c->mon);
 		client_update_oldmonname_record(c, selmon);
 
 		// 根据新monitor调整窗口尺寸
@@ -1569,12 +1604,17 @@ void applyrules(Client *c) {
 	int32_t fullscreen_state_backup =
 		c->isfullscreen || client_wants_fullscreen(c);
 
-	setmon(c, mon, newtags,
-		   !c->isopensilent &&
-			   !(client_is_x11_popup(c) && client_should_ignore_focus(c)) &&
-			   mon &&
-			   (!c->istagsilent || !newtags ||
-				newtags & mon->tagset[mon->seltags]));
+	bool should_init_get_focus =
+		!c->isopensilent &&
+		!(client_is_x11_popup(c) && client_should_ignore_focus(c)) && mon &&
+		(!c->istagsilent || !newtags || newtags & mon->tagset[mon->seltags]);
+
+	if (!should_init_get_focus) {
+		wl_list_remove(&c->flink);
+		wl_list_insert(fstack.prev, &c->flink);
+	}
+
+	setmon(c, mon, newtags, should_init_get_focus);
 
 	if (!c->isfloating) {
 		c->old_stack_inner_per = c->stack_inner_per;
@@ -1819,6 +1859,9 @@ void arrangelayers(Monitor *m) {
 	if (!m->wlr_output->enabled)
 		return;
 
+	if (m->iscleanuping)
+		return;
+
 	/* Arrange exclusive surfaces from top->bottom */
 	for (i = 3; i >= 0; i--)
 		arrangelayer(m, &m->layers[i], &usable_area, 1);
@@ -1833,9 +1876,21 @@ void arrangelayers(Monitor *m) {
 		arrangelayer(m, &m->layers[i], &usable_area, 0);
 }
 
+bool pointer_is_trackpad(struct wlr_pointer *pointer) {
+	struct libinput_device *device;
+
+	if (wlr_input_device_is_libinput(&pointer->base) &&
+		(device = wlr_libinput_get_device_handle(&pointer->base))) {
+		if (libinput_device_config_tap_get_finger_count(device) > 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void // 鼠标滚轮事件
 axisnotify(struct wl_listener *listener, void *data) {
-
 	/* This event is forwarded by the cursor when a pointer emits an axis event,
 	 * for example when you move the scroll wheel. */
 	struct wlr_pointer_axis_event *event = data;
@@ -1844,6 +1899,7 @@ axisnotify(struct wl_listener *listener, void *data) {
 	AxisBinding *a;
 	int32_t ji;
 	uint32_t adir;
+	double target_scroll_factor;
 	// IDLE_NOTIFY_ACTIVITY;
 	handlecursoractivity();
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
@@ -1890,12 +1946,17 @@ axisnotify(struct wl_listener *listener, void *data) {
 	 * implemented checking the event's orientation and the delta of the event
 	 */
 	/* Notify the client with pointer focus of the axis event. */
+
+	target_scroll_factor = pointer_is_trackpad(event->pointer)
+							   ? config.trackpad_scroll_factor
+							   : config.axis_scroll_factor;
+
 	wlr_seat_pointer_notify_axis(
 		seat, // 滚轮事件发送给客户端也就是窗口
 		event->time_msec, event->orientation,
-		event->delta * config.axis_scroll_factor,
-		roundf(event->delta_discrete * config.axis_scroll_factor),
-		event->source, event->relative_direction);
+		event->delta * target_scroll_factor,
+		roundf(event->delta_discrete * target_scroll_factor), event->source,
+		event->relative_direction);
 }
 
 int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
@@ -2018,52 +2079,180 @@ void hold_end(struct wl_listener *listener, void *data) {
 										  event->time_msec, event->cancelled);
 }
 
-void place_drag_tile_client(Client *c) {
-	Client *tc = NULL;
-	Client *closest_client = NULL;
-	long min_distant = LONG_MAX;
-	long temp_distant;
-	int32_t x, y;
+Client *find_closest_tiled_client(Client *c) {
+	Client *tc, *closest = NULL;
+	long min_dist = LONG_MAX;
 
 	wl_list_for_each(tc, &clients, link) {
-		if (tc != c && ISTILED(tc) && VISIBLEON(tc, c->mon)) {
-			x = tc->geom.x + (int32_t)(tc->geom.width / 2) - cursor->x;
-			y = tc->geom.y + (int32_t)(tc->geom.height / 2) - cursor->y;
-			temp_distant = x * x + y * y;
-			if (temp_distant < min_distant) {
-				min_distant = temp_distant;
-				closest_client = tc;
-			}
+		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, c->mon))
+			continue;
+
+		if (cursor->x >= tc->geom.x &&
+			cursor->x < tc->geom.x + tc->geom.width &&
+			cursor->y >= tc->geom.y &&
+			cursor->y < tc->geom.y + tc->geom.height) {
+			return tc;
+		}
+
+		int32_t dx = tc->geom.x + (int32_t)(tc->geom.width / 2) - cursor->x;
+		int32_t dy = tc->geom.y + (int32_t)(tc->geom.height / 2) - cursor->y;
+		long dist = (long)dx * dx + (long)dy * dy;
+
+		if (dist < min_dist) {
+			min_dist = dist;
+			closest = tc;
 		}
 	}
-	if (closest_client && closest_client->link.prev != &c->link) {
-		wl_list_remove(&c->link);
-		c->link.next = &closest_client->link;
-		c->link.prev = closest_client->link.prev;
-		closest_client->link.prev->next = &c->link;
-		closest_client->link.prev = &c->link;
-	} else if (closest_client) {
-		exchange_two_client(c, closest_client);
+
+	return closest;
+}
+
+void scroller_insert_stack(Client *c, Client *target_client,
+						   bool insert_before) {
+	Client *stack_head = NULL;
+
+	if (!target_client || target_client->mon != c->mon) {
+		return;
+	} else {
+		c->isglobal = target_client->isglobal = 0;
+		c->isunglobal = target_client->isunglobal = 0;
+		c->tags = target_client->tags = get_tags_first_tag(target_client->tags);
 	}
+
+	if (c->isfullscreen) {
+		setfullscreen(c, 0);
+	}
+
+	if (c->ismaximizescreen) {
+		setmaximizescreen(c, 0);
+	}
+
+	exit_scroller_stack(c);
+	stack_head = get_scroll_stack_head(target_client);
+
+	if (insert_before) {
+		if (target_client->prev_in_stack) {
+			target_client->prev_in_stack->next_in_stack = c;
+		}
+		c->prev_in_stack = target_client->prev_in_stack;
+		c->next_in_stack = target_client;
+		target_client->prev_in_stack = c;
+
+	} else {
+		if (target_client->next_in_stack) {
+			target_client->next_in_stack->prev_in_stack = c;
+		}
+		c->next_in_stack = target_client->next_in_stack;
+		c->prev_in_stack = target_client;
+		target_client->next_in_stack = c;
+	}
+
+	if (stack_head->ismaximizescreen) {
+		setmaximizescreen(stack_head, 0);
+	}
+
+	if (stack_head->isfullscreen) {
+		setfullscreen(stack_head, 0);
+	}
+
+	arrange(c->mon, false, false);
+
+	return;
+}
+
+void try_scroller_drop(Client *c, Client *closest, int vertical) {
+
+	Client *stack_head = get_scroll_stack_head(closest);
+
+	if (vertical) {
+		if (closest->drop_direction == LEFT) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, true);
+			return;
+		} else if (closest->drop_direction == RIGHT) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, false);
+			return;
+		} else if (closest->drop_direction == UP) {
+			wl_list_remove(&c->link);
+			wl_list_insert(stack_head->link.prev, &c->link);
+		} else if (closest->drop_direction == DOWN) {
+			wl_list_remove(&c->link);
+			wl_list_insert(&stack_head->link, &c->link);
+		}
+	} else {
+		if (closest->drop_direction == UP) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, true);
+			return;
+		} else if (closest->drop_direction == DOWN) {
+			setfloating(c, 0);
+			scroller_insert_stack(c, closest, false);
+			return;
+		} else if (closest->drop_direction == LEFT) {
+			wl_list_remove(&c->link);
+			wl_list_insert(stack_head->link.prev, &c->link);
+		} else if (closest->drop_direction == RIGHT) {
+			wl_list_remove(&c->link);
+			wl_list_insert(&stack_head->link, &c->link);
+		}
+	}
+
+	setfloating(c, 0);
+}
+
+void place_drag_tile_client(Client *c) {
+	Client *closest = find_closest_tiled_client(c);
+
+	if (closest && closest->mon) {
+		const Layout *layout =
+			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
+
+		if (closest->drop_direction == UNDIR) {
+			setfloating(c, 0);
+			exchange_two_client(c, closest);
+			return;
+		}
+
+		if (layout->id == SCROLLER) {
+			try_scroller_drop(c, closest, 0);
+			return;
+		}
+		if (layout->id == VERTICAL_SCROLLER) {
+			try_scroller_drop(c, closest, 1);
+			return;
+		}
+		if (layout->id == DWINDLE) {
+			uint32_t tag = c->mon->pertag->curtag;
+			bool insert_before = (closest->drop_direction == LEFT ||
+								  closest->drop_direction == UP);
+			bool split_h = (closest->drop_direction == LEFT ||
+							closest->drop_direction == RIGHT);
+			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
+						   config.dwindle_split_ratio, insert_before, split_h,
+						   !config.dwindle_drop_simple_split);
+			setfloating(c, 0);
+			return;
+		}
+
+		if (closest->drop_direction == LEFT || closest->drop_direction == UP) {
+			wl_list_remove(&c->link);
+			wl_list_insert(closest->link.prev, &c->link);
+		} else {
+			wl_list_remove(&c->link);
+			wl_list_insert(&closest->link, &c->link);
+		}
+	}
+
 	setfloating(c, 0);
 }
 
 bool check_trackpad_disabled(struct wlr_pointer *pointer) {
-	struct libinput_device *device;
-
-	if (!config.disable_trackpad)
+	if (!config.disable_trackpad) {
 		return false;
-
-	if (wlr_input_device_is_libinput(&pointer->base) &&
-		(device = wlr_libinput_get_device_handle(&pointer->base))) {
-
-		// 如果是触摸板且被禁用，忽略事件
-		if (libinput_device_config_tap_get_finger_count(device) > 0) {
-			return true; // 不处理事件
-		}
 	}
 
-	return false;
+	return pointer_is_trackpad(pointer);
 }
 
 void // 鼠标按键事件
@@ -2172,10 +2361,16 @@ buttonpress(struct wl_listener *listener, void *data) {
 			last_apply_drap_time = 0;
 			if (tmpc->drag_to_tile && config.drag_tile_to_tile) {
 				place_drag_tile_client(tmpc);
+				tmpc->float_geom = tmpc->drag_tile_float_backup_geom;
 			} else {
 				apply_window_snap(tmpc);
 			}
 			tmpc->drag_to_tile = false;
+			if (dropc) {
+				dropc->enable_drop_area_draw = false;
+				client_set_drop_area(dropc);
+				dropc = NULL;
+			}
 			return;
 		} else {
 			cursor_mode = CurNormal;
@@ -2318,6 +2513,8 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	LayerSurface *l = NULL, *tmp = NULL;
 	uint32_t i;
 
+	m->iscleanuping = true;
+
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {
 		wl_list_for_each_safe(l, tmp, &m->layers[i], link)
@@ -2350,6 +2547,9 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		m->skip_frame_timeout = NULL;
 	}
 	m->wlr_output->data = NULL;
+
+	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
+		dwindle_free_tree(m->pertag->dwindle_root[t]);
 	free(m->pertag);
 	free(m);
 }
@@ -2374,7 +2574,13 @@ void closemon(Monitor *m) {
 		if (c->mon == m) {
 
 			if (selmon == NULL) {
-				remove_foreign_topleve(c);
+				if (c->foreign_toplevel) {
+					wlr_foreign_toplevel_handle_v1_output_leave(
+						c->foreign_toplevel, c->mon->wlr_output);
+					wlr_foreign_toplevel_handle_v1_destroy(c->foreign_toplevel);
+					c->foreign_toplevel = NULL;
+				}
+
 				c->mon = NULL;
 			} else {
 				client_change_mon(c, selmon);
@@ -3019,6 +3225,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	struct wl_event_loop *loop = wl_display_get_event_loop(dpy);
 	m = wlr_output->data = ecalloc(1, sizeof(*m));
 
+	m->iscleanuping = false;
 	m->skip_frame_timeout =
 		wl_event_loop_add_timer(loop, monitor_skip_frame_timeout_callback, m);
 	m->skiping_frame = false;
@@ -3201,6 +3408,22 @@ void destroyinputdevice(struct wl_listener *listener, void *data) {
 	free(input_dev);
 }
 
+void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
+					   uint32_t mouse_accel_profile, double mouse_accel_speed) {
+	libinput_device_config_scroll_set_natural_scroll_enabled(device,
+															 natural_scrolling);
+	if (mouse_accel_profile &&
+		libinput_device_config_accel_is_available(device)) {
+		libinput_device_config_accel_set_profile(device, mouse_accel_profile);
+		libinput_device_config_accel_set_speed(device, mouse_accel_speed);
+	} else {
+		// profile cannot be directly applied to 0, need to set to 1 first
+		libinput_device_config_accel_set_profile(device, 1);
+		libinput_device_config_accel_set_profile(device, 0);
+		libinput_device_config_accel_set_speed(device, 0);
+	}
+}
+
 void configure_pointer(struct libinput_device *device) {
 	if (libinput_device_config_tap_get_finger_count(device)) {
 		libinput_device_config_tap_set_enabled(device, config.tap_to_click);
@@ -3209,11 +3432,12 @@ void configure_pointer(struct libinput_device *device) {
 		libinput_device_config_tap_set_drag_lock_enabled(device,
 														 config.drag_lock);
 		libinput_device_config_tap_set_button_map(device, config.button_map);
-		libinput_device_config_scroll_set_natural_scroll_enabled(
-			device, config.trackpad_natural_scrolling);
+		pointer_set_accel(device, config.trackpad_natural_scrolling,
+						  config.trackpad_accel_profile,
+						  config.trackpad_accel_speed);
 	} else {
-		libinput_device_config_scroll_set_natural_scroll_enabled(
-			device, config.mouse_natural_scrolling);
+		pointer_set_accel(device, config.mouse_natural_scrolling,
+						  config.mouse_accel_profile, config.mouse_accel_speed);
 	}
 
 	if (libinput_device_config_dwt_is_available(device))
@@ -3241,17 +3465,6 @@ void configure_pointer(struct libinput_device *device) {
 	if (libinput_device_config_send_events_get_modes(device))
 		libinput_device_config_send_events_set_mode(device,
 													config.send_events_mode);
-
-	if (config.accel_profile &&
-		libinput_device_config_accel_is_available(device)) {
-		libinput_device_config_accel_set_profile(device, config.accel_profile);
-		libinput_device_config_accel_set_speed(device, config.accel_speed);
-	} else {
-		// profile cannot be directly applied to 0, need to set to 1 first
-		libinput_device_config_accel_set_profile(device, 1);
-		libinput_device_config_accel_set_profile(device, 0);
-		libinput_device_config_accel_set_speed(device, 0);
-	}
 }
 
 void createpointer(struct wlr_pointer *pointer) {
@@ -3577,8 +3790,14 @@ void focusclient(Client *c, int32_t lift) {
 	wl_list_for_each(um, &mons, link) {
 		if (um->wlr_output->enabled && um != selmon && um->sel &&
 			!um->sel->iskilling && um->sel->isfocusing) {
+
 			um->sel->isfocusing = false;
 			client_set_unfocused_opacity_animation(um->sel);
+
+			if (um->sel->foreign_toplevel) {
+				wlr_foreign_toplevel_handle_v1_set_activated(
+					um->sel->foreign_toplevel, false);
+			}
 		}
 	}
 
@@ -4032,6 +4251,8 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 }
 
 void init_client_properties(Client *c) {
+	c->drop_direction = UNDIR;
+	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
 	c->isfloating = 0;
 	c->isfakefullscreen = 0;
@@ -4173,6 +4394,12 @@ mapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	// extra node
+
+	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
+	wlr_scene_node_lower_to_bottom(&c->droparea->node);
+	wlr_scene_node_set_position(&c->droparea->node, 0, 0);
+	wlr_scene_node_set_enabled(&c->droparea->node, false);
+
 	c->border = wlr_scene_rect_create(
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
@@ -4211,6 +4438,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 		}
 	} else
 		wl_list_insert(clients.prev, &c->link); // 尾部入栈
+
 	wl_list_insert(&fstack, &c->flink);
 
 	applyrules(c);
@@ -4286,7 +4514,11 @@ void set_minimized(Client *c) {
 	c->is_scratchpad_show = 0;
 	focusclient(focustop(selmon), 1);
 	arrange(c->mon, false, false);
-	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, false);
+
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel,
+													 false);
+
 	wl_list_remove(&c->link);				// 从原来位置移除
 	wl_list_insert(clients.prev, &c->link); // 插入尾部
 }
@@ -4362,6 +4594,7 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 				  double dy, double dx_unaccel, double dy_unaccel) {
 	double sx = 0, sy = 0, sx_confined, sy_confined;
 	Client *c = NULL, *w = NULL;
+	Client *closet_drop_client = NULL;
 	LayerSurface *l = NULL;
 	struct wlr_surface *surface = NULL;
 	struct wlr_pointer_constraint_v1 *constraint;
@@ -4378,20 +4611,23 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 		if (active_constraint && cursor_mode != CurResize &&
 			cursor_mode != CurMove) {
-			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
-			if (c && active_constraint->surface ==
-						 seat->pointer_state.focused_surface) {
-				sx = cursor->x - c->geom.x - c->bw;
-				sy = cursor->y - c->geom.y - c->bw;
-				if (wlr_region_confine(&active_constraint->region, sx, sy,
-									   sx + dx, sy + dy, &sx_confined,
-									   &sy_confined)) {
-					dx = sx_confined - sx;
-					dy = sy_confined - sy;
-				}
+			if (active_constraint->surface ==
+				seat->pointer_state.focused_surface) {
 
 				if (active_constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED)
 					return;
+
+				toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
+				if (c) {
+					sx = cursor->x - c->geom.x - c->bw;
+					sy = cursor->y - c->geom.y - c->bw;
+					if (wlr_region_confine(&active_constraint->region, sx, sy,
+										   sx + dx, sy + dy, &sx_confined,
+										   &sy_confined)) {
+						dx = sx_confined - sx;
+						dy = sy_confined - sy;
+					}
+				}
 			}
 		}
 
@@ -4430,6 +4666,24 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 							 .y = (int32_t)round(cursor->y) - grabcy,
 							 .width = grabc->geom.width,
 							 .height = grabc->geom.height};
+		if (config.drag_tile_to_tile && grabc->drag_to_tile) {
+			closet_drop_client = find_closest_tiled_client(grabc);
+			if (closet_drop_client && dropc && closet_drop_client != dropc) {
+				dropc->enable_drop_area_draw = false;
+				client_set_drop_area(dropc);
+				dropc = closet_drop_client;
+				dropc->enable_drop_area_draw = true;
+				client_set_drop_area(dropc);
+			} else if (closet_drop_client) {
+				dropc = closet_drop_client;
+				dropc->enable_drop_area_draw = true;
+				client_set_drop_area(dropc);
+			} else if (dropc) {
+				dropc->enable_drop_area_draw = false;
+				client_set_drop_area(dropc);
+				dropc = NULL;
+			}
+		}
 		resize(grabc, grabc->float_geom, 1);
 		return;
 	} else if (cursor_mode == CurResize) {
@@ -4890,10 +5144,20 @@ void exchange_two_client(Client *c1, Client *c2) {
 		tmp_tags = c2->tags;
 		setmon(c2, c1->mon, c1->tags, false);
 		setmon(c1, tmp_mon, tmp_tags, false);
+		if (c1->mon &&
+			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
+			dwindle_swap_clients(
+				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
+				c2);
 		arrange(c1->mon, false, false);
 		arrange(c2->mon, false, false);
 		focusclient(c1, 0);
 	} else {
+		if (c1->mon &&
+			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
+			dwindle_swap_clients(
+				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
+				c2);
 		arrange(c1->mon, false, false);
 	}
 
@@ -5424,7 +5688,7 @@ void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		arrange(oldmon, false, false);
 	if (m) {
 		/* Make sure window actually overlaps with the monitor */
-		reset_foreign_tolevel(c);
+		reset_foreign_tolevel(c, oldmon, m);
 		resize(c, c->geom, 0);
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
@@ -5471,7 +5735,9 @@ void show_hide_client(Client *c) {
 	}
 	client_pending_minimized_state(c, 0);
 	focusclient(c, 1);
-	wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
+
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
 }
 
 void create_output(struct wlr_backend *backend, void *data) {
@@ -6056,6 +6322,10 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		grabc = NULL;
 	}
 
+	if (c == dropc) {
+		dropc = NULL;
+	}
+
 	wl_list_for_each(m, &mons, link) {
 		if (!m->wlr_output->enabled) {
 			continue;
@@ -6126,6 +6396,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->next_in_stack = NULL;
 	c->prev_in_stack = NULL;
 
+	dwindle_remove_client(c);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus();
 	motionnotify(0, NULL, 0, 0, 0, 0);
@@ -6244,7 +6515,7 @@ void updatemons(struct wl_listener *listener, void *data) {
 		wl_list_for_each(c, &clients, link) {
 			if (!c->mon && client_surface(c)->mapped) {
 				c->mon = selmon;
-				reset_foreign_tolevel(c);
+				reset_foreign_tolevel(c, NULL, c->mon);
 			}
 			if (c->tags == 0 && !c->is_in_scratchpad) {
 				c->tags = selmon->tagset[selmon->seltags];
@@ -6317,10 +6588,14 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	}
 
 	if (arg->ui == UINT32_MAX) {
-		m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		m->seltags ^= 1; /* toggle sel tagset */
-		m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
-		goto toggleseltags;
+		if (m->tagset[0] != m->tagset[1]) {
+			m->pertag->prevtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			m->seltags ^= 1; /* toggle sel tagset */
+			m->pertag->curtag = get_tags_first_tag_num(m->tagset[m->seltags]);
+			goto toggleseltags;
+		} else {
+			return;
+		}
 	}
 
 	if ((m->tagset[m->seltags] & arg->ui & TAGMASK) != 0) {

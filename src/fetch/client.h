@@ -558,7 +558,7 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 
 	if (id != SCROLLER && id != VERTICAL_SCROLLER && id != TILE &&
 		id != VERTICAL_TILE && id != DECK && id != VERTICAL_DECK &&
-		id != CENTER_TILE && id != RIGHT_TILE && id != TGMIX)
+		id != CENTER_TILE && id != RIGHT_TILE)
 		return false;
 
 	if (id == SCROLLER || id == VERTICAL_SCROLLER) {
@@ -580,15 +580,6 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 		if (fc && !(fc->ismaster ^ sc->ismaster))
 			return false;
 		else
-			return true;
-	}
-
-	if (id == TGMIX) {
-		if (tc->ismaster ^ sc->ismaster)
-			return false;
-		if (fc && !(fc->ismaster ^ sc->ismaster))
-			return false;
-		if (!sc->ismaster && sc->mon->visible_tiling_clients <= 3)
 			return true;
 	}
 

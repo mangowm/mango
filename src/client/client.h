@@ -312,11 +312,6 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 		int32_t width = c->geom.width - 2 * c->bw;
 		int32_t height = c->geom.height - 2 * c->bw;
 
-		if (c->mon && c->mon->isoverview && size_hints &&
-			c->geom.width - 2 * (int32_t)c->bw < size_hints->min_width &&
-			c->geom.height - 2 * (int32_t)c->bw < size_hints->min_height)
-			return 0;
-
 		if (size_hints &&
 			c->geom.width - 2 * (int32_t)c->bw < size_hints->min_width)
 			width = size_hints->min_width;

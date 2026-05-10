@@ -18,7 +18,7 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `vertical_scroller`
 - `vertical_grid`
 - `vertical_deck`
-- `tgmix`
+- `dwindle`
 
 ---
 
@@ -79,6 +79,35 @@ new_is_master=1
 smartgaps=0
 default_mfact=0.55
 default_nmaster=1
+```
+
+---
+
+## Dwindle Layout
+
+The Dwindle layout arranges windows as a binary tree of recursive splits. Each new window splits the focused window's container, producing a spiral-like tiling.
+
+### Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `dwindle_split_ratio` | `0.5` | Ratio used for new splits (`0.05`–`0.95`). |
+| `dwindle_smart_split` | `0` | Pick the split axis from the cursor's position inside the focused window. The new window appears on the cursor's side. |
+| `dwindle_hsplit` | `0` | Side-by-side splits: where the new window goes. `0` = follow cursor, `1` = right, `2` = left. |
+| `dwindle_vsplit` | `0` | Top/bottom splits: where the new window goes. `0` = follow cursor, `1` = below, `2` = above. |
+| `dwindle_preserve_split` | `0` | Keep the sibling's split orientation when a window is closed. |
+| `dwindle_smart_resize` | `0` | When dragging to resize, move the split toward the cursor regardless of which side was grabbed. |
+| `dwindle_drop_simple_split` | `1` | Drag-to-tile drop preview. `1` = 2-zone preview matching `dwindle_split_ratio`, `0` = 4-quadrant preview. |
+
+```ini
+# Example dwindle configuration
+dwindle_split_ratio=0.5
+dwindle_smart_split=0
+dwindle_hsplit=0
+dwindle_vsplit=0
+dwindle_preserve_split=0
+dwindle_smart_resize=0
+dwindle_drop_simple_split=1
 ```
 
 ---

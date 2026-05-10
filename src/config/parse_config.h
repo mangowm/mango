@@ -226,6 +226,7 @@ typedef struct {
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t drag_tile_to_tile;
+	int32_t drag_tile_small;
 	uint32_t swipe_min_threshold;
 	float focused_opacity;
 	float unfocused_opacity;
@@ -240,6 +241,15 @@ typedef struct {
 	uint32_t default_nmaster;
 	int32_t center_master_overspread;
 	int32_t center_when_single_stack;
+
+	/* dwindle layout */
+	int32_t dwindle_vsplit;
+	int32_t dwindle_hsplit;
+	int32_t dwindle_preserve_split;
+	int32_t dwindle_smart_split;
+	int32_t dwindle_smart_resize;
+	int32_t dwindle_drop_simple_split;
+	float dwindle_split_ratio;
 
 	uint32_t hotarea_size;
 	uint32_t hotarea_corner;
@@ -262,26 +272,33 @@ typedef struct {
 	int32_t repeat_delay;
 	uint32_t numlockon;
 
-	/* Trackpad */
-	int32_t disable_trackpad;
-	int32_t tap_to_click;
-	int32_t tap_and_drag;
-	int32_t drag_lock;
-	int32_t mouse_natural_scrolling;
-	int32_t trackpad_natural_scrolling;
+	/* common pointer */
 	int32_t disable_while_typing;
 	int32_t left_handed;
 	int32_t middle_button_emulation;
-	uint32_t accel_profile;
-	double accel_speed;
 	uint32_t scroll_method;
 	uint32_t scroll_button;
 	uint32_t click_method;
 	uint32_t send_events_mode;
-	uint32_t button_map;
 
+	/* mouse */
+	int32_t mouse_natural_scrolling;
+	uint32_t mouse_accel_profile;
+	double mouse_accel_speed;
 	double axis_scroll_factor;
 
+	/* Trackpad */
+	int32_t trackpad_natural_scrolling;
+	uint32_t trackpad_accel_profile;
+	double trackpad_accel_speed;
+	double trackpad_scroll_factor;
+	int32_t disable_trackpad;
+	int32_t tap_to_click;
+	int32_t tap_and_drag;
+	int32_t drag_lock;
+	uint32_t button_map;
+
+	/* window effects */
 	int32_t blur;
 	int32_t blur_layer;
 	int32_t blur_optimized;
@@ -297,6 +314,7 @@ typedef struct {
 	int32_t shadows_position_y;
 	float shadowscolor[4];
 
+	/* appearance */
 	int32_t smartgaps;
 	uint32_t gappih;
 	uint32_t gappiv;
@@ -307,6 +325,7 @@ typedef struct {
 	float scratchpad_height_ratio;
 	float rootcolor[4];
 	float bordercolor[4];
+	float dropcolor[4];
 	float focuscolor[4];
 	float maximizescreencolor[4];
 	float urgentcolor[4];
@@ -1440,6 +1459,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->enable_floating_snap = atoi(value);
 	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
+	} else if (strcmp(key, "drag_tile_small") == 0) {
+		config->drag_tile_small = atoi(value);
 	} else if (strcmp(key, "swipe_min_threshold") == 0) {
 		config->swipe_min_threshold = atoi(value);
 	} else if (strcmp(key, "focused_opacity") == 0) {
@@ -1607,6 +1628,20 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
 		config->center_when_single_stack = atoi(value);
+	} else if (strcmp(key, "dwindle_vsplit") == 0) {
+		config->dwindle_vsplit = atoi(value);
+	} else if (strcmp(key, "dwindle_hsplit") == 0) {
+		config->dwindle_hsplit = atoi(value);
+	} else if (strcmp(key, "dwindle_preserve_split") == 0) {
+		config->dwindle_preserve_split = atoi(value);
+	} else if (strcmp(key, "dwindle_smart_split") == 0) {
+		config->dwindle_smart_split = atoi(value);
+	} else if (strcmp(key, "dwindle_smart_resize") == 0) {
+		config->dwindle_smart_resize = atoi(value);
+	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
+		config->dwindle_drop_simple_split = atoi(value);
+	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
+		config->dwindle_split_ratio = atof(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
 		config->hotarea_size = atoi(value);
 	} else if (strcmp(key, "hotarea_corner") == 0) {
@@ -1665,10 +1700,14 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->left_handed = atoi(value);
 	} else if (strcmp(key, "middle_button_emulation") == 0) {
 		config->middle_button_emulation = atoi(value);
-	} else if (strcmp(key, "accel_profile") == 0) {
-		config->accel_profile = atoi(value);
-	} else if (strcmp(key, "accel_speed") == 0) {
-		config->accel_speed = atof(value);
+	} else if (strcmp(key, "mouse_accel_profile") == 0) {
+		config->mouse_accel_profile = atoi(value);
+	} else if (strcmp(key, "mouse_accel_speed") == 0) {
+		config->mouse_accel_speed = atof(value);
+	} else if (strcmp(key, "trackpad_accel_profile") == 0) {
+		config->trackpad_accel_profile = atoi(value);
+	} else if (strcmp(key, "trackpad_accel_speed") == 0) {
+		config->trackpad_accel_speed = atof(value);
 	} else if (strcmp(key, "scroll_method") == 0) {
 		config->scroll_method = atoi(value);
 	} else if (strcmp(key, "scroll_button") == 0) {
@@ -1681,6 +1720,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->button_map = atoi(value);
 	} else if (strcmp(key, "axis_scroll_factor") == 0) {
 		config->axis_scroll_factor = atof(value);
+	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
+		config->trackpad_scroll_factor = atof(value);
 	} else if (strcmp(key, "gappih") == 0) {
 		config->gappih = atoi(value);
 	} else if (strcmp(key, "gappiv") == 0) {
@@ -1729,6 +1770,17 @@ bool parse_option(Config *config, char *key, char *value) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->bordercolor, color);
+		}
+	} else if (strcmp(key, "dropcolor") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid dropcolor "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->dropcolor, color);
 		}
 	} else if (strcmp(key, "focuscolor") == 0) {
 		int64_t color = parse_color(value);
@@ -3154,6 +3206,16 @@ void override_config(void) {
 	config.center_when_single_stack =
 		CLAMP_INT(config.center_when_single_stack, 0, 1);
 	config.new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
+	config.dwindle_vsplit = CLAMP_INT(config.dwindle_vsplit, 0, 2);
+	config.dwindle_hsplit = CLAMP_INT(config.dwindle_hsplit, 0, 2);
+	config.dwindle_preserve_split =
+		CLAMP_INT(config.dwindle_preserve_split, 0, 1);
+	config.dwindle_smart_split = CLAMP_INT(config.dwindle_smart_split, 0, 1);
+	config.dwindle_smart_resize = CLAMP_INT(config.dwindle_smart_resize, 0, 1);
+	config.dwindle_drop_simple_split =
+		CLAMP_INT(config.dwindle_drop_simple_split, 0, 1);
+	config.dwindle_split_ratio =
+		CLAMP_FLOAT(config.dwindle_split_ratio, 0.05f, 0.95f);
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
@@ -3167,6 +3229,7 @@ void override_config(void) {
 	config.drag_floating_refresh_interval =
 		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	config.allow_shortcuts_inhibit =
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
@@ -3214,8 +3277,13 @@ void override_config(void) {
 	config.swipe_min_threshold = CLAMP_INT(config.swipe_min_threshold, 1, 1000);
 	config.mouse_natural_scrolling =
 		CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
-	config.accel_profile = CLAMP_INT(config.accel_profile, 0, 2);
-	config.accel_speed = CLAMP_FLOAT(config.accel_speed, -1.0f, 1.0f);
+	config.mouse_accel_profile = CLAMP_INT(config.mouse_accel_profile, 0, 2);
+	config.mouse_accel_speed =
+		CLAMP_FLOAT(config.mouse_accel_speed, -1.0f, 1.0f);
+	config.trackpad_accel_profile =
+		CLAMP_INT(config.trackpad_accel_profile, 0, 2);
+	config.trackpad_accel_speed =
+		CLAMP_FLOAT(config.trackpad_accel_speed, -1.0f, 1.0f);
 	config.scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
 	config.scroll_button = CLAMP_INT(config.scroll_button, 272, 279);
 	config.click_method = CLAMP_INT(config.click_method, 0, 2);
@@ -3223,6 +3291,8 @@ void override_config(void) {
 	config.button_map = CLAMP_INT(config.button_map, 0, 1);
 	config.axis_scroll_factor =
 		CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
+	config.trackpad_scroll_factor =
+		CLAMP_FLOAT(config.trackpad_scroll_factor, 0.1f, 10.0f);
 	config.gappih = CLAMP_INT(config.gappih, 0, 1000);
 	config.gappiv = CLAMP_INT(config.gappiv, 0, 1000);
 	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
@@ -3285,6 +3355,14 @@ void set_value_default() {
 	config.center_master_overspread = 0;
 	config.center_when_single_stack = 1;
 
+	config.dwindle_vsplit = 0;
+	config.dwindle_hsplit = 0;
+	config.dwindle_preserve_split = 0;
+	config.dwindle_smart_split = 0;
+	config.dwindle_smart_resize = 0;
+	config.dwindle_drop_simple_split = 1;
+	config.dwindle_split_ratio = 0.5f;
+
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;
 	config.capslock = 0;
@@ -3315,6 +3393,7 @@ void set_value_default() {
 	config.scratchpad_cross_monitor = 0;
 	config.focus_cross_tag = 0;
 	config.axis_scroll_factor = 1.0;
+	config.trackpad_scroll_factor = 1.0;
 	config.view_current_to_back = 0;
 	config.single_scratchpad = 1;
 	config.xwayland_persistence = 1;
@@ -3328,6 +3407,7 @@ void set_value_default() {
 	config.no_radius_when_single = 0;
 	config.snap_distance = 30;
 	config.drag_tile_to_tile = 0;
+	config.drag_tile_small = 1;
 	config.enable_floating_snap = 0;
 	config.swipe_min_threshold = 1;
 
@@ -3355,8 +3435,10 @@ void set_value_default() {
 	config.disable_while_typing = 1;
 	config.left_handed = 0;
 	config.middle_button_emulation = 0;
-	config.accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
-	config.accel_speed = 0.0;
+	config.mouse_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.mouse_accel_speed = 0.0;
+	config.trackpad_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.trackpad_accel_speed = 0.0;
 	config.scroll_method = LIBINPUT_CONFIG_SCROLL_2FG;
 	config.scroll_button = 274;
 	config.click_method = LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
@@ -3426,6 +3508,10 @@ void set_value_default() {
 	config.bordercolor[1] = 0x44 / 255.0f;
 	config.bordercolor[2] = 0x44 / 255.0f;
 	config.bordercolor[3] = 1.0f;
+	config.dropcolor[0] = 0x8f / 255.0f;
+	config.dropcolor[1] = 0xba / 255.0f;
+	config.dropcolor[2] = 0x7c / 255.0f;
+	config.dropcolor[3] = 0.5f;
 	config.focuscolor[0] = 0xc6 / 255.0f;
 	config.focuscolor[1] = 0x6b / 255.0f;
 	config.focuscolor[2] = 0x25 / 255.0f;
@@ -3675,7 +3761,7 @@ void reapply_rootbg(void) {
 	wlr_scene_rect_set_color(root_bg, config.rootcolor);
 }
 
-void reapply_border(void) {
+void reapply_property(void) {
 	Client *c = NULL;
 
 	// reset border width when config change
@@ -3684,6 +3770,8 @@ void reapply_border(void) {
 			if (!c->isnoborder && !c->isfullscreen) {
 				c->bw = config.borderpx;
 			}
+
+			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
 		}
 	}
 }
@@ -3829,7 +3917,7 @@ void reset_option(void) {
 	run_exec();
 
 	reapply_cursor_style();
-	reapply_border();
+	reapply_property();
 	reapply_rootbg();
 	reapply_keyboard();
 	reapply_pointer();

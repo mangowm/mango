@@ -488,6 +488,21 @@ void resize_tile_master_vertical(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
+void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
+						 int32_t offsety, uint32_t time, bool isvertical) {
+
+	if (!isdrag) {
+		dwindle_resize_client_step(grabc->mon, grabc, offsetx, offsety);
+		return;
+	}
+
+	if (last_apply_drap_time == 0 ||
+		time - last_apply_drap_time > config.drag_tile_refresh_interval) {
+		dwindle_resize_client(grabc->mon, grabc);
+		last_apply_drap_time = time;
+	}
+}
+
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
 	Client *tc = NULL;
@@ -692,8 +707,7 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 	const Layout *current_layout =
 		grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag];
 	if (current_layout->id == TILE || current_layout->id == DECK ||
-		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE ||
-		(current_layout->id == TGMIX && grabc->mon->visible_tiling_clients <= 3)
+		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE
 
 	) {
 		resize_tile_master_horizontal(grabc, isdrag, offsetx, offsety, time,
@@ -706,6 +720,8 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 		resize_tile_scroller(grabc, isdrag, offsetx, offsety, time, false);
 	} else if (current_layout->id == VERTICAL_SCROLLER) {
 		resize_tile_scroller(grabc, isdrag, offsetx, offsety, time, true);
+	} else if (current_layout->id == DWINDLE) {
+		resize_tile_dwindle(grabc, isdrag, offsetx, offsety, time, true);
 	}
 }
 

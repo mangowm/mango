@@ -48,7 +48,7 @@ https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 - vertical_tile
 - vertical_grid
 - vertical_scroller
-- tgmix
+- dwindle
 
 # Installation
 
@@ -95,6 +95,12 @@ Finally, install the package:
 emerge --ask --verbose gui-wm/mangowm
 ```
 
+## openSUSE 
+The package is in the community-maintained repository called obs.
+
+```bash
+sudo opi in mangowm
+```
 ## Fedora Linux
 The package is in the third-party Terra repository.
 First, add the [Terra Repository](https://terra.fyralabs.com/).
@@ -148,7 +154,7 @@ meson build -Dprefix=/usr
 sudo ninja -C build install
 
 git clone https://github.com/mangowm/mango.git
-cd mangowm
+cd mango
 meson build -Dprefix=/usr
 sudo ninja -C build install
 ```
