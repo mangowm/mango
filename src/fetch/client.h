@@ -569,14 +569,8 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 		Client *source_stack_head = get_scroll_stack_head(sc);
 		Client *target_stack_head = get_scroll_stack_head(tc);
 		Client *fc_head = fc ? get_scroll_stack_head(fc) : NULL;
-		struct ScrollerStackNode *fc_node =
-			fc && fc->mon
-				? find_scroller_node(
-					  fc->mon->pertag->scroller_state[fc->mon->pertag->curtag],
-					  fc)
-				: NULL;
-		if (fc && (fc_node && fc_node->prev_in_stack) &&
-			fc_head == source_stack_head)
+
+		if (fc && fc_head == source_stack_head)
 			return false;
 		if (source_stack_head == target_stack_head)
 			return true;
