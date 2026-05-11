@@ -90,6 +90,12 @@ Thanks to everyone who has sponsored this project:
         <sub>tonybanters</sub>
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/vinthara">
+        <img src="https://unavatar.io/github/vinthara" width="48" style="border-radius:50%"/><br/>
+        <sub>vinthara</sub>
+      </a>
+    </td>
   </tr>
 </table>
 
