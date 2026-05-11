@@ -5190,13 +5190,6 @@ void exchange_two_client(Client *c1, Client *c2) {
 				exchange_two_client(head1->client, head2->client);
 				return;
 			}
-
-			/* 两者都是头部，直接交换两个堆叠的头部客户端 */
-			float tmp_scroller = head1->scroller_proportion;
-			head1->scroller_proportion = head2->scroller_proportion;
-			head2->scroller_proportion = tmp_scroller;
-			sync_scroller_state_to_clients(m1, tag1);
-			goto exchange_common;
 		}
 	}
 
@@ -5238,15 +5231,25 @@ exchange_common:
 	}
 
 	if (config.exchange_cross_monitor) {
+		DwindleNode **c1_root = &m1->pertag->dwindle_root[m1->pertag->curtag];
+		DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
+
+		DwindleNode **c2_root = &m2->pertag->dwindle_root[m2->pertag->curtag];
+		DwindleNode *c2node = dwindle_find_leaf(*c2_root, c2);
+
+		if (c1node)
+			c1node->client = c2;
+
+		if (c2node)
+			c2node->client = c1;
+
 		tmp_mon = c2->mon;
 		tmp_tags = c2->tags;
-		setmon(c2, c1->mon, c1->tags, false);
-		setmon(c1, tmp_mon, tmp_tags, false);
-		if (c1->mon &&
-			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
-			dwindle_swap_clients(
-				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
-				c2);
+		c2->mon = c1->mon;
+		c1->mon = tmp_mon;
+		c2->tags = c1->tags;
+		c1->tags = tmp_tags;
+
 		arrange(c1->mon, false, false);
 		arrange(c2->mon, false, false);
 	} else {
@@ -5258,6 +5261,11 @@ exchange_common:
 			arrange(c1->mon, false, false);
 		}
 	}
+
+	// In order to facilitate repeated exchanges for get_focused_stack_client
+	// set c2 focus order behind c1
+	wl_list_remove(&c2->flink);
+	wl_list_insert(&c1->flink, &c2->flink);
 }
 
 void set_activation_env() {
