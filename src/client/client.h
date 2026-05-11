@@ -297,17 +297,6 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 		struct wlr_xwayland_surface *surface = c->surface.xwayland;
 		struct wlr_surface_state *state = &surface->surface->current;
 
-		if ((int32_t)c->geom.width - 2 * (int32_t)c->bw ==
-				(int32_t)state->width &&
-			(int32_t)c->geom.height - 2 * (int32_t)c->bw ==
-				(int32_t)state->height &&
-			(int32_t)c->surface.xwayland->x ==
-				(int32_t)c->geom.x + (int32_t)c->bw &&
-			(int32_t)c->surface.xwayland->y ==
-				(int32_t)c->geom.y + (int32_t)c->bw) {
-			return 0;
-		}
-
 		xcb_size_hints_t *size_hints = surface->size_hints;
 		int32_t width = c->geom.width - 2 * c->bw;
 		int32_t height = c->geom.height - 2 * c->bw;
