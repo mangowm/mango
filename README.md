@@ -93,10 +93,16 @@ Thanks to everyone who has sponsored this project:
   </tr>
 </table>
 
-Crypto donations accepted — scan the QR code or send to the address shown:
+Crypto donations accepted:
 
-<details>
-<summary>Show QR code</summary>
-<br/>
-<img width="300" alt="sponsor QR" src="https://github.com/user-attachments/assets/8c860317-90d2-4071-971d-f1a92b674469" />
-</details>
+<table>
+  <tr>
+    <td valign="middle">
+      <strong>Network:</strong> BEP20 (BSC)<br/>
+      <strong>Address:</strong> <code>0xf9cda472f2556671d2504afc4c35340ec5615da1</code>
+    </td>
+    <td valign="middle">
+      <img width="120" alt="sponsor QR" src="assets/crypto_sponserme_qrcode.png" />
+    </td>
+  </tr>
+</table>
