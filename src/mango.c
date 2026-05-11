@@ -5090,6 +5090,7 @@ void exchange_two_client(Client *c1, Client *c2) {
 			}
 
 			sync_scroller_state_to_clients(m1, tag1);
+			arrange(m1, false, false);
 		} else {
 			/* 不同堆叠：交换两个堆叠整体位置 */
 			if (n1 != head1 || n2 != head2) {
@@ -5165,8 +5166,8 @@ exchange_common:
 			dwindle_swap_clients(
 				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
 				c2);
-			arrange(c1->mon, false, false);
 		}
+		arrange(c1->mon, false, false);
 	}
 
 	// In order to facilitate repeated exchanges for get_focused_stack_client
