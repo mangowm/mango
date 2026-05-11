@@ -5079,32 +5079,47 @@ void exchange_two_client(Client *c1, Client *c2) {
 	double master_inner_per = 0.0f;
 	double master_mfact_per = 0.0f;
 	double stack_inner_per = 0.0f;
-	float scroller_proportion = 0.0f;
-	float stack_proportion = 0.0f;
+	struct ScrollerStackNode *n1 = NULL;
+	struct ScrollerStackNode *n2 = NULL;
+	struct TagScrollerState *st1 = NULL;
+	struct TagScrollerState *st2 = NULL;
 
 	if (c1 == NULL || c2 == NULL ||
 		(!config.exchange_cross_monitor && c1->mon != c2->mon)) {
 		return;
 	}
 
+	master_inner_per = c1->master_inner_per;
+	master_mfact_per = c1->master_mfact_per;
+	stack_inner_per = c1->stack_inner_per;
+	c1->master_inner_per = c2->master_inner_per;
+	c1->master_mfact_per = c2->master_mfact_per;
+	c1->stack_inner_per = c2->stack_inner_per;
+	c2->master_inner_per = master_inner_per;
+	c2->master_mfact_per = master_mfact_per;
+	c2->stack_inner_per = stack_inner_per;
+
 	bool c1_scroller = c1->mon && is_scroller_layout(c1->mon);
 	bool c2_scroller = c2->mon && is_scroller_layout(c2->mon);
+	Monitor *m1 = c1->mon;
+	Monitor *m2 = c2->mon;
+	uint32_t tag1 = m1->pertag->curtag;
+	uint32_t tag2 = m2->pertag->curtag;
 
-	if (c1_scroller && c2_scroller) {
-		Monitor *m1 = c1->mon;
-		Monitor *m2 = c2->mon;
-		uint32_t tag1 = m1->pertag->curtag;
-		uint32_t tag2 = m2->pertag->curtag;
+	if (c1_scroller) {
+		st1 = ensure_scroller_state(m1, tag1);
+		n1 = find_scroller_node(st1, c1);
+	}
 
-		struct TagScrollerState *st1 = ensure_scroller_state(m1, tag1);
-		struct TagScrollerState *st2 =
-			(m1 == m2) ? st1 : ensure_scroller_state(m2, tag2);
+	if (c2_scroller) {
+		st2 = ensure_scroller_state(m2, tag2);
+		n2 = find_scroller_node(st2, c2);
+	}
 
-		struct ScrollerStackNode *n1 = find_scroller_node(st1, c1);
-		struct ScrollerStackNode *n2 = find_scroller_node(st2, c2);
+	if (!n1 || !n2)
+		goto exchange_common;
 
-		if (!n1 || !n2)
-			goto non_scroller_fallback;
+	if (n1 && n2) {
 
 		/* 跨显示器且任一方有堆叠关系时不允许交换 */
 		if (m1 != m2 && (n1->prev_in_stack || n2->prev_in_stack ||
@@ -5173,7 +5188,6 @@ void exchange_two_client(Client *c1, Client *c2) {
 			if (n1 != head1 || n2 != head2) {
 				/* 当前不是头部，递归交换头部 */
 				exchange_two_client(head1->client, head2->client);
-				focusclient(c1, 0);
 				return;
 			}
 
@@ -5181,164 +5195,17 @@ void exchange_two_client(Client *c1, Client *c2) {
 			float tmp_scroller = head1->scroller_proportion;
 			head1->scroller_proportion = head2->scroller_proportion;
 			head2->scroller_proportion = tmp_scroller;
-
-			/* 交换布局通用参数 */
-			master_inner_per = c1->master_inner_per;
-			master_mfact_per = c1->master_mfact_per;
-			stack_inner_per = c1->stack_inner_per;
-			c1->master_inner_per = c2->master_inner_per;
-			c1->master_mfact_per = c2->master_mfact_per;
-			c1->stack_inner_per = c2->stack_inner_per;
-			c2->master_inner_per = master_inner_per;
-			c2->master_mfact_per = master_mfact_per;
-			c2->stack_inner_per = stack_inner_per;
-
-			/* 交换全局链表位置 */
-			struct wl_list *tmp1_prev = c1->link.prev;
-			struct wl_list *tmp2_prev = c2->link.prev;
-			struct wl_list *tmp1_next = c1->link.next;
-			struct wl_list *tmp2_next = c2->link.next;
-
-			if (c1->link.next == &c2->link) {
-				c1->link.next = c2->link.next;
-				c1->link.prev = &c2->link;
-				c2->link.next = &c1->link;
-				c2->link.prev = tmp1_prev;
-				tmp1_prev->next = &c2->link;
-				tmp2_next->prev = &c1->link;
-			} else if (c2->link.next == &c1->link) {
-				c2->link.next = c1->link.next;
-				c2->link.prev = &c1->link;
-				c1->link.next = &c2->link;
-				c1->link.prev = tmp2_prev;
-				tmp2_prev->next = &c1->link;
-				tmp1_next->prev = &c2->link;
-			} else {
-				c2->link.next = tmp1_next;
-				c2->link.prev = tmp1_prev;
-				c1->link.next = tmp2_next;
-				c1->link.prev = tmp2_prev;
-				tmp1_prev->next = &c2->link;
-				tmp1_next->prev = &c2->link;
-				tmp2_prev->next = &c1->link;
-				tmp2_next->prev = &c1->link;
-			}
-
-			/* 跨显示器交换处理 */
-			if (config.exchange_cross_monitor && m1 != m2) {
-				tmp_mon = m2;
-				tmp_tags = c2->tags;
-				setmon(c2, m1, c1->tags, false);
-				setmon(c1, tmp_mon, tmp_tags, false);
-
-				if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
-					dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1,
-										 c2);
-				if (m2->pertag->ltidxs[tag2]->id == DWINDLE)
-					dwindle_swap_clients(&m2->pertag->dwindle_root[tag2], c2,
-										 c1);
-
-				sync_scroller_state_to_clients(m1, tag1);
-				sync_scroller_state_to_clients(m2, tag2);
-				arrange(m1, false, false);
-				arrange(m2, false, false);
-			} else {
-				if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
-					dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1,
-										 c2);
-				sync_scroller_state_to_clients(m1, tag1);
-				arrange(m1, false, false);
-			}
-
-			wl_list_remove(&c2->flink);
-			wl_list_insert(&c1->flink, &c2->flink);
-			focusclient(c1, 0);
-			return;
-		}
-
-		/* 同一堆叠交换完成后的公共处理（全局链表、跨显示器等） */
-		struct wl_list *tmp1_prev = c1->link.prev;
-		struct wl_list *tmp2_prev = c2->link.prev;
-		struct wl_list *tmp1_next = c1->link.next;
-		struct wl_list *tmp2_next = c2->link.next;
-
-		if (c1->link.next == &c2->link) {
-			c1->link.next = c2->link.next;
-			c1->link.prev = &c2->link;
-			c2->link.next = &c1->link;
-			c2->link.prev = tmp1_prev;
-			tmp1_prev->next = &c2->link;
-			tmp2_next->prev = &c1->link;
-		} else if (c2->link.next == &c1->link) {
-			c2->link.next = c1->link.next;
-			c2->link.prev = &c1->link;
-			c1->link.next = &c2->link;
-			c1->link.prev = tmp2_prev;
-			tmp2_prev->next = &c1->link;
-			tmp1_next->prev = &c2->link;
-		} else {
-			c2->link.next = tmp1_next;
-			c2->link.prev = tmp1_prev;
-			c1->link.next = tmp2_next;
-			c1->link.prev = tmp2_prev;
-			tmp1_prev->next = &c2->link;
-			tmp1_next->prev = &c2->link;
-			tmp2_prev->next = &c1->link;
-			tmp2_next->prev = &c1->link;
-		}
-
-		/* 跨显示器交换处理 */
-		if (config.exchange_cross_monitor && m1 != m2) {
-			tmp_mon = m2;
-			tmp_tags = c2->tags;
-			setmon(c2, m1, c1->tags, false);
-			setmon(c1, tmp_mon, tmp_tags, false);
-
-			if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
-				dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1, c2);
-			if (m2->pertag->ltidxs[tag2]->id == DWINDLE)
-				dwindle_swap_clients(&m2->pertag->dwindle_root[tag2], c2, c1);
-
 			sync_scroller_state_to_clients(m1, tag1);
-			sync_scroller_state_to_clients(m2, tag2);
-			arrange(m1, false, false);
-			arrange(m2, false, false);
-		} else {
-			if (m1->pertag->ltidxs[tag1]->id == DWINDLE)
-				dwindle_swap_clients(&m1->pertag->dwindle_root[tag1], c1, c2);
-			sync_scroller_state_to_clients(m1, tag1);
-			arrange(m1, false, false);
+			goto exchange_common;
 		}
+	}
 
-		wl_list_remove(&c2->flink);
-		wl_list_insert(&c1->flink, &c2->flink);
-		focusclient(c1, 0);
+exchange_common:
+
+	/* 跨显示器且任一方有堆叠关系时不允许交换 */
+	if (m1 != m2 && ((n1 && n1->prev_in_stack) || (n2 && n2->prev_in_stack) ||
+					 (n1 && n1->next_in_stack) || (n2 && n2->next_in_stack)))
 		return;
-	}
-
-non_scroller_fallback:
-
-	Client *c1head = get_scroll_stack_head(c1);
-	Client *c2head = get_scroll_stack_head(c2);
-
-	if (c1head == c2head) {
-		scroller_proportion = c1->scroller_proportion;
-		stack_proportion = c1->stack_proportion;
-		c1->scroller_proportion = c2->scroller_proportion;
-		c1->stack_proportion = c2->stack_proportion;
-		c2->scroller_proportion = scroller_proportion;
-		c2->stack_proportion = stack_proportion;
-	}
-
-	master_inner_per = c1->master_inner_per;
-	master_mfact_per = c1->master_mfact_per;
-	stack_inner_per = c1->stack_inner_per;
-	c1->master_inner_per = c2->master_inner_per;
-	c1->master_mfact_per = c2->master_mfact_per;
-	c1->stack_inner_per = c2->stack_inner_per;
-	c2->master_inner_per = master_inner_per;
-	c2->master_mfact_per = master_mfact_per;
-	c2->stack_inner_per = stack_inner_per;
 
 	struct wl_list *tmp1_prev = c1->link.prev;
 	struct wl_list *tmp2_prev = c2->link.prev;
@@ -5382,18 +5249,15 @@ non_scroller_fallback:
 				c2);
 		arrange(c1->mon, false, false);
 		arrange(c2->mon, false, false);
-		focusclient(c1, 0);
 	} else {
 		if (c1->mon &&
-			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE)
+			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE) {
 			dwindle_swap_clients(
 				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
 				c2);
-		arrange(c1->mon, false, false);
+			arrange(c1->mon, false, false);
+		}
 	}
-
-	wl_list_remove(&c2->flink);
-	wl_list_insert(&c1->flink, &c2->flink);
 }
 
 void set_activation_env() {
