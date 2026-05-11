@@ -421,8 +421,6 @@ struct Client {
 	int32_t allow_shortcuts_inhibit;
 	float scroller_proportion_single;
 	bool isfocusing;
-	struct Client *next_in_stack;
-	struct Client *prev_in_stack;
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
 	struct wlr_box drag_tile_float_backup_geom;
@@ -1179,15 +1177,9 @@ void swallow(Client *c, Client *w) {
 	c->master_inner_per = w->master_inner_per;
 	c->master_mfact_per = w->master_mfact_per;
 	c->scroller_proportion = w->scroller_proportion;
-	c->next_in_stack = w->next_in_stack;
-	c->prev_in_stack = w->prev_in_stack;
 	c->isglobal = w->isglobal;
 
 	/* 调整 w 的邻居指针，让它们指向 c */
-	if (w->next_in_stack)
-		w->next_in_stack->prev_in_stack = c;
-	if (w->prev_in_stack)
-		w->prev_in_stack->next_in_stack = c;
 	c->stack_proportion = w->stack_proportion;
 
 	/* 全局链表替换 */
@@ -4384,8 +4376,6 @@ void init_client_properties(Client *c) {
 	c->float_geom.x = 0;
 	c->float_geom.y = 0;
 	c->stack_proportion = 0.0f;
-	c->next_in_stack = NULL;
-	c->prev_in_stack = NULL;
 	memset(c->oldmonname, 0, sizeof(c->oldmonname));
 	memcpy(c->opacity_animation.initial_border_color, config.bordercolor,
 		   sizeof(c->opacity_animation.initial_border_color));
@@ -5106,11 +5096,6 @@ void exchange_two_client(Client *c1, Client *c2) {
 		uint32_t tag1 = m1->pertag->curtag;
 		uint32_t tag2 = m2->pertag->curtag;
 
-		/* 跨显示器且任一方有堆叠关系时不允许交换 */
-		if (m1 != m2 && (c1->prev_in_stack || c2->prev_in_stack ||
-						 c1->next_in_stack || c2->next_in_stack))
-			return;
-
 		struct TagScrollerState *st1 = ensure_scroller_state(m1, tag1);
 		struct TagScrollerState *st2 =
 			(m1 == m2) ? st1 : ensure_scroller_state(m2, tag2);
@@ -5120,6 +5105,11 @@ void exchange_two_client(Client *c1, Client *c2) {
 
 		if (!n1 || !n2)
 			goto non_scroller_fallback;
+
+		/* 跨显示器且任一方有堆叠关系时不允许交换 */
+		if (m1 != m2 && (n1->prev_in_stack || n2->prev_in_stack ||
+						 n1->next_in_stack || n2->next_in_stack))
+			return;
 
 		/* 获取各自的堆叠头节点 */
 		struct ScrollerStackNode *head1 = n1;
@@ -5327,10 +5317,6 @@ void exchange_two_client(Client *c1, Client *c2) {
 	}
 
 non_scroller_fallback:
-	/* 原有的非 scroller 逻辑保持不变 */
-	if (c1->mon != c2->mon && (c1->prev_in_stack || c2->prev_in_stack ||
-							   c1->next_in_stack || c2->next_in_stack))
-		return;
 
 	Client *c1head = get_scroll_stack_head(c1);
 	Client *c2head = get_scroll_stack_head(c2);
@@ -5353,38 +5339,6 @@ non_scroller_fallback:
 	c2->master_inner_per = master_inner_per;
 	c2->master_mfact_per = master_mfact_per;
 	c2->stack_inner_per = stack_inner_per;
-
-	Client *tmp1_next_in_stack = c1->next_in_stack;
-	Client *tmp1_prev_in_stack = c1->prev_in_stack;
-	Client *tmp2_next_in_stack = c2->next_in_stack;
-	Client *tmp2_prev_in_stack = c2->prev_in_stack;
-
-	if (c1->next_in_stack == c2) {
-		c1->next_in_stack = tmp2_next_in_stack;
-		c2->next_in_stack = c1;
-		c1->prev_in_stack = c2;
-		c2->prev_in_stack = tmp1_prev_in_stack;
-		if (tmp1_prev_in_stack)
-			tmp1_prev_in_stack->next_in_stack = c2;
-		if (tmp2_next_in_stack)
-			tmp2_next_in_stack->prev_in_stack = c1;
-	} else if (c2->next_in_stack == c1) {
-		c2->next_in_stack = tmp1_next_in_stack;
-		c1->next_in_stack = c2;
-		c2->prev_in_stack = c1;
-		c1->prev_in_stack = tmp2_prev_in_stack;
-		if (tmp2_prev_in_stack)
-			tmp2_prev_in_stack->next_in_stack = c1;
-		if (tmp1_next_in_stack)
-			tmp1_next_in_stack->prev_in_stack = c2;
-	} else if (is_scroller_layout(c1->mon) &&
-			   (c1->prev_in_stack || c2->prev_in_stack)) {
-		Client *c1head = get_scroll_stack_head(c1);
-		Client *c2head = get_scroll_stack_head(c2);
-		exchange_two_client(c1head, c2head);
-		focusclient(c1, 0);
-		return;
-	}
 
 	struct wl_list *tmp1_prev = c1->link.prev;
 	struct wl_list *tmp2_prev = c2->link.prev;
@@ -5714,16 +5668,6 @@ void exit_scroller_stack(Client *c) {
 			return; /* 节点已移除，客户端指针已在函数内清空 */
 		}
 	}
-
-	/* 没有节点时也要确保客户端脱离堆叠 */
-	if (c->prev_in_stack) {
-		c->prev_in_stack->next_in_stack = c->next_in_stack;
-	}
-	if (c->next_in_stack) {
-		c->next_in_stack->prev_in_stack = c->prev_in_stack;
-	}
-	c->prev_in_stack = NULL;
-	c->next_in_stack = NULL;
 }
 
 void setmaximizescreen(Client *c, int32_t maximizescreen) {
@@ -6578,9 +6522,15 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
-	Client *next_in_stack = c->next_in_stack;
-	Client *prev_in_stack = c->prev_in_stack;
 	c->iskilling = 1;
+	struct ScrollerStackNode *target_node =
+		c->mon ? find_scroller_node(
+					 c->mon->pertag->scroller_state[c->mon->pertag->curtag], c)
+			   : NULL;
+	struct ScrollerStackNode *prev_node =
+		target_node ? target_node->prev_in_stack : NULL;
+	struct ScrollerStackNode *next_node =
+		target_node ? target_node->next_in_stack : NULL;
 
 	if (config.animations && !c->is_clip_to_hide && !c->isminimized &&
 		(!c->mon || VISIBLEON(c, c->mon)))
@@ -6618,10 +6568,10 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	if (c->mon && c->mon == selmon) {
-		if (next_in_stack && !c->swallowedby) {
-			nextfocus = next_in_stack;
-		} else if (prev_in_stack && !c->swallowedby) {
-			nextfocus = prev_in_stack;
+		if (next_node && !c->swallowedby) {
+			nextfocus = next_node->client;
+		} else if (prev_node && !c->swallowedby) {
+			nextfocus = prev_node->client;
 		} else {
 			nextfocus = focustop(selmon);
 		}
@@ -6672,8 +6622,6 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	c->stack_proportion = 0.0f;
-	c->next_in_stack = NULL;
-	c->prev_in_stack = NULL;
 
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus();

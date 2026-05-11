@@ -551,9 +551,6 @@ Client *get_scroll_stack_head(Client *c) {
 			return n->client;
 		}
 	}
-	/* 如果 tag 状态未初始化或节点丢失，使用 client 字段 */
-	while (c->prev_in_stack)
-		c = c->prev_in_stack;
 	return c;
 }
 
@@ -572,7 +569,14 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 		Client *source_stack_head = get_scroll_stack_head(sc);
 		Client *target_stack_head = get_scroll_stack_head(tc);
 		Client *fc_head = fc ? get_scroll_stack_head(fc) : NULL;
-		if (fc && fc->prev_in_stack && fc_head == source_stack_head)
+		struct ScrollerStackNode *fc_node =
+			fc && fc->mon
+				? find_scroller_node(
+					  fc->mon->pertag->scroller_state[fc->mon->pertag->curtag],
+					  fc)
+				: NULL;
+		if (fc && (fc_node && fc_node->prev_in_stack) &&
+			fc_head == source_stack_head)
 			return false;
 		if (source_stack_head == target_stack_head)
 			return true;

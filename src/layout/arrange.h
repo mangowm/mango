@@ -870,9 +870,8 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 					struct ScrollerStackNode *n = find_scroller_node(st, c);
 					if (n && !n->prev_in_stack) /* 是堆叠头部 */
 						m->visible_scroll_tiling_clients++;
-				} else {
-					if (ISSCROLLTILED(c) && !c->prev_in_stack)
-						m->visible_scroll_tiling_clients++;
+				} else if (ISSCROLLTILED(c)) {
+					m->visible_scroll_tiling_clients++;
 				}
 			}
 		}

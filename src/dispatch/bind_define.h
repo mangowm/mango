@@ -1381,10 +1381,6 @@ int32_t toggleglobal(const Arg *arg) {
 		selmon->sel->isnamedscratchpad = 0;
 	}
 	selmon->sel->isglobal ^= 1;
-	if (selmon->sel->isglobal &&
-		(selmon->sel->prev_in_stack || selmon->sel->next_in_stack)) {
-		arrange(selmon, false, false);
-	}
 	setborder_color(selmon->sel);
 	return 0;
 }

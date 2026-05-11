@@ -52,12 +52,6 @@ static void scroller_node_remove(struct TagScrollerState *st,
 	if (next)
 		next->prev_in_stack = prev;
 
-	/* 清空目标客户端的堆叠指针，使其彻底脱离 */
-	if (target->client) {
-		target->client->prev_in_stack = NULL;
-		target->client->next_in_stack = NULL;
-	}
-
 	/* 从 all 链表摘除 */
 	struct ScrollerStackNode **indirect = &st->all_first;
 	while (*indirect && *indirect != target)
@@ -102,8 +96,6 @@ static void sync_scroller_state_to_clients(Monitor *m, uint32_t tag) {
 		c->scroller_proportion = n->scroller_proportion;
 		c->stack_proportion = n->stack_proportion;
 		c->scroller_proportion_single = n->scroller_proportion_single;
-		c->prev_in_stack = n->prev_in_stack ? n->prev_in_stack->client : NULL;
-		c->next_in_stack = n->next_in_stack ? n->next_in_stack->client : NULL;
 	}
 }
 
@@ -319,20 +311,10 @@ void scroller(Monitor *m) {
 		n = next;
 	}
 
-	/* 为新的可见窗口创建节点，并尝试恢复堆叠关系 */
+	/* 为新的可见窗口创建节点 */
 	for (int i = 0; i < count; i++) {
 		if (!find_scroller_node(st, vis[i])) {
-			struct ScrollerStackNode *new_node =
-				scroller_node_create(st, vis[i]);
-			Client *prev = vis[i]->prev_in_stack;
-			if (prev) {
-				struct ScrollerStackNode *prev_node =
-					find_scroller_node(st, prev);
-				if (prev_node) {
-					new_node->prev_in_stack = prev_node;
-					prev_node->next_in_stack = new_node;
-				}
-			}
+			scroller_node_create(st, vis[i]);
 		}
 	}
 
@@ -585,17 +567,7 @@ void vertical_scroller(Monitor *m) {
 
 	for (int i = 0; i < count; i++) {
 		if (!find_scroller_node(st, vis[i])) {
-			struct ScrollerStackNode *new_node =
-				scroller_node_create(st, vis[i]);
-			Client *prev = vis[i]->prev_in_stack;
-			if (prev) {
-				struct ScrollerStackNode *prev_node =
-					find_scroller_node(st, prev);
-				if (prev_node) {
-					new_node->prev_in_stack = prev_node;
-					prev_node->next_in_stack = new_node;
-				}
-			}
+			scroller_node_create(st, vis[i]);
 		}
 	}
 
