@@ -947,6 +947,7 @@ static struct wl_event_source *hide_cursor_source;
 static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
+static bool mod_key_used = false;
 static const char *cli_config_path = NULL;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
@@ -2282,6 +2283,7 @@ buttonpress(struct wl_listener *listener, void *data) {
 				event->button == m->button && m->func &&
 				(CLEANMASK(m->mod) != 0 ||
 				 (event->button != BTN_LEFT && event->button != BTN_RIGHT))) {
+				mod_key_used = true;
 				m->func(&m->arg);
 				return;
 			}
@@ -3953,6 +3955,10 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			state != WL_KEYBOARD_KEY_STATE_RELEASED)
 			continue;
 
+		// exclusive binds are handled after this loop so that mod_key_used is set properly.
+		if (config.key_bindings[ji].isexclusiveapply)
+			continue;
+
 		k = &config.key_bindings[ji];
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
@@ -3966,10 +3972,12 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			   keycode == k->keysymcode.keycode.keycode3))) &&
 			k->func) {
 
-			if (!k->ispassapply)
+			if (!k->ispassapply) {
 				handled = 1;
-			else
+				mod_key_used = true;
+			} else {
 				handled = 0;
+			}
 
 			isbreak = k->func(&k->arg);
 
@@ -4072,6 +4080,16 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
+	/* Track non-modifier key presses.
+	 * Modifier keycodes: 133,134=Super  37,105=Ctrl  50,62=Shift  64,108=Alt */
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+		keycode != 133 && keycode != 134 &&
+		keycode != 37  && keycode != 105 &&
+		keycode != 50  && keycode != 62  &&
+		keycode != 64  && keycode != 108) {
+		mod_key_used = true;
+	}
+
 	// ov tab mode detect moe key release
 	if (config.ov_tab_mode && !locked && group == kb_group &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
@@ -4088,6 +4106,38 @@ void keypress(struct wl_listener *listener, void *data) {
 	for (i = 0; i < nsyms; i++)
 		handled =
 			keybinding(event->state, locked, mods, syms[i], keycode) || handled;
+
+	if (!mod_key_used &&
+		event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+		for (int32_t ji = 0; ji < config.key_bindings_count; ji++) {
+			const KeyBinding *k = &config.key_bindings[ji];
+			if (!k->isexclusiveapply || !k->func)
+				continue;
+			if (locked && !k->islockapply)
+				continue;
+			if (!(k->iscommonmode ||
+				  (k->isdefaultmode && keymode.isdefault) ||
+				  (strcmp(keymode.mode, k->mode) == 0)))
+				continue;
+			if (CLEANMASK(mods) != CLEANMASK(k->mod))
+				continue;
+			bool key_match = false;
+			for (int32_t si = 0; si < nsyms && !key_match; si++) {
+				if ((k->keysymcode.type == KEY_TYPE_SYM &&
+					 xkb_keysym_to_lower(syms[si]) ==
+						 xkb_keysym_to_lower(k->keysymcode.keysym)) ||
+					(k->keysymcode.type == KEY_TYPE_CODE &&
+					 (keycode == k->keysymcode.keycode.keycode1 ||
+					  keycode == k->keysymcode.keycode.keycode2 ||
+					  keycode == k->keysymcode.keycode.keycode3)))
+					key_match = true;
+			}
+			if (!key_match)
+				continue;
+			handled = !k->ispassapply;
+			k->func(&k->arg);
+		}
+	}
 
 	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
 		tag_combo = false;
@@ -4138,6 +4188,10 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
+
+	uint32_t cur_mods = wlr_keyboard_get_modifiers(&group->wlr_group->keyboard);
+	if (cur_mods == 0)
+		mod_key_used = false;
 
 	if (!dwl_im_keyboard_grab_forward_modifiers(group)) {
 
