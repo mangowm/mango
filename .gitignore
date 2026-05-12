@@ -1,6 +1,7 @@
 /.cache
 /.vscode
 /result
+/result-*
 config.h
 mango
 mango.o
