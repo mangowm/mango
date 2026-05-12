@@ -12,7 +12,7 @@ in {
       addLoginEntry = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Whether to add a login entry to the display manager for mango";
+        description = "Whether to add a login entry to the display manager for mango. Only has effect if a display manager is configured (e.g. SDDM, GDM via `services.displayManager`).";
       };
       package = lib.mkOption {
         type = lib.types.package;
