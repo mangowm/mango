@@ -33,7 +33,7 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 	// 1. 尝试在映射表中查找
 	for (int32_t i = 0; layout_mappings[i].full_name != NULL; i++) {
 		if (strcmp(full_name, layout_mappings[i].full_name) == 0) {
-			strcpy(abbr, layout_mappings[i].abbr);
+			snprintf(abbr, 32, "%s", layout_mappings[i].abbr);
 			return;
 		}
 	}
@@ -73,7 +73,7 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 		abbr[2] = '\0';
 	} else {
 		// 5. 最终回退：返回 "xx"
-		strcpy(abbr, "xx");
+		snprintf(abbr, 32, "xx");
 	}
 }
 
