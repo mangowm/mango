@@ -5142,7 +5142,7 @@ exchange_common:
 		tmp2_next->prev = &c1->link;
 	}
 
-	if (config.exchange_cross_monitor) {
+	if (config.exchange_cross_monitor && c1->mon != c2->mon) {
 		DwindleNode **c1_root = &m1->pertag->dwindle_root[m1->pertag->curtag];
 		DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
 
