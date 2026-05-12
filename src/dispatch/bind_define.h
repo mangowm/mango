@@ -1839,14 +1839,26 @@ int32_t scroller_apply_stack(Client *c, Client *target_client,
 		struct ScrollerStackNode *move_out_refer_node =
 			cnode->prev_in_stack ? cnode->prev_in_stack : cnode->next_in_stack;
 		scroller_node_remove(st, cnode);
+
+		// 必须先更新，不然里面节点还存着的是cnode的信息，
+		// 会造成stach_head/stack_tail指向的客户端不对
+		update_scroller_state(c->mon);
+
 		Client *stack_head =
 			scroll_get_stack_head_client(move_out_refer_node->client);
+		Client *stack_tail =
+			scroll_get_stack_tail_client(move_out_refer_node->client);
+
 		if (direction == LEFT || direction == UP) {
-			wl_list_remove(&c->link);
-			wl_list_insert(stack_head->link.prev, &c->link);
+			if (c != stack_head) {
+				wl_list_remove(&c->link);
+				wl_list_insert(stack_head->link.prev, &c->link);
+			}
 		} else if (direction == RIGHT || direction == DOWN) {
-			wl_list_remove(&c->link);
-			wl_list_insert(&stack_head->link, &c->link);
+			if (c != stack_tail) {
+				wl_list_remove(&c->link);
+				wl_list_insert(&stack_tail->link, &c->link);
+			}
 		}
 		sync_scroller_state_to_clients(m, tag);
 		arrange(m, false, false);
@@ -1863,6 +1875,11 @@ int32_t scroller_apply_stack(Client *c, Client *target_client,
 
 	/* 通过封装好的插入函数实现（尾部插入） */
 	scroller_insert_stack(c, tail->client, false);
+
+	if (c != tail->client) {
+		wl_list_remove(&c->link);
+		wl_list_insert(&tail->client->link, &c->link);
+	}
 	return 0;
 }
 

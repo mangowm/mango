@@ -793,7 +793,12 @@ void scroller_insert_stack(Client *c, Client *target_client,
 
 void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 
+	// 必须先更新，不然里面节点还存着的是cnode的信息，
+	// 会造成stach_head/stack_tail指向的客户端不对
+	update_scroller_state(c->mon);
+
 	Client *stack_head = scroll_get_stack_head_client(closest);
+	Client *stack_tail = scroll_get_stack_tail_client(closest);
 
 	if (vertical) {
 		if (closest->drop_direction == LEFT) {
@@ -805,11 +810,15 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == UP) {
-			wl_list_remove(&c->link);
-			wl_list_insert(stack_head->link.prev, &c->link);
+			if (c != stack_head) {
+				wl_list_remove(&c->link);
+				wl_list_insert(stack_head->link.prev, &c->link);
+			}
 		} else if (closest->drop_direction == DOWN) {
-			wl_list_remove(&c->link);
-			wl_list_insert(&stack_head->link, &c->link);
+			if (c != stack_tail) {
+				wl_list_remove(&c->link);
+				wl_list_insert(&stack_head->link, &c->link);
+			}
 		}
 	} else {
 		if (closest->drop_direction == UP) {
@@ -821,11 +830,15 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == LEFT) {
-			wl_list_remove(&c->link);
-			wl_list_insert(stack_head->link.prev, &c->link);
+			if (c != stack_head) {
+				wl_list_remove(&c->link);
+				wl_list_insert(stack_head->link.prev, &c->link);
+			}
 		} else if (closest->drop_direction == RIGHT) {
-			wl_list_remove(&c->link);
-			wl_list_insert(&stack_head->link, &c->link);
+			if (c != stack_tail) {
+				wl_list_remove(&c->link);
+				wl_list_insert(&stack_head->link, &c->link);
+			}
 		}
 	}
 
@@ -842,6 +855,22 @@ Client *scroll_get_stack_head_client(Client *c) {
 		if (n) {
 			while (n->prev_in_stack)
 				n = n->prev_in_stack;
+			return n->client;
+		}
+	}
+	return c;
+}
+
+Client *scroll_get_stack_tail_client(Client *c) {
+	if (!c || !c->mon)
+		return c;
+	uint32_t tag = c->mon->pertag->curtag;
+	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
+	if (st) {
+		struct ScrollerStackNode *n = find_scroller_node(st, c);
+		if (n) {
+			while (n->next_in_stack)
+				n = n->next_in_stack;
 			return n->client;
 		}
 	}
