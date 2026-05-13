@@ -34,11 +34,25 @@ jobs:
           nix build .#nixos-options-json --out-link result-nixos
           nix build .#hm-options-json --out-link result-hm
 
+      - name: Render to CommonMark
+        run: |
+          echo '{}' > /tmp/manpage-urls.json
+          nix run nixpkgs#nixos-render-docs -- options commonmark \
+            --manpage-urls /tmp/manpage-urls.json \
+            --revision nightly \
+            result-nixos/share/doc/nixos/options.json \
+            /tmp/nixos-raw.md
+          nix run nixpkgs#nixos-render-docs -- options commonmark \
+            --manpage-urls /tmp/manpage-urls.json \
+            --revision nightly \
+            result-hm/share/doc/nixos/options.json \
+            /tmp/hm-raw.md
+
       - name: Format to Markdown
         run: |
           python3 ./.github/scripts/generate-nix-options-docs.py \
-            result-nixos/share/doc/nixos/options.json \
-            result-hm/share/doc/nixos/options.json \
+            /tmp/nixos-raw.md \
+            /tmp/hm-raw.md \
             docs/nix-options.md
 
       - name: Auto-commit changes

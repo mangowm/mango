@@ -9,55 +9,163 @@ description: NixOS and Home Manager configuration options for mangowm.
 
 **System-level options via `programs.mango`.**
 
-### `addLoginEntry`
+### enable
 
-Whether to add a login entry to the display manager for mango. Only has effect if a display manager is configured (e.g. SDDM, GDM via `services.displayManager`).
 
-**Type:** `boolean`
 
-**Default:** `true`
+Whether to enable mango, a wayland compositor based on dwl\.
 
----
 
-### `enable`
 
-Whether to enable mango, a wayland compositor based on dwl.
+*Type:*
+boolean
 
-**Type:** `boolean`
 
-**Default:** `false`
 
-**Example:** `true`
+*Default:*
 
----
+```nix
+false
+```
 
-### `package`
+
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [\<mango/nix/nixos-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/nixos-modules.nix)
+
+
+
+### package
+
+
 
 The mango package to use
 
-**Type:** `package`
 
-**Default:** `<derivation mango-nightly>`
 
----
+*Type:*
+package
+
+
+
+*Default:*
+
+```nix
+<derivation mango-nightly>
+```
+
+*Declared by:*
+ - [\<mango/nix/nixos-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/nixos-modules.nix)
+
+
+
+### addLoginEntry
+
+
+
+Whether to add a login entry to the display manager for mango\. Only has effect if a display manager is configured (e\.g\. SDDM, GDM via ` services.displayManager `)\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [\<mango/nix/nixos-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/nixos-modules.nix)
 
 ## Home Manager
 
 **Configure mangowm declaratively via `wayland.windowManager.mango`.**
 
-### `autostart_sh`
+### enable
 
-Shell script to run on mango startup. No shebang needed.
+
+
+Whether to enable mangowm, a Wayland compositor based on dwl\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
+
+
+
+### package
+
+
+
+The mango package to use
+
+
+
+*Type:*
+package
+
+
+
+*Default:*
+
+```nix
+<derivation mango-nightly>
+```
+
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
+
+
+
+### autostart_sh
+
+
+
+Shell script to run on mango startup\. No shebang needed\.
 
 When this option is set, the script will be written to
-`~/.config/mango/autostart.sh` and an `exec-once` line
-will be automatically added to the config to execute it.
+` ~/.config/mango/autostart.sh ` and an ` exec-once ` line
+will be automatically added to the config to execute it\.
 
-**Type:** `strings concatenated with "\n"`
 
-**Default:** `""`
 
-**Example:** 
+*Type:*
+strings concatenated with “\\n”
+
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
 ```nix
 ''
   waybar &
@@ -65,47 +173,71 @@ will be automatically added to the config to execute it.
 ''
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `bottomPrefixes`
 
-List of prefixes for attributes that should appear at the bottom of the config file.
-Attributes starting with these prefixes will be sorted to the end.
 
-**Type:** `list of string`
+### bottomPrefixes
 
-**Default:** `[ ]`
 
-**Example:** 
+
+List of prefixes for attributes that should appear at the bottom of the config file\.
+Attributes starting with these prefixes will be sorted to the end\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
 ```nix
 [
   "source"
 ]
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `enable`
 
-Whether to enable mangowm, a Wayland compositor based on dwl.
 
-**Type:** `boolean`
+### extraConfig
 
-**Default:** `false`
 
----
 
-### `extraConfig`
+Extra configuration lines to add to ` ~/.config/mango/config.conf `\.
+This is useful for advanced configurations that don’t fit the structured
+settings format, or for options that aren’t yet supported by the module\.
 
-Extra configuration lines to add to `~/.config/mango/config.conf`.
-This is useful for advanced configurations that don't fit the structured
-settings format, or for options that aren't yet supported by the module.
 
-**Type:** `strings concatenated with "\n"`
 
-**Default:** `""`
+*Type:*
+strings concatenated with “\\n”
 
-**Example:** 
+
+
+*Default:*
+
+```nix
+""
+```
+
+
+
+*Example:*
+
 ```nix
 ''
   # Advanced config that doesn't fit structured format
@@ -113,38 +245,43 @@ settings format, or for options that aren't yet supported by the module.
 ''
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `package`
 
-The mango package to use
 
-**Type:** `package`
+### settings
 
-**Default:** `<derivation mango-nightly>`
 
----
 
-### `settings`
+Mango configuration written in Nix\. Entries with the same key
+should be written as lists\. Variables and colors names should be
+quoted\. See [https://mangowm\.github\.io/docs](https://mangowm\.github\.io/docs) for more examples\.
 
-Mango configuration written in Nix. Entries with the same key
-should be written as lists. Variables and colors names should be
-quoted. See <https://mangowm.github.io/docs> for more examples.
+**Note:** This option uses a structured format that is converted to Mango’s
+configuration syntax\. Nested attributes are flattened with underscore separators\.
+For example: ` animation.duration_open = 400 ` becomes ` animation_duration_open = 400 `
 
-> **Note:**
->
-> This option uses a structured format that is converted to Mango's
-> configuration syntax. Nested attributes are flattened with underscore separators.
-> For example: `animation.duration_open = 400` becomes `animation_duration_open = 400`
-> 
-> Keymodes (submaps) are supported via the special `keymode` attribute. Each keymode
-> is a nested attribute set under `keymode` that contains its own bindings.
+Keymodes (submaps) are supported via the special ` keymode ` attribute\. Each keymode
+is a nested attribute set under ` keymode ` that contains its own bindings\.
 
-**Type:** `Mango configuration value`
 
-**Default:** `{ }`
 
-**Example:** 
+*Type:*
+Mango configuration value
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
 ```nix
 {
   # Window effects
@@ -193,39 +330,72 @@ quoted. See <https://mangowm.github.io/docs> for more examples.
     };
   };
 }
+
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `systemd.enable`
 
-Whether to enable `mango-session.target` on
-mango startup. This links to
-`graphical-session.target`.
+
+### systemd\.enable
+
+
+
+Whether to enable ` mango-session.target ` on
+mango startup\. This links to
+` graphical-session.target `\.
 Some important environment variables will be imported to systemd
 and dbus user environment before reaching the target, including
-* `DISPLAY`
-* `WAYLAND_DISPLAY`
-* `XDG_CURRENT_DESKTOP`
-* `XDG_SESSION_TYPE`
-* `NIXOS_OZONE_WL`
-You can extend this list using the `systemd.variables` option.
 
-**Type:** `boolean`
+ - ` DISPLAY `
+ - ` WAYLAND_DISPLAY `
+ - ` XDG_CURRENT_DESKTOP `
+ - ` XDG_SESSION_TYPE `
+ - ` NIXOS_OZONE_WL `
+   You can extend this list using the ` systemd.variables ` option\.
 
-**Default:** `true`
 
-**Example:** `false`
 
----
+*Type:*
+boolean
 
-### `systemd.extraCommands`
 
-Extra commands to run after D-Bus activation.
 
-**Type:** `list of string`
+*Default:*
 
-**Default:** 
+```nix
+true
+```
+
+
+
+*Example:*
+
+```nix
+false
+```
+
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
+
+
+
+### systemd\.extraCommands
+
+
+
+Extra commands to run after D-Bus activation\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
 ```nix
 [
   "systemctl --user reset-failed"
@@ -233,15 +403,26 @@ Extra commands to run after D-Bus activation.
 ]
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `systemd.variables`
 
-Environment variables imported into the systemd and D-Bus user environment.
 
-**Type:** `list of string`
+### systemd\.variables
 
-**Default:** 
+
+
+Environment variables imported into the systemd and D-Bus user environment\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
 ```nix
 [
   "DISPLAY"
@@ -254,43 +435,85 @@ Environment variables imported into the systemd and D-Bus user environment.
 ]
 ```
 
-**Example:** 
+
+
+*Example:*
+
 ```nix
 [
   "--all"
 ]
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 
-### `systemd.xdgAutostart`
+
+
+### systemd\.xdgAutostart
+
+
 
 Whether to enable autostart of applications using
-`systemd-xdg-autostart-generator(8)`.
+` systemd-xdg-autostart-generator(8) `
+\.
 
-**Type:** `boolean`
 
-**Default:** `false`
 
-**Example:** `true`
+*Type:*
+boolean
 
----
 
-### `topPrefixes`
 
-List of prefixes for attributes that should appear at the top of the config file.
-Attributes starting with these prefixes will be sorted to the beginning.
+*Default:*
 
-**Type:** `list of string`
+```nix
+false
+```
 
-**Default:** `[ ]`
 
-**Example:** 
+
+*Example:*
+
+```nix
+true
+```
+
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
+
+
+
+### topPrefixes
+
+
+
+List of prefixes for attributes that should appear at the top of the config file\.
+Attributes starting with these prefixes will be sorted to the beginning\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
 ```nix
 [
   "source"
 ]
 ```
 
----
+*Declared by:*
+ - [\<mango/nix/hm-modules\.nix>](https://github.com/mangowm/mango/blob/main/nix/hm-modules.nix)
 

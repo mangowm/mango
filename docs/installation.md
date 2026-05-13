@@ -202,7 +202,7 @@ The repository provides a Flake with a NixOS module.
    };
    ```
 
-   **Option B — Display manager autologin:** Autologin via an existing display manager (e.g. SDDM, GDM). [`addLoginEntry`](/docs/nix-module#addloginentry) (default: `true`) automatically registers mango as a session.
+   **Option B — Display manager autologin:** Autologin via an existing display manager (e.g. SDDM, GDM). [`addLoginEntry`](/docs/nix-options#addloginentry) (default: `true`) automatically registers mango as a session.
 
    ```nix
    services.displayManager = {
@@ -240,7 +240,7 @@ The repository provides a Flake with a NixOS module.
 
 5. **All available options**
 
-   See [Nix Module Options](/docs/nix-module) for the full list of NixOS and Home Manager options.
+   See [Nix Module Options](/docs/nix-options) for the full list of NixOS and Home Manager options.
 
 ---
 
