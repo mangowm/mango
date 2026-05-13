@@ -114,7 +114,7 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	xkb_layout_index_t current;
 	int32_t tagmask, state, numclients, focused_client, tag;
 	const char *title, *appid, *symbol;
-	char kb_layout[32];
+	char kb_layout[KB_LAYOUT_ABBR_SIZE];
 	focused = focustop(monitor);
 	zdwl_ipc_output_v2_send_active(ipc_output->resource, monitor == selmon);
 
