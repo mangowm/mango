@@ -244,6 +244,7 @@ typedef struct {
 	int32_t dwindle_smart_split;
 	int32_t dwindle_smart_resize;
 	int32_t dwindle_drop_simple_split;
+	int32_t dwindle_manual_split;
 	float dwindle_split_ratio;
 
 	uint32_t hotarea_size;
@@ -305,6 +306,7 @@ typedef struct {
 	float rootcolor[4];
 	float bordercolor[4];
 	float dropcolor[4];
+	float splitcolor[4];
 	float focuscolor[4];
 	float maximizescreencolor[4];
 	float urgentcolor[4];
@@ -1201,6 +1203,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
 		func = toggle_all_floating;
+	} else if (strcmp(func_name, "dwindle_toggle_split_direction") == 0) {
+		func = dwindle_toggle_split_direction;
 	} else {
 		return NULL;
 	}
@@ -1578,6 +1582,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->dwindle_smart_resize = atoi(value);
 	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
 		config->dwindle_drop_simple_split = atoi(value);
+	} else if (strcmp(key, "dwindle_manual_split") == 0) {
+		config->dwindle_manual_split = atoi(value);
 	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
 		config->dwindle_split_ratio = atof(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
@@ -1708,6 +1714,17 @@ bool parse_option(Config *config, char *key, char *value) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->dropcolor, color);
+		}
+	} else if (strcmp(key, "splitcolor") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid splitcolor "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->splitcolor, color);
 		}
 	} else if (strcmp(key, "focuscolor") == 0) {
 		int64_t color = parse_color(value);
@@ -3122,6 +3139,7 @@ void override_config(void) {
 	config.dwindle_smart_resize = CLAMP_INT(config.dwindle_smart_resize, 0, 1);
 	config.dwindle_drop_simple_split =
 		CLAMP_INT(config.dwindle_drop_simple_split, 0, 1);
+	config.dwindle_manual_split = CLAMP_INT(config.dwindle_manual_split, 0, 1);
 	config.dwindle_split_ratio =
 		CLAMP_FLOAT(config.dwindle_split_ratio, 0.05f, 0.95f);
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
@@ -3244,6 +3262,7 @@ void set_value_default() {
 	config.dwindle_smart_split = 0;
 	config.dwindle_smart_resize = 0;
 	config.dwindle_drop_simple_split = 1;
+	config.dwindle_manual_split = 0;
 	config.dwindle_split_ratio = 0.5f;
 
 	config.log_level = WLR_ERROR;
@@ -3367,10 +3386,14 @@ void set_value_default() {
 	config.bordercolor[1] = 0x44 / 255.0f;
 	config.bordercolor[2] = 0x44 / 255.0f;
 	config.bordercolor[3] = 1.0f;
-	config.dropcolor[0] = 0x8f / 255.0f;
-	config.dropcolor[1] = 0xba / 255.0f;
-	config.dropcolor[2] = 0x7c / 255.0f;
+	config.dropcolor[0] = 0xd5 / 255.0f;
+	config.dropcolor[1] = 0x89 / 255.0f;
+	config.dropcolor[2] = 0x9d / 255.0f;
 	config.dropcolor[3] = 0.5f;
+	config.splitcolor[0] = 0xeb / 255.0f;
+	config.splitcolor[1] = 0x44 / 255.0f;
+	config.splitcolor[2] = 0x1e / 255.0f;
+	config.splitcolor[3] = 1.0f;
 	config.focuscolor[0] = 0xc6 / 255.0f;
 	config.focuscolor[1] = 0x6b / 255.0f;
 	config.focuscolor[2] = 0x25 / 255.0f;
@@ -3604,6 +3627,8 @@ void reapply_property(void) {
 			}
 
 			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
+			wlr_scene_rect_set_color(c->splitindicator[0], config.splitcolor);
+			wlr_scene_rect_set_color(c->splitindicator[1], config.splitcolor);
 		}
 	}
 }

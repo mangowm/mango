@@ -314,6 +314,8 @@ struct Client {
 	struct wlr_scene_rect *border[4]; /* top, bottom, left, right */
 	struct wlr_scene_rect *shield;
 	struct wlr_scene_rect *droparea;
+	struct wlr_scene_rect *splitindicator[4];
+
 	struct wlr_scene_tree *scene_surface;
 
 	struct wlr_scene_tree *image_capture_tree;
@@ -571,6 +573,23 @@ struct capture_session_tracker {
 	struct wlr_ext_image_copy_capture_session_v1 *session;
 };
 typedef struct DwindleNode DwindleNode;
+struct DwindleNode {
+	bool is_split;
+	bool split_h;
+	bool split_locked;
+	bool custom_leaf_split_h;
+	float ratio;
+	float drag_init_ratio;
+	int32_t container_x;
+	int32_t container_y;
+	int32_t container_w;
+	int32_t container_h;
+	DwindleNode *parent;
+	DwindleNode *first;
+	DwindleNode *second;
+	Client *client;
+};
+
 struct ScrollerStackNode {
 	Client *client;
 	float scroller_proportion;
@@ -859,6 +878,7 @@ static struct ScrollerStackNode *
 scroller_node_create(struct TagScrollerState *st, Client *c);
 static void update_scroller_state(Monitor *m);
 Client *scroll_get_stack_tail_client(Client *c);
+static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -4255,7 +4275,8 @@ mapnotify(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	Client *at_client = NULL;
 	Client *c = wl_container_of(listener, c, map);
-	int32_t i;
+	int32_t i = 0;
+
 	/* Create scene tree for this client and its border */
 	c->scene = client_surface(c)->data = wlr_scene_tree_create(layers[LyrTile]);
 	wlr_scene_node_set_enabled(&c->scene->node, c->type != XDGShell);
@@ -4330,6 +4351,15 @@ mapnotify(struct wl_listener *listener, void *data) {
 		c->border[i]->node.data = c;
 	}
 	// extra node
+
+	for (i = 0; i < 2; i++) {
+		c->splitindicator[i] = wlr_scene_rect_create(
+			c->scene, 0, 0,
+			c->isurgent ? config.urgentcolor : config.splitcolor);
+		c->splitindicator[i]->node.data = c;
+		wlr_scene_node_lower_to_bottom(&c->splitindicator[i]->node);
+		wlr_scene_node_set_enabled(&c->splitindicator[i]->node, false);
+	}
 
 	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
