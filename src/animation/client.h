@@ -306,24 +306,23 @@ void apply_split_border(Client *c, bool hit_no_border) {
 		top_offset = GEZERO(c->mon->m.y - c->animation.current.y);
 	}
 
-	int32_t border_down_width = GEZERO(fullgeom.width - left_offset -
-									   right_offset - 2 * config.border_radius);
+	int32_t border_down_width =
+		GEZERO(fullgeom.width - left_offset - right_offset);
 	int32_t border_down_height =
 		GEZERO(bw - bottom_offset - GEZERO(top_offset + bw - fullgeom.height));
 
 	int32_t border_right_width =
 		GEZERO(bw - right_offset - GEZERO(left_offset + bw - fullgeom.width));
 	int32_t border_right_height =
-		GEZERO(fullgeom.height - top_offset - bottom_offset -
-			   2 * config.border_radius);
+		GEZERO(fullgeom.height - top_offset - bottom_offset);
 
-	int32_t border_down_x = GEZERO(config.border_radius - left_offset);
+	int32_t border_down_x = GEZERO(left_offset);
 	int32_t border_down_y = GEZERO(fullgeom.height - bw) +
 							GEZERO(top_offset + bw - fullgeom.height);
 
 	int32_t border_right_x =
 		GEZERO(fullgeom.width - bw) + GEZERO(left_offset + bw - fullgeom.width);
-	int32_t border_right_y = GEZERO(config.border_radius - top_offset);
+	int32_t border_right_y = GEZERO(top_offset);
 
 	set_rect_size(c->splitindicator[0], border_down_width, border_down_height);
 	set_rect_size(c->splitindicator[1], border_right_width,
@@ -1191,7 +1190,9 @@ bool client_draw_fadeout_frame(Client *c) {
 
 void client_set_focused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
-	wlr_scene_node_lower_to_bottom(&c->border->node);
+	for (int32_t i = 0; i < 4; i++) {
+		wlr_scene_node_lower_to_bottom(&c->border[i]->node);
+	}
 
 	if (!config.animations) {
 		setborder_color(c);
@@ -1213,7 +1214,11 @@ void client_set_focused_opacity_animation(Client *c) {
 
 void client_set_unfocused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
-	wlr_scene_node_raise_to_top(&c->border->node);
+
+	for (int32_t i = 0; i < 4; i++) {
+		wlr_scene_node_raise_to_top(&c->border[i]->node);
+	}
+
 	if (!config.animations) {
 		setborder_color(c);
 		return;
