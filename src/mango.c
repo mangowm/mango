@@ -88,6 +88,7 @@
 #include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
+#include "session/session.h"
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_foreign_registry.h>
 #include <wlr/types/wlr_xdg_foreign_v1.h>
@@ -480,7 +481,7 @@ struct Client {
 	float focused_opacity;
 	float unfocused_opacity;
 	char oldmonname[128];
-	char session_launch_command[1024];
+	char session_launch_command[SESSION_COMMAND_MAX];
 	int32_t noblur;
 	float blur_opacity;
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
@@ -711,7 +712,7 @@ typedef struct {
 	struct wl_list link;
 	pid_t pid;
 	time_t created_at;
-	char command[1024];
+	char command[SESSION_COMMAND_MAX];
 } SessionSpawnCommand;
 
 /* function declarations */
@@ -1264,7 +1265,6 @@ struct Pertag {
 };
 #include "common/log.h"
 #include "config/parse_config.h"
-#include "session/session.h"
 
 static struct wl_signal mango_print_status;
 
