@@ -98,6 +98,7 @@ The Dwindle layout arranges windows as a binary tree of recursive splits. Each n
 | `dwindle_preserve_split` | `0` | Keep the sibling's split orientation when a window is closed. |
 | `dwindle_smart_resize` | `0` | When dragging to resize, move the split toward the cursor regardless of which side was grabbed. |
 | `dwindle_drop_simple_split` | `1` | Drag-to-tile drop preview. `1` = 2-zone preview matching `dwindle_split_ratio`, `0` = 4-quadrant preview. |
+| `dwindle_manual_split` | `0` | Manually split windows mode. |
 
 ```ini
 # Example dwindle configuration
