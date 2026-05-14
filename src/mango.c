@@ -81,6 +81,7 @@
 #include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
+#include "session/session.h"
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_foreign_registry.h>
 #include <wlr/types/wlr_xdg_foreign_v1.h>
@@ -419,7 +420,7 @@ struct Client {
 	float focused_opacity;
 	float unfocused_opacity;
 	char oldmonname[128];
-	char session_launch_command[1024];
+	char session_launch_command[SESSION_COMMAND_MAX];
 	int32_t noblur;
 	double master_mfact_per, master_inner_per, stack_inner_per;
 	double old_master_mfact_per, old_master_inner_per, old_stack_inner_per;
@@ -626,7 +627,7 @@ typedef struct {
 	struct wl_list link;
 	pid_t pid;
 	time_t created_at;
-	char command[1024];
+	char command[SESSION_COMMAND_MAX];
 } SessionSpawnCommand;
 
 /* function declarations */
@@ -1051,7 +1052,6 @@ struct Pertag {
 	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];
 };
 #include "config/parse_config.h"
-#include "session/session.h"
 
 static struct wl_signal mango_print_status;
 

@@ -6,6 +6,10 @@
 
 typedef struct Client Client;
 
+#define SESSION_TITLE_MAX 512
+#define SESSION_MONITOR_MAX 128
+#define SESSION_COMMAND_MAX 1024
+
 typedef struct {
 	int32_t x;
 	int32_t y;
@@ -15,9 +19,9 @@ typedef struct {
 
 typedef struct {
 	char app_id[256];
-	char title[512];
-	char monitor[128];
-	char launch_command[1024];
+	char title[SESSION_TITLE_MAX];
+	char monitor[SESSION_MONITOR_MAX];
+	char launch_command[SESSION_COMMAND_MAX];
 	int32_t pid;
 	uint32_t tags;
 	int32_t is_floating;
