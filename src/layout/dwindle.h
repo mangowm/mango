@@ -151,6 +151,12 @@ static void dwindle_remove(DwindleNode **root, Client *c) {
 		return;
 
 	DwindleNode *parent = leaf->parent;
+
+	if (dwindle_locked_h_node == leaf || dwindle_locked_h_node == parent)
+		dwindle_locked_h_node = NULL;
+	if (dwindle_locked_v_node == leaf || dwindle_locked_v_node == parent)
+		dwindle_locked_v_node = NULL;
+
 	if (!parent) {
 		free(leaf);
 		*root = NULL;
