@@ -71,3 +71,4 @@ int32_t enable_monitor(const Arg *arg);
 int32_t toggle_monitor(const Arg *arg);
 int32_t scroller_stack(const Arg *arg);
 int32_t toggle_all_floating(const Arg *arg);
+int32_t dwindle_toggle_split_direction(const Arg *arg);

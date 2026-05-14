@@ -1,3 +1,4 @@
+#include "wlr/util/log.h"
 void client_actual_size(Client *c, int32_t *width, int32_t *height) {
 	*width = c->animation.current.width - 2 * (int32_t)c->bw;
 
@@ -284,8 +285,8 @@ void client_draw_shadow(Client *c) {
 	struct wlr_box client_box = {
 		.x = bwoffset,
 		.y = bwoffset,
-		.width = width + (int32_t)c->bw - bwoffset,
-		.height = height + (int32_t)c->bw - bwoffset,
+		.width = width + 2 * (int32_t)c->bw - 2 * bwoffset,
+		.height = height + 2 * (int32_t)c->bw - 2 * bwoffset,
 	};
 
 	struct wlr_box shadow_box = {
@@ -350,11 +351,102 @@ void client_draw_shadow(Client *c) {
 	wlr_scene_shadow_set_clipped_region(c->shadow, clipped_region);
 }
 
+void apply_split_border(Client *c, bool hit_no_border) {
+
+	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
+		return;
+
+	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+
+	if (hit_no_border || layout->id != DWINDLE ||
+		!config.dwindle_manual_split) {
+		if (c->splitindicator[0]->node.enabled) {
+			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+		}
+		if (c->splitindicator[1]->node.enabled) {
+			wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+		}
+		return;
+	} else {
+
+		DwindleNode **root =
+			&c->mon->pertag->dwindle_root[c->mon->pertag->curtag];
+		DwindleNode *dnode = dwindle_find_leaf(*root, c);
+
+		if (!dnode) {
+			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+			wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+			return;
+		} else {
+			if (dnode->custom_leaf_split_h) {
+				wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+				wlr_scene_node_set_enabled(&c->splitindicator[1]->node, true);
+			} else {
+				wlr_scene_node_set_enabled(&c->splitindicator[0]->node, true);
+				wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+			}
+		}
+	}
+
+	struct wlr_box fullgeom = c->animation.current;
+	// 一但在GEZERO如果使用无符号，那么其他数据也会转换为无符号导致没有负数出错
+	int32_t bw = (int32_t)c->bw;
+
+	int32_t right_offset, bottom_offset, left_offset, top_offset;
+
+	if (c == grabc) {
+		right_offset = 0;
+		bottom_offset = 0;
+		left_offset = 0;
+		top_offset = 0;
+	} else {
+		right_offset =
+			GEZERO(c->animation.current.x + c->animation.current.width -
+				   c->mon->m.x - c->mon->m.width);
+		bottom_offset =
+			GEZERO(c->animation.current.y + c->animation.current.height -
+				   c->mon->m.y - c->mon->m.height);
+
+		left_offset = GEZERO(c->mon->m.x - c->animation.current.x);
+		top_offset = GEZERO(c->mon->m.y - c->animation.current.y);
+	}
+
+	int32_t border_down_width = GEZERO(fullgeom.width - left_offset -
+									   right_offset - 2 * config.border_radius);
+	int32_t border_down_height =
+		GEZERO(bw - bottom_offset - GEZERO(top_offset + bw - fullgeom.height));
+
+	int32_t border_right_width =
+		GEZERO(bw - right_offset - GEZERO(left_offset + bw - fullgeom.width));
+	int32_t border_right_height =
+		GEZERO(fullgeom.height - top_offset - bottom_offset -
+			   2 * config.border_radius);
+
+	int32_t border_down_x = GEZERO(config.border_radius - left_offset);
+	int32_t border_down_y = GEZERO(fullgeom.height - bw) +
+							GEZERO(top_offset + bw - fullgeom.height);
+
+	int32_t border_right_x =
+		GEZERO(fullgeom.width - bw) + GEZERO(left_offset + bw - fullgeom.width);
+	int32_t border_right_y = GEZERO(config.border_radius - top_offset);
+
+	set_rect_size(c->splitindicator[0], border_down_width, border_down_height);
+	set_rect_size(c->splitindicator[1], border_right_width,
+				  border_right_height);
+	wlr_scene_node_set_position(&c->splitindicator[0]->node, border_down_x,
+								border_down_y);
+	wlr_scene_node_set_position(&c->splitindicator[1]->node, border_right_x,
+								border_right_y);
+}
+
 void apply_border(Client *c) {
 	if (!c || c->iskilling || !client_surface(c)->mapped)
 		return;
 
 	bool hit_no_border = check_hit_no_border(c);
+
+	apply_split_border(c, hit_no_border);
+
 	enum corner_location current_corner_location;
 	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)) {
@@ -1203,6 +1295,7 @@ bool client_draw_fadeout_frame(Client *c) {
 
 void client_set_focused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
+	wlr_scene_node_lower_to_bottom(&c->border->node);
 
 	if (!config.animations) {
 		setborder_color(c);
@@ -1224,7 +1317,7 @@ void client_set_focused_opacity_animation(Client *c) {
 
 void client_set_unfocused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
-
+	wlr_scene_node_raise_to_top(&c->border->node);
 	if (!config.animations) {
 		setborder_color(c);
 		return;

@@ -317,6 +317,7 @@ struct Client {
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
 	struct wlr_scene_rect *droparea;
+	struct wlr_scene_rect *splitindicator[4];
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
 	struct wl_list link;
@@ -561,6 +562,23 @@ typedef struct {
 } SessionLock;
 
 typedef struct DwindleNode DwindleNode;
+struct DwindleNode {
+	bool is_split;
+	bool split_h;
+	bool split_locked;
+	bool custom_leaf_split_h;
+	float ratio;
+	float drag_init_ratio;
+	int32_t container_x;
+	int32_t container_y;
+	int32_t container_w;
+	int32_t container_h;
+	DwindleNode *parent;
+	DwindleNode *first;
+	DwindleNode *second;
+	Client *client;
+};
+
 struct ScrollerStackNode {
 	Client *client;
 	float scroller_proportion;
@@ -848,6 +866,7 @@ static struct ScrollerStackNode *
 scroller_node_create(struct TagScrollerState *st, Client *c);
 static void update_scroller_state(Monitor *m);
 Client *scroll_get_stack_tail_client(Client *c);
+static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -1212,38 +1231,47 @@ void swallow(Client *c, Client *w) {
 	client_pending_maximized_state(c, w->ismaximizescreen);
 	client_pending_minimized_state(c, w->isminimized);
 
-	/* ---------- 跨 tag 同步：dwindle 与 scroller ---------- */
-	Monitor *m;
-	wl_list_for_each(m, &mons, link) {
+	if (!w->mon)
+		return;
+
+	const Layout *layout = w->mon->pertag->ltidxs[w->mon->pertag->curtag];
+
+	if (layout->id == DWINDLE || layout->id == SCROLLER ||
+		layout->id == VERTICAL_SCROLLER) {
+
 		for (uint32_t t = 0; t < LENGTH(tags) + 1; t++) {
 			/* dwindle */
-			DwindleNode **root = &m->pertag->dwindle_root[t];
-			dwindle_remove(root, c);
-			DwindleNode *dnode = dwindle_find_leaf(*root, w);
-			if (dnode)
-				dnode->client = c;
 
-			/* scroller */
-			struct TagScrollerState *st = m->pertag->scroller_state[t];
-			if (!st)
-				continue;
+			if (layout->id == DWINDLE) {
 
-			/* 先移除 c 在任意 tag 中的旧节点 */
-			struct ScrollerStackNode *cn = find_scroller_node(st, c);
-			if (cn)
-				scroller_node_remove(st, cn);
+				DwindleNode **root = &w->mon->pertag->dwindle_root[t];
+				dwindle_remove(root, c);
+				DwindleNode *dnode = dwindle_find_leaf(*root, w);
+				if (dnode)
+					dnode->client = c;
+			}
 
-			/* 将 w 的节点（如果存在）转给 c */
-			struct ScrollerStackNode *wn = find_scroller_node(st, w);
-			if (wn)
-				wn->client = c;
+			// scroller
+			if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER) {
+				struct TagScrollerState *st = w->mon->pertag->scroller_state[t];
+				if (!st)
+					continue;
+				/* 先移除 c 在任意 tag 中的旧节点 */
+				struct ScrollerStackNode *cn = find_scroller_node(st, c);
+				if (cn)
+					scroller_node_remove(st, cn);
+
+				/* 将 w 的节点（如果存在）转给 c */
+				struct ScrollerStackNode *wn = find_scroller_node(st, w);
+				if (wn)
+					wn->client = c;
+			}
 		}
 	}
 
 	/* 同步当前活动 tag 的全局客户端字段 */
-	if (c->mon) {
-		uint32_t curtag = c->mon->pertag->curtag;
-		sync_scroller_state_to_clients(c->mon, curtag);
+	if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER) {
+		sync_scroller_state_to_clients(w->mon, w->mon->pertag->curtag);
 	}
 }
 
@@ -2503,9 +2531,7 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	}
 	m->wlr_output->data = NULL;
 
-	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
-		dwindle_free_tree(m->pertag->dwindle_root[t]);
-
+	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);
 
 	free(m->pertag);
@@ -4334,6 +4360,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	Client *at_client = NULL;
 	Client *c = wl_container_of(listener, c, map);
+	int32_t i = 0;
 	/* Create scene tree for this client and its border */
 	c->scene = client_surface(c)->data = wlr_scene_tree_create(layers[LyrTile]);
 	wlr_scene_node_set_enabled(&c->scene->node, c->type != XDGShell);
@@ -4385,6 +4412,15 @@ mapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	// extra node
+
+	for (i = 0; i < 2; i++) {
+		c->splitindicator[i] = wlr_scene_rect_create(
+			c->scene, 0, 0,
+			c->isurgent ? config.urgentcolor : config.splitcolor);
+		c->splitindicator[i]->node.data = c;
+		wlr_scene_node_lower_to_bottom(&c->splitindicator[i]->node);
+		wlr_scene_node_set_enabled(&c->splitindicator[i]->node, false);
+	}
 
 	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
@@ -5168,18 +5204,27 @@ exchange_common:
 		tmp2_next->prev = &c1->link;
 	}
 
-	if (config.exchange_cross_monitor && c1->mon != c2->mon) {
-		DwindleNode **c1_root = &m1->pertag->dwindle_root[m1->pertag->curtag];
-		DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
+	const Layout *layout1 = c1->mon->pertag->ltidxs[c1->mon->pertag->curtag];
 
-		DwindleNode **c2_root = &m2->pertag->dwindle_root[m2->pertag->curtag];
-		DwindleNode *c2node = dwindle_find_leaf(*c2_root, c2);
+	const Layout *layout2 = c2->mon->pertag->ltidxs[c2->mon->pertag->curtag];
 
-		if (c1node)
-			c1node->client = c2;
+	if (c1->mon != c2->mon) {
 
-		if (c2node)
-			c2node->client = c1;
+		if (layout1->id == DWINDLE && layout2->id == DWINDLE) {
+			DwindleNode **c1_root =
+				&m1->pertag->dwindle_root[m1->pertag->curtag];
+			DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
+
+			DwindleNode **c2_root =
+				&m2->pertag->dwindle_root[m2->pertag->curtag];
+			DwindleNode *c2node = dwindle_find_leaf(*c2_root, c2);
+
+			if (c1node)
+				c1node->client = c2;
+
+			if (c2node)
+				c2node->client = c1;
+		}
 
 		tmp_mon = c2->mon;
 		tmp_tags = c2->tags;
@@ -5191,8 +5236,7 @@ exchange_common:
 		arrange(c1->mon, false, false);
 		arrange(c2->mon, false, false);
 	} else {
-		if (c1->mon &&
-			c1->mon->pertag->ltidxs[c1->mon->pertag->curtag]->id == DWINDLE) {
+		if (layout1->id == DWINDLE && layout2->id == DWINDLE) {
 			dwindle_swap_clients(
 				&c1->mon->pertag->dwindle_root[c1->mon->pertag->curtag], c1,
 				c2);

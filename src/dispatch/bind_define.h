@@ -1917,3 +1917,28 @@ int32_t toggle_all_floating(const Arg *arg) {
 	}
 	return 0;
 }
+
+int32_t dwindle_toggle_split_direction(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return 0;
+
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating)
+		return 0;
+
+	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+
+	if (layout->id != DWINDLE)
+		return 0;
+
+	DwindleNode **root = &selmon->pertag->dwindle_root[selmon->pertag->curtag];
+	DwindleNode *leaf = dwindle_find_leaf(*root, c);
+
+	if (!leaf)
+		return 0;
+
+	leaf->custom_leaf_split_h = !leaf->custom_leaf_split_h;
+	bool hit_no_border = check_hit_no_border(c);
+	apply_split_border(c, hit_no_border);
+	return 0;
+}
