@@ -26,9 +26,14 @@ stdenv.mkDerivation {
   pname = "mango";
   version = "nightly";
 
-  src = builtins.path {
-    path = ../.;
-    name = "source";
+  src = lib.cleanSourceWith {
+    src = ../.;
+    filter =
+      path: type:
+      let
+        relPath = lib.removePrefix ((toString ../.) + "/") (toString path);
+      in
+      !(relPath == ".git" || lib.hasPrefix ".git/" relPath || relPath == "build" || lib.hasPrefix "build/" relPath);
   };
 
   mesonFlags = [
