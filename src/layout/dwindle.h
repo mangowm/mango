@@ -81,35 +81,37 @@ static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 		target = dwindle_first_leaf(*root);
 
 	// ================= 保持其他窗口比例缩减逻辑 =================
-	DwindleNode *path[512];
-	float p[512];
-	int path_len = get_block_path_and_ratios(target, split_h, path, p);
+	if (config.dwindle_manual_split) {
+		DwindleNode *path[512];
+		float p[512];
+		int path_len = get_block_path_and_ratios(target, split_h, path, p);
 
-	int n_old = 1;
-	if (path_len > 1) {
-		n_old = count_block_items(path[path_len - 1], split_h);
-	}
-	float N = (float)(n_old + 1);
-
-	for (int i = path_len - 1; i > 0; i--) {
-		DwindleNode *S = path[i];
-		DwindleNode *child = path[i - 1];
-		float p_S = p[i];
-		float p_first = p_S * S->ratio;
-
-		if (S->first == child) {
-			float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
-			float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-			S->ratio = p_first_new / p_S_new;
-		} else {
-			float p_first_new = p_first * (N - 1.0f) / N;
-			float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-			S->ratio = p_first_new / p_S_new;
+		int n_old = 1;
+		if (path_len > 1) {
+			n_old = count_block_items(path[path_len - 1], split_h);
 		}
-		if (S->ratio < 0.001f)
-			S->ratio = 0.001f;
-		if (S->ratio > 0.999f)
-			S->ratio = 0.999f;
+		float N = (float)(n_old + 1);
+
+		for (int i = path_len - 1; i > 0; i--) {
+			DwindleNode *S = path[i];
+			DwindleNode *child = path[i - 1];
+			float p_S = p[i];
+			float p_first = p_S * S->ratio;
+
+			if (S->first == child) {
+				float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
+				float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+				S->ratio = p_first_new / p_S_new;
+			} else {
+				float p_first_new = p_first * (N - 1.0f) / N;
+				float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+				S->ratio = p_first_new / p_S_new;
+			}
+			if (S->ratio < 0.001f)
+				S->ratio = 0.001f;
+			if (S->ratio > 0.999f)
+				S->ratio = 0.999f;
+		}
 	}
 	// ============================================================
 
@@ -166,55 +168,57 @@ static void dwindle_remove(DwindleNode **root, Client *c) {
 	// 开始删除空间的比例回退逻辑
 
 	// 查找连续的同方向块路径
-	bool split_h = parent->split_h;
-	DwindleNode *path[512];
-	int path_len = 0;
-	path[path_len++] = parent;
-	DwindleNode *curr = parent->parent;
-	while (curr && curr->split_h == split_h) {
-		path[path_len++] = curr;
-		curr = curr->parent;
-	}
-
-	// 计算各祖先的旧绝对占比
-	float p[512];
-	p[path_len - 1] = 1.0f;
-	for (int i = path_len - 1; i > 0; i--) {
-		DwindleNode *S = path[i];
-		DwindleNode *child = path[i - 1];
-		if (S->first == child)
-			p[i - 1] = p[i] * S->ratio;
-		else
-			p[i - 1] = p[i] * (1.0f - S->ratio);
-	}
-
-	// 计算即将被删除的叶子节点，在该方向块中所占的绝对面积比例 (P_del)
-	float p_del =
-		p[0] * (parent->first == leaf ? parent->ratio : (1.0f - parent->ratio));
-	if (p_del > 0.999f)
-		p_del = 0.999f; // 兜底
-
-	// 重算祖先比例：将 P_del 空出来的空间，按原定比例无缝分配给其他窗口
-	for (int i = path_len - 1; i > 0; i--) {
-		DwindleNode *S = path[i];
-		DwindleNode *child = path[i - 1];
-		float p_S = p[i];
-		float p_first = p_S * S->ratio;
-
-		float denom = p_S - p_del;
-		if (denom < 0.0001f)
-			denom = 0.0001f;
-
-		if (S->first == child) {
-			S->ratio = (p_first - p_del) / denom;
-		} else {
-			S->ratio = p_first / denom;
+	if (config.dwindle_manual_split) {
+		bool split_h = parent->split_h;
+		DwindleNode *path[512];
+		int path_len = 0;
+		path[path_len++] = parent;
+		DwindleNode *curr = parent->parent;
+		while (curr && curr->split_h == split_h) {
+			path[path_len++] = curr;
+			curr = curr->parent;
 		}
 
-		if (S->ratio < 0.001f)
-			S->ratio = 0.001f;
-		if (S->ratio > 0.999f)
-			S->ratio = 0.999f;
+		// 计算各祖先的旧绝对占比
+		float p[512];
+		p[path_len - 1] = 1.0f;
+		for (int i = path_len - 1; i > 0; i--) {
+			DwindleNode *S = path[i];
+			DwindleNode *child = path[i - 1];
+			if (S->first == child)
+				p[i - 1] = p[i] * S->ratio;
+			else
+				p[i - 1] = p[i] * (1.0f - S->ratio);
+		}
+
+		// 计算即将被删除的叶子节点，在该方向块中所占的绝对面积比例 (P_del)
+		float p_del = p[0] * (parent->first == leaf ? parent->ratio
+													: (1.0f - parent->ratio));
+		if (p_del > 0.999f)
+			p_del = 0.999f; // 兜底
+
+		// 重算祖先比例：将 P_del 空出来的空间，按原定比例无缝分配给其他窗口
+		for (int i = path_len - 1; i > 0; i--) {
+			DwindleNode *S = path[i];
+			DwindleNode *child = path[i - 1];
+			float p_S = p[i];
+			float p_first = p_S * S->ratio;
+
+			float denom = p_S - p_del;
+			if (denom < 0.0001f)
+				denom = 0.0001f;
+
+			if (S->first == child) {
+				S->ratio = (p_first - p_del) / denom;
+			} else {
+				S->ratio = p_first / denom;
+			}
+
+			if (S->ratio < 0.001f)
+				S->ratio = 0.001f;
+			if (S->ratio > 0.999f)
+				S->ratio = 0.999f;
+		}
 	}
 
 	// 比例重算结束
@@ -454,14 +458,15 @@ static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 		double ny = (cursor->y - fcy) / (fg->height * 0.5);
 
 		if (fabs(ny) > fabs(nx)) {
-			split_h = false;
-			as_first = (ny < 0);
+			split_h = false;	 // vertical split
+			as_first = (ny < 0); // top → new window on top
 		} else {
-			split_h = true;
-			as_first = (nx < 0);
+			split_h = true;		 // horizontal split
+			as_first = (nx < 0); // left → new window on left
 		}
-		lock = true;
+		lock = true; // lock split direction
 	} else {
+		// normal mode, auto split
 		bool likely_h = (fg->width >= fg->height);
 		split_h = likely_h;
 
@@ -479,11 +484,10 @@ static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 	}
 
 	DwindleNode *target = focused ? dwindle_find_leaf(*root, focused) : NULL;
-	// 防止极端情况下找不到 target
 	if (!target && *root)
 		target = dwindle_first_leaf(*root);
 
-	// 计算 1/N 比例
+	// 当且仅当 manual_split=1 时，计算精确的 1/N 新节点比例
 	if (config.dwindle_manual_split && target) {
 		split_h = target->custom_leaf_split_h;
 		lock = true;
@@ -501,17 +505,14 @@ static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 		float N = (float)(n_old + 1);
 
 		float p_target_old = p[0];
-		// 算出 split 节点在方向块里总共能分到的绝对面积比例
 		float p_split_new = p_target_old * (N - 1.0f) / N + 1.0f / N;
 
-		// 逆推传给 dwindle_insert 的局部 ratio
 		if (as_first) {
 			ratio = (1.0f / N) / p_split_new;
 		} else {
 			ratio = (p_target_old * (N - 1.0f) / N) / p_split_new;
 		}
 
-		// 安全兜底
 		if (ratio < 0.001f)
 			ratio = 0.001f;
 		if (ratio > 0.999f)
