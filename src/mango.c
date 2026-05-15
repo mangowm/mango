@@ -877,6 +877,8 @@ Client *scroll_get_stack_tail_client(Client *c);
 static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
 static void overview_backup_surface(Client *c);
 
+static void apply_xkb_layout_colors(struct wlr_keyboard *keyboard);
+
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
 #include "layout/layout.h"
@@ -4132,6 +4134,8 @@ void keypress(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, key);
 	struct wlr_keyboard_key_event *event = data;
 
+	apply_xkb_layout_colors(&group->wlr_group->keyboard);
+
 	struct wlr_surface *last_surface = seat->keyboard_state.focused_surface;
 	struct wlr_xdg_surface *xdg_surface =
 		last_surface ? wlr_xdg_surface_try_from_wlr_surface(last_surface)
@@ -4222,6 +4226,8 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
+
+	apply_xkb_layout_colors(&group->wlr_group->keyboard); 
 
 	if (!dwl_im_keyboard_grab_forward_modifiers(group)) {
 
@@ -5518,6 +5524,43 @@ void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
 	arrange(selmon, false, false);
 }
 
+static uint32_t last_xkb_group = UINT32_MAX;
+
+static void apply_xkb_layout_colors(struct wlr_keyboard *keyboard) {
+	if (!keyboard) return;
+	uint32_t current_group = keyboard->modifiers.group;
+	
+	if (current_group != last_xkb_group) {
+		last_xkb_group = current_group;
+		bool changed = false;
+
+		if (config.xkb_layout_focuscolors_count > 0) {
+			if (current_group < (uint32_t)config.xkb_layout_focuscolors_count) {
+				memcpy(config.focuscolor, config.xkb_layout_focuscolors[current_group], sizeof(float) * 4);
+			} else {
+				memcpy(config.focuscolor, config.default_focuscolor, sizeof(float) * 4);
+			}
+			changed = true;
+		}
+
+		if (config.xkb_layout_bordercolors_count > 0) {
+			if (current_group < (uint32_t)config.xkb_layout_bordercolors_count) {
+				memcpy(config.bordercolor, config.xkb_layout_bordercolors[current_group], sizeof(float) * 4);
+			} else {
+				memcpy(config.bordercolor, config.default_bordercolor, sizeof(float) * 4);
+			}
+			changed = true;
+		}
+
+		if (changed) {
+			Client *c;
+			wl_list_for_each(c, &clients, link) {
+				setborder_color(c);
+			}
+		}
+	}
+}
+
 void reset_keyboard_layout(void) {
 	if (!kb_group || !kb_group->wlr_group || !seat) {
 		wlr_log(WLR_ERROR, "Invalid keyboard group or seat");
@@ -5608,6 +5651,11 @@ void reset_keyboard_layout(void) {
 
 cleanup_context:
 	xkb_context_unref(context);
+
+	last_xkb_group = UINT32_MAX;
+	if (kb_group && kb_group->wlr_group) {
+		apply_xkb_layout_colors(&kb_group->wlr_group->keyboard);
+	}
 }
 
 void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
