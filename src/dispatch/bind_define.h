@@ -1242,9 +1242,18 @@ int32_t tagtoleft(const Arg *arg) {
 		return 0;
 
 	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] > 1) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] >> 1, .i = arg->i});
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1) {
+		uint32_t target = selmon->tagset[selmon->seltags] >> 1;
+
+		if (target == 0) {
+			if (!config.tag_carousel)
+				return 0;
+			target = (1 << (LENGTH(tags) - 1)) & TAGMASK;
+			selmon->carousel_anim_dir = -1;
+		}
+
+		tag(&(Arg){.ui = target & TAGMASK, .i = arg->i});
+		selmon->carousel_anim_dir = 0;
 	}
 	return 0;
 }
@@ -1254,9 +1263,18 @@ int32_t tagtoright(const Arg *arg) {
 		return 0;
 
 	if (selmon->sel != NULL &&
-		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1 &&
-		selmon->tagset[selmon->seltags] & (TAGMASK >> 1)) {
-		tag(&(Arg){.ui = selmon->tagset[selmon->seltags] << 1, .i = arg->i});
+		__builtin_popcount(selmon->tagset[selmon->seltags] & TAGMASK) == 1) {
+		uint32_t target = selmon->tagset[selmon->seltags] << 1;
+
+		if (!(target & TAGMASK)) {
+			if (!config.tag_carousel)
+				return 0;
+			target = 1;
+			selmon->carousel_anim_dir = 1;
+		}
+
+		tag(&(Arg){.ui = target & TAGMASK, .i = arg->i});
+		selmon->carousel_anim_dir = 0;
 	}
 	return 0;
 }
@@ -1499,22 +1517,24 @@ int32_t viewtoleft(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
-	uint32_t target = selmon->tagset[selmon->seltags];
-
-	if (selmon->isoverview || selmon->pertag->curtag == 0) {
+	if (selmon->isoverview || selmon->pertag->curtag == 0)
 		return 0;
-	}
 
+	uint32_t target = selmon->tagset[selmon->seltags];
 	target >>= 1;
 
 	if (target == 0) {
-		return 0;
+		if (!config.tag_carousel)
+			return 0;
+		target = (1 << (LENGTH(tags) - 1)) & TAGMASK;
+		selmon->carousel_anim_dir = -1;
 	}
 
-	if (!selmon || (target) == selmon->tagset[selmon->seltags])
+	if (target == selmon->tagset[selmon->seltags])
 		return 0;
 
 	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
+	selmon->carousel_anim_dir = 0;
 	return 0;
 }
 
@@ -1522,19 +1542,24 @@ int32_t viewtoright(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
-	if (selmon->isoverview || selmon->pertag->curtag == 0) {
+	if (selmon->isoverview || selmon->pertag->curtag == 0)
 		return 0;
-	}
+
 	uint32_t target = selmon->tagset[selmon->seltags];
 	target <<= 1;
 
-	if (!selmon || (target) == selmon->tagset[selmon->seltags])
-		return 0;
 	if (!(target & TAGMASK)) {
-		return 0;
+		if (!config.tag_carousel)
+			return 0;
+		target = 1;
+		selmon->carousel_anim_dir = 1;
 	}
 
+	if (target == selmon->tagset[selmon->seltags])
+		return 0;
+
 	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
+	selmon->carousel_anim_dir = 0;
 	return 0;
 }
 

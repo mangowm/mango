@@ -553,6 +553,7 @@ struct Monitor {
 	char last_surface_ws_name[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
+	int8_t carousel_anim_dir;
 };
 
 typedef struct {
@@ -3216,6 +3217,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->skiping_frame = false;
 	m->resizing_count_pending = 0;
 	m->resizing_count_current = 0;
+	m->carousel_anim_dir = 0;
 
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
