@@ -1737,6 +1737,11 @@ int32_t toggleoverview(const Arg *arg) {
 	// 正常视图到overview,退出所有窗口的浮动和全屏状态参与平铺,
 	// overview到正常视图,还原之前退出的浮动和全屏窗口状态
 	if (selmon->isoverview) {
+
+		// 让游戏窗口无法强制约束鼠标
+		wlr_seat_pointer_clear_focus(seat);
+		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !client_is_unmanaged(c) &&
 				!client_is_x11_popup(c) && !c->isunglobal)

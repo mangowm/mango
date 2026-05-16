@@ -4816,7 +4816,13 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	/* Let the client know that the mouse cursor has entered one
 	 * of its surfaces, and make keyboard focus follow if desired.
 	 * wlroots makes this a no-op if surface is already focused */
-	wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+
+	if (!c || !c->mon || !c->mon->isoverview) {
+		// don't let window get pointer focus,
+		// avoid game window force grab pointer in overview mode
+		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+	}
+
 	wlr_seat_pointer_notify_motion(seat, time, sx, sy);
 }
 

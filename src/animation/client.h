@@ -888,7 +888,9 @@ void client_animation_next_tick(Client *c) {
 
 		surface =
 			pointer_c && pointer_c == c ? client_surface(pointer_c) : NULL;
-		if (surface && pointer_c == selmon->sel) {
+
+		// avoid game window force grab pointer in overview mode
+		if (surface && pointer_c == selmon->sel && !selmon->isoverview) {
 			wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
 		}
 
