@@ -355,118 +355,105 @@ void vertical_grid(Monitor *m) {
 }
 
 void vertical_fair(Monitor *m) {
-	int32_t i, n = 0;
-	Client *c = NULL;
+    int32_t n = m->visible_tiling_clients;
+    if (n == 0) return;
 
-	n = m->visible_tiling_clients;
-	if (n == 0)
-		return;
+    int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
+    int32_t cur_gappih = enablegaps ? m->gappih : 0;
+    int32_t cur_gappov = enablegaps ? m->gappov : 0;
+    int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
+    cur_gappiv = config.smartgaps && n == 1 ? 0 : cur_gappiv;
+    cur_gappih = config.smartgaps && n == 1 ? 0 : cur_gappih;
+    cur_gappov = config.smartgaps && n == 1 ? 0 : cur_gappov;
+    cur_gappoh = config.smartgaps && n == 1 ? 0 : cur_gappoh;
 
-	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
-	int32_t cur_gappih = enablegaps ? m->gappih : 0;
-	int32_t cur_gappov = enablegaps ? m->gappov : 0;
-	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
+    int32_t rows;
+    for (rows = 0; rows <= n; rows++)
+        if (rows * rows >= n) break;
 
-	cur_gappiv = config.smartgaps && n == 1 ? 0 : cur_gappiv;
-	cur_gappih = config.smartgaps && n == 1 ? 0 : cur_gappih;
-	cur_gappov = config.smartgaps && n == 1 ? 0 : cur_gappov;
-	cur_gappoh = config.smartgaps && n == 1 ? 0 : cur_gappoh;
+    int32_t base_cols         = n / rows;
+    int32_t remainder         = n % rows;
+    int32_t first_group_rows  = rows - remainder;
+    int32_t first_group_count = first_group_rows * base_cols;
 
-	int32_t rows;
-	for (rows = 0; rows <= n; rows++) {
-		if (rows * rows >= n)
-			break;
-	}
+    uint32_t tag = m->pertag->curtag;
+    struct FairState *fs = ensure_fair_state(m, tag);
+    // adapt with transposed semantics: rows are top-level
+    if (fs->n_cols != rows) {
+        for (int r = fs->n_cols; r < rows; r++) {
+            if (fs->cols[r].ratio <= 0.0f) fs->cols[r].ratio = 1.0f;
+            int cols_in_row = (r < first_group_rows) ? base_cols : base_cols + 1;
+            for (int c = 0; c < cols_in_row; c++)
+                if (fs->cols[r].row_ratios[c] <= 0.0f)
+                    fs->cols[r].row_ratios[c] = 1.0f;
+        }
+        fs->n_cols = rows;
+    }
 
-	int32_t base_cols = n / rows;
-	int32_t remainder = n % rows;
-	int32_t first_group_rows = rows - remainder;
-	int32_t first_group_count = first_group_rows * base_cols;
-	int32_t max_cols = base_cols + (remainder > 0 ? 1 : 0);
+    float avail_h = m->w.height - 2*cur_gappov - (rows-1)*cur_gappiv;
+    float sum_row = 0.0f;
+    for (int r = 0; r < rows; r++) sum_row += fs->cols[r].ratio;
 
-	float row_pers[rows];
-	float col_pers[max_cols];
-	for (i = 0; i < rows; i++)
-		row_pers[i] = 1.0f;
-	for (i = 0; i < max_cols; i++)
-		col_pers[i] = 1.0f;
+    int     i        = 0;
+    int     prev_row = -1;
+    float   row_y    = 0, col_x = 0, avail_w = 0, sum_col = 0;
+    int     cols_in_row = 0;
+    Client *c;
 
-	i = 0;
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
-			continue;
-		int32_t row_idx, col_idx;
-		if (i < first_group_count) {
-			row_idx = i / base_cols;
-			col_idx = i % base_cols;
-		} else {
-			int32_t offset = i - first_group_count;
-			row_idx = first_group_rows + (offset / (base_cols + 1));
-			col_idx = offset % (base_cols + 1);
-		}
+    wl_list_for_each(c, &clients, link) {
+        if (!VISIBLEON(c, m) || !ISTILED(c)) continue;
 
-		if (col_idx == 0)
-			row_pers[row_idx] =
-				(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
-		if (row_idx == 0)
-			col_pers[col_idx] =
-				(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
-		i++;
-	}
+        int row, col;
+        if (i < first_group_count) {
+            row = i / base_cols;
+            col = i % base_cols;
+            cols_in_row = base_cols;
+        } else {
+            int off = i - first_group_count;
+            row = first_group_rows + off / (base_cols + 1);
+            col = off % (base_cols + 1);
+            cols_in_row = base_cols + 1;
+        }
 
-	float sum_row = 0.0f;
-	for (i = 0; i < rows; i++)
-		sum_row += row_pers[i];
-	float avail_h = m->w.height - 2 * cur_gappov - (rows - 1) * cur_gappiv;
+        if (row != prev_row) {
+            row_y = m->w.y + cur_gappov;
+            for (int pr = 0; pr < row; pr++)
+                row_y += avail_h * (fs->cols[pr].ratio / sum_row) + cur_gappiv;
 
-	i = 0;
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
-			continue;
+            struct FairColNode *rn = &fs->cols[row];
+            sum_col = 0.0f;
+            avail_w = m->w.width - 2*cur_gappoh - (cols_in_row-1)*cur_gappih;
+            for (int ci = 0; ci < cols_in_row; ci++) {
+                if (rn->row_ratios[ci] <= 0.0f) rn->row_ratios[ci] = 1.0f;
+                sum_col += rn->row_ratios[ci];
+            }
+            col_x    = m->w.x + cur_gappoh;
+            prev_row = row;
+        }
 
-		int32_t row_idx, col_idx, cols_in_this_row;
-		if (i < first_group_count) {
-			row_idx = i / base_cols;
-			col_idx = i % base_cols;
-			cols_in_this_row = base_cols;
-		} else {
-			int32_t offset = i - first_group_count;
-			row_idx = first_group_rows + (offset / (base_cols + 1));
-			col_idx = offset % (base_cols + 1);
-			cols_in_this_row = base_cols + 1;
-		}
+        struct FairColNode *rn = &fs->cols[row];
 
-		c->grid_row_per = row_pers[row_idx];
-		c->grid_col_per = col_pers[col_idx];
-		c->grid_row_idx = row_idx;
-		c->grid_col_idx = col_idx;
+        float row_h = (row == rows - 1)
+            ? (m->w.y + m->w.height - cur_gappov - row_y)
+            : avail_h * (rn->ratio / sum_row);
 
-		float fl_cy = m->w.y + cur_gappov;
-		for (int j = 0; j < row_idx; j++)
-			fl_cy += avail_h * (row_pers[j] / sum_row) + cur_gappiv;
-		float fl_ch = (row_idx == rows - 1)
-						  ? (m->w.y + m->w.height - cur_gappov - fl_cy)
-						  : avail_h * (row_pers[row_idx] / sum_row);
+        float col_w = (col == cols_in_row - 1)
+            ? (m->w.x + m->w.width - cur_gappoh - col_x)
+            : avail_w * (rn->row_ratios[col] / sum_col);
 
-		float sum_col_this_row = 0.0f;
-		for (int j = 0; j < cols_in_this_row; j++)
-			sum_col_this_row += col_pers[j];
+        c->grid_row_idx = row;
+        c->grid_col_idx = col;
+        c->grid_row_per = rn->ratio;
+        c->grid_col_per = rn->row_ratios[col];
 
-		float avail_w =
-			m->w.width - 2 * cur_gappoh - (cols_in_this_row - 1) * cur_gappih;
-		float fl_cx = m->w.x + cur_gappoh;
-		for (int j = 0; j < col_idx; j++)
-			fl_cx += avail_w * (col_pers[j] / sum_col_this_row) + cur_gappih;
-		float fl_cw = (col_idx == cols_in_this_row - 1)
-						  ? (m->w.x + m->w.width - cur_gappoh - fl_cx)
-						  : avail_w * (col_pers[col_idx] / sum_col_this_row);
+        resize(c, (struct wlr_box){
+            .x      = (int32_t)col_x,
+            .y      = (int32_t)row_y,
+            .width  = (int32_t)col_w,
+            .height = (int32_t)row_h,
+        }, 0);
 
-		resize(c,
-			   (struct wlr_box){.x = (int32_t)fl_cx,
-								.y = (int32_t)fl_cy,
-								.width = (int32_t)fl_cw,
-								.height = (int32_t)fl_ch},
-			   0);
-		i++;
-	}
+        col_x += col_w + cur_gappih;
+        i++;
+    }
 }
