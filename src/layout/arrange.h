@@ -536,6 +536,302 @@ void resize_tile_dwindle(Client *grabc, bool isdrag, int32_t offsetx,
 	}
 }
 
+void resize_tile_grid_fair(Client *grabc, bool isdrag, int32_t offsetx,
+						   int32_t offsety, uint32_t time) {
+	if (!grabc || grabc->isfullscreen || grabc->ismaximizescreen)
+		return;
+	Monitor *m = grabc->mon;
+	if (m->isoverview)
+		return;
+
+	if (m->visible_tiling_clients <= 1)
+		return;
+
+	// 获取当前布局 ID
+	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+
+	if (!start_drag_window && isdrag) {
+		drag_begin_cursorx = cursor->x;
+		drag_begin_cursory = cursor->y;
+		start_drag_window = true;
+
+		Client *c;
+		wl_list_for_each(c, &clients, link) {
+			c->old_grid_col_per =
+				(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
+			c->old_grid_row_per =
+				(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
+		}
+
+		grabc->old_grid_col_per = grabc->grid_col_per;
+		grabc->old_grid_row_per = grabc->grid_row_per;
+
+		grabc->cursor_in_left_half =
+			cursor->x < grabc->geom.x + grabc->geom.width / 2;
+		grabc->cursor_in_upper_half =
+			cursor->y < grabc->geom.y + grabc->geom.height / 2;
+		grabc->drag_begin_geom = grabc->geom;
+	} else {
+		if (isdrag) {
+			offsetx = cursor->x - drag_begin_cursorx;
+			offsety = cursor->y - drag_begin_cursory;
+		} else {
+			grabc->drag_begin_geom = grabc->geom;
+			Client *c;
+			wl_list_for_each(c, &clients, link) {
+				c->old_grid_col_per =
+					(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
+				c->old_grid_row_per =
+					(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
+			}
+			grabc->cursor_in_upper_half = false;
+			grabc->cursor_in_left_half = false;
+		}
+
+		// 以屏幕分辨率为基准算出缩放比变化的量
+		float delta_x = (float)offsetx * grabc->old_grid_col_per /
+						grabc->drag_begin_geom.width;
+		float delta_y = (float)offsety * grabc->old_grid_row_per /
+						grabc->drag_begin_geom.height;
+
+		int adj_c_idx = grabc->grid_col_idx;
+		int adj_r_idx = grabc->grid_row_idx;
+		float sign_x = 1.0f, sign_y = 1.0f;
+
+		if (isdrag) {
+			if (grabc->cursor_in_left_half) {
+				adj_c_idx -= 1;
+				sign_x = -1.0f;
+			} else {
+				adj_c_idx += 1;
+				sign_x = 1.0f;
+			}
+
+			if (grabc->cursor_in_upper_half) {
+				adj_r_idx -= 1;
+				sign_y = -1.0f;
+			} else {
+				adj_r_idx += 1;
+				sign_y = 1.0f;
+			}
+		}
+		// 键盘热键逻辑不变
+		int max_col = -1, max_row = -1, min_col = INT32_MAX,
+			min_row = INT32_MAX;
+		Client *tmp;
+		wl_list_for_each(tmp, &clients, link) {
+			if (tmp->mon != m || !VISIBLEON(tmp, m) || !ISTILED(tmp))
+				continue;
+			if (tmp->grid_col_idx > max_col)
+				max_col = tmp->grid_col_idx;
+			if (tmp->grid_row_idx > max_row)
+				max_row = tmp->grid_row_idx;
+			if (tmp->grid_col_idx < min_col)
+				min_col = tmp->grid_col_idx;
+			if (tmp->grid_row_idx < min_row)
+				min_row = tmp->grid_row_idx;
+		}
+
+		adj_c_idx = grabc->grid_col_idx + 1;
+		adj_r_idx = grabc->grid_row_idx + 1;
+		sign_x = 1.0f;
+		sign_y = 1.0f;
+
+		if (grabc->grid_col_idx == max_col) {
+			adj_c_idx = grabc->grid_col_idx - 1;
+			sign_x = -1.0f;
+		}
+		if (grabc->grid_row_idx == max_row) {
+			adj_r_idx = grabc->grid_row_idx - 1;
+			sign_y = -1.0f;
+		}
+		if (grabc->grid_col_idx == min_col) {
+			adj_c_idx = grabc->grid_col_idx + 1;
+			sign_x = 1.0f;
+		}
+		if (grabc->grid_row_idx == min_row) {
+			adj_r_idx = grabc->grid_row_idx + 1;
+			sign_y = 1.0f;
+		}
+
+		float dx = delta_x * sign_x;
+		float dy = delta_y * sign_y;
+
+		float my_old_col = grabc->old_grid_col_per;
+		float my_old_row = grabc->old_grid_row_per;
+		float adj_old_col = -1.0f, adj_old_row = -1.0f;
+
+		Client *c;
+		wl_list_for_each(c, &clients, link) {
+			if (c->mon != m || !VISIBLEON(c, m) || !ISTILED(c))
+				continue;
+			if (c->grid_col_idx == adj_c_idx && adj_old_col < 0)
+				adj_old_col = c->old_grid_col_per;
+			if (c->grid_row_idx == adj_r_idx && adj_old_row < 0)
+				adj_old_row = c->old_grid_row_per;
+		}
+
+		// 应用列宽调节
+		if (adj_old_col > 0.0f) {
+			float dx_clamped = dx;
+			if (my_old_col + dx_clamped < 0.1f)
+				dx_clamped = 0.1f - my_old_col;
+			if (adj_old_col - dx_clamped < 0.1f)
+				dx_clamped = adj_old_col - 0.1f;
+
+			float new_my_col = my_old_col + dx_clamped;
+			float new_adj_col = adj_old_col - dx_clamped;
+
+			// 处理被强行锁死在 1.0f 的列边界，头部是个错位窗口
+			if (current_layout && current_layout->id == VERTICAL_FAIR) {
+				int32_t n_tiling = m->visible_tiling_clients;
+				int32_t l_rows;
+				for (l_rows = 0; l_rows <= n_tiling; l_rows++) {
+					if (l_rows * l_rows >= n_tiling)
+						break;
+				}
+				int32_t base_cols = n_tiling / l_rows;
+				// 当调节边界恰好处于非对称的锁死列（如 3 窗口下的 col 0 与 col
+				// 1 之间）
+				if ((grabc->grid_col_idx == base_cols - 1 &&
+					 adj_c_idx == base_cols) ||
+					(grabc->grid_col_idx == base_cols &&
+					 adj_c_idx == base_cols - 1)) {
+
+					float p_col =
+						(grabc->grid_col_idx == base_cols - 1)
+							? (my_old_col + dx) / (my_old_col + adj_old_col)
+							: (adj_old_col - dx) / (my_old_col + adj_old_col);
+					if (p_col < 0.01f)
+						p_col = 0.01f;
+					if (p_col > 0.99f)
+						p_col = 0.99f;
+
+					// 反推非线性真实权重值
+					float new_r_var_per = p_col / (1.0f - p_col);
+					if (new_r_var_per < 0.1f)
+						new_r_var_per = 0.1f;
+					if (new_r_var_per > 10.0f)
+						new_r_var_per = 10.0f;
+
+					if (grabc->grid_col_idx == base_cols - 1) {
+						new_my_col = new_r_var_per;
+						new_adj_col = 1.0f;
+					} else {
+						new_my_col = 1.0f;
+						new_adj_col = new_r_var_per;
+					}
+				}
+			}
+
+			wl_list_for_each(c, &clients, link) {
+				if (c->mon != m || !VISIBLEON(c, m) || !ISTILED(c))
+					continue;
+				if (c->grid_col_idx == grabc->grid_col_idx)
+					c->grid_col_per = new_my_col;
+				if (c->grid_col_idx == adj_c_idx)
+					c->grid_col_per = new_adj_col;
+			}
+
+			wl_list_for_each(c, &clients, link) {
+				if (c->mon != m || !VISIBLEON(c, m) || !ISTILED(c))
+					continue;
+				if (c->grid_row_idx == 0) {
+					if (c->grid_col_idx == grabc->grid_col_idx)
+						c->grid_col_per = new_my_col;
+					else if (c->grid_col_idx == adj_c_idx)
+						c->grid_col_per = new_adj_col;
+				}
+			}
+		}
+
+		// 应用行高调节
+		if (adj_old_row > 0.0f) {
+			float dy_clamped = dy;
+			if (my_old_row + dy_clamped < 0.1f)
+				dy_clamped = 0.1f - my_old_row;
+			if (adj_old_row - dy_clamped < 0.1f)
+				dy_clamped = adj_old_row - 0.1f;
+
+			float new_my_row = my_old_row + dy_clamped;
+			float new_adj_row = adj_old_row - dy_clamped;
+
+			// 处理被强行锁死在 1.0f 的行边界，头部是个错位窗口
+			if (current_layout && current_layout->id == FAIR) {
+				int32_t n_tiling = m->visible_tiling_clients;
+				int32_t l_cols;
+				for (l_cols = 0; l_cols <= n_tiling; l_cols++) {
+					if (l_cols * l_cols >= n_tiling)
+						break;
+				}
+				int32_t base_rows = n_tiling / l_cols;
+				// 当调节边界恰好处于非对称的锁死行（如 3 窗口下的 row 0 与 row
+				// 1 之间）
+				if ((grabc->grid_row_idx == base_rows - 1 &&
+					 adj_r_idx == base_rows) ||
+					(grabc->grid_row_idx == base_rows &&
+					 adj_r_idx == base_rows - 1)) {
+
+					float p_row =
+						(grabc->grid_row_idx == base_rows - 1)
+							? (my_old_row + dy) / (my_old_row + adj_old_row)
+							: (adj_old_row - dy) / (my_old_row + adj_old_row);
+					if (p_row < 0.01f)
+						p_row = 0.01f;
+					if (p_row > 0.99f)
+						p_row = 0.99f;
+
+					// 反推非线性真实权重值
+					float new_r_var_per = p_row / (1.0f - p_row);
+					if (new_r_var_per < 0.1f)
+						new_r_var_per = 0.1f;
+					if (new_r_var_per > 10.0f)
+						new_r_var_per = 10.0f;
+
+					if (grabc->grid_row_idx == base_rows - 1) {
+						new_my_row = new_r_var_per;
+						new_adj_row = 1.0f;
+					} else {
+						new_my_row = 1.0f;
+						new_adj_row = new_r_var_per;
+					}
+				}
+			}
+
+			wl_list_for_each(c, &clients, link) {
+				if (c->mon != m || !VISIBLEON(c, m) || !ISTILED(c))
+					continue;
+				if (c->grid_row_idx == grabc->grid_row_idx)
+					c->grid_row_per = new_my_row;
+				if (c->grid_row_idx == adj_r_idx)
+					c->grid_row_per = new_adj_row;
+			}
+
+			wl_list_for_each(c, &clients, link) {
+				if (c->mon != m || !VISIBLEON(c, m) || !ISTILED(c))
+					continue;
+				if (c->grid_col_idx == 0) {
+					if (c->grid_row_idx == grabc->grid_row_idx)
+						c->grid_row_per = new_my_row;
+					else if (c->grid_row_idx == adj_r_idx)
+						c->grid_row_per = new_adj_row;
+				}
+			}
+		}
+
+		if (!isdrag) {
+			arrange(m, false, false);
+			return;
+		}
+
+		if (last_apply_drap_time == 0 ||
+			time - last_apply_drap_time > config.drag_tile_refresh_interval) {
+			arrange(m, false, false);
+			last_apply_drap_time = time;
+		}
+	}
+}
+
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
 	if (!grabc || grabc->isfullscreen || grabc->ismaximizescreen)
@@ -772,6 +1068,11 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 		resize_tile_scroller(grabc, isdrag, offsetx, offsety, time, true);
 	} else if (current_layout->id == DWINDLE) {
 		resize_tile_dwindle(grabc, isdrag, offsetx, offsety, time, true);
+	} else if (current_layout->id == GRID ||
+			   current_layout->id == VERTICAL_GRID ||
+			   current_layout->id == FAIR ||
+			   current_layout->id == VERTICAL_FAIR) {
+		resize_tile_grid_fair(grabc, isdrag, offsetx, offsety, time);
 	}
 }
 

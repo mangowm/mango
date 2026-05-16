@@ -428,6 +428,12 @@ struct Client {
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
 	struct wlr_box drag_tile_float_backup_geom;
+	float grid_col_per;
+	float grid_row_per;
+	float old_grid_col_per;
+	float old_grid_row_per;
+	int32_t grid_col_idx;
+	int32_t grid_row_idx;
 };
 
 typedef struct {
@@ -4195,6 +4201,8 @@ void locksession(struct wl_listener *listener, void *data) {
 }
 
 void init_client_properties(Client *c) {
+	c->grid_col_per = 1.0f;
+	c->grid_row_per = 1.0f;
 	c->drop_direction = UNDIR;
 	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
@@ -6215,8 +6223,6 @@ void tag_client(const Arg *arg, Client *target_client) {
 	focusclient(target_client, 1);
 	printstatus();
 }
-
-void overview(Monitor *m) { grid(m); }
 
 // 目标窗口有其他窗口和它同个tag就返回0
 uint32_t want_restore_fullscreen(Client *target_client) {
