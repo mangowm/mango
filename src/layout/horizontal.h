@@ -704,7 +704,11 @@ void fair(Monitor *m) {
 	}
 
 	int32_t base_rows = n / cols; // 每列的基础行数
-	int32_t remainder = n % cols; // 多出来的窗口，分配给前 remainder 列
+	int32_t remainder = n % cols; // 多出来的窗口
+
+	// 计算前半部分（大窗口）的列数和总窗口数
+	int32_t first_group_cols = cols - remainder;
+	int32_t first_group_count = first_group_cols * base_rows;
 
 	// 计算标准列宽
 	int32_t col_width =
@@ -718,15 +722,16 @@ void fair(Monitor *m) {
 		int32_t col_idx, row_idx, rows_in_this_col;
 
 		// 判断当前窗口属于哪一列、哪一行
-		if (i < remainder * (base_rows + 1)) {
-			col_idx = i / (base_rows + 1);
-			row_idx = i % (base_rows + 1);
-			rows_in_this_col = base_rows + 1;
-		} else {
-			int32_t offset = i - remainder * (base_rows + 1);
-			col_idx = remainder + offset / base_rows;
-			row_idx = offset % base_rows;
+		// 前半部分列拥有较少的行数（窗口更大），后半部分列承担余数（窗口更小）
+		if (i < first_group_count) {
+			col_idx = i / base_rows;
+			row_idx = i % base_rows;
 			rows_in_this_col = base_rows;
+		} else {
+			int32_t offset = i - first_group_count;
+			col_idx = first_group_cols + (offset / (base_rows + 1));
+			row_idx = offset % (base_rows + 1);
+			rows_in_this_col = base_rows + 1;
 		}
 
 		// 计算 X 坐标和宽度 (最后一列吃掉剩余像素，防止缝隙)

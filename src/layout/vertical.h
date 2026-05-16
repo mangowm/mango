@@ -311,7 +311,11 @@ void vertical_fair(Monitor *m) {
 	}
 
 	int32_t base_cols = n / rows; // 每行的基础列数
-	int32_t remainder = n % rows; // 多出来的窗口，分配给前 remainder 行
+	int32_t remainder = n % rows; // 多出来的窗口
+
+	// 计算上半部分（大窗口）的行数和总窗口数
+	int32_t first_group_rows = rows - remainder;
+	int32_t first_group_count = first_group_rows * base_cols;
 
 	// 计算标准行高
 	int32_t row_height =
@@ -325,15 +329,16 @@ void vertical_fair(Monitor *m) {
 		int32_t row_idx, col_idx, cols_in_this_row;
 
 		// 判断当前窗口属于哪一行、哪一列
-		if (i < remainder * (base_cols + 1)) {
-			row_idx = i / (base_cols + 1);
-			col_idx = i % (base_cols + 1);
-			cols_in_this_row = base_cols + 1;
-		} else {
-			int32_t offset = i - remainder * (base_cols + 1);
-			row_idx = remainder + offset / base_cols;
-			col_idx = offset % base_cols;
+		// 上半部分行拥有较少的列数（窗口更宽），下半部分行承担余数（窗口更窄）
+		if (i < first_group_count) {
+			row_idx = i / base_cols;
+			col_idx = i % base_cols;
 			cols_in_this_row = base_cols;
+		} else {
+			int32_t offset = i - first_group_count;
+			row_idx = first_group_rows + (offset / (base_cols + 1));
+			col_idx = offset % (base_cols + 1);
+			cols_in_this_row = base_cols + 1;
 		}
 
 		// 计算 Y 坐标和高度 (最后一行吃掉剩余像素)
