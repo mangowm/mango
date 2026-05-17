@@ -1924,13 +1924,7 @@ int32_t toggle_all_floating(const Arg *arg) {
 	return 0;
 }
 
-int32_t dwindle_toggle_split_direction(const Arg *arg) {
-	if (!selmon || !selmon->sel)
-		return 0;
-
-	Client *c = selmon->sel;
-	if (!c || !c->mon || c->isfloating)
-		return 0;
+int32_t dwindle_set_split_direction(Client *c, bool istoggle, bool horizontal) {
 
 	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
 
@@ -1943,8 +1937,44 @@ int32_t dwindle_toggle_split_direction(const Arg *arg) {
 	if (!leaf)
 		return 0;
 
-	leaf->custom_leaf_split_h = !leaf->custom_leaf_split_h;
+	if (istoggle) {
+		leaf->custom_leaf_split_h = !leaf->custom_leaf_split_h;
+	} else if (horizontal) {
+		leaf->custom_leaf_split_h = true;
+	} else {
+		leaf->custom_leaf_split_h = false;
+	}
 	bool hit_no_border = check_hit_no_border(c);
 	apply_split_border(c, hit_no_border);
 	return 0;
+}
+
+int32_t dwindle_toggle_split_direction(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return 0;
+
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating)
+		return 0;
+	return dwindle_set_split_direction(selmon->sel, true, false);
+}
+
+int32_t dwindle_split_horizontal(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return 0;
+
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating)
+		return 0;
+	return dwindle_set_split_direction(selmon->sel, false, true);
+}
+
+int32_t dwindle_split_vertical(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return 0;
+
+	Client *c = selmon->sel;
+	if (!c || !c->mon || c->isfloating)
+		return 0;
+	return dwindle_set_split_direction(selmon->sel, false, false);
 }

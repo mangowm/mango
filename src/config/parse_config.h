@@ -1205,6 +1205,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = toggle_all_floating;
 	} else if (strcmp(func_name, "dwindle_toggle_split_direction") == 0) {
 		func = dwindle_toggle_split_direction;
+	} else if (strcmp(func_name, "dwindle_split_horizontal") == 0) {
+		func = dwindle_split_horizontal;
+	} else if (strcmp(func_name, "dwindle_split_vertical") == 0) {
+		func = dwindle_split_vertical;
 	} else {
 		return NULL;
 	}
