@@ -253,7 +253,7 @@ void apply_split_border(Client *c, bool hit_no_border) {
 
 	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
 
-	if (hit_no_border || layout->id != DWINDLE ||
+	if (hit_no_border || !ISTILED(c) || layout->id != DWINDLE ||
 		!config.dwindle_manual_split) {
 		if (c->splitindicator[0]->node.enabled) {
 			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
