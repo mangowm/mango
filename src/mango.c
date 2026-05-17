@@ -5066,6 +5066,10 @@ void exchange_two_client(Client *c1, Client *c2) {
 	double master_inner_per = 0.0f;
 	double master_mfact_per = 0.0f;
 	double stack_inner_per = 0.0f;
+	double grid_col_per = 0.0f;
+	double grid_row_per = 0.0f;
+	int32_t grid_col_idx = 0;
+	int32_t grid_row_idx = 0;
 	struct ScrollerStackNode *n1 = NULL;
 	struct ScrollerStackNode *n2 = NULL;
 	struct TagScrollerState *st1 = NULL;
@@ -5075,6 +5079,19 @@ void exchange_two_client(Client *c1, Client *c2) {
 		(!config.exchange_cross_monitor && c1->mon != c2->mon)) {
 		return;
 	}
+
+	grid_col_per = c1->grid_col_per;
+	grid_row_per = c1->grid_row_per;
+	grid_col_idx = c1->grid_col_idx;
+	grid_row_idx = c1->grid_row_idx;
+	c1->grid_col_per = c2->grid_col_per;
+	c1->grid_row_per = c2->grid_row_per;
+	c1->grid_col_idx = c2->grid_col_idx;
+	c1->grid_row_idx = c2->grid_row_idx;
+	c2->grid_col_per = grid_col_per;
+	c2->grid_row_per = grid_row_per;
+	c2->grid_col_idx = grid_col_idx;
+	c2->grid_row_idx = grid_row_idx;
 
 	master_inner_per = c1->master_inner_per;
 	master_mfact_per = c1->master_mfact_per;
@@ -5103,11 +5120,8 @@ void exchange_two_client(Client *c1, Client *c2) {
 		n2 = find_scroller_node(st2, c2);
 	}
 
-	if (!n1 || !n2)
-		goto exchange_common;
-
+	/* ------- 两个客户端都在 scroller 堆叠中的处理 ------- */
 	if (n1 && n2) {
-
 		/* 跨显示器且任一方有堆叠关系时不允许交换 */
 		if (m1 != m2 && (n1->prev_in_stack || n2->prev_in_stack ||
 						 n1->next_in_stack || n2->next_in_stack))
@@ -5170,19 +5184,68 @@ void exchange_two_client(Client *c1, Client *c2) {
 			}
 
 			sync_scroller_state_to_clients(m1, tag1);
-			arrange(m1, false, false);
-		} else {
-			/* 不同堆叠：交换两个堆叠整体位置 */
-			if (n1 != head1 || n2 != head2) {
-				/* 当前不是头部，递归交换头部 */
-				exchange_two_client(head1->client, head2->client);
-				return;
-			}
+			goto arrange_and_finish; /* 已完成，不再执行普通链表交换 */
 		}
+
+		/* ------- 不同堆叠整体交换 ------- */
+		Client *head1_c = head1->client;
+		Client *head2_c = head2->client;
+		Client *tail1_c = scroll_get_stack_tail_client(head1_c);
+		Client *tail2_c = scroll_get_stack_tail_client(head2_c);
+
+		struct wl_list *p1 = head1_c->link.prev;
+		struct wl_list *n1_list = tail1_c->link.next;
+		struct wl_list *p2 = head2_c->link.prev;
+		struct wl_list *n2_list = tail2_c->link.next;
+
+		if (n1_list == &head2_c->link) {
+			/* 堆叠1紧接堆叠2之后: …→[堆1]→[堆2]→… */
+			/* 摘下堆叠2 */
+			p2->next = n2_list;
+			n2_list->prev = p2;
+			/* 将堆叠2插入到 p1 与 head1 之间 */
+			p1->next = &head2_c->link;
+			head2_c->link.prev = p1;
+			tail2_c->link.next = &head1_c->link;
+			head1_c->link.prev = &tail2_c->link;
+		} else if (n2_list == &head1_c->link) {
+			/* 堆叠2紧接堆叠1之后: …→[堆2]→[堆1]→… */
+			/* 摘下堆叠1 */
+			p1->next = n1_list;
+			n1_list->prev = p1;
+			/* 将堆叠1插入到 p2 与 head2 之间 */
+			p2->next = &head1_c->link;
+			head1_c->link.prev = p2;
+			tail1_c->link.next = &head2_c->link;
+			head2_c->link.prev = &tail1_c->link;
+		} else {
+			/* 两个堆叠不相邻 */
+			p1->next = &head2_c->link;
+			head2_c->link.prev = p1;
+			tail2_c->link.next = n1_list;
+			n1_list->prev = &tail2_c->link;
+
+			p2->next = &head1_c->link;
+			head1_c->link.prev = p2;
+			tail1_c->link.next = n2_list;
+			n2_list->prev = &tail1_c->link;
+		}
+
+		/* 跨显示器时需要交换 mon 和 tags（此时必为单客户端堆叠） */
+		if (m1 != m2) {
+			tmp_mon = c2->mon;
+			tmp_tags = c2->tags;
+			c2->mon = c1->mon;
+			c1->mon = tmp_mon;
+			c2->tags = c1->tags;
+			c1->tags = tmp_tags;
+		}
+
+		/* scroller 交换结束，统一进行 arrange */
+		goto arrange_and_finish;
 	}
 
-exchange_common:
-
+	/* ------- 至少一方不在 scroller 中的通用交换 ------- */
 	/* 跨显示器且任一方有堆叠关系时不允许交换 */
 	if (m1 != m2 && ((n1 && n1->prev_in_stack) || (n2 && n2->prev_in_stack) ||
 					 (n1 && n1->next_in_stack) || (n2 && n2->next_in_stack)))
@@ -5219,11 +5282,9 @@ exchange_common:
 	}
 
 	const Layout *layout1 = c1->mon->pertag->ltidxs[c1->mon->pertag->curtag];
-
 	const Layout *layout2 = c2->mon->pertag->ltidxs[c2->mon->pertag->curtag];
 
 	if (c1->mon != c2->mon) {
-
 		if (layout1->id == DWINDLE && layout2->id == DWINDLE) {
 			DwindleNode **c1_root =
 				&m1->pertag->dwindle_root[m1->pertag->curtag];
@@ -5258,8 +5319,19 @@ exchange_common:
 		arrange(c1->mon, false, false);
 	}
 
-	// In order to facilitate repeated exchanges for get_focused_stack_client
-	// set c2 focus order behind c1
+	/* 调整焦点顺序（方便重复交换） */
+	wl_list_remove(&c2->flink);
+	wl_list_insert(&c1->flink, &c2->flink);
+	return;
+
+arrange_and_finish:
+	/* 统一 arrange 和焦点调整 */
+	if (c1->mon != c2->mon) {
+		arrange(c1->mon, false, false);
+		arrange(c2->mon, false, false);
+	} else {
+		arrange(c1->mon, false, false);
+	}
 	wl_list_remove(&c2->flink);
 	wl_list_insert(&c1->flink, &c2->flink);
 }
