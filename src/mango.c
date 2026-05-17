@@ -585,6 +585,19 @@ struct DwindleNode {
 	Client *client;
 };
 
+typedef struct FairColNode FairColNode;
+struct FairColNode {
+  float ratio;
+  int n_rows;
+  float row_ratios[32];
+};
+
+typedef struct FairState FairState;
+struct FairState {
+    int           n_cols;
+    struct FairColNode cols[32];
+};
+
 struct ScrollerStackNode {
 	Client *client;
 	float scroller_proportion;
@@ -1004,6 +1017,7 @@ struct Pertag {
 	int32_t no_render_border[LENGTH(tags) + 1];
 	int32_t open_as_floating[LENGTH(tags) + 1];
 	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
+  struct FairState *fair_state[LENGTH(tags) + 1];
 	const Layout *ltidxs[LENGTH(tags) + 1];
 	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];
 };
@@ -2539,6 +2553,7 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 
 	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);
+  cleanup_monitor_fair(m);
 
 	free(m->pertag);
 	free(m);
