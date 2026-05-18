@@ -874,16 +874,17 @@ void fair(Monitor *m) {
 	if (n == 0)
 		return;
 
+	// 获取间距配置
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
 	int32_t cur_gappih = enablegaps ? m->gappih : 0;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
 
-	cur_gappiv = config.smartgaps && n == 1 ? 0 : cur_gappiv;
-	cur_gappih = config.smartgaps && n == 1 ? 0 : cur_gappih;
-	cur_gappov = config.smartgaps && n == 1 ? 0 : cur_gappov;
-	cur_gappoh = config.smartgaps && n == 1 ? 0 : cur_gappoh;
+	if (config.smartgaps && n == 1) {
+		cur_gappiv = cur_gappih = cur_gappov = cur_gappoh = 0;
+	}
 
+	// 计算网格行列数
 	int32_t cols;
 	for (cols = 0; cols <= n; cols++) {
 		if (cols * cols >= n)
@@ -896,56 +897,130 @@ void fair(Monitor *m) {
 	int32_t first_group_count = first_group_cols * base_rows;
 	int32_t max_rows = base_rows + (remainder > 0 ? 1 : 0);
 
+	// 将有效客户端存入数组
+	Client *arr[n];
+	int32_t arr_idx = 0;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISTILED(c)) {
+			arr[arr_idx++] = c;
+			if (arr_idx >= n)
+				break; // 安全边界
+		}
+	}
+
+	// 初始化比例数组
 	float col_pers[cols];
 	float row_pers[max_rows];
 	for (i = 0; i < cols; i++)
-		col_pers[i] = 1.0f;
+		col_pers[i] = 0.0f;
 	for (i = 0; i < max_rows; i++)
-		row_pers[i] = 1.0f;
+		row_pers[i] = 0.0f;
 
-	i = 0;
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
-			continue;
-		int32_t col_idx, row_idx;
-		if (i < first_group_count) {
-			col_idx = i / base_rows;
-			row_idx = i % base_rows;
-		} else {
-			int32_t offset = i - first_group_count;
-			col_idx = first_group_cols + (offset / (base_rows + 1));
-			row_idx = offset % (base_rows + 1);
-		}
+	// 直接基于数组进行两遍比例锁定
+	for (i = 0; i < n; i++) {
+		c = arr[i];
+		int32_t col_idx =
+			(i < first_group_count)
+				? (i / base_rows)
+				: (first_group_cols + (i - first_group_count) / max_rows);
+		int32_t row_idx = (i < first_group_count)
+							  ? (i % base_rows)
+							  : ((i - first_group_count) % max_rows);
 
-		if (row_idx == 0)
-			col_pers[col_idx] =
-				(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
-		if (col_idx == 0)
-			row_pers[row_idx] =
-				(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
-		i++;
+		if (c->grid_col_idx == col_idx && c->grid_col_per > 0.0f)
+			col_pers[col_idx] = c->grid_col_per;
+		if (c->grid_row_idx == row_idx && c->grid_row_per > 0.0f)
+			row_pers[row_idx] = c->grid_row_per;
+	}
+	for (i = 0; i < n; i++) {
+		c = arr[i];
+		int32_t col_idx =
+			(i < first_group_count)
+				? (i / base_rows)
+				: (first_group_cols + (i - first_group_count) / max_rows);
+		int32_t row_idx = (i < first_group_count)
+							  ? (i % base_rows)
+							  : ((i - first_group_count) % max_rows);
+
+		if (col_pers[col_idx] == 0.0f && c->grid_col_per > 0.0f)
+			col_pers[col_idx] = c->grid_col_per;
+		if (row_pers[row_idx] == 0.0f && c->grid_row_per > 0.0f)
+			row_pers[row_idx] = c->grid_row_per;
 	}
 
+	// 兜底策略与总权重计算
 	float sum_col = 0.0f;
-	for (i = 0; i < cols; i++)
+	for (i = 0; i < cols; i++) {
+		if (col_pers[i] == 0.0f)
+			col_pers[i] = 1.0f;
 		sum_col += col_pers[i];
+	}
+	for (i = 0; i < max_rows; i++) {
+		if (row_pers[i] == 0.0f)
+			row_pers[i] = 1.0f;
+	}
+
+	// 预计算所有列的 X 坐标和宽度
+	float col_x[cols], col_w[cols];
 	float avail_w = m->w.width - 2 * cur_gappoh - (cols - 1) * cur_gappih;
+	float next_x = m->w.x + cur_gappoh;
+	for (i = 0; i < cols; i++) {
+		col_x[i] = next_x;
+		col_w[i] = (i == cols - 1) ? (m->w.x + m->w.width - cur_gappoh - next_x)
+								   : (avail_w * (col_pers[i] / sum_col));
+		next_x += col_w[i] + cur_gappih;
+	}
 
-	i = 0;
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
-			continue;
+	// 预计算两组不同的行几何参数（解决不同列行数不一致的问题）
+	float row_y_base[base_rows], row_h_base[base_rows];
+	float sum_row_base = 0.0f;
+	for (i = 0; i < base_rows; i++)
+		sum_row_base += row_pers[i];
+	float avail_h_base =
+		m->w.height - 2 * cur_gappov - (base_rows - 1) * cur_gappiv;
+	float next_y = m->w.y + cur_gappov;
+	for (i = 0; i < base_rows; i++) {
+		row_y_base[i] = next_y;
+		row_h_base[i] = (i == base_rows - 1)
+							? (m->w.y + m->w.height - cur_gappov - next_y)
+							: (avail_h_base * (row_pers[i] / sum_row_base));
+		next_y += row_h_base[i] + cur_gappiv;
+	}
 
-		int32_t col_idx, row_idx, rows_in_this_col;
+	float row_y_max[max_rows], row_h_max[max_rows];
+	if (remainder > 0) {
+		float sum_row_max = 0.0f;
+		for (i = 0; i < max_rows; i++)
+			sum_row_max += row_pers[i];
+		float avail_h_max =
+			m->w.height - 2 * cur_gappov - (max_rows - 1) * cur_gappiv;
+		next_y = m->w.y + cur_gappov;
+		for (i = 0; i < max_rows; i++) {
+			row_y_max[i] = next_y;
+			row_h_max[i] = (i == max_rows - 1)
+							   ? (m->w.y + m->w.height - cur_gappov - next_y)
+							   : (avail_h_max * (row_pers[i] / sum_row_max));
+			next_y += row_h_max[i] + cur_gappiv;
+		}
+	}
+
+	// 最终渲染布局
+	for (i = 0; i < n; i++) {
+		c = arr[i];
+		int32_t col_idx, row_idx;
+		float fl_cx, fl_cy, fl_cw, fl_ch;
+
 		if (i < first_group_count) {
 			col_idx = i / base_rows;
 			row_idx = i % base_rows;
-			rows_in_this_col = base_rows;
+			fl_cy = row_y_base[row_idx];
+			fl_ch = row_h_base[row_idx];
 		} else {
 			int32_t offset = i - first_group_count;
-			col_idx = first_group_cols + (offset / (base_rows + 1));
-			row_idx = offset % (base_rows + 1);
-			rows_in_this_col = base_rows + 1;
+			col_idx = first_group_cols + (offset / max_rows);
+			row_idx = offset % max_rows;
+			fl_cy = row_y_max[row_idx];
+			fl_ch = row_h_max[row_idx];
 		}
 
 		c->grid_col_per = col_pers[col_idx];
@@ -953,25 +1028,8 @@ void fair(Monitor *m) {
 		c->grid_col_idx = col_idx;
 		c->grid_row_idx = row_idx;
 
-		float fl_cx = m->w.x + cur_gappoh;
-		for (int j = 0; j < col_idx; j++)
-			fl_cx += avail_w * (col_pers[j] / sum_col) + cur_gappih;
-		float fl_cw = (col_idx == cols - 1)
-						  ? (m->w.x + m->w.width - cur_gappoh - fl_cx)
-						  : avail_w * (col_pers[col_idx] / sum_col);
-
-		float sum_row_this_col = 0.0f;
-		for (int j = 0; j < rows_in_this_col; j++)
-			sum_row_this_col += row_pers[j];
-
-		float avail_h =
-			m->w.height - 2 * cur_gappov - (rows_in_this_col - 1) * cur_gappiv;
-		float fl_cy = m->w.y + cur_gappov;
-		for (int j = 0; j < row_idx; j++)
-			fl_cy += avail_h * (row_pers[j] / sum_row_this_col) + cur_gappiv;
-		float fl_ch = (row_idx == rows_in_this_col - 1)
-						  ? (m->w.y + m->w.height - cur_gappov - fl_cy)
-						  : avail_h * (row_pers[row_idx] / sum_row_this_col);
+		fl_cx = col_x[col_idx];
+		fl_cw = col_w[col_idx];
 
 		resize(c,
 			   (struct wlr_box){.x = (int32_t)fl_cx,
@@ -979,6 +1037,5 @@ void fair(Monitor *m) {
 								.width = (int32_t)fl_cw,
 								.height = (int32_t)fl_ch},
 			   0);
-		i++;
 	}
 }
