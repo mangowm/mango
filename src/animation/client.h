@@ -696,7 +696,7 @@ void client_apply_clip(Client *c, float factor) {
 	struct ivec2 offset;
 	BufferData buffer_data;
 
-	if (!config.animations) {
+	if (!config.animations && !c->mon->isoverview) {
 		c->animation.running = false;
 		c->need_output_flush = false;
 		c->animainit_geom = c->current = c->pending = c->animation.current =
@@ -1065,13 +1065,12 @@ void client_set_pending_state(Client *c) {
 	if (!c || c->iskilling)
 		return;
 
-	if (!config.animations) {
+	if (!config.animations && !c->mon->isoverview) {
 		c->animation.should_animate = false;
 	} else if (config.animations && c->animation.tagining) {
 		c->animation.should_animate = true;
-	} else if (!config.animations || c == grabc ||
-			   (!c->is_pending_open_animation &&
-				wlr_box_equal(&c->current, &c->pending))) {
+	} else if (c == grabc || (!c->is_pending_open_animation &&
+							  wlr_box_equal(&c->current, &c->pending))) {
 		c->animation.should_animate = false;
 	} else {
 		c->animation.should_animate = true;
@@ -1233,9 +1232,13 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animainit_geom = c->geom;
 	}
 
-	if (c->mon->isoverview && c != c->mon->sel &&
+	if (config.animations && c->mon->isoverview && c != c->mon->sel &&
 		c->animation.action == OVERVIEW) {
 		set_overview_enter_animation(c);
+	}
+
+	if (!config.animations && c->mon->isoverview) {
+		c->animainit_geom = c->geom;
 	}
 
 	// 开始应用动画设置
@@ -1401,7 +1404,7 @@ bool client_draw_frame(Client *c) {
 		return client_apply_focus_opacity(c);
 	}
 
-	if (config.animations && c->animation.running) {
+	if ((config.animations || c->mon->isoverview) && c->animation.running) {
 		client_animation_next_tick(c);
 	} else {
 		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
