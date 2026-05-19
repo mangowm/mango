@@ -175,7 +175,7 @@ enum {
 }; /* EWMH atoms */
 #endif
 enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
-enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT };
+enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT, OVERVIEW };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { PREV, NEXT };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
@@ -279,6 +279,7 @@ struct dwl_animation {
 	bool tagouting;
 	bool begin_fade_in;
 	bool tag_from_rule;
+	bool overining;
 	uint32_t time_started;
 	uint32_t duration;
 	struct wlr_box initial;
@@ -320,6 +321,7 @@ struct Client {
 	struct wlr_scene_rect *splitindicator[4];
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
+	struct wlr_scene_tree *overview_scene_surface;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -873,6 +875,7 @@ scroller_node_create(struct TagScrollerState *st, Client *c);
 static void update_scroller_state(Monitor *m);
 Client *scroll_get_stack_tail_client(Client *c);
 static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
+static void overview_backup_surface(Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -1078,6 +1081,7 @@ static struct wl_event_source *sync_keymap;
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
+#include "layout/overview.h"
 #include "layout/scroll.h"
 #include "layout/vertical.h"
 
@@ -4279,6 +4283,7 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 void init_client_properties(Client *c) {
 	c->grid_col_per = 1.0f;
 	c->grid_row_per = 1.0f;
+	c->overview_scene_surface = NULL;
 	c->drop_direction = UNDIR;
 	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
@@ -4399,6 +4404,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// init client geom
 	c->geom.width += 2 * c->bw;
 	c->geom.height += 2 * c->bw;
+	c->overview_backup_geom = c->geom;
 
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
@@ -4484,9 +4490,14 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// apply buffer effects of client
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
 								   iter_xdg_scene_buffers, c);
+	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
 
 	// set border color
 	setborder_color(c);
+
+	if (c->mon->isoverview && config.ov_no_resize) {
+		overview_backup_surface(c);
+	}
 
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
@@ -4854,7 +4865,8 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 
 	if (config.sloppyfocus && !start_drag_window && c && time && c->scene &&
 		c->scene->node.enabled && !c->animation.tagining &&
-		(surface != seat->pointer_state.focused_surface) &&
+		(surface != seat->pointer_state.focused_surface ||
+		 (selmon && selmon->isoverview && selmon->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		focusclient(c, 0);
 
@@ -6061,6 +6073,23 @@ uint32_t want_restore_fullscreen(Client *target_client) {
 	return 1;
 }
 
+void overview_backup_surface(Client *c) {
+	struct wlr_box clip_box;
+	clip_box.x = 0;
+	clip_box.y = 0;
+	clip_box.width = c->geom.width - 2 * config.borderpx;
+	clip_box.height = c->geom.height - 2 * config.borderpx;
+
+	c->overview_scene_surface = c->scene_surface;
+	wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+	wlr_scene_node_set_position(&c->scene_surface->node, 0, 0);
+	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+	c->scene_surface =
+		wlr_scene_tree_snapshot(&c->scene_surface->node, c->scene);
+	wlr_scene_node_set_enabled(&c->overview_scene_surface->node, false);
+	wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+}
+
 // 普通视图切换到overview时保存窗口的旧状态
 void overview_backup(Client *c) {
 	c->overview_isfloatingbak = c->isfloating;
@@ -6075,6 +6104,11 @@ void overview_backup(Client *c) {
 	if (c->isfloating) {
 		c->isfloating = 0;
 	}
+
+	if (config.ov_no_resize) {
+		overview_backup_surface(c);
+	}
+
 	if (c->isfullscreen || c->ismaximizescreen) {
 		client_pending_fullscreen_state(c, 0); // 清除窗口全屏标志
 		client_pending_maximized_state(c, 0);
@@ -6097,6 +6131,12 @@ void overview_restore(Client *c, const Arg *arg) {
 	c->bw = c->overview_backup_bw;
 	c->animation.tagining = false;
 	c->is_restoring_from_ov = (arg->ui & c->tags & TAGMASK) == 0 ? true : false;
+
+	if (c->overview_scene_surface) {
+		wlr_scene_node_destroy(&c->scene_surface->node);
+		c->scene_surface = c->overview_scene_surface;
+		c->overview_scene_surface = NULL;
+	}
 
 	if (c->isfloating) {
 		// XRaiseWindow(dpy, c->win); // 提升悬浮窗口到顶层

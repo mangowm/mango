@@ -252,10 +252,11 @@ typedef struct {
 	int32_t dwindle_manual_split;
 	float dwindle_split_ratio;
 
-	uint32_t hotarea_size;
-	uint32_t hotarea_corner;
-	uint32_t enable_hotarea;
-	uint32_t ov_tab_mode;
+	int32_t hotarea_size;
+	int32_t hotarea_corner;
+	int32_t enable_hotarea;
+	int32_t ov_tab_mode;
+	int32_t ov_no_resize;
 	int32_t overviewgappi;
 	int32_t overviewgappo;
 	uint32_t cursor_hide_timeout;
@@ -1655,6 +1656,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->enable_hotarea = atoi(value);
 	} else if (strcmp(key, "ov_tab_mode") == 0) {
 		config->ov_tab_mode = atoi(value);
+	} else if (strcmp(key, "ov_no_resize") == 0) {
+		config->ov_no_resize = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
@@ -3237,6 +3240,7 @@ void override_config(void) {
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
 	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
+	config.ov_no_resize = CLAMP_INT(config.ov_no_resize, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
@@ -3386,6 +3390,7 @@ void set_value_default() {
 	config.capslock = 0;
 
 	config.ov_tab_mode = 0;
+	config.ov_no_resize = 0;
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
 	config.enable_hotarea = 1;
