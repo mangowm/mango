@@ -175,7 +175,7 @@ enum {
 }; /* EWMH atoms */
 #endif
 enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
-enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT };
+enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT, OVERVIEW };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { PREV, NEXT };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
@@ -279,6 +279,7 @@ struct dwl_animation {
 	bool tagouting;
 	bool begin_fade_in;
 	bool tag_from_rule;
+	bool overining;
 	uint32_t time_started;
 	uint32_t duration;
 	struct wlr_box initial;
@@ -1078,6 +1079,7 @@ static struct wl_event_source *sync_keymap;
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
+#include "layout/overview.h"
 #include "layout/scroll.h"
 #include "layout/vertical.h"
 
@@ -4399,6 +4401,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// init client geom
 	c->geom.width += 2 * c->bw;
 	c->geom.height += 2 * c->bw;
+	c->overview_backup_geom = c->geom;
 
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
@@ -4854,7 +4857,7 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 
 	if (config.sloppyfocus && !start_drag_window && c && time && c->scene &&
 		c->scene->node.enabled && !c->animation.tagining &&
-		(surface != seat->pointer_state.focused_surface) &&
+		(surface != seat->pointer_state.focused_surface || (selmon && selmon->isoverview && selmon->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		focusclient(c, 0);
 

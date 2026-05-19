@@ -73,6 +73,14 @@ int32_t is_special_animation_rule(Client *c) {
 	}
 }
 
+void set_overview_enter_animation(Client *c) {
+	struct wlr_box geo = c->geom;
+	c->animainit_geom.width = geo.width * 1.2;
+	c->animainit_geom.height = geo.height * 1.2;
+	c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
+	c->animainit_geom.y = geo.y + (geo.height - c->animainit_geom.height) / 2;
+}
+
 void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t slide_direction;
 	int32_t horizontal, horizontal_value;
@@ -231,6 +239,30 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 									   buffer_data->corner_location);
 }
 
+void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
+										int32_t sx, int32_t sy, void *data) {
+	BufferData *buffer_data = (BufferData *)data;
+
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+
+	if (scene_surface == NULL)
+		return;
+
+	struct wlr_surface *surface = scene_surface->surface;
+
+	if (buffer_data->width > 0 && buffer_data->height > 0) {
+		wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
+									   buffer_data->height);
+	}
+
+	if (wlr_xdg_popup_try_from_wlr_surface(surface) != NULL)
+		return;
+
+	wlr_scene_buffer_set_corner_radius(buffer, config.border_radius,
+									   buffer_data->corner_location);
+}
+
 void buffer_set_effect(Client *c, BufferData data) {
 
 	if (!c || c->iskilling)
@@ -250,8 +282,13 @@ void buffer_set_effect(Client *c, BufferData data) {
 		data.corner_location = CORNER_LOCATION_NONE;
 	}
 
-	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
-								   scene_buffer_apply_effect, &data);
+	if (c->mon->isoverview) {
+		wlr_scene_node_for_each_buffer(
+			&c->scene_surface->node, scene_buffer_apply_overview_effect, &data);
+	} else {
+		wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+									   scene_buffer_apply_effect, &data);
+	}
 }
 
 void client_draw_shadow(Client *c) {
@@ -841,7 +878,18 @@ void client_apply_clip(Client *c, float factor) {
 	}
 
 	// 应用窗口表面剪切
-	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+	if (!c->mon->isoverview) {
+		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+	} else {
+		struct wlr_box ov_surface_box = c->geom;
+		ov_surface_box.x = 0;
+		ov_surface_box.y = 0;
+		ov_surface_box.width = c->mon->m.width - 2 * c->bw;
+		ov_surface_box.height = c->mon->m.height - 2 * c->bw;
+		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
+										   &ov_surface_box);
+		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+	}
 
 	// 获取剪切后的表面的实际大小用于计算缩放
 	int32_t acutal_surface_width = geometry.width - offset.x - offset.width;
@@ -949,6 +997,10 @@ void client_animation_next_tick(Client *c) {
 			? (double)passed_time / (double)c->animation.duration
 			: 1.0;
 
+	if (c->mon->isoverview && animation_passed >= 1.0) {
+		animation_passed = 1.0;
+	}
+
 	int32_t type = c->animation.action == NONE ? MOVE : c->animation.action;
 	double factor = find_animation_curve_at(animation_passed, type);
 
@@ -978,7 +1030,10 @@ void client_animation_next_tick(Client *c) {
 
 	client_apply_clip(c, factor);
 
-	if (animation_passed >= 1.0) {
+	if (c->mon->isoverview && animation_passed >= 1.0) {
+		c->animation.overining = false;
+		return;
+	} else if (animation_passed >= 1.0) {
 
 		// clear the open action state
 		// To prevent him from being mistaken that
@@ -1201,8 +1256,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animation.begin_fade_in = false;
 	}
 
-	if (c->animation.action == OPEN && !c->animation.tagining &&
-		!c->animation.tagouting && wlr_box_equal(&c->geom, &c->current)) {
+	if (c->animation.overining) {
+		c->animation.action = OVERVIEW;
+	} else if (c->animation.action == OPEN && !c->animation.tagining &&
+			   !c->animation.tagouting &&
+			   wlr_box_equal(&c->geom, &c->current)) {
 		c->animation.action = c->animation.action;
 	} else if (c->animation.tagouting) {
 		c->animation.duration = config.animation_duration_tag;
@@ -1241,8 +1299,9 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	}
 
 	// c->geom 是真实的窗口大小和位置，跟过度的动画无关，用于计算布局
-	c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
-										  c->geom.height - 2 * c->bw);
+	if (!c->mon->isoverview)
+		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
+											  c->geom.height - 2 * c->bw);
 
 	if (c->configure_serial != 0) {
 		c->mon->resizing_count_pending++;
@@ -1283,6 +1342,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 
 	if (c->scratchpad_switching_mon && c->isfloating) {
 		c->animainit_geom = c->geom;
+	}
+
+	if (c->mon->isoverview && c != c->mon->sel &&
+		c->animation.action == OVERVIEW) {
+		set_overview_enter_animation(c);
 	}
 
 	// 开始应用动画设置

@@ -1743,8 +1743,10 @@ int32_t toggleoverview(const Arg *arg) {
 
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !client_is_unmanaged(c) &&
-				!client_is_x11_popup(c) && !c->isunglobal)
+				!client_is_x11_popup(c) && !c->isunglobal) {
+				c->animation.overining = true;
 				overview_backup(c);
+			}
 		}
 	} else {
 		wl_list_for_each(c, &clients, link) {
