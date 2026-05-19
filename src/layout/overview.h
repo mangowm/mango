@@ -1,4 +1,3 @@
-// 紧凑型自适应行高概览布局 (Mission Control / GNOME 风格)
 void overview(Monitor *m) {
 	int32_t target_gappo =
 		enablegaps ? (m->isoverview ? config.overviewgappo : config.gappoh) : 0;
@@ -9,7 +8,6 @@ void overview(Monitor *m) {
 	if (n == 0)
 		return;
 
-	// 收集有效客户端，并提取它们原始的宽高比
 	Client *c_arr[n];
 	float aspects[n];
 	int actual_n = 0;
@@ -28,7 +26,6 @@ void overview(Monitor *m) {
 				aspect = (float)c->overview_backup_geom.width /
 						 c->overview_backup_geom.height;
 			}
-			// 限制极端宽高比，防止某个 1px 宽度的异常窗口毁掉整个布局的数学计算
 			if (aspect < 0.2f)
 				aspect = 0.2f;
 			if (aspect > 5.0f)
@@ -42,22 +39,12 @@ void overview(Monitor *m) {
 	if (n == 0)
 		return;
 
-	// 动态决定行数与列数分配 (例如 7 个窗口分发为 3, 2, 2)
-	int cols = 1;
-	while (cols * cols < n)
-		cols++;
-	int rows = (n + cols - 1) / cols;
-
-	int items_per_row[rows];
-	int remaining = n;
-	for (int r = 0; r < rows; r++) {
-		// 使用向上取整的除法，让首行尽可能多排布，视觉重心更稳
-		int count = (remaining + rows - r - 1) / (rows - r);
-		items_per_row[r] = count;
-		remaining -= count;
+	float suffix_sums[n + 1];
+	suffix_sums[n] = 0.0f;
+	for (int i = n - 1; i >= 0; i--) {
+		suffix_sums[i] = suffix_sums[i + 1] + aspects[i];
 	}
 
-	// 计算整个布局允许的最大可用区域 (留出四周安全边距)
 	float max_avail_w = m->w.width - 2 * target_gappo;
 	float max_avail_h = m->w.height - 2 * target_gappo;
 	if (max_avail_w < 10)
@@ -65,48 +52,104 @@ void overview(Monitor *m) {
 	if (max_avail_h < 10)
 		max_avail_h = 10;
 
-	// 计算能够满足所有限制条件的 "最大统一行高"
-	float A_sum[rows];		   // 每行窗口宽高比之和
-	float h_max_w = 999999.0f; // 受宽度限制推导出的行高上限
+	int best_rows = 1;
+	float best_row_height = 0.0f;
+	int best_items_per_row[n];
+	best_items_per_row[0] = n;
 
-	for (int r = 0; r < rows; r++) {
-		A_sum[r] = 0;
+	for (int R = 1; R <= n; R++) {
+		int temp_items_per_row[R];
 		int start_idx = 0;
-		for (int i = 0; i < r; i++)
-			start_idx += items_per_row[i];
 
-		for (int i = 0; i < items_per_row[r]; i++) {
-			A_sum[r] += aspects[start_idx + i];
+		for (int r = 0; r < R; r++) {
+			int rows_left = R - r;
+
+			float S_rem = suffix_sums[start_idx];
+			float target_sum = S_rem / rows_left;
+
+			float current_sum = 0;
+			int count = 0;
+
+			while (start_idx + count < n - (rows_left - 1)) {
+				float next_val = aspects[start_idx + count];
+				if (rows_left == 1) {
+					current_sum += next_val;
+					count++;
+					continue;
+				}
+
+				if (count > 0) {
+					float diff_without = fabs(current_sum - target_sum);
+					float diff_with = fabs(current_sum + next_val - target_sum);
+					if (diff_with > diff_without) {
+						break;
+					}
+				}
+				current_sum += next_val;
+				count++;
+			}
+			temp_items_per_row[r] = count;
+			start_idx += count;
 		}
 
-		// 这行所有的内部间隙总和
-		float gap_x_total = (items_per_row[r] - 1) * target_gappi;
-		// 保证最宽的一行也不会超出 max_avail_w
-		float h_limit = (max_avail_w - gap_x_total) / A_sum[r];
-		if (h_limit < h_max_w)
-			h_max_w = h_limit;
+		float min_h_max_w = 999999.0f;
+		start_idx = 0;
+		for (int r = 0; r < R; r++) {
+			float A_sum = suffix_sums[start_idx] -
+						  suffix_sums[start_idx + temp_items_per_row[r]];
+			start_idx += temp_items_per_row[r];
+
+			float gap_x_total = (temp_items_per_row[r] - 1) * target_gappi;
+			float w_avail = max_avail_w - gap_x_total;
+			if (w_avail < 1)
+				w_avail = 1;
+
+			float h_limit = w_avail / A_sum;
+			if (h_limit < min_h_max_w) {
+				min_h_max_w = h_limit;
+			}
+		}
+
+		float gap_y_total = (R - 1) * target_gappi;
+		float h_avail = max_avail_h - gap_y_total;
+		if (h_avail < 1)
+			h_avail = 1;
+
+		float h_max_h = h_avail / R;
+		float final_h = min_h_max_w < h_max_h ? min_h_max_w : h_max_h;
+
+		if (final_h > best_row_height) {
+			best_row_height = final_h;
+			best_rows = R;
+			for (int r = 0; r < R; r++) {
+				best_items_per_row[r] = temp_items_per_row[r];
+			}
+		}
 	}
 
+	int rows = best_rows;
+	float row_height = best_row_height;
+	int items_per_row[rows];
+	float A_sum[rows];
+
+	int current_render_idx = 0;
+	for (int r = 0; r < rows; r++) {
+		items_per_row[r] = best_items_per_row[r];
+		A_sum[r] = suffix_sums[current_render_idx] -
+				   suffix_sums[current_render_idx + items_per_row[r]];
+		current_render_idx += items_per_row[r];
+	}
 	float gap_y_total = (rows - 1) * target_gappi;
-	// 保证总行高不会超出 max_avail_h
-	float h_max_h = (max_avail_h - gap_y_total) / rows;
 
-	// 最终采用的行高是水平和垂直双向限制中最严苛的一个
-	float row_height = h_max_w < h_max_h ? h_max_w : h_max_h;
-
-	// 应用坐标并进行防撕裂渲染
 	float total_layout_height = rows * row_height + gap_y_total;
-	// 计算全局起点 Y，确保整个概览在屏幕垂直居中
 	float start_y = m->w.y + (m->w.height - total_layout_height) / 2.0f;
 
 	int current_idx = 0;
 	float current_y = start_y;
 
 	for (int r = 0; r < rows; r++) {
-		// 根据当前确定的行高，反推这行真实的像素宽度
 		float row_width =
 			row_height * A_sum[r] + (items_per_row[r] - 1) * target_gappi;
-		// 让当前这一排窗口在屏幕水平居中 (不满列数的行会自动居中对齐)
 		float current_x = m->w.x + (m->w.width - row_width) / 2.0f;
 
 		for (int i = 0; i < items_per_row[r]; i++) {
@@ -114,10 +157,6 @@ void overview(Monitor *m) {
 			float aspect = aspects[current_idx];
 			float client_width = row_height * aspect;
 
-			// 【关键防错位】累加 float 坐标，最后写入 client
-			// 时再强转+0.5四舍五入。
-			// 避免每次计算内部小间隙都丢弃浮点精度，导致最后多出或少出 1px
-			// 缝隙。
 			struct wlr_box client_geom;
 			client_geom.x = (int)(current_x + 0.5f);
 			client_geom.y = (int)(current_y + 0.5f);
