@@ -77,6 +77,19 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 	}
 }
 
+Client *xytoclient(double x, double y) {
+	Client *c = NULL, *tmp = NULL;
+	wl_list_for_each_safe(c, tmp, &clients, link) {
+		if (VISIBLEON(c, c->mon) && c->animation.current.x <= x &&
+			c->animation.current.y <= y &&
+			c->animation.current.x + c->animation.current.width >= x &&
+			c->animation.current.y + c->animation.current.height >= y) {
+			return c;
+		}
+	}
+	return NULL;
+}
+
 void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 			  LayerSurface **pl, double *nx, double *ny) {
 	struct wlr_scene_node *node, *pnode;
@@ -84,6 +97,7 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 	Client *c = NULL;
 	LayerSurface *l = NULL;
 	int32_t layer;
+	Client *ovc = NULL;
 
 	for (layer = NUM_LAYERS - 1; !surface && layer >= 0; layer--) {
 
@@ -96,10 +110,16 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		if (!node->enabled)
 			continue;
 
-		if (node->type == WLR_SCENE_NODE_BUFFER)
-			surface = wlr_scene_surface_try_from_buffer(
-						  wlr_scene_buffer_from_node(node))
-						  ->surface;
+		if (node->type == WLR_SCENE_NODE_BUFFER) {
+			struct wlr_scene_surface *scene_surface =
+				wlr_scene_surface_try_from_buffer(
+					wlr_scene_buffer_from_node(node));
+			if (scene_surface) {
+				surface = scene_surface->surface;
+			} else {
+				continue;
+			}
+		}
 
 		/*  start from the topmost layer,
 			find a sureface that can be focused by pointer,
@@ -130,4 +150,12 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		*pc = c;
 	if (pl)
 		*pl = l;
+
+	if (selmon && selmon->isoverview && !l) {
+		ovc = xytoclient(x, y);
+		if (pc)
+			*pc = ovc;
+		if (psurface && ovc)
+			*psurface = client_surface(ovc);
+	}
 }
