@@ -1,5 +1,12 @@
 bool check_hit_no_border(Client *c) {
 	bool hit_no_border = false;
+
+	if (!c->mon)
+		return false;
+
+	if (c->tags <= 0)
+		return false;
+
 	if (!render_border) {
 		hit_no_border = true;
 	}

@@ -6411,7 +6411,8 @@ void updatemons(struct wl_listener *listener, void *data) {
 				c->geom.x += mon_pos_offsetx;
 				c->geom.y += mon_pos_offsety;
 				c->float_geom = c->geom;
-				resize(c, c->geom, 1);
+				if (VISIBLEON(c, m))
+					resize(c, c->geom, 1);
 			}
 
 			// restore window to old monitor
