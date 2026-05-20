@@ -2,6 +2,45 @@
 
 static struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_manager;
 
+static bool foreign_toplevel_should_enter_output(Client *c) {
+	if (!c || !c->foreign_toplevel || !c->mon || !c->mon->wlr_output ||
+		!c->mon->wlr_output->enabled || !client_surface(c)->mapped ||
+		c->iskilling)
+		return false;
+
+	if (c->isglobal || c->isunglobal)
+		return true;
+
+	uint32_t taskbar_tags = c->isminimized ? c->mini_restore_tag : c->tags;
+	return taskbar_tags & c->mon->tagset[c->mon->seltags];
+}
+
+static void sync_foreign_toplevel_output(Client *c) {
+	if (!c || !c->foreign_toplevel || !c->mon || !c->mon->wlr_output)
+		return;
+
+	bool should_enter = foreign_toplevel_should_enter_output(c);
+
+	if (should_enter && !c->foreign_toplevel_output_entered) {
+		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
+													c->mon->wlr_output);
+		c->foreign_toplevel_output_entered = true;
+	} else if (!should_enter && c->foreign_toplevel_output_entered) {
+		wlr_foreign_toplevel_handle_v1_output_leave(c->foreign_toplevel,
+													c->mon->wlr_output);
+		c->foreign_toplevel_output_entered = false;
+	}
+}
+
+static void sync_foreign_toplevel_outputs(Monitor *m) {
+	Client *c = NULL;
+
+	wl_list_for_each(c, &clients, link) {
+		if (c && c->mon == m)
+			sync_foreign_toplevel_output(c);
+	}
+}
+
 void handle_foreign_activate_request(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, foreign_activate_request);
 	uint32_t target;
@@ -99,12 +138,14 @@ void handle_foreign_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&c->foreign_close_request.link);
 	wl_list_remove(&c->foreign_destroy.link);
 	c->foreign_toplevel = NULL;
+	c->foreign_toplevel_output_entered = false;
 }
 
 void add_foreign_toplevel(Client *c) {
 	if (!c || !c->mon || !c->mon->wlr_output || !c->mon->wlr_output->enabled)
 		return;
 
+	c->foreign_toplevel_output_entered = false;
 	c->foreign_toplevel =
 		wlr_foreign_toplevel_handle_v1_create(foreign_toplevel_manager);
 	// 监听来自外部对于窗口的事件请求
@@ -134,9 +175,7 @@ void add_foreign_toplevel(Client *c) {
 		if (title)
 			wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel,
 													 title);
-		// 设置外部顶层句柄的显示监视器为当前监视器
-		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
-													c->mon->wlr_output);
+		sync_foreign_toplevel_output(c);
 	}
 }
 
@@ -152,11 +191,12 @@ void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon) {
 	if (oldmon == newmon)
 		return;
 
-	if (oldmon)
+	if (oldmon && c->foreign_toplevel_output_entered) {
 		wlr_foreign_toplevel_handle_v1_output_leave(c->foreign_toplevel,
 													oldmon->wlr_output);
+		c->foreign_toplevel_output_entered = false;
+	}
 
 	if (newmon)
-		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
-													newmon->wlr_output);
+		sync_foreign_toplevel_output(c);
 }

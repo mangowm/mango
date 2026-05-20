@@ -351,6 +351,7 @@ struct Client {
 	bool dirty;
 	uint32_t configure_serial;
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
+	bool foreign_toplevel_output_entered;
 	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, isnosizehint,
 		ignore_maximize, ignore_minimize, indleinhibit_when_focus;
@@ -1232,8 +1233,11 @@ void swallow(Client *c, Client *w) {
 	wl_list_insert(&w->flink, &c->flink);
 
 	if (w->foreign_toplevel) {
-		wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
-													w->mon->wlr_output);
+		if (w->foreign_toplevel_output_entered) {
+			wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
+														w->mon->wlr_output);
+			w->foreign_toplevel_output_entered = false;
+		}
 		wlr_foreign_toplevel_handle_v1_destroy(w->foreign_toplevel);
 		w->foreign_toplevel = NULL;
 	}
@@ -1245,8 +1249,7 @@ void swallow(Client *c, Client *w) {
 	if (!c->foreign_toplevel && c->mon)
 		add_foreign_toplevel(c);
 	else if (c->foreign_toplevel && c->mon) {
-		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
-													c->mon->wlr_output);
+		sync_foreign_toplevel_output(c);
 	}
 
 	client_pending_fullscreen_state(c, w->isfullscreen);
@@ -2581,8 +2584,11 @@ void closemon(Monitor *m) {
 
 			if (selmon == NULL) {
 				if (c->foreign_toplevel) {
-					wlr_foreign_toplevel_handle_v1_output_leave(
-						c->foreign_toplevel, c->mon->wlr_output);
+					if (c->foreign_toplevel_output_entered) {
+						wlr_foreign_toplevel_handle_v1_output_leave(
+							c->foreign_toplevel, c->mon->wlr_output);
+						c->foreign_toplevel_output_entered = false;
+					}
 					wlr_foreign_toplevel_handle_v1_destroy(c->foreign_toplevel);
 					c->foreign_toplevel = NULL;
 				}
@@ -4513,6 +4519,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+	sync_foreign_toplevel_output(c);
 	printstatus();
 }
 
@@ -4541,6 +4548,7 @@ void unminimize(Client *c) {
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
 		setborder_color(c);
+		sync_foreign_toplevel_output(c);
 		return;
 	}
 
@@ -4551,6 +4559,7 @@ void unminimize(Client *c) {
 		c->isnamedscratchpad = 0;
 		setborder_color(c);
 		arrange(c->mon, false, false);
+		sync_foreign_toplevel_output(c);
 		return;
 	}
 }
@@ -4569,6 +4578,7 @@ void set_minimized(Client *c) {
 	c->is_scratchpad_show = 0;
 	focusclient(focustop(selmon), 1);
 	arrange(c->mon, false, false);
+	sync_foreign_toplevel_output(c);
 
 	if (c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel,
@@ -5637,6 +5647,7 @@ void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		check_match_tag_floating_rule(c, m);
 		setfloating(c, c->isfloating);
 		setfullscreen(c, c->isfullscreen); /* This will call arrange(c->mon) */
+		sync_foreign_toplevel_output(c);
 	}
 
 	if (focus && !client_is_x11_popup(c)) {
@@ -5678,6 +5689,7 @@ void show_hide_client(Client *c) {
 	}
 	client_pending_minimized_state(c, 0);
 	focusclient(c, 1);
+	sync_foreign_toplevel_output(c);
 
 	if (c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel, true);
@@ -6608,6 +6620,7 @@ toggleseltags:
 	if (changefocus)
 		focusclient(focustop(m), 1);
 	arrange(m, want_animation, true);
+	sync_foreign_toplevel_outputs(m);
 	printstatus();
 }
 
