@@ -1750,6 +1750,7 @@ int32_t toggleoverview(const Arg *arg) {
 			}
 		}
 	} else {
+		selmon->tagset[selmon->seltags] = target;
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !c->iskilling &&
 				!client_is_unmanaged(c) && !c->isunglobal &&
