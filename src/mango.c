@@ -1233,9 +1233,20 @@ void swallow(Client *c, Client *w) {
 	c->master_mfact_per = w->master_mfact_per;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
+	c->overview_backup_geom = w->overview_backup_geom;
 
 	/* 调整 w 的邻居指针，让它们指向 c */
 	c->stack_proportion = w->stack_proportion;
+
+	if (w->overview_scene_surface) {
+		wlr_scene_node_destroy(&w->scene_surface->node);
+		w->scene_surface = w->overview_scene_surface;
+		w->overview_scene_surface = NULL;
+	}
+
+	if (c->mon && c->mon->isoverview) {
+		overview_backup_surface(c);
+	}
 
 	/* 全局链表替换 */
 	wl_list_insert(&w->link, &c->link);
@@ -6084,11 +6095,16 @@ uint32_t want_restore_fullscreen(Client *target_client) {
 }
 
 void overview_backup_surface(Client *c) {
+
+	if (c->overview_scene_surface) {
+		return;
+	}
+
 	struct wlr_box clip_box;
 	clip_box.x = 0;
 	clip_box.y = 0;
-	clip_box.width = c->geom.width - 2 * config.borderpx;
-	clip_box.height = c->geom.height - 2 * config.borderpx;
+	clip_box.width = c->overview_backup_geom.width - 2 * config.borderpx;
+	clip_box.height = c->overview_backup_geom.height - 2 * config.borderpx;
 
 	c->overview_scene_surface = c->scene_surface;
 	wlr_scene_node_set_enabled(&c->scene_surface->node, true);

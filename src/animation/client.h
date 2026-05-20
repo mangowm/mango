@@ -953,6 +953,10 @@ void init_fadeout_client(Client *c) {
 
 	wlr_scene_node_set_enabled(&c->scene->node, true);
 	client_set_border_color(c, config.bordercolor);
+	if (c->overview_scene_surface) {
+		wlr_scene_node_destroy(&c->overview_scene_surface->node);
+		c->overview_scene_surface = NULL;
+	}
 	fadeout_client->scene =
 		wlr_scene_tree_snapshot(&c->scene->node, layers[LyrFadeOut]);
 	wlr_scene_node_set_enabled(&c->scene->node, false);
