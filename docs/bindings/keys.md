@@ -148,6 +148,8 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `incgaps` | `+/-value` | Adjust gap size. |
 | `togglegaps` | - | Toggle gaps. |
 |  `dwindle_toggle_split_direction` | - | Toggle split direction in dwindle layout. |
+| `dwindle_split_horizontal` | - | Set split window direction to horizontal in dwindle layout. |
+| `dwindle_split_vertical` | - | Set split window direction to vertical in dwindle layout. |
 
 ### System
 
