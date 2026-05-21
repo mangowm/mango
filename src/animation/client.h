@@ -225,10 +225,30 @@ void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
 										int32_t sx, int32_t sy, void *data) {
 	BufferData *buffer_data = (BufferData *)data;
 
-	if (buffer_data->width > 0 && buffer_data->height > 0) {
-		wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
-									   buffer_data->height);
+	if (buffer_data->width_scale >= 1.0 || buffer_data->height_scale >= 1.0)
+		return;
+
+	int32_t surface_width = 0;
+	int32_t surface_height = 0;
+	bool is_subsurface = false;
+
+	struct wlr_scene_tree *parent_tree = buffer->node.parent;
+	if (parent_tree->node.data != NULL) {
+		SnapshotMetadata *meta = (SnapshotMetadata *)parent_tree->node.data;
+		surface_width = meta->orig_width;
+		surface_height = meta->orig_height;
+		is_subsurface = meta->is_subsurface;
 	}
+
+	surface_height = surface_height * buffer_data->height_scale;
+	surface_width = surface_width * buffer_data->width_scale;
+
+	if (buffer_data->width > 0 && buffer_data->height > 0) {
+		wlr_scene_buffer_set_dest_size(buffer, surface_width, surface_height);
+	}
+
+	if (is_subsurface)
+		return;
 }
 
 void buffer_set_effect(Client *c, BufferData data) {

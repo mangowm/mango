@@ -617,6 +617,13 @@ struct TagScrollerState {
 	int count;
 };
 
+typedef struct {
+	int32_t orig_width;
+	int32_t orig_height;
+	bool is_subsurface;
+	struct wl_listener destroy;
+} SnapshotMetadata;
+
 /* function declarations */
 static void applybounds(
 	Client *c,
