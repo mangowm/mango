@@ -34,7 +34,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
-| `indleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
 
 ### Geometry & Position
 

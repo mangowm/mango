@@ -358,7 +358,7 @@ struct Client {
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, isnosizehint,
-		ignore_maximize, ignore_minimize, indleinhibit_when_focus;
+		ignore_maximize, ignore_minimize, idleinhibit_when_focus;
 	int32_t ismaximizescreen;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
@@ -1524,7 +1524,7 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
 	APPLY_INT_PROP(c, r, isnosizehint);
-	APPLY_INT_PROP(c, r, indleinhibit_when_focus);
+	APPLY_INT_PROP(c, r, idleinhibit_when_focus);
 	APPLY_INT_PROP(c, r, isunglobal);
 	APPLY_INT_PROP(c, r, allow_shortcuts_inhibit);
 
@@ -4305,7 +4305,7 @@ void init_client_properties(Client *c) {
 	c->force_tiled_state = 1;
 	c->force_tearing = 0;
 	c->allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
-	c->indleinhibit_when_focus = 0;
+	c->idleinhibit_when_focus = 0;
 	c->scroller_proportion_single = 0.0f;
 	c->float_geom.width = 0;
 	c->float_geom.height = 0;
@@ -6253,7 +6253,7 @@ int32_t hidecursor(void *data) {
 }
 
 void check_keep_idle_inhibit(Client *c) {
-	if (c && c->indleinhibit_when_focus && keep_idle_inhibit_source) {
+	if (c && c->idleinhibit_when_focus && keep_idle_inhibit_source) {
 		wl_event_source_timer_update(keep_idle_inhibit_source, 1000);
 	}
 }
@@ -6270,7 +6270,7 @@ int32_t keep_idle_inhibit(void *data) {
 		return 1;
 	}
 
-	if (!selmon || !selmon->sel || !selmon->sel->indleinhibit_when_focus) {
+	if (!selmon || !selmon->sel || !selmon->sel->idleinhibit_when_focus) {
 		wl_event_source_timer_update(keep_idle_inhibit_source, 0);
 		return 1;
 	}
