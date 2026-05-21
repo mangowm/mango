@@ -6100,11 +6100,19 @@ void overview_backup_surface(Client *c) {
 		return;
 	}
 
-	struct wlr_box clip_box;
-	clip_box.x = 0;
-	clip_box.y = 0;
-	clip_box.width = c->overview_backup_geom.width - 2 * config.borderpx;
-	clip_box.height = c->overview_backup_geom.height - 2 * config.borderpx;
+	struct wlr_box geometry;
+	client_get_geometry(c, &geometry);
+	struct wlr_box clip_box = (struct wlr_box){
+		.x = geometry.x,
+		.y = geometry.y,
+		.width = c->overview_backup_geom.width - 2 * config.borderpx,
+		.height = c->overview_backup_geom.height - 2 * config.borderpx,
+	};
+
+	if (client_is_x11(c)) {
+		clip_box.x = 0;
+		clip_box.y = 0;
+	}
 
 	c->overview_scene_surface = c->scene_surface;
 	wlr_scene_node_set_enabled(&c->scene_surface->node, true);
