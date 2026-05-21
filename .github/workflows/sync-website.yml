@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   sync-website:
+    if: github.repository == 'mangowm/mango'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
