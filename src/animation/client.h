@@ -243,8 +243,11 @@ void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
 	surface_height = surface_height * buffer_data->height_scale;
 	surface_width = surface_width * buffer_data->width_scale;
 
-	if (buffer_data->width > 0 && buffer_data->height > 0) {
+	if (is_subsurface && surface_width > 0 && surface_height > 0) {
 		wlr_scene_buffer_set_dest_size(buffer, surface_width, surface_height);
+	} else if (buffer_data->height > 0 && buffer_data->width > 0) {
+		wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
+									   buffer_data->height);
 	}
 
 	if (is_subsurface)
