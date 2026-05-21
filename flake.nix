@@ -3,8 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     scenefx = {
-      url = "github:wlrfx/scenefx";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:wlrfx/scenefx?rev=3a6cfb12e4ba97b43326357d14f7b3e40897adfc";
     };
   };
 
