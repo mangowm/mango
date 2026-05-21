@@ -175,7 +175,6 @@ void overview_scale(Monitor *m) {
 	}
 
 	if (best_s > 0.0f) {
-		float box_w = 0, box_h = 0;
 		int placed_cnt = 0;
 
 		for (int k = 0; k < n; k++) {
@@ -185,9 +184,43 @@ void overview_scale(Monitor *m) {
 			try_place(placed, placed_cnt, w, h, (float)target_gappi,
 					  max_avail_w, max_avail_h, &out, cands, feas);
 			placed[placed_cnt++] = out;
+		}
 
-			float r = out.x + w;
-			float b = out.y + h;
+		if (n > 1) {
+			float grid_box_w = 0;
+			for (int k = 0; k < n - 1; k++) {
+				float r = placed[k].x + placed[k].w;
+				if (r > grid_box_w)
+					grid_box_w = r;
+			}
+
+			OvPlacedRect *last = &placed[n - 1];
+			float max_x = grid_box_w - last->w;
+
+			if (max_x > last->x) {
+				for (int k = 0; k < n - 1; k++) {
+					OvPlacedRect p = placed[k];
+					if (!(last->y + last->h + target_gappi <= p.y ||
+						  last->y >= p.y + p.h + target_gappi)) {
+						if (p.x > last->x) {
+							float limit = p.x - target_gappi - last->w;
+							if (limit < max_x) {
+								max_x = limit;
+							}
+						}
+					}
+				}
+
+				if (max_x > last->x) {
+					last->x += (max_x - last->x) / 2.0f;
+				}
+			}
+		}
+
+		float box_w = 0, box_h = 0;
+		for (int k = 0; k < n; k++) {
+			float r = placed[k].x + placed[k].w;
+			float b = placed[k].y + placed[k].h;
 			if (r > box_w)
 				box_w = r;
 			if (b > box_h)
