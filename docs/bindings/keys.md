@@ -126,7 +126,9 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `tag` | `1-9 [,synctag]` | Move window to tag. Optional `synctag` (0/1) syncs to all monitors. |
 | `tagsilent` | `1-9` | Move window to tag without focusing it. |
 | `tagtoleft` | `[synctag]` | Move window to left tag. Optional `synctag` (0/1). |
+| `tagtoleftsilent` | `[synctag]` | Move window to left tag without focusing it. Optional `synctag` (0/1). |
 | `tagtoright` | `[synctag]` | Move window to right tag. Optional `synctag` (0/1). |
+| `tagtorightsilent` | `[synctag]` | Move window to right tag without focusing it. Optional `synctag` (0/1). |
 | `tagcrossmon` | `tag,monitor_spec` | Move window to specified tag on specified monitor. |
 | `toggletag` | `0-9` | Toggle tag on window (0 means all tags). |
 | `toggleview` | `1-9` | Toggle tag view. |
