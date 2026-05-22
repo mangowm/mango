@@ -2598,15 +2598,13 @@ void closemon(Monitor *m) {
 
 	wl_list_for_each(c, &clients, link) {
 		if (c->mon == m) {
-
+			if (c->foreign_toplevel) {
+				wlr_foreign_toplevel_handle_v1_output_leave(c->foreign_toplevel,
+															c->mon->wlr_output);
+				wlr_foreign_toplevel_handle_v1_destroy(c->foreign_toplevel);
+				c->foreign_toplevel = NULL;
+			}
 			if (selmon == NULL) {
-				if (c->foreign_toplevel) {
-					wlr_foreign_toplevel_handle_v1_output_leave(
-						c->foreign_toplevel, c->mon->wlr_output);
-					wlr_foreign_toplevel_handle_v1_destroy(c->foreign_toplevel);
-					c->foreign_toplevel = NULL;
-				}
-
 				c->mon = NULL;
 			} else {
 				client_change_mon(c, selmon);
