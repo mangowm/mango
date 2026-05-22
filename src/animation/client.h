@@ -225,9 +225,6 @@ void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
 										int32_t sx, int32_t sy, void *data) {
 	BufferData *buffer_data = (BufferData *)data;
 
-	if (buffer_data->width_scale >= 1.0 || buffer_data->height_scale >= 1.0)
-		return;
-
 	int32_t surface_width = 0;
 	int32_t surface_height = 0;
 	bool is_subsurface = false;
@@ -708,7 +705,7 @@ void client_apply_clip(Client *c, float factor) {
 	struct ivec2 offset;
 	BufferData buffer_data;
 
-	if (!config.animations) {
+	if (!config.animations && !c->mon->isoverview) {
 		c->animation.running = false;
 		c->need_output_flush = false;
 		c->animainit_geom = c->current = c->pending = c->animation.current =
@@ -795,7 +792,7 @@ void client_apply_clip(Client *c, float factor) {
 	buffer_data.height_scale =
 		(float)buffer_data.height / acutal_surface_height;
 
-	if (factor == 1.0) {
+	if (factor == 1.0 && !c->mon->isoverview) {
 		buffer_data.width_scale = 1.0;
 		buffer_data.height_scale = 1.0;
 	} else {
