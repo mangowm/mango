@@ -1255,7 +1255,7 @@ void swallow(Client *c, Client *w) {
 		w->overview_scene_surface = NULL;
 	}
 
-	if (c->mon && c->mon->isoverview) {
+	if (c->mon && c->mon->isoverview && config.ov_no_resize) {
 		overview_backup_surface(c);
 	}
 

@@ -1266,6 +1266,9 @@ int32_t toggle_named_scratchpad(const Arg *arg) {
 	char *arg_id = arg->v;
 	char *arg_title = arg->v2;
 
+	if (selmon && selmon->isoverview)
+		return 0;
+
 	target_client = get_client_by_id_or_title(arg_id, arg_title);
 
 	if (!target_client && arg->v3) {
@@ -1744,7 +1747,8 @@ int32_t toggleoverview(const Arg *arg) {
 
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !client_is_unmanaged(c) &&
-				!client_is_x11_popup(c) && !c->isunglobal) {
+				!client_is_x11_popup(c) && !c->isunglobal && !c->isminimized &&
+				client_surface(c)->mapped) {
 				c->animation.overining = true;
 				overview_backup(c);
 			}
@@ -1753,7 +1757,7 @@ int32_t toggleoverview(const Arg *arg) {
 		selmon->tagset[selmon->seltags] = target;
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !c->iskilling &&
-				!client_is_unmanaged(c) && !c->isunglobal &&
+				!client_is_unmanaged(c) && !c->isunglobal && !c->isminimized &&
 				!client_is_x11_popup(c) && client_surface(c)->mapped) {
 				overview_restore(c, &(Arg){.ui = target});
 			}

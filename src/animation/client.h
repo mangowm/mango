@@ -264,7 +264,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c == grabc)
 		data.should_scale = false;
 
-	if (c->mon->isoverview && config.ov_no_resize) {
+	if (c->overview_scene_surface) {
 		wlr_scene_node_for_each_buffer(
 			&c->scene_surface->node, scene_buffer_apply_overview_effect, &data);
 	} else {
@@ -705,7 +705,7 @@ void client_apply_clip(Client *c, float factor) {
 	struct ivec2 offset;
 	BufferData buffer_data;
 
-	if (!config.animations && !c->mon->isoverview) {
+	if (!config.animations && !c->overview_scene_surface) {
 		c->animation.running = false;
 		c->need_output_flush = false;
 		c->animainit_geom = c->current = c->pending = c->animation.current =
@@ -722,7 +722,8 @@ void client_apply_clip(Client *c, float factor) {
 		}
 
 		apply_shield(c, clip_box);
-		if (!c->mon->isoverview || !config.ov_no_resize) {
+
+		if (!c->overview_scene_surface) {
 			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
 											   &clip_box);
 		}
@@ -774,7 +775,7 @@ void client_apply_clip(Client *c, float factor) {
 	// 应用窗口表面剪切
 	apply_shield(c, clip_box);
 
-	if (!c->mon->isoverview || !config.ov_no_resize) {
+	if (!c->overview_scene_surface) {
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
 	}
 
@@ -792,7 +793,7 @@ void client_apply_clip(Client *c, float factor) {
 	buffer_data.height_scale =
 		(float)buffer_data.height / acutal_surface_height;
 
-	if (factor == 1.0 && !c->mon->isoverview) {
+	if (factor == 1.0 && !c->overview_scene_surface) {
 		buffer_data.width_scale = 1.0;
 		buffer_data.height_scale = 1.0;
 	} else {
