@@ -54,6 +54,7 @@
                   seatd
                   pcre2
                   libxcb
+                  pixman
                   xcb-util-wm
                   wlroots-0.19
                   scenefx))

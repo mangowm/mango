@@ -38,6 +38,7 @@ xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput',version: '>=1.27.1')
 libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
+pixman_dep = dependency('pixman-1')
 
 
 # 获取版本信息
@@ -107,6 +108,7 @@ executable('mango',
     libinput_dep,
     libwayland_client_dep,
     pcre2_dep,
+    pixman_dep,
   ],
   install : true,
   c_args : c_args,

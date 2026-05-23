@@ -90,6 +90,15 @@ Client *xytoclient(double x, double y) {
 	return NULL;
 }
 
+static bool layer_ignores_focus(LayerSurface *l) {
+	if (!l || !l->layer_surface)
+		return true;
+	struct wlr_surface *s = l->layer_surface->surface;
+	return !pixman_region32_not_empty(&s->input_region) ||
+		   l->layer_surface->current.keyboard_interactive ==
+			   ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
+}
+
 void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 			  LayerSurface **pl, double *nx, double *ny) {
 	struct wlr_scene_node *node, *pnode;
@@ -151,7 +160,7 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 	if (pl)
 		*pl = l;
 
-	if (selmon && selmon->isoverview && !l) {
+	if (selmon && selmon->isoverview && (!l || layer_ignores_focus(l))) {
 		ovc = xytoclient(x, y);
 		if (pc)
 			*pc = ovc;
