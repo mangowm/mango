@@ -4723,14 +4723,22 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 	}
 
 	should_lock = false;
+	double speed = 0.0f;
+
+	if (config.edge_scroller_pointer_focus) {
+		speed = sqrt(dx * dx + dy * dy);
+	}
+
 	if (!scroller_focus_lock || !(c && c->mon && !INSIDEMON(c))) {
 		if (c && c->mon && is_scroller_layout(c->mon) && !INSIDEMON(c)) {
 			should_lock = true;
 		}
 
-		if (!(!config.edge_scroller_pointer_focus && c && c->mon &&
-			  is_scroller_layout(c->mon) && !INSIDEMON(c)))
+		if (!((!config.edge_scroller_pointer_focus ||
+			   speed < config.edge_scroller_focus_allow_speed) &&
+			  c && c->mon && is_scroller_layout(c->mon) && !INSIDEMON(c))) {
 			pointerfocus(c, surface, sx, sy, time);
+		}
 
 		if (should_lock && c && c->mon && ISTILED(c) && c == c->mon->sel) {
 			scroller_focus_lock = 1;

@@ -38,6 +38,7 @@ The Scroller layout positions windows in a scrollable strip, similar to PaperWM.
 | `scroller_prefer_center` | `0` | Center focused window only if it was outside the view. |
 | `scroller_prefer_overspread` | `1` | Allow windows to overspread when there's extra space. |
 | `edge_scroller_pointer_focus` | `1` | Focus windows even if partially off-screen. |
+| `edge_scroller_focus_allow_speed` | `0.0` | Allow pointer focus to happen if the pointer moves at a speed greater than this value. |
 | `scroller_proportion_preset` | `0.5,0.8,1.0` | Presets for cycling window widths. |
 | `scroller_ignore_proportion_single` | `1` | Ignore proportion adjustments for single windows. |
 | `scroller_default_proportion_single` | `1.0` | Default proportion for single windows in scroller. **Requires `scroller_ignore_proportion_single=0` to take effect.** |
@@ -56,6 +57,7 @@ scroller_focus_center=0
 scroller_prefer_center=0
 scroller_prefer_overspread=1
 edge_scroller_pointer_focus=1
+edge_scroller_focus_allow_speed=0.0
 scroller_default_proportion_single=1.0
 scroller_proportion_preset=0.5,0.8,1.0
 ```

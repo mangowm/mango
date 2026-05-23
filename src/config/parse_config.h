@@ -212,6 +212,7 @@ typedef struct {
 	int32_t scroller_prefer_center;
 	int32_t scroller_prefer_overspread;
 	int32_t edge_scroller_pointer_focus;
+	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
@@ -1375,6 +1376,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->scroller_prefer_overspread = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
+	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0) {
+		config->edge_scroller_focus_allow_speed = atof(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
 	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
@@ -3142,6 +3145,8 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
 	config.edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
+	config.edge_scroller_focus_allow_speed =
+		CLAMP_FLOAT(config.edge_scroller_focus_allow_speed, 0.0f, 1000.0f);
 	config.scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
 	config.default_mfact = CLAMP_FLOAT(config.default_mfact, 0.1f, 0.9f);
 	config.default_nmaster = CLAMP_INT(config.default_nmaster, 1, 1000);
@@ -3311,6 +3316,7 @@ void set_value_default() {
 	config.scroller_prefer_center = 0;
 	config.scroller_prefer_overspread = 1;
 	config.edge_scroller_pointer_focus = 1;
+	config.edge_scroller_focus_allow_speed = 0.0f;
 	config.focus_cross_monitor = 0;
 	config.exchange_cross_monitor = 0;
 	config.scratchpad_cross_monitor = 0;
