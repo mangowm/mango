@@ -1,10 +1,11 @@
 void save_old_size_per(Monitor *m) {
 	Client *c = NULL;
-
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISTILED(c)) {
 			c->old_master_inner_per = c->master_inner_per;
 			c->old_stack_inner_per = c->stack_inner_per;
+			c->old_grid_col_per = c->grid_col_per;
+			c->old_grid_row_per = c->grid_row_per;
 		}
 	}
 }
@@ -32,10 +33,21 @@ void restore_size_per(Monitor *m, Client *c) {
 	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
 
 	if (current_layout->id == SCROLLER ||
-		current_layout->id == VERTICAL_SCROLLER || current_layout->id == GRID ||
-		current_layout->id == FAIR || current_layout->id == VERTICAL_FAIR ||
-		current_layout->id == VERTICAL_GRID || current_layout->id == DECK ||
+		current_layout->id == VERTICAL_SCROLLER || current_layout->id == DECK ||
 		current_layout->id == VERTICAL_DECK || current_layout->id == MONOCLE) {
+		return;
+	}
+
+	if (current_layout->id == GRID || current_layout->id == VERTICAL_GRID ||
+		current_layout->id == FAIR || current_layout->id == VERTICAL_FAIR) {
+		wl_list_for_each(fc, &clients, link) {
+			if (VISIBLEON(fc, m) && ISTILED(fc)) {
+				if (fc->old_grid_col_per > 0.0f)
+					fc->grid_col_per = fc->old_grid_col_per;
+				if (fc->old_grid_row_per > 0.0f)
+					fc->grid_row_per = fc->old_grid_row_per;
+			}
+		}
 		return;
 	}
 
