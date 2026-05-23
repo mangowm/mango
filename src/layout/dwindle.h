@@ -257,8 +257,11 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 
 	if (!node->is_split) {
 		if (node->client) {
-			struct wlr_box box = {ax, ay, MAX(1, aw), MAX(1, ah)};
-			resize(node->client, box, 0);
+			if (!node->client->isfullscreen &&
+				!node->client->ismaximizescreen) {
+				struct wlr_box box = {ax, ay, MAX(1, aw), MAX(1, ah)};
+				resize(node->client, box, 0);
+			}
 		}
 		return;
 	}
@@ -589,8 +592,13 @@ void dwindle(Monitor *m) {
 					found = true;
 					break;
 				}
-			if (!found)
+			if (!found) {
+				if (VISIBLEON(leaves[i]->client, m) &&
+					(leaves[i]->client->isfullscreen ||
+					 leaves[i]->client->ismaximizescreen))
+					continue;
 				dwindle_remove(root, leaves[i]->client);
+			}
 		}
 	}
 
