@@ -58,3 +58,6 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 		resize(c, geo, interact);
 	}
 }
+
+static uint32_t next_client_id = 0;
+uint32_t generate_client_id(void) { return ++next_client_id; }

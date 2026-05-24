@@ -194,28 +194,6 @@ enum seat_config_shortcuts_inhibit {
 	SHORTCUTS_INHIBIT_ENABLE,
 };
 
-// 事件掩码枚举
-enum print_event_type {
-	PRINT_ACTIVE = 1 << 0,
-	PRINT_TAG = 1 << 1,
-	PRINT_LAYOUT = 1 << 2,
-	PRINT_TITLE = 1 << 3,
-	PRINT_APPID = 1 << 4,
-	PRINT_LAYOUT_SYMBOL = 1 << 5,
-	PRINT_FULLSCREEN = 1 << 6,
-	PRINT_FLOATING = 1 << 7,
-	PRINT_X = 1 << 8,
-	PRINT_Y = 1 << 9,
-	PRINT_WIDTH = 1 << 10,
-	PRINT_HEIGHT = 1 << 11,
-	PRINT_LAST_LAYER = 1 << 12,
-	PRINT_KB_LAYOUT = 1 << 13,
-	PRINT_KEYMODE = 1 << 14,
-	PRINT_SCALEFACTOR = 1 << 15,
-	PRINT_FRAME = 1 << 16,
-	PRINT_ALL = (1 << 17) - 1 // 所有位都设为1
-};
-
 typedef struct Pertag Pertag;
 typedef struct Monitor Monitor;
 typedef struct Client Client;
@@ -238,6 +216,7 @@ typedef struct {
 	char *v3;
 	uint32_t ui;
 	uint32_t ui2;
+	Client *tc;
 } Arg;
 
 typedef struct {
@@ -442,6 +421,7 @@ struct Client {
 	float old_grid_row_per;
 	int32_t grid_col_idx;
 	int32_t grid_row_idx;
+	uint32_t id;
 };
 
 typedef struct {
@@ -554,7 +534,7 @@ struct Monitor {
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
 	uint32_t visible_fake_tiling_clients;
-	char last_surface_ws_name[256];
+	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
@@ -867,7 +847,8 @@ static Client *find_client_by_direction(Client *tc, const Arg *arg,
 static void exit_scroller_stack(Client *c);
 static Client *scroll_get_stack_head_client(Client *c);
 static bool client_only_in_one_tag(Client *c);
-static Client *get_focused_stack_client(Client *sc);
+static Client *get_focused_stack_client(Client *sc,
+										Client *custom_focus_client);
 static bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc);
 static void monitor_stop_skip_frame_timer(Monitor *m);
 static int monitor_skip_frame_timeout_callback(void *data);
@@ -1024,6 +1005,7 @@ static char *env_vars[] = {"DISPLAY",
 						   "XDG_SESSION_TYPE",
 						   "XCURSOR_THEME",
 						   "XCURSOR_SIZE",
+						   "MANGO_INSTANCE_SIGNATURE",
 						   NULL};
 static struct {
 	enum wp_cursor_shape_device_v1_shape shape;
@@ -1115,6 +1097,7 @@ static struct wl_event_source *sync_keymap;
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
+#include "ipc/ipc.h"
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
@@ -2531,6 +2514,7 @@ void cleanuplisteners(void) {
 }
 
 void cleanup(void) {
+	ipc_cleanup();
 	cleanuplisteners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(xwayland);
@@ -2656,9 +2640,9 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 
 	if (!l->mon)
 		return;
-	strncpy(l->mon->last_surface_ws_name, layer_surface->namespace,
-			sizeof(l->mon->last_surface_ws_name) - 1); // 最多拷贝255个字符
-	l->mon->last_surface_ws_name[sizeof(l->mon->last_surface_ws_name) - 1] =
+	strncpy(l->mon->last_open_surface, layer_surface->namespace,
+			sizeof(l->mon->last_open_surface) - 1); // 最多拷贝255个字符
+	l->mon->last_open_surface[sizeof(l->mon->last_open_surface) - 1] =
 		'\0'; // 确保字符串以null结尾
 
 	// 初始化几何位置
@@ -4341,6 +4325,8 @@ mapnotify(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, map);
 	int32_t i = 0;
 
+	c->id = generate_client_id();
+
 	/* Create scene tree for this client and its border */
 	c->scene = client_surface(c)->data = wlr_scene_tree_create(layers[LyrTile]);
 	wlr_scene_node_set_enabled(&c->scene->node, c->type != XDGShell);
@@ -5722,13 +5708,30 @@ void create_output(struct wlr_backend *backend, void *data) {
 // 修改信号处理函数，接收掩码参数
 void handle_print_status(struct wl_listener *listener, void *data) {
 
+	ipc_notify_keymode();
+	ipc_notify_kb_layout();
+	ipc_notify_all_tags();
+	ipc_notify_all_clients();
+	ipc_notify_all_monitors();
+
+	Client *c = NULL;
+	wl_list_for_each(c, &clients, link) {
+		if (c->iskilling)
+			continue;
+		ipc_notify_client(c);
+	}
+
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
 		if (!m->wlr_output->enabled) {
 			continue;
 		}
-		dwl_ext_workspace_printstatus(m);
 
+		ipc_notify_monitor(m);
+		ipc_notify_tags(m);
+		ipc_notify_last_surface_ws_name(m);
+
+		dwl_ext_workspace_printstatus(m);
 		dwl_ipc_output_printstatus(m);
 	}
 }
@@ -5757,6 +5760,9 @@ void setup(void) {
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
 	dpy = wl_display_create();
 	event_loop = wl_display_get_event_loop(dpy);
+
+	ipc_init(event_loop);
+
 	tablet_mgr = wlr_tablet_v2_create(dpy);
 	/* The backend is a wlroots feature which abstracts the underlying input
 	 * and output hardware. The autocreate option will choose the most

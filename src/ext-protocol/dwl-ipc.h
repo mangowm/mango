@@ -192,7 +192,7 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	if (wl_resource_get_version(ipc_output->resource) >=
 		ZDWL_IPC_OUTPUT_V2_LAST_LAYER_SINCE_VERSION) {
 		zdwl_ipc_output_v2_send_last_layer(ipc_output->resource,
-										   monitor->last_surface_ws_name);
+										   monitor->last_open_surface);
 	}
 
 	if (wl_resource_get_version(ipc_output->resource) >=

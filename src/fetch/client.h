@@ -452,7 +452,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating,
 
 Client *direction_select(const Arg *arg) {
 
-	Client *tc = selmon->sel;
+	Client *tc = arg->tc ? arg->tc : selmon->sel;
 
 	if (!tc)
 		return NULL;
@@ -593,12 +593,12 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 	return false;
 }
 
-Client *get_focused_stack_client(Client *sc) {
+Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 	if (!sc || sc->isfloating)
 		return sc;
 
 	Client *tc = NULL;
-	Client *fc = focustop(sc->mon);
+	Client *fc = custom_focus_client ? custom_focus_client : focustop(sc->mon);
 
 	if (fc->isfloating || sc->isfloating)
 		return sc;
