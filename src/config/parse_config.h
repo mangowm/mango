@@ -306,7 +306,6 @@ typedef struct {
 	uint32_t gappoh;
 	uint32_t gappov;
 	uint32_t borderpx;
-	int32_t tag_carousel;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float rootcolor[4];
@@ -365,6 +364,7 @@ typedef struct {
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
 	int32_t syncobj_enable;
+	int32_t tag_carousel;
 	float drag_tile_refresh_interval;
 	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
@@ -1395,6 +1395,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->xwayland_persistence = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
+	} else if (strcmp(key, "tag_carousel") == 0) {
+		config->tag_carousel = atoi(value);
 	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
 		config->drag_tile_refresh_interval = atof(value);
 	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
@@ -1698,8 +1700,6 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->scratchpad_height_ratio = atof(value);
 	} else if (strcmp(key, "borderpx") == 0) {
 		config->borderpx = atoi(value);
-	} else if (strcmp(key, "tag_carousel") == 0) {
-		config->tag_carousel = atoi(value);
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -3330,6 +3330,7 @@ void set_value_default() {
 	config.single_scratchpad = 1;
 	config.xwayland_persistence = 1;
 	config.syncobj_enable = 0;
+	config.tag_carousel = 0;
 	config.drag_tile_refresh_interval = 8.0f;
 	config.drag_floating_refresh_interval = 8.0f;
 	config.allow_tearing = TEARING_DISABLED;
@@ -3345,7 +3346,6 @@ void set_value_default() {
 	config.idleinhibit_ignore_visible = 0;
 
 	config.borderpx = 4;
-	config.tag_carousel = 0;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
 	config.cursor_hide_timeout = 0;

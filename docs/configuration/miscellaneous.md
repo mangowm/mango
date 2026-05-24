@@ -46,5 +46,6 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `snap_distance` | `30` | Max distance (pixels) to trigger floating snap. |
 | `no_border_when_single` | `0` | Remove window borders when only one window is visible on the tag. |
 | `idleinhibit_ignore_visible` | `0` | Allow invisible clients (e.g., background audio players) to inhibit idle. |
+| `tag_carousel` | `0` | Enable tag carousel (cycling through tags). |
 | `drag_tile_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh tiled window resize during drag. Too small may cause application lag. |
 | `drag_floating_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh floating window resize during drag. Too small may cause application lag. |
