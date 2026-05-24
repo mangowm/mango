@@ -79,7 +79,7 @@ void vertical_tile(Monitor *m) {
 												.width = w,
 												.height = mh - cur_gapiv * ie},
 							   0);
-			mx += c->geom.width + cur_gapih * ie;
+			mx += w + cur_gapih * ie; // 使用理论宽度累加
 		} else {
 			r = n - i;
 			if (c->stack_inner_per > 0.0f) {
@@ -103,7 +103,7 @@ void vertical_tile(Monitor *m) {
 								 .width = w,
 								 .height = m->w.height - mh - 2 * cur_gapov},
 				0);
-			tx += c->geom.width + cur_gapih * ie;
+			tx += w + cur_gapih * ie; // 使用理论宽度累加
 		}
 		i++;
 	}
