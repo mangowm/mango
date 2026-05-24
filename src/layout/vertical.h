@@ -6,7 +6,7 @@ void vertical_tile(Monitor *m) {
 	int32_t master_num = 0;
 	int32_t stack_num = 0;
 
-	n = m->visible_tiling_clients;
+	n = m->visible_fake_tiling_clients;
 	master_num = m->pertag->nmasters[m->pertag->curtag];
 	master_num = n > master_num ? master_num : n;
 	stack_num = n - master_num;
@@ -20,16 +20,16 @@ void vertical_tile(Monitor *m) {
 	int32_t cur_gapov = enablegaps ? m->gappov : 0;
 
 	cur_gapih =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapih;
+		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapih;
 	cur_gapiv =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapiv;
+		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapiv;
 	cur_gapoh =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapoh;
+		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapoh;
 	cur_gapov =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gapov;
+		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapov;
 
 	wl_list_for_each(fc, &clients, link) {
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
@@ -55,7 +55,7 @@ void vertical_tile(Monitor *m) {
 	float slave_surplus_ratio = 1.0;
 
 	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
 			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
@@ -73,12 +73,12 @@ void vertical_tile(Monitor *m) {
 										   cur_gapih * ie * (r - 1));
 				c->master_mfact_per = mfact;
 			}
-			resize(c,
-				   (struct wlr_box){.x = m->w.x + mx,
-									.y = m->w.y + cur_gapov,
-									.width = w,
-									.height = mh - cur_gapiv * ie},
-				   0);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + mx,
+												.y = m->w.y + cur_gapov,
+												.width = w,
+												.height = mh - cur_gapiv * ie},
+							   0);
 			mx += c->geom.width + cur_gapih * ie;
 		} else {
 			r = n - i;
@@ -96,12 +96,13 @@ void vertical_tile(Monitor *m) {
 				c->master_mfact_per = mfact;
 			}
 
-			resize(c,
-				   (struct wlr_box){.x = m->w.x + tx,
-									.y = m->w.y + mh + cur_gapov,
-									.width = w,
-									.height = m->w.height - mh - 2 * cur_gapov},
-				   0);
+			client_tile_resize(
+				c,
+				(struct wlr_box){.x = m->w.x + tx,
+								 .y = m->w.y + mh + cur_gapov,
+								 .width = w,
+								 .height = m->w.height - mh - 2 * cur_gapov},
+				0);
 			tx += c->geom.width + cur_gapih * ie;
 		}
 		i++;
@@ -120,21 +121,24 @@ void vertical_deck(Monitor *m) {
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 
-	cur_gappiv =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappiv;
-	cur_gappoh =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappoh;
-	cur_gappov =
-		config.smartgaps && m->visible_tiling_clients == 1 ? 0 : cur_gappov;
+	cur_gappiv = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappiv;
+	cur_gappoh = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappoh;
+	cur_gappov = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappov;
 
-	n = m->visible_tiling_clients;
+	n = m->visible_fake_tiling_clients;
 
 	if (n == 0)
 		return;
 
 	wl_list_for_each(fc, &clients, link) {
 
-		if (VISIBLEON(fc, m) && ISTILED(fc))
+		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
@@ -149,10 +153,10 @@ void vertical_deck(Monitor *m) {
 
 	i = mx = 0;
 	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < nmasters) {
-			resize(
+			client_tile_resize(
 				c,
 				(struct wlr_box){.x = m->w.x + cur_gappoh + mx,
 								 .y = m->w.y + cur_gappov,
@@ -162,13 +166,14 @@ void vertical_deck(Monitor *m) {
 				0);
 			mx += c->geom.width;
 		} else {
-			resize(c,
-				   (struct wlr_box){.x = m->w.x + cur_gappoh,
-									.y = m->w.y + mh + cur_gappov + cur_gappiv,
-									.width = m->w.width - 2 * cur_gappoh,
-									.height = m->w.height - mh -
-											  2 * cur_gappov - cur_gappiv},
-				   0);
+			client_tile_resize(
+				c,
+				(struct wlr_box){.x = m->w.x + cur_gappoh,
+								 .y = m->w.y + mh + cur_gappov + cur_gappiv,
+								 .width = m->w.width - 2 * cur_gappoh,
+								 .height = m->w.height - mh - 2 * cur_gappov -
+										   cur_gappiv},
+				0);
 			if (c == focustop(m))
 				wlr_scene_node_raise_to_top(&c->scene->node);
 		}
@@ -188,7 +193,7 @@ void vertical_grid(Monitor *m) {
 	float single_width_ratio = m->isoverview ? 0.7 : 0.9;
 	float single_height_ratio = m->isoverview ? 0.8 : 0.9;
 
-	n = m->isoverview ? m->visible_clients : m->visible_tiling_clients;
+	n = m->isoverview ? m->visible_clients : m->visible_fake_tiling_clients;
 	if (n == 0)
 		return;
 
@@ -197,14 +202,15 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
 				ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
 				cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
 				c->geom.x = m->w.x + (m->w.width - cw) / 2;
 				c->geom.y = m->w.y + (m->w.height - ch) / 2;
 				c->geom.width = cw;
 				c->geom.height = ch;
-				resize(c, c->geom, 0);
+				client_tile_resize(c, c->geom, 0);
 				return;
 			}
 		}
@@ -218,7 +224,8 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
 				if (i < 2)
 					row_pers[i] =
 						(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
@@ -235,7 +242,8 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
 				c->grid_col_idx = 0;
 				c->grid_row_idx = i;
 				c->grid_col_per = 1.0f;
@@ -254,7 +262,7 @@ void vertical_grid(Monitor *m) {
 				}
 				c->geom.width = cw;
 				c->geom.height = ch;
-				resize(c, c->geom, 0);
+				client_tile_resize(c, c->geom, 0);
 				i++;
 			}
 		}
@@ -279,7 +287,7 @@ void vertical_grid(Monitor *m) {
 		if (c->mon != m)
 			continue;
 		if (VISIBLEON(c, m) && !c->isunglobal &&
-			((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
 			int32_t c_idx = i / rows;
 			int32_t r_idx = i % rows;
 			if (r_idx == 0)
@@ -306,7 +314,7 @@ void vertical_grid(Monitor *m) {
 		if (c->mon != m)
 			continue;
 		if (VISIBLEON(c, m) && !c->isunglobal &&
-			((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
 			int32_t c_idx = i / rows;
 			int32_t r_idx = i % rows;
 
@@ -348,7 +356,7 @@ void vertical_grid(Monitor *m) {
 			c->geom.y = (int32_t)fl_cy;
 			c->geom.width = (int32_t)fl_cw;
 			c->geom.height = (int32_t)fl_ch;
-			resize(c, c->geom, 0);
+			client_tile_resize(c, c->geom, 0);
 			i++;
 		}
 	}
@@ -358,7 +366,7 @@ void vertical_fair(Monitor *m) {
 	int32_t i, n = 0;
 	Client *c = NULL;
 
-	n = m->visible_tiling_clients;
+	n = m->visible_fake_tiling_clients;
 	if (n == 0)
 		return;
 
@@ -386,7 +394,7 @@ void vertical_fair(Monitor *m) {
 	Client *arr[n];
 	int32_t arr_idx = 0;
 	wl_list_for_each(c, &clients, link) {
-		if (VISIBLEON(c, m) && ISTILED(c)) {
+		if (VISIBLEON(c, m) && ISFAKETILED(c)) {
 			arr[arr_idx++] = c;
 			if (arr_idx >= n)
 				break;
@@ -511,11 +519,11 @@ void vertical_fair(Monitor *m) {
 		fl_cy = row_y[row_idx];
 		fl_ch = row_h[row_idx];
 
-		resize(c,
-			   (struct wlr_box){.x = (int32_t)fl_cx,
-								.y = (int32_t)fl_cy,
-								.width = (int32_t)fl_cw,
-								.height = (int32_t)fl_ch},
-			   0);
+		client_tile_resize(c,
+						   (struct wlr_box){.x = (int32_t)fl_cx,
+											.y = (int32_t)fl_cy,
+											.width = (int32_t)fl_cw,
+											.height = (int32_t)fl_ch},
+						   0);
 	}
 }

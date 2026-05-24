@@ -49,3 +49,12 @@ static void finish_exchange_arrange_and_focus(Client *c1, Client *c2,
 	wl_list_remove(&c2->flink);
 	wl_list_insert(&c1->flink, &c2->flink);
 }
+
+void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
+	if (!ISSCROLLTILED(c))
+		return;
+
+	if (!c->isfullscreen && !c->ismaximizescreen) {
+		resize(c, geo, interact);
+	}
+}
