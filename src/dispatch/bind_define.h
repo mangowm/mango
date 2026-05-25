@@ -1768,50 +1768,27 @@ int32_t toggleoverview(const Arg *arg) {
 	return 0;
 }
 
-int32_t disable_monitor(const Arg *arg) {
+/* enabled: 1 = on, 0 = off, -1 = toggle */
+static void set_monitor_enabled(const Arg *arg, int enabled, int wake_on_input) {
 	Monitor *m = NULL;
 	struct wlr_output_state state = {0};
 	wl_list_for_each(m, &mons, link) {
 		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, false);
+			int new_enabled = (enabled < 0) ? !m->wlr_output->enabled : enabled;
+			wlr_output_state_set_enabled(&state, new_enabled);
 			wlr_output_commit_state(m->wlr_output, &state);
-			m->asleep = 1;
+			m->asleep = !new_enabled;
+			m->wake_on_input = wake_on_input;
 			updatemons(NULL, NULL);
 			break;
 		}
 	}
-	return 0;
 }
 
-int32_t enable_monitor(const Arg *arg) {
-	Monitor *m = NULL;
-	struct wlr_output_state state = {0};
-	wl_list_for_each(m, &mons, link) {
-		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, true);
-			wlr_output_commit_state(m->wlr_output, &state);
-			m->asleep = 0;
-			updatemons(NULL, NULL);
-			break;
-		}
-	}
-	return 0;
-}
-
-int32_t toggle_monitor(const Arg *arg) {
-	Monitor *m = NULL;
-	struct wlr_output_state state = {0};
-	wl_list_for_each(m, &mons, link) {
-		if (match_monitor_spec(arg->v, m)) {
-			wlr_output_state_set_enabled(&state, !m->wlr_output->enabled);
-			wlr_output_commit_state(m->wlr_output, &state);
-			m->asleep = !m->wlr_output->enabled;
-			updatemons(NULL, NULL);
-			break;
-		}
-	}
-	return 0;
-}
+int32_t disable_monitor(const Arg *arg) { set_monitor_enabled(arg, 0, 0); return 0; }
+int32_t enable_monitor(const Arg *arg)  { set_monitor_enabled(arg, 1, 0); return 0; }
+int32_t toggle_monitor(const Arg *arg)  { set_monitor_enabled(arg, -1, 0); return 0; }
+int32_t sleep_monitor(const Arg *arg)   { set_monitor_enabled(arg, 0, 1); return 0; }
 
 int32_t scroller_apply_stack(Client *c, Client *target_client,
 							 int32_t direction) {

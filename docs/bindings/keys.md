@@ -171,6 +171,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `disable_monitor` | `monitor_spec` | Shutdown monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `enable_monitor` | `monitor_spec` | Power on monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggle_monitor` | `monitor_spec` | Toggle monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `sleep_monitor` | `monitor_spec` | Turn off monitor and wake it automatically on the next keypress or mouse movement. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 
 ### Media Controls
 
