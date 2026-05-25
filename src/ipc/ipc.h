@@ -376,13 +376,11 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		}
 
 		Arg arg = {0};
-		int32_t (*func)(const Arg *) =
-			parse_func_name(token_count > 0 ? tokens[0] : "", &arg,
-							token_count > 1 ? tokens[1] : NULL,
-							token_count > 2 ? tokens[2] : NULL,
-							token_count > 3 ? tokens[3] : NULL,
-							token_count > 4 ? tokens[4] : NULL,
-							token_count > 5 ? tokens[5] : NULL);
+		int32_t (*func)(const Arg *) = parse_func_name(
+			token_count > 0 ? tokens[0] : "", &arg,
+			token_count > 1 ? tokens[1] : "", token_count > 2 ? tokens[2] : "",
+			token_count > 3 ? tokens[3] : "", token_count > 4 ? tokens[4] : "",
+			token_count > 5 ? tokens[5] : "");
 
 		if (func && client_id > 0)
 			arg.tc = client_by_id((uint32_t)client_id);
