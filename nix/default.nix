@@ -5,6 +5,7 @@
   libxcb,
   libxkbcommon,
   pcre2,
+  cjson,
   pixman,
   pkg-config,
   stdenv,
@@ -48,6 +49,7 @@ stdenv.mkDerivation {
       libxcb
       libxkbcommon
       pcre2
+      cjson
       pixman
       wayland
       wayland-protocols

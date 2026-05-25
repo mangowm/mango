@@ -273,6 +273,7 @@ If your distribution isn't listed above, or you want the latest unreleased chang
 > - `hwdata`
 > - `seatd`
 > - `pcre2`
+> - `cjson`
 > - `pixman`
 > - `xorg-xwayland`
 > - `libxcb`

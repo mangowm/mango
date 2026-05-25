@@ -94,6 +94,12 @@ Thanks to everyone who has sponsored this project:
   <tr>
     <!-- add new sponsors here: copy the <td>...</td> block below -->
     <td align="center">
+      <a href="https://github.com/dl09r">
+        <img src="https://unavatar.io/github/dl09r" width="48" style="border-radius:50%"/><br/>
+        <sub>dl09r</sub>
+      </a>
+    </td>
+    <td align="center">
       <a href="https://github.com/tonybanters">
         <img src="https://unavatar.io/github/tonybanters" width="48" style="border-radius:50%"/><br/>
         <sub>tonybanters</sub>
