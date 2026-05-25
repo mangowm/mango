@@ -252,8 +252,8 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 	} else if (strcmp(cmd, "get keyboardlayout") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "layout", ipc_get_layout_str());
-	} else if (strncmp(cmd, "get last_open_surface ", 25) == 0) {
-		const char *name = cmd + 25;
+	} else if (strncmp(cmd, "get last_open_surface ", 22) == 0) {
+		const char *name = cmd + 22;
 		Monitor *m = monitor_by_name(name);
 		if (!m) {
 			send_static_json(client_fd, "{\"error\":\"monitor not found\"}\n");
