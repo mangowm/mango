@@ -53,11 +53,11 @@ jobs:
           python3 ./.github/scripts/generate-nix-options-docs.py \
             /tmp/nixos-raw.md \
             /tmp/hm-raw.md \
-            docs/nix-options.md
+            'docs/nix-options.md'
 
       - name: Auto-commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: auto-generate Nix module options"
-          file_pattern: 'docs/*-options.md'
+          file_pattern: 'docs/nix-options.md'
           branch: ${{ github.head_ref }}

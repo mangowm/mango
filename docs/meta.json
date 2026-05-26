@@ -1,3 +1,22 @@
 {
-	"pages": ["(git)", "v0.13.1", "v0.13.0"]
+	"title": "git (latest)",
+	"description": "Latest development",
+	"root": true,
+	"pages": [
+		"---Getting Started---",
+		"index",
+		"installation",
+		"quick-start",
+		"---Configuration---",
+		"configuration",
+		"visuals",
+		"window-management",
+		"bindings",
+		"---Examples---",
+		"screenshot",
+		"---Reference---",
+		"nix-options",
+		"ipc",
+		"faq"
+	]
 }
