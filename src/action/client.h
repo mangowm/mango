@@ -61,3 +61,29 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 
 static uint32_t next_client_id = 0;
 uint32_t generate_client_id(void) { return ++next_client_id; }
+
+void client_active(Client *c) {
+	uint32_t target;
+
+	if (client_is_unmanaged(c)) {
+		focusclient(c, 1);
+		return;
+	}
+
+	if (c->swallowing || !c->mon)
+		return;
+
+	if (c->isminimized) {
+		c->is_in_scratchpad = 0;
+		c->isnamedscratchpad = 0;
+		c->is_scratchpad_show = 0;
+		setborder_color(c);
+		show_hide_client(c);
+		arrange(c->mon, true, false);
+		return;
+	}
+
+	target = get_tags_first_tag(c->tags);
+	view_in_mon(&(Arg){.ui = target}, true, c->mon, true);
+	focusclient(c, 1);
+}

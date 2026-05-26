@@ -2001,6 +2001,6 @@ int32_t focusid(const Arg *arg) {
 		return 0;
 
 	Client *c = arg->tc;
-	focusclient(c, 1);
+	client_active(c);
 	return 0;
 }
