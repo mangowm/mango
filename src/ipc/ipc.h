@@ -253,9 +253,14 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 	} else if (strcmp(cmd, "get keyboardlayout") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "layout", ipc_get_layout_str());
-	} else if (strncmp(cmd, "get last_open_surface ", 22) == 0) {
-		const char *name = cmd + 22;
-		Monitor *m = monitor_by_name(name);
+	} else if (strcmp(cmd, "get last_open_surface") == 0 ||
+			   strncmp(cmd, "get last_open_surface ", 22) == 0) {
+		Monitor *m;
+		if (cmd[21] == '\0') { // exactly "get last_open_surface"
+			m = selmon;
+		} else {
+			m = monitor_by_name(cmd + 22);
+		}
 		if (!m) {
 			send_static_json(client_fd, "{\"error\":\"monitor not found\"}\n");
 			return;
@@ -504,9 +509,14 @@ static bool handle_watch_command(int fd, const char *cmd,
 		type = IPC_WATCH_KEYMODE;
 	} else if (strcmp(cmd, "watch keyboardlayout") == 0) {
 		type = IPC_WATCH_KB_LAYOUT;
-	} else if (strncmp(cmd, "watch last_open_surface ", 27) == 0) {
+	} else if (strcmp(cmd, "watch last_open_surface") == 0 ||
+			   strncmp(cmd, "watch last_open_surface ", 24) == 0) {
 		type = IPC_WATCH_LAST_OPEN_SURFACE;
-		arg = cmd + 27;
+		if (cmd[24] != '\0') { // has argument after the space
+			arg = cmd + 24;
+		} else {
+			arg = NULL; // default to selmon
+		}
 	}
 
 	if (type == IPC_WATCH_NONE)
@@ -542,7 +552,12 @@ static bool handle_watch_command(int fd, const char *cmd,
 		break;
 	}
 	case IPC_WATCH_LAST_OPEN_SURFACE: {
-		Monitor *m = monitor_by_name(arg);
+		Monitor *m = NULL;
+		if (arg) {
+			m = monitor_by_name(arg);
+		} else {
+			m = selmon;
+		}
 		if (m) {
 			json = cJSON_CreateObject();
 			cJSON_AddStringToObject(json, "monitor", m->wlr_output->name);
@@ -640,7 +655,6 @@ static int ipc_handle_client_data(int fd, uint32_t mask, void *data) {
 			available = client->buf_cap - client->buf_len;
 		}
 
-		// 直接读取到 client->buf 尾部，跳过临时数组
 		ssize_t n = recv(fd, client->buf + client->buf_len, available - 1,
 						 MSG_DONTWAIT);
 		if (n <= 0)
@@ -652,7 +666,7 @@ static int ipc_handle_client_data(int fd, uint32_t mask, void *data) {
 		char *nl = memchr(client->buf, '\n', client->buf_len);
 		if (!nl) {
 			if (client->buf_len > 1024 * 1024)
-				goto cleanup; // 防御过长命令
+				goto cleanup;
 			return 0;
 		}
 		*nl = '\0';
@@ -726,28 +740,41 @@ void ipc_notify_last_surface_ws_name(Monitor *m) {
 	size_t len = 0;
 	struct ipc_watch_client *wc, *tmp;
 	wl_list_for_each_safe(wc, tmp, &watch_clients, link) {
-		if (wc->type == IPC_WATCH_LAST_OPEN_SURFACE &&
-			strcmp(m->wlr_output->name, wc->target.monitor.name) == 0) {
-			if (!json_str) {
-				cJSON *json = cJSON_CreateObject();
-				cJSON_AddStringToObject(json, "monitor", m->wlr_output->name);
-				cJSON_AddStringToObject(json, "last_open_surface",
-										m->last_open_surface);
-				char *raw = cJSON_PrintUnformatted(json);
-				cJSON_Delete(json);
-				if (!raw)
-					return;
-				len = strlen(raw);
-				json_str = malloc(len + 2);
-				snprintf(json_str, len + 2, "%s\n", raw);
-				free(raw);
-			}
-			if (send(wc->fd, json_str, len + 1, MSG_NOSIGNAL) < 0)
-				ipc_remove_watch_client(wc);
+		if (wc->type != IPC_WATCH_LAST_OPEN_SURFACE)
+			continue;
+
+		/* 匹配具体 monitor 名称，或空名称表示默认 selmon */
+		bool match = false;
+		if (wc->target.monitor.name[0] == '\0') {
+			/* 订阅的是 selmon */
+			if (m == selmon)
+				match = true;
+		} else {
+			if (strcmp(m->wlr_output->name, wc->target.monitor.name) == 0)
+				match = true;
 		}
+
+		if (!match)
+			continue;
+
+		if (!json_str) {
+			cJSON *json = cJSON_CreateObject();
+			cJSON_AddStringToObject(json, "monitor", m->wlr_output->name);
+			cJSON_AddStringToObject(json, "last_open_surface",
+									m->last_open_surface);
+			char *raw = cJSON_PrintUnformatted(json);
+			cJSON_Delete(json);
+			if (!raw)
+				return;
+			len = strlen(raw);
+			json_str = malloc(len + 2);
+			snprintf(json_str, len + 2, "%s\n", raw);
+			free(raw);
+		}
+		if (send(wc->fd, json_str, len + 1, MSG_NOSIGNAL) < 0)
+			ipc_remove_watch_client(wc);
 	}
-	if (json_str)
-		free(json_str);
+	free(json_str);
 }
 
 void ipc_notify_focusing_client(void) {
