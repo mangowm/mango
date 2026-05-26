@@ -1,0 +1,20 @@
+{
+	"title": "mangowm",
+	"pages": [
+		"---Getting Started---",
+		"index",
+		"installation",
+		"quick-start",
+		"---Configuration---",
+		"configuration",
+		"visuals",
+		"window-management",
+		"bindings",
+		"---Examples---",
+		"screenshot",
+		"---Reference---",
+		"nix-options",
+		"ipc",
+		"faq"
+	]
+}

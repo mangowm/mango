@@ -1,0 +1,22 @@
+{
+	"title": "v0.13.0",
+	"description": "v0.13.0 release",
+	"root": true,
+	"pages": [
+		"---Getting Started---",
+		"index",
+		"installation",
+		"quick-start",
+		"---Configuration---",
+		"configuration",
+		"visuals",
+		"window-management",
+		"bindings",
+		"---Examples---",
+		"screenshot",
+		"---Reference---",
+		"nix-options",
+		"ipc",
+		"faq"
+	]
+}
