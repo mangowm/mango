@@ -5710,6 +5710,7 @@ void handle_print_status(struct wl_listener *listener, void *data) {
 
 	ipc_notify_keymode();
 	ipc_notify_kb_layout();
+	ipc_notify_focusing_client();
 	ipc_notify_all_tags();
 	ipc_notify_all_clients();
 	ipc_notify_all_monitors();

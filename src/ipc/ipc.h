@@ -20,6 +20,7 @@ enum ipc_watch_type {
 	IPC_WATCH_KEYMODE,
 	IPC_WATCH_KB_LAYOUT,
 	IPC_WATCH_LAST_OPEN_SURFACE,
+	IPC_WATCH_FOCUSING_CLIENT
 };
 
 struct ipc_watch_client {
@@ -270,6 +271,13 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_json(m);
+	} else if (strcmp(cmd, "get focusing-client") == 0) {
+		if (selmon && selmon->sel) {
+			resp = build_client_json(selmon->sel);
+		} else {
+			send_static_json(client_fd, "{\"error\":\"no focused client\"}\n");
+			return;
+		}
 	} else if (strncmp(cmd, "get client ", 11) == 0) {
 		Client *c = client_by_id((uint32_t)atoi(cmd + 11));
 		if (!c) {
@@ -478,6 +486,8 @@ static bool handle_watch_command(int fd, const char *cmd,
 	if (strncmp(cmd, "watch monitor ", 14) == 0) {
 		type = IPC_WATCH_MONITOR;
 		arg = cmd + 14;
+	} else if (strcmp(cmd, "watch focusing-client") == 0) {
+		type = IPC_WATCH_FOCUSING_CLIENT;
 	} else if (strncmp(cmd, "watch client ", 13) == 0) {
 		type = IPC_WATCH_CLIENT;
 		client_id = (uint32_t)atoi(cmd + 13);
@@ -538,6 +548,17 @@ static bool handle_watch_command(int fd, const char *cmd,
 			cJSON_AddStringToObject(json, "monitor", m->wlr_output->name);
 			cJSON_AddStringToObject(json, "last_open_surface",
 									m->last_open_surface);
+		}
+		break;
+	}
+	case IPC_WATCH_FOCUSING_CLIENT: {
+		if (selmon && selmon->sel) {
+			json = build_client_json(selmon->sel);
+		} else {
+			json = cJSON_CreateObject();
+			cJSON_AddNullToObject(json, "id");
+			cJSON_AddNullToObject(json, "title");
+			cJSON_AddNullToObject(json, "appid");
 		}
 		break;
 	}
@@ -727,6 +748,38 @@ void ipc_notify_last_surface_ws_name(Monitor *m) {
 	}
 	if (json_str)
 		free(json_str);
+}
+
+void ipc_notify_focusing_client(void) {
+	char *json_str = NULL;
+	size_t len = 0;
+	struct ipc_watch_client *wc, *tmp;
+	wl_list_for_each_safe(wc, tmp, &watch_clients, link) {
+		if (wc->type == IPC_WATCH_FOCUSING_CLIENT) {
+			if (!json_str) {
+				cJSON *json = NULL;
+				if (selmon && selmon->sel) {
+					json = build_client_json(selmon->sel);
+				} else {
+					json = cJSON_CreateObject();
+					cJSON_AddNullToObject(json, "id");
+					cJSON_AddNullToObject(json, "title");
+					cJSON_AddNullToObject(json, "appid");
+				}
+				char *raw = cJSON_PrintUnformatted(json);
+				cJSON_Delete(json);
+				if (!raw)
+					return;
+				len = strlen(raw);
+				json_str = malloc(len + 2);
+				snprintf(json_str, len + 2, "%s\n", raw);
+				free(raw);
+			}
+			if (send(wc->fd, json_str, len + 1, MSG_NOSIGNAL) < 0)
+				ipc_remove_watch_client(wc);
+		}
+	}
+	free(json_str);
 }
 
 void ipc_notify_client(Client *c) {
