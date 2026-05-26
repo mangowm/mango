@@ -19,7 +19,7 @@ struct wl_list workspaces;
 
 static void handle_ext_commit(struct wl_listener *listener, void *data);
 static struct wl_listener ext_manager_commit_listener = {.notify =
-													   handle_ext_commit};
+															 handle_ext_commit};
 
 void goto_workspace(struct workspace *target) {
 	uint32_t tag;
