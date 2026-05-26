@@ -1,5 +1,7 @@
 {
-	"title": "mangowm",
+	"title": "git (latest)",
+	"description": "Latest development",
+	"root": true,
 	"pages": [
 		"---Getting Started---",
 		"index",
