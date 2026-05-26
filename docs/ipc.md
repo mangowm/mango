@@ -30,10 +30,11 @@ description: Control mangowm programmatically using mmsg.
 | `get focusing-client` | Returns full JSON details for the client currently in focus. |
 | `get client <id>` | Returns full JSON details for a client with the given ID. |
 | `get tag <mon> <idx>` | Queries status of a specific tag on a monitor. |
+| `get tags <mon>` | Returns a JSON object containing the status of all tags on a monitor. |
 | `get all-clients` | Returns a JSON array of all active clients. |
 | `get all-monitors` | Returns a JSON array of all connected monitors. |
 | `get all-tags` | Returns a JSON object containing the status of all tags. |
-| `get last_open_surface <mon>` | Returns the last focused surface name for a monitor. |
+| `get last_open_surface [<mon>]` | Returns the last focused surface name for a monitor,if the mon not set, it will get current monitor. |
 
 *Example:*
 ```bash
@@ -54,7 +55,7 @@ Subscribes the client to real-time updates. When the state changes, the server p
 * `watch all-clients`
 * `watch keymode`
 * `watch keyboardlayout`
-* `watch last_open_surface <mon_name>`
+* `watch last_open_surface [<mon_name>]`
 
 *Example:*
 ```bash

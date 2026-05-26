@@ -83,13 +83,13 @@ name:xxx&&make:xxx&&model:xxx&&serial:xxx
 
 ```bash
 # By name (shorthand)
-mmsg -d toggle_monitor,eDP-1
+mmsg dispatch toggle_monitor,eDP-1
 
 # By make and model
-mmsg -d toggle_monitor,make:Chimei Innolux Corporation&&model:0x15F5
+mmsg dispatch toggle_monitor,make:Chimei Innolux Corporation&&model:0x15F5
 
 # By serial
-mmsg -d toggle_monitor,serial:12345678
+mmsg dispatch toggle_monitor,serial:12345678
 ```
 
 ---
@@ -166,13 +166,13 @@ You can control monitor power using the `mmsg` IPC tool.
 
 ```bash
 # Turn off
-mmsg -d disable_monitor,eDP-1
+mmsg dispatch disable_monitor,eDP-1
 
 # Turn on
-mmsg -d enable_monitor,eDP-1
+mmsg dispatch enable_monitor,eDP-1
 
 # Toggle
-mmsg -d toggle_monitor,eDP-1
+mmsg dispatch toggle_monitor,eDP-1
 ```
 
 You can also use `wlr-randr` for monitor management:
@@ -257,10 +257,10 @@ You can create and manage virtual displays through IPC commands:
 
 ```bash
 # Create virtual output
-mmsg -d create_virtual_output
+mmsg dispatch create_virtual_output
 
 # Destroy all virtual outputs
-mmsg -d destroy_all_virtual_output
+mmsg dispatch destroy_all_virtual_output
 ```
 
 You can configure virtual monitors using `wlr-randr`:

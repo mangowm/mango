@@ -131,7 +131,7 @@ Or bind it manually to a key:
 bind=alt,shift_l,switch_keyboard_layout
 ```
 
-Use `mmsg -g -k` to query the current keyboard layout at any time.
+Use `mmsg get keyboardlayout` to query the current layout.
 
 ---
 
