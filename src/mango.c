@@ -855,7 +855,9 @@ static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
 static void scroller_insert_stack(Client *c, Client *target_client,
 								  bool insert_before);
+static void dwindle_movetoroot(DwindleNode **root, Client *c, bool stable);
 static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
+
 								float ratio, int32_t dir);
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy);

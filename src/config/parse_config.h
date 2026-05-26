@@ -1256,10 +1256,21 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = dwindle_split_horizontal;
 	} else if (strcmp(func_name, "dwindle_split_vertical") == 0) {
 		func = dwindle_split_vertical;
+	} else if (strcmp(func_name, "movetoroot") == 0) {
+		func = movetoroot;
+		bool unstable = false;
+		if (arg_value && strcmp(arg_value, "unstable") == 0) {
+			unstable = true;
+		}
+		if (arg_value2 && strcmp(arg_value2, "unstable") == 0) {
+			unstable = true;
+		}
+		(*arg).i = unstable ? 1 : 0;
 	} else {
 		return NULL;
 	}
 	return func;
+
 }
 
 void set_env() {

@@ -2003,3 +2003,20 @@ int32_t focusid(const Arg *arg) {
 	focusclient(c, 1);
 	return 0;
 }
+
+int32_t movetoroot(const Arg *arg) {
+	if (!selmon)
+		return 0;
+
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	if (!c || c->isfloating)
+		return 0;
+
+	if (c->mon && c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == DWINDLE) {
+		uint32_t tag = c->mon->pertag->curtag;
+		bool stable = (arg->i == 0);
+		dwindle_movetoroot(&c->mon->pertag->dwindle_root[tag], c, stable);
+		arrange(c->mon, false, false);
+	}
+	return 0;
+}
