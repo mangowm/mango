@@ -54,7 +54,7 @@ uint32_t get_tags_first_tag_num(uint32_t source_tags) {
 	tag = 0;
 
 	if (!source_tags) {
-		return selmon->pertag->curtag;
+		return 0;
 	}
 
 	for (i = 0; !(tag & 1) && source_tags != 0 && i < LENGTH(tags); i++) {

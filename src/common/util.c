@@ -174,3 +174,35 @@ char *string_printf(const char *fmt, ...) {
 	va_end(args);
 	return str;
 }
+
+void wl_list_swap(struct wl_list *l1, struct wl_list *l2) {
+	struct wl_list *tmp1_prev = l1->prev;
+	struct wl_list *tmp2_prev = l2->prev;
+	struct wl_list *tmp1_next = l1->next;
+	struct wl_list *tmp2_next = l2->next;
+
+	if (l1->next == l2) { /* l1 -> l2 相邻 */
+		l1->next = l2->next;
+		l1->prev = l2;
+		l2->next = l1;
+		l2->prev = tmp1_prev;
+		tmp1_prev->next = l2;
+		tmp2_next->prev = l1;
+	} else if (l2->next == l1) { /* l2 -> l1 相邻 */
+		l2->next = l1->next;
+		l2->prev = l1;
+		l1->next = l2;
+		l1->prev = tmp2_prev;
+		tmp2_prev->next = l1;
+		tmp1_next->prev = l2;
+	} else { /* 不相邻 */
+		l2->next = tmp1_next;
+		l2->prev = tmp1_prev;
+		l1->next = tmp2_next;
+		l1->prev = tmp2_prev;
+		tmp1_prev->next = l2;
+		tmp1_next->prev = l2;
+		tmp2_prev->next = l1;
+		tmp2_next->prev = l1;
+	}
+}

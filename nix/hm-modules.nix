@@ -22,6 +22,7 @@ in
       enable = mkOption {
         type = types.bool;
         default = false;
+        description = "Whether to enable mangowm, a Wayland compositor based on dwl.";
       };
       package = lib.mkOption {
         type = lib.types.package;
@@ -101,7 +102,7 @@ in
         description = ''
           Mango configuration written in Nix. Entries with the same key
           should be written as lists. Variables and colors names should be
-          quoted. See <https://mangowc.vercel.app/docs> for more examples.
+          quoted. See <https://mangowm.github.io/docs> for more examples.
 
           ::: {.note}
           This option uses a structured format that is converted to Mango's

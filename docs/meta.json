@@ -1,17 +1,3 @@
 {
-	"title": "mangowm",
-	"pages": [
-		"---Getting Started---",
-		"index",
-		"installation",
-		"quick-start",
-		"---Configuration---",
-		"configuration",
-		"visuals",
-		"window-management",
-		"bindings",
-		"---Reference---",
-		"ipc",
-		"faq"
-	]
+	"pages": ["(git)", "v0.13.1", "v0.13.0"]
 }

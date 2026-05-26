@@ -1,3 +1,4 @@
+#include "wlr/util/log.h"
 void client_actual_size(Client *c, int32_t *width, int32_t *height) {
 	*width = c->animation.current.width - 2 * (int32_t)c->bw;
 
@@ -70,6 +71,14 @@ int32_t is_special_animation_rule(Client *c) {
 	} else {
 		return UNDIR;
 	}
+}
+
+void set_overview_enter_animation(Client *c) {
+	struct wlr_box geo = c->geom;
+	c->animainit_geom.width = geo.width * 1.2;
+	c->animainit_geom.height = geo.height * 1.2;
+	c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
+	c->animainit_geom.y = geo.y + (geo.height - c->animainit_geom.height) / 2;
 }
 
 void set_client_open_animation(Client *c, struct wlr_box geo) {
@@ -230,6 +239,39 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 									   buffer_data->corner_location);
 }
 
+void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
+										int32_t sx, int32_t sy, void *data) {
+	BufferData *buffer_data = (BufferData *)data;
+
+	int32_t surface_width = 0;
+	int32_t surface_height = 0;
+	bool is_subsurface = false;
+
+	struct wlr_scene_tree *parent_tree = buffer->node.parent;
+	if (parent_tree->node.data != NULL) {
+		SnapshotMetadata *meta = (SnapshotMetadata *)parent_tree->node.data;
+		surface_width = meta->orig_width;
+		surface_height = meta->orig_height;
+		is_subsurface = meta->is_subsurface;
+	}
+
+	surface_height = surface_height * buffer_data->height_scale;
+	surface_width = surface_width * buffer_data->width_scale;
+
+	if (is_subsurface && surface_width > 0 && surface_height > 0) {
+		wlr_scene_buffer_set_dest_size(buffer, surface_width, surface_height);
+	} else if (buffer_data->height > 0 && buffer_data->width > 0) {
+		wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
+									   buffer_data->height);
+	}
+
+	if (is_subsurface)
+		return;
+
+	wlr_scene_buffer_set_corner_radius(buffer, config.border_radius,
+									   buffer_data->corner_location);
+}
+
 void buffer_set_effect(Client *c, BufferData data) {
 
 	if (!c || c->iskilling)
@@ -249,8 +291,13 @@ void buffer_set_effect(Client *c, BufferData data) {
 		data.corner_location = CORNER_LOCATION_NONE;
 	}
 
-	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
-								   scene_buffer_apply_effect, &data);
+	if (c->overview_scene_surface) {
+		wlr_scene_node_for_each_buffer(
+			&c->scene_surface->node, scene_buffer_apply_overview_effect, &data);
+	} else {
+		wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+									   scene_buffer_apply_effect, &data);
+	}
 }
 
 void client_draw_shadow(Client *c) {
@@ -284,8 +331,8 @@ void client_draw_shadow(Client *c) {
 	struct wlr_box client_box = {
 		.x = bwoffset,
 		.y = bwoffset,
-		.width = width + (int32_t)c->bw - bwoffset,
-		.height = height + (int32_t)c->bw - bwoffset,
+		.width = width + 2 * (int32_t)c->bw - 2 * bwoffset,
+		.height = height + 2 * (int32_t)c->bw - 2 * bwoffset,
 	};
 
 	struct wlr_box shadow_box = {
@@ -350,11 +397,105 @@ void client_draw_shadow(Client *c) {
 	wlr_scene_shadow_set_clipped_region(c->shadow, clipped_region);
 }
 
+void apply_split_border(Client *c, bool hit_no_border) {
+
+	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
+		return;
+
+	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+
+	if (hit_no_border || !ISTILED(c) || layout->id != DWINDLE ||
+		!config.dwindle_manual_split) {
+		if (c->splitindicator[0]->node.enabled) {
+			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+		}
+		if (c->splitindicator[1]->node.enabled) {
+			wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+		}
+		return;
+	} else {
+
+		DwindleNode **root =
+			&c->mon->pertag->dwindle_root[c->mon->pertag->curtag];
+		DwindleNode *dnode = dwindle_find_leaf(*root, c);
+
+		if (!dnode) {
+			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+			wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+			return;
+		} else {
+			if (dnode->custom_leaf_split_h) {
+				wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+				wlr_scene_node_set_enabled(&c->splitindicator[1]->node, true);
+			} else {
+				wlr_scene_node_set_enabled(&c->splitindicator[0]->node, true);
+				wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
+			}
+		}
+	}
+
+	struct wlr_box fullgeom = c->animation.current;
+	// 一但在GEZERO如果使用无符号，那么其他数据也会转换为无符号导致没有负数出错
+	int32_t bw = (int32_t)c->bw;
+
+	int32_t right_offset, bottom_offset, left_offset, top_offset;
+
+	if (c == grabc) {
+		right_offset = 0;
+		bottom_offset = 0;
+		left_offset = 0;
+		top_offset = 0;
+	} else {
+		right_offset =
+			GEZERO(c->animation.current.x + c->animation.current.width -
+				   c->mon->m.x - c->mon->m.width);
+		bottom_offset =
+			GEZERO(c->animation.current.y + c->animation.current.height -
+				   c->mon->m.y - c->mon->m.height);
+
+		left_offset = GEZERO(c->mon->m.x - c->animation.current.x);
+		top_offset = GEZERO(c->mon->m.y - c->animation.current.y);
+	}
+
+	int32_t border_down_width =
+		GEZERO(fullgeom.width - 2 * config.border_radius -
+			   GEZERO((left_offset + right_offset) - config.border_radius));
+	int32_t border_down_height =
+		GEZERO(bw - bottom_offset - GEZERO(top_offset + bw - fullgeom.height));
+
+	int32_t border_right_width =
+		GEZERO(bw - right_offset - GEZERO(left_offset + bw - fullgeom.width));
+	int32_t border_right_height =
+		GEZERO(fullgeom.height - 2 * config.border_radius -
+			   GEZERO((top_offset + bottom_offset) - config.border_radius));
+
+	int32_t border_down_x = GEZERO(config.border_radius +
+								   GEZERO(left_offset - config.border_radius));
+	int32_t border_down_y = GEZERO(fullgeom.height - bw) +
+							GEZERO(top_offset + bw - fullgeom.height);
+
+	int32_t border_right_x =
+		GEZERO(fullgeom.width - bw) + GEZERO(left_offset + bw - fullgeom.width);
+	int32_t border_right_y = GEZERO(config.border_radius +
+									GEZERO(top_offset - config.border_radius));
+
+	set_rect_size(c->splitindicator[0], border_down_width, border_down_height);
+	set_rect_size(c->splitindicator[1], border_right_width,
+				  border_right_height);
+	wlr_scene_node_set_position(&c->splitindicator[0]->node, border_down_x,
+								border_down_y);
+	wlr_scene_node_set_position(&c->splitindicator[1]->node, border_right_x,
+								border_right_y);
+}
+
 void apply_border(Client *c) {
 	if (!c || c->iskilling || !client_surface(c)->mapped)
 		return;
 
 	bool hit_no_border = check_hit_no_border(c);
+
+	apply_split_border(c, hit_no_border);
+
 	enum corner_location current_corner_location;
 	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)) {
@@ -510,6 +651,164 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 	return offset;
 }
 
+void client_set_drop_area(Client *c) {
+	bool first_draw = false;
+	int32_t drop_direction = UNDIR;
+
+	if (!c || !c->mon)
+		return;
+
+	if (!c->enable_drop_area_draw && !c->droparea->node.enabled) {
+		return;
+	}
+
+	if (!c->enable_drop_area_draw && c->droparea->node.enabled) {
+		wlr_scene_node_lower_to_bottom(&c->droparea->node);
+		wlr_scene_node_set_enabled(&c->droparea->node, false);
+		return;
+	} else if (c->enable_drop_area_draw && !c->droparea->node.enabled) {
+		wlr_scene_node_raise_to_top(&c->droparea->node);
+		wlr_scene_node_set_enabled(&c->droparea->node, true);
+		first_draw = true;
+	}
+
+	int32_t bw = (int32_t)c->bw;
+	int32_t client_width = c->geom.width - 2 * bw;
+	int32_t client_height = c->geom.height - 2 * bw;
+
+	// 光标在窗口客户区内的相对坐标
+	double rel_x = cursor->x - c->geom.x - bw;
+	double rel_y = cursor->y - c->geom.y - bw;
+
+	struct wlr_box drop_box;
+
+	const Layout *cur_layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+	bool dwindle_familiar =
+		cur_layout->id == DWINDLE && config.dwindle_drop_simple_split;
+
+	uint32_t nmaster = c->mon->pertag->nmasters[c->mon->pertag->curtag];
+
+	bool should_swap =
+		(cur_layout->id == DECK || cur_layout->id == VERTICAL_DECK ||
+		 cur_layout->id == MONOCLE || cur_layout->id == GRID ||
+		 cur_layout->id == FAIR || cur_layout->id == VERTICAL_FAIR ||
+		 cur_layout->id == VERTICAL_GRID) ||
+		((cur_layout->id == TILE || cur_layout->id == VERTICAL_TILE ||
+		  cur_layout->id == CENTER_TILE || cur_layout->id == RIGHT_TILE) &&
+		 nmaster == 1 && c->ismaster);
+
+	if (dwindle_familiar) {
+		bool split_h = c->geom.width >= c->geom.height;
+		float ratio = config.dwindle_split_ratio;
+		if (split_h) {
+			if (rel_x < client_width * 0.5) {
+				drop_direction = LEFT;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = (int32_t)(client_width * ratio);
+				drop_box.height = client_height;
+			} else {
+				drop_direction = RIGHT;
+				drop_box.x = bw + (int32_t)(client_width * ratio);
+				drop_box.y = bw;
+				drop_box.width = client_width - (int32_t)(client_width * ratio);
+				drop_box.height = client_height;
+			}
+		} else {
+			if (rel_y < client_height * 0.5) {
+				drop_direction = UP;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = (int32_t)(client_height * ratio);
+			} else {
+				drop_direction = DOWN;
+				drop_box.x = bw;
+				drop_box.y = bw + (int32_t)(client_height * ratio);
+				drop_box.width = client_width;
+				drop_box.height =
+					client_height - (int32_t)(client_height * ratio);
+			}
+		}
+	} else if (should_swap) {
+		drop_box.x = bw;
+		drop_box.y = bw;
+		drop_box.width = client_width;
+		drop_box.height = client_height;
+		drop_direction = UNDIR;
+	} else if (cur_layout->id == TILE || cur_layout->id == DECK ||
+			   cur_layout->id == CENTER_TILE || cur_layout->id == RIGHT_TILE) {
+		if (rel_y < client_height * 0.5) {
+			drop_direction = UP;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width;
+			drop_box.height = client_height / 2;
+		} else {
+			drop_direction = DOWN;
+			drop_box.x = bw;
+			drop_box.y = bw + client_height / 2;
+			drop_box.width = client_width;
+			drop_box.height = client_height / 2;
+		}
+	} else if (cur_layout->id == VERTICAL_TILE ||
+			   cur_layout->id == VERTICAL_DECK) {
+		if (rel_x < client_width * 0.5) {
+			drop_direction = LEFT;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width / 2;
+			drop_box.height = client_height;
+		} else {
+			drop_direction = RIGHT;
+			drop_box.x = bw + client_width / 2;
+			drop_box.y = bw;
+			drop_box.width = client_width / 2;
+			drop_box.height = client_height;
+		}
+	} else {
+		double dist_left = rel_x;
+		double dist_right = client_width - rel_x;
+		double dist_top = rel_y;
+		double dist_bottom = client_height - rel_y;
+
+		if (dist_left <= dist_right && dist_left <= dist_top &&
+			dist_left <= dist_bottom) {
+			drop_direction = LEFT;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width / 2;
+			drop_box.height = client_height;
+		} else if (dist_right <= dist_top && dist_right <= dist_bottom) {
+			drop_direction = RIGHT;
+			drop_box.x = bw + client_width / 2;
+			drop_box.y = bw;
+			drop_box.width = client_width / 2;
+			drop_box.height = client_height;
+		} else if (dist_top <= dist_bottom) {
+			drop_direction = UP;
+			drop_box.x = bw;
+			drop_box.y = bw;
+			drop_box.width = client_width;
+			drop_box.height = client_height / 2;
+		} else {
+			drop_direction = DOWN;
+			drop_box.x = bw;
+			drop_box.y = bw + client_height / 2;
+			drop_box.width = client_width;
+			drop_box.height = client_height / 2;
+		}
+	}
+
+	if (!first_draw && c->drop_direction == drop_direction) {
+		return;
+	}
+	c->drop_direction = drop_direction;
+
+	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
+	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
+}
+
 void client_apply_clip(Client *c, float factor) {
 
 	if (c->iskilling || !client_surface(c)->mapped)
@@ -523,7 +822,7 @@ void client_apply_clip(Client *c, float factor) {
 	enum corner_location current_corner_location =
 		set_client_corner_location(c);
 
-	if (!config.animations) {
+	if (!config.animations && !c->overview_scene_surface) {
 		c->animation.running = false;
 		c->need_output_flush = false;
 		c->animainit_geom = c->current = c->pending = c->animation.current =
@@ -540,7 +839,11 @@ void client_apply_clip(Client *c, float factor) {
 			return;
 		}
 
-		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+		if (!c->overview_scene_surface) {
+			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
+											   &clip_box);
+		}
+
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
 										  current_corner_location, true});
@@ -588,7 +891,9 @@ void client_apply_clip(Client *c, float factor) {
 	}
 
 	// 应用窗口表面剪切
-	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+	if (!c->overview_scene_surface) {
+		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+	}
 
 	// 获取剪切后的表面的实际大小用于计算缩放
 	int32_t acutal_surface_width = geometry.width - offset.x - offset.width;
@@ -602,7 +907,7 @@ void client_apply_clip(Client *c, float factor) {
 	buffer_data.height = clip_box.height;
 	buffer_data.corner_location = current_corner_location;
 
-	if (factor == 1.0) {
+	if (factor == 1.0 && !c->overview_scene_surface) {
 		buffer_data.width_scale = 1.0;
 		buffer_data.height_scale = 1.0;
 	} else {
@@ -734,11 +1039,11 @@ void client_animation_next_tick(Client *c) {
 
 		c->animation.tagining = false;
 		c->animation.running = false;
+		c->animation.overining = false;
 
 		if (c->animation.tagouting) {
 			c->animation.tagouting = false;
 			wlr_scene_node_set_enabled(&c->scene->node, false);
-			client_set_suspended(c, true);
 			c->animation.tagouted = true;
 			c->animation.current = c->geom;
 		}
@@ -747,7 +1052,9 @@ void client_animation_next_tick(Client *c) {
 
 		surface =
 			pointer_c && pointer_c == c ? client_surface(pointer_c) : NULL;
-		if (surface && pointer_c == selmon->sel) {
+
+		// avoid game window force grab pointer in overview mode
+		if (surface && pointer_c == selmon->sel && !selmon->isoverview) {
 			wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
 		}
 
@@ -776,6 +1083,10 @@ void init_fadeout_client(Client *c) {
 
 	wlr_scene_node_set_enabled(&c->scene->node, true);
 	client_set_border_color(c, config.bordercolor);
+	if (c->overview_scene_surface) {
+		wlr_scene_node_destroy(&c->overview_scene_surface->node);
+		c->overview_scene_surface = NULL;
+	}
 	fadeout_client->scene =
 		wlr_scene_tree_snapshot(&c->scene->node, layers[LyrFadeOut]);
 	wlr_scene_node_set_enabled(&c->scene->node, false);
@@ -870,9 +1181,8 @@ void client_set_pending_state(Client *c) {
 		c->animation.should_animate = false;
 	} else if (config.animations && c->animation.tagining) {
 		c->animation.should_animate = true;
-	} else if (!config.animations || c == grabc ||
-			   (!c->is_pending_open_animation &&
-				wlr_box_equal(&c->current, &c->pending))) {
+	} else if (c == grabc || (!c->is_pending_open_animation &&
+							  wlr_box_equal(&c->current, &c->pending))) {
 		c->animation.should_animate = false;
 	} else {
 		c->animation.should_animate = true;
@@ -946,8 +1256,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animation.begin_fade_in = false;
 	}
 
-	if (c->animation.action == OPEN && !c->animation.tagining &&
-		!c->animation.tagouting && wlr_box_equal(&c->geom, &c->current)) {
+	if (c->animation.overining) {
+		c->animation.action = OVERVIEW;
+	} else if (c->animation.action == OPEN && !c->animation.tagining &&
+			   !c->animation.tagouting &&
+			   wlr_box_equal(&c->geom, &c->current)) {
 		c->animation.action = c->animation.action;
 	} else if (c->animation.tagouting) {
 		c->animation.duration = config.animation_duration_tag;
@@ -986,8 +1299,10 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	}
 
 	// c->geom 是真实的窗口大小和位置，跟过度的动画无关，用于计算布局
-	c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
-										  c->geom.height - 2 * c->bw);
+	if (!c->mon->isoverview || !config.ov_no_resize) {
+		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
+											  c->geom.height - 2 * c->bw);
+	}
 
 	if (c->configure_serial != 0) {
 		c->mon->resizing_count_pending++;
@@ -1030,6 +1345,15 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->animainit_geom = c->geom;
 	}
 
+	if (config.animations && config.ov_no_resize && c->mon->isoverview &&
+		c != c->mon->sel && c->animation.action == OVERVIEW) {
+		set_overview_enter_animation(c);
+	}
+
+	if (!config.animations && config.ov_no_resize && c->mon->isoverview) {
+		c->animainit_geom = c->geom;
+	}
+
 	// 开始应用动画设置
 	client_set_pending_state(c);
 
@@ -1046,6 +1370,7 @@ bool client_draw_fadeout_frame(Client *c) {
 
 void client_set_focused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
+	wlr_scene_node_lower_to_bottom(&c->border->node);
 
 	if (!config.animations) {
 		setborder_color(c);
@@ -1067,7 +1392,7 @@ void client_set_focused_opacity_animation(Client *c) {
 
 void client_set_unfocused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
-
+	wlr_scene_node_raise_to_top(&c->border->node);
 	if (!config.animations) {
 		setborder_color(c);
 		return;

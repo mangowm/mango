@@ -12,3 +12,4 @@ char *join_strings(char *arr[], const char *sep);
 char *join_strings_with_suffix(char *arr[], const char *suffix,
 							   const char *sep);
 char *string_printf(const char *fmt, ...);
+void wl_list_swap(struct wl_list *l1, struct wl_list *l2);

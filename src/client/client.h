@@ -380,15 +380,6 @@ static inline void client_set_tiled(Client *c, uint32_t edges) {
 	}
 }
 
-static inline void client_set_suspended(Client *c, int32_t suspended) {
-#ifdef XWAYLAND
-	if (client_is_x11(c))
-		return;
-#endif
-
-	wlr_xdg_toplevel_set_suspended(c->surface.xdg->toplevel, suspended);
-}
-
 static inline int32_t client_should_ignore_focus(Client *c) {
 
 #ifdef XWAYLAND
