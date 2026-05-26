@@ -2468,6 +2468,7 @@ void setcursorshape(struct wl_listener *listener, void *data) {
 }
 
 void cleanuplisteners(void) {
+	wl_list_remove(&ext_manager_commit_listener.link); // 0.7
 	wl_list_remove(&print_status_listener.link);
 	wl_list_remove(&cursor_axis.link);
 	wl_list_remove(&cursor_button.link);
