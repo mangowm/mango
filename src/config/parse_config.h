@@ -857,6 +857,24 @@ uint32_t parse_button(const char *str) {
 	}
 	lowerStr[i] = '\0'; // 确保字符串正确终止
 
+	// 解析 "code:数字" 格式
+	if (strncmp(lowerStr, "code:", 5) == 0) {
+		const char *numStart = lowerStr + 5; // 跳过 "code:"
+		char *endptr;
+		unsigned long val = strtoul(numStart, &endptr, 10);
+
+		// 检查是否成功转换且无多余字符，且值未溢出（在 uint32_t 范围内）
+		if (endptr != numStart && *endptr == '\0' && val <= UINT32_MAX) {
+			return (uint32_t)val;
+		} else {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid code format: "
+					"\033[1m\033[31m%s\n",
+					str);
+			return UINT32_MAX;
+		}
+	}
+
 	// 根据转换后的小写字符串返回对应的按钮编号
 	if (strcmp(lowerStr, "btn_left") == 0) {
 		return BTN_LEFT;
