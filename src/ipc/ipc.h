@@ -159,7 +159,7 @@ static cJSON *build_client_json(Client *c) {
 	cJSON_AddStringToObject(obj, "appid", client_get_appid(c));
 	cJSON_AddStringToObject(obj, "monitor", c->mon->wlr_output->name);
 	cJSON_AddItemToObject(obj, "tags", tags_mask_to_array(c->tags));
-	cJSON_AddBoolToObject(obj, "is_focused", c == focustop(c->mon));
+	cJSON_AddBoolToObject(obj, "is_focused", c->isfocusing);
 	cJSON_AddBoolToObject(obj, "is_fullscreen", c->isfullscreen);
 	cJSON_AddBoolToObject(obj, "is_floating", c->isfloating);
 	cJSON_AddBoolToObject(obj, "is_maximized", c->ismaximizescreen);
