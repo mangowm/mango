@@ -622,6 +622,45 @@ void dwindle(Monitor *m) {
 				   gap_iv);
 }
 
+static void dwindle_movetoroot(DwindleNode **root, Client *c, bool stable) {
+	if (!root || !*root || !c)
+		return;
+
+	DwindleNode *x = dwindle_find_leaf(*root, c);
+	if (!x || !x->parent)
+		return;
+
+	if (!x->parent->parent)
+		return;
+
+	DwindleNode **pNode =
+		(x->parent->first == x) ? &(x->parent->first) : &(x->parent->second);
+
+	DwindleNode *pAncestor = x;
+	DwindleNode *pRoot = x->parent;
+	while (pRoot->parent) {
+		pAncestor = pRoot;
+		pRoot = pRoot->parent;
+	}
+
+	DwindleNode **pSwap =
+		(pRoot->first == pAncestor) ? &(pRoot->second) : &(pRoot->first);
+
+	DwindleNode *temp = *pNode;
+	*pNode = *pSwap;
+	*pSwap = temp;
+
+	DwindleNode *parent_temp = (*pNode)->parent;
+	(*pNode)->parent = (*pSwap)->parent;
+	(*pSwap)->parent = parent_temp;
+
+	if (stable) {
+		DwindleNode *temp_root_child = pRoot->first;
+		pRoot->first = pRoot->second;
+		pRoot->second = temp_root_child;
+	}
+}
+
 void cleanup_monitor_dwindle(Monitor *m) {
 	for (uint32_t t = 0; t < LENGTH(tags) + 1; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
