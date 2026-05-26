@@ -909,9 +909,15 @@ int32_t spawn_shell(const Arg *arg) {
 		return 0;
 
 	if (fork() == 0) {
-		signal(SIGSEGV, SIG_IGN);
-		signal(SIGABRT, SIG_IGN);
-		signal(SIGILL, SIG_IGN);
+		signal(SIGSEGV, SIG_DFL);
+		signal(SIGABRT, SIG_DFL);
+		signal(SIGILL, SIG_DFL);
+		signal(SIGCHLD, SIG_DFL);
+
+		int fd_max = sysconf(_SC_OPEN_MAX);
+		for (int i = 3; i < fd_max; i++) {
+			close(i);
+		}
 
 		dup2(STDERR_FILENO, STDOUT_FILENO);
 		setsid();
@@ -921,7 +927,7 @@ int32_t spawn_shell(const Arg *arg) {
 
 		wlr_log(WLR_DEBUG,
 				"mango: failed to execute command '%s' with shell: %s\n",
-				arg->v, strerror(errno));
+				(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
 	return 0;
@@ -932,16 +938,25 @@ int32_t spawn(const Arg *arg) {
 		return 0;
 
 	if (fork() == 0) {
-		signal(SIGSEGV, SIG_IGN);
-		signal(SIGABRT, SIG_IGN);
-		signal(SIGILL, SIG_IGN);
+		signal(SIGSEGV, SIG_DFL);
+		signal(SIGABRT, SIG_DFL);
+		signal(SIGILL, SIG_DFL);
+		signal(SIGCHLD, SIG_DFL);
+
+		// close all file descriptors inherited from the parent process to
+		// prevent IPC handle leakage that can block clients
+		int fd_max = sysconf(_SC_OPEN_MAX);
+		for (int i = 3; i < fd_max; i++) {
+			close(i);
+		}
 
 		dup2(STDERR_FILENO, STDOUT_FILENO);
 		setsid();
 
 		wordexp_t p;
 		if (wordexp(arg->v, &p, 0) != 0) {
-			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n", arg->v);
+			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n",
+					(char *)arg->v);
 			_exit(EXIT_FAILURE);
 		}
 
