@@ -46,6 +46,10 @@ jobs:
             if [ -d "/tmp/docs-$tag/docs" ]; then
               name="v${tag#v}"
               cp -r "/tmp/docs-$tag/docs" "$TARGET/$name"
+              jq --arg title "$name" --arg desc "$name release" \
+                '.title = $title | .description = $desc | .root = true' \
+                "$TARGET/$name/meta.json" > "$TARGET/$name/meta.json.tmp" \
+                && mv "$TARGET/$name/meta.json.tmp" "$TARGET/$name/meta.json"
             fi
             git worktree remove /tmp/docs-"$tag"
           done
