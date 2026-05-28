@@ -1225,5 +1225,5 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		checkidleinhibitor(NULL);
 	}
 
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }

@@ -9,20 +9,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-enum ipc_watch_type {
-	IPC_WATCH_NONE,
-	IPC_WATCH_MONITOR,
-	IPC_WATCH_CLIENT,
-	IPC_WATCH_TAGS,
-	IPC_WATCH_ALL_MONITORS,
-	IPC_WATCH_ALL_TAGS,
-	IPC_WATCH_ALL_CLIENTS,
-	IPC_WATCH_KEYMODE,
-	IPC_WATCH_KB_LAYOUT,
-	IPC_WATCH_LAST_OPEN_SURFACE,
-	IPC_WATCH_FOCUSING_CLIENT
-};
-
 struct ipc_watch_client {
 	struct wl_list link;
 	int fd;

@@ -149,6 +149,11 @@
 
 #define BAKED_POINTS_COUNT 256
 
+#define IPC_WATCH_ARRANGGE                                                     \
+	IPC_WATCH_MONITOR | IPC_WATCH_CLIENT | IPC_WATCH_TAGS |                    \
+		IPC_WATCH_ALL_MONITORS | IPC_WATCH_ALL_TAGS | IPC_WATCH_ALL_CLIENTS |  \
+		IPC_WATCH_LAST_OPEN_SURFACE | IPC_WATCH_FOCUSING_CLIENT
+
 /* enums */
 enum { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT };
 
@@ -192,6 +197,20 @@ enum tearing_mode {
 enum seat_config_shortcuts_inhibit {
 	SHORTCUTS_INHIBIT_DISABLE,
 	SHORTCUTS_INHIBIT_ENABLE,
+};
+
+enum ipc_watch_type {
+    IPC_WATCH_NONE              = 0,
+    IPC_WATCH_MONITOR           = 1 << 0,
+    IPC_WATCH_CLIENT            = 1 << 1,
+    IPC_WATCH_TAGS              = 1 << 2,
+    IPC_WATCH_ALL_MONITORS      = 1 << 3,
+    IPC_WATCH_ALL_TAGS          = 1 << 4,
+    IPC_WATCH_ALL_CLIENTS       = 1 << 5,
+    IPC_WATCH_KEYMODE           = 1 << 6,
+    IPC_WATCH_KB_LAYOUT         = 1 << 7,
+    IPC_WATCH_LAST_OPEN_SURFACE = 1 << 8,
+    IPC_WATCH_FOCUSING_CLIENT   = 1 << 9,
 };
 
 typedef struct Pertag Pertag;
@@ -449,6 +468,8 @@ typedef struct {
 	struct wl_listener modifiers;
 	struct wl_listener key;
 	struct wl_listener destroy;
+
+	u_int32_t layout_index;
 } KeyboardGroup;
 
 typedef struct {
@@ -712,7 +733,7 @@ static void outputmgrapplyortest(struct wlr_output_configuration_v1 *config,
 static void outputmgrtest(struct wl_listener *listener, void *data);
 static void pointerfocus(Client *c, struct wlr_surface *surface, double sx,
 						 double sy, uint32_t time);
-static void printstatus(void);
+static void printstatus(enum ipc_watch_type type);
 static void quitsignal(int32_t signo);
 static void powermgrsetmode(struct wl_listener *listener, void *data);
 static void rendermon(struct wl_listener *listener, void *data);
@@ -2627,7 +2648,7 @@ void closemon(Monitor *m) {
 	}
 	if (selmon) {
 		focusclient(focustop(selmon), 1);
-		printstatus();
+		printstatus(IPC_WATCH_ARRANGGE);
 	}
 }
 
@@ -3322,7 +3343,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		add_workspace_by_tag(i, m);
 	}
 
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void // fix for 0.5
@@ -3819,7 +3840,7 @@ void focusclient(Client *c, int32_t lift) {
 			client_activate_surface(old_keyboard_focus_surface, 0);
 		}
 	}
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 
 	if (!c) {
 
@@ -4200,6 +4221,14 @@ void keypressmod(struct wl_listener *listener, void *data) {
 		wlr_seat_keyboard_notify_modifiers(
 			seat, &group->wlr_group->keyboard.modifiers);
 	}
+
+	xkb_layout_index_t current = xkb_state_serialize_layout(
+		group->wlr_group->keyboard.xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+
+	if (current != group->layout_index) {
+		group->layout_index = current;
+		printstatus(IPC_WATCH_KB_LAYOUT);
+	}
 }
 
 void pending_kill_client(Client *c) {
@@ -4466,7 +4495,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void maximizenotify(struct wl_listener *listener, void *data) {
@@ -4887,7 +4916,9 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 }
 
 // 修改printstatus函数，接受掩码参数
-void printstatus(void) { wl_signal_emit(&mango_print_status, NULL); }
+void printstatus(enum ipc_watch_type type) {
+	wl_signal_emit(&mango_print_status, &type);
+}
 
 // 会话销毁时的回调
 void handle_session_destroy(struct wl_listener *listener, void *data) {
@@ -5222,7 +5253,7 @@ run(char *startup_cmd) {
 	if (fd_set_nonblock(STDOUT_FILENO) < 0)
 		close(STDOUT_FILENO);
 
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 
 	/* At this point the outputs are initialized, choose initial selmon
 	 * based on cursor position, and set default cursor image */
@@ -5383,7 +5414,7 @@ setfloating(Client *c, int32_t floating) {
 	}
 
 	setborder_color(c);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void reset_maximizescreen_size(Client *c) {
@@ -5709,18 +5740,36 @@ void create_output(struct wlr_backend *backend, void *data) {
 // 修改信号处理函数，接收掩码参数
 void handle_print_status(struct wl_listener *listener, void *data) {
 
-	ipc_notify_keymode();
-	ipc_notify_kb_layout();
-	ipc_notify_focusing_client();
-	ipc_notify_all_tags();
-	ipc_notify_all_clients();
-	ipc_notify_all_monitors();
+	enum ipc_watch_type type = *(enum ipc_watch_type *)data;
 
-	Client *c = NULL;
-	wl_list_for_each(c, &clients, link) {
-		if (c->iskilling)
-			continue;
-		ipc_notify_client(c);
+	if (type & IPC_WATCH_KEYMODE) {
+		ipc_notify_keymode();
+	}
+	if (type & IPC_WATCH_KB_LAYOUT) {
+		ipc_notify_kb_layout();
+	}
+	if (type & IPC_WATCH_FOCUSING_CLIENT) {
+		ipc_notify_focusing_client();
+	}
+	if (type & IPC_WATCH_ALL_TAGS) {
+		ipc_notify_all_tags();
+	}
+	if (type & IPC_WATCH_ALL_CLIENTS) {
+		ipc_notify_all_clients();
+	}
+	if (type &
+		(IPC_WATCH_ALL_MONITORS | IPC_WATCH_KEYMODE | IPC_WATCH_KB_LAYOUT |
+		 IPC_WATCH_FOCUSING_CLIENT | IPC_WATCH_TAGS)) {
+		ipc_notify_all_monitors();
+	}
+
+	if (type & IPC_WATCH_CLIENT) {
+		Client *c = NULL;
+		wl_list_for_each(c, &clients, link) {
+			if (c->iskilling)
+				continue;
+			ipc_notify_client(c);
+		}
 	}
 
 	Monitor *m = NULL;
@@ -5729,9 +5778,16 @@ void handle_print_status(struct wl_listener *listener, void *data) {
 			continue;
 		}
 
-		ipc_notify_monitor(m);
-		ipc_notify_tags(m);
-		ipc_notify_last_surface_ws_name(m);
+		if (type & IPC_WATCH_MONITOR) {
+			ipc_notify_monitor(m);
+		}
+		if (type & IPC_WATCH_TAGS) {
+			ipc_notify_tags(m);
+		}
+
+		if (type & IPC_WATCH_LAST_OPEN_SURFACE) {
+			ipc_notify_last_surface_ws_name(m);
+		}
 
 		dwl_ext_workspace_printstatus(m);
 		dwl_ipc_output_printstatus(m);
@@ -6104,7 +6160,7 @@ void tag_client(const Arg *arg, Client *target_client) {
 	}
 
 	focusclient(target_client, 1);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 // 目标窗口有其他窗口和它同个tag就返回0
@@ -6436,7 +6492,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->stack_proportion = 0.0f;
 
 	wlr_scene_node_destroy(&c->scene->node);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 	motionnotify(0, NULL, 0, 0, 0, 0);
 }
 
@@ -6593,7 +6649,7 @@ void updatetitle(struct wl_listener *listener, void *data) {
 			});
 	}
 	if (c == focustop(c->mon))
-		printstatus();
+		printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void // 17 fix to 0.5
@@ -6613,7 +6669,7 @@ urgent(struct wl_listener *listener, void *data) {
 		c->isurgent = 1;
 		if (client_surface(c)->mapped)
 			setborder_color(c);
-		printstatus();
+		printstatus(IPC_WATCH_ARRANGGE);
 	}
 }
 
@@ -6672,7 +6728,7 @@ toggleseltags:
 	if (changefocus)
 		focusclient(focustop(m), 1);
 	arrange(m, want_animation, true);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void view(const Arg *arg, bool want_animation) {
@@ -6842,7 +6898,7 @@ void activatex11(struct wl_listener *listener, void *data) {
 		arrange(c->mon, false, false);
 	}
 
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }
 
 void configurex11(struct wl_listener *listener, void *data) {
@@ -6931,7 +6987,7 @@ void sethints(struct wl_listener *listener, void *data) {
 		return;
 
 	c->isurgent = xcb_icccm_wm_hints_get_urgency(c->surface.xwayland->hints);
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 
 	if (c->isurgent && surface && surface->mapped)
 		setborder_color(c);

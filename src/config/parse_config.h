@@ -3844,6 +3844,6 @@ void reset_option(void) {
 int32_t reload_config(const Arg *arg) {
 	parse_config();
 	reset_option();
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 	return 1;
 }
