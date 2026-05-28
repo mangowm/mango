@@ -66,8 +66,8 @@ static const char *ipc_get_layout_str(void) {
 	xkb_layout_index_t current = xkb_state_serialize_layout(
 		keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 	static char layout[32];
-	get_layout_abbr(layout,
-					xkb_keymap_layout_get_name(keyboard->keymap, current));
+	const char *name = xkb_keymap_layout_get_name(keyboard->keymap, current);
+	snprintf(layout, sizeof(layout), "%s", name ? name : "");
 	return layout;
 }
 
