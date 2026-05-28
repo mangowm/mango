@@ -200,17 +200,17 @@ enum seat_config_shortcuts_inhibit {
 };
 
 enum ipc_watch_type {
-    IPC_WATCH_NONE              = 0,
-    IPC_WATCH_MONITOR           = 1 << 0,
-    IPC_WATCH_CLIENT            = 1 << 1,
-    IPC_WATCH_TAGS              = 1 << 2,
-    IPC_WATCH_ALL_MONITORS      = 1 << 3,
-    IPC_WATCH_ALL_TAGS          = 1 << 4,
-    IPC_WATCH_ALL_CLIENTS       = 1 << 5,
-    IPC_WATCH_KEYMODE           = 1 << 6,
-    IPC_WATCH_KB_LAYOUT         = 1 << 7,
-    IPC_WATCH_LAST_OPEN_SURFACE = 1 << 8,
-    IPC_WATCH_FOCUSING_CLIENT   = 1 << 9,
+	IPC_WATCH_NONE = 0,
+	IPC_WATCH_MONITOR = 1 << 0,
+	IPC_WATCH_CLIENT = 1 << 1,
+	IPC_WATCH_TAGS = 1 << 2,
+	IPC_WATCH_ALL_MONITORS = 1 << 3,
+	IPC_WATCH_ALL_TAGS = 1 << 4,
+	IPC_WATCH_ALL_CLIENTS = 1 << 5,
+	IPC_WATCH_KEYMODE = 1 << 6,
+	IPC_WATCH_KB_LAYOUT = 1 << 7,
+	IPC_WATCH_LAST_OPEN_SURFACE = 1 << 8,
+	IPC_WATCH_FOCUSING_CLIENT = 1 << 9,
 };
 
 typedef struct Pertag Pertag;
@@ -4488,7 +4488,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// set border color
 	setborder_color(c);
 
-	if (c->mon->isoverview && config.ov_no_resize) {
+	if (c->mon && c->mon->isoverview && config.ov_no_resize) {
 		overview_backup_surface(c);
 	}
 
