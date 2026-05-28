@@ -51,7 +51,7 @@ You can divide key bindings into named modes. Rules:
 2. If no `keymode` is set before a bind, it belongs to the `default` mode.
 3. The special `common` keymode applies its binds **across all modes**.
 
-Use `setkeymode` to switch modes, and `mmsg -b` to query the current mode.
+Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini
 # Binds in 'common' apply in every mode
@@ -147,6 +147,9 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `scroller_stack` | `left/right/up/down` | Move window inside/outside scroller stack by direction. |
 | `incgaps` | `+/-value` | Adjust gap size. |
 | `togglegaps` | - | Toggle gaps. |
+|  `dwindle_toggle_split_direction` | - | Toggle split direction in dwindle layout. |
+| `dwindle_split_horizontal` | - | Set split window direction to horizontal in dwindle layout. |
+| `dwindle_split_vertical` | - | Set split window direction to vertical in dwindle layout. |
 
 ### System
 

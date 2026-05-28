@@ -34,14 +34,14 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
-| `indleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
 
 ### Geometry & Position
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `width` | integer | 0-9999 | Window width when it becomes a floating window |
-| `height` | integer | 0-9999 | Window height when it becomes a floating window |
+| `width` | float | 0-9999 | Window width when it becomes a floating window,if the value below 1, it will be the percentage of the screen width,otherwise it will be the pixel value |
+| `height` | float | 0-9999 | Window height when it becomes a floating window,if the value below 1, it will be the percentage of the screen height,otherwise it will be the pixel value |
 | `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
 | `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
@@ -220,7 +220,7 @@ You can set all parameters in one line. Target "layer shell" surfaces like statu
 layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 ```
 
-> **Tip:** You can use `mmsg -e` to get the last open layer name for debugging.
+> **Tip:** You can use `mmsg get last_open_surface` to get the last open layer name for debugging.
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |

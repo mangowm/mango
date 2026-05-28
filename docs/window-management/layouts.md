@@ -18,7 +18,9 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `vertical_scroller`
 - `vertical_grid`
 - `vertical_deck`
-- `tgmix`
+- `dwindle`
+- `fair`
+- `vertical_fair`
 
 ---
 
@@ -36,6 +38,7 @@ The Scroller layout positions windows in a scrollable strip, similar to PaperWM.
 | `scroller_prefer_center` | `0` | Center focused window only if it was outside the view. |
 | `scroller_prefer_overspread` | `1` | Allow windows to overspread when there's extra space. |
 | `edge_scroller_pointer_focus` | `1` | Focus windows even if partially off-screen. |
+| `edge_scroller_focus_allow_speed` | `0.0` | Allow pointer focus to happen if the pointer moves at a speed greater than this value. |
 | `scroller_proportion_preset` | `0.5,0.8,1.0` | Presets for cycling window widths. |
 | `scroller_ignore_proportion_single` | `1` | Ignore proportion adjustments for single windows. |
 | `scroller_default_proportion_single` | `1.0` | Default proportion for single windows in scroller. **Requires `scroller_ignore_proportion_single=0` to take effect.** |
@@ -54,6 +57,7 @@ scroller_focus_center=0
 scroller_prefer_center=0
 scroller_prefer_overspread=1
 edge_scroller_pointer_focus=1
+edge_scroller_focus_allow_speed=0.0
 scroller_default_proportion_single=1.0
 scroller_proportion_preset=0.5,0.8,1.0
 ```
@@ -83,7 +87,40 @@ default_nmaster=1
 
 ---
 
+## Dwindle Layout
+
+The Dwindle layout arranges windows as a binary tree of recursive splits. Each new window splits the focused window's container, producing a spiral-like tiling.
+
+### Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `dwindle_split_ratio` | `0.5` | Ratio used for new splits (`0.05`–`0.95`). |
+| `dwindle_smart_split` | `0` | Pick the split axis from the cursor's position inside the focused window. The new window appears on the cursor's side. |
+| `dwindle_hsplit` | `1` | Side-by-side splits: where the new window goes. `0` = follow cursor, `1` = right, `2` = left. |
+| `dwindle_vsplit` | `1` | Top/bottom splits: where the new window goes. `0` = follow cursor, `1` = below, `2` = above. |
+| `dwindle_preserve_split` | `0` | Keep the sibling's split orientation when a window is closed. |
+| `dwindle_smart_resize` | `0` | When dragging to resize, move the split toward the cursor regardless of which side was grabbed. |
+| `dwindle_drop_simple_split` | `1` | Drag-to-tile drop preview. `1` = 2-zone preview matching `dwindle_split_ratio`, `0` = 4-quadrant preview. |
+| `dwindle_manual_split` | `0` | Manually split windows mode. |
+
+```ini
+# Example dwindle configuration
+dwindle_split_ratio=0.5
+dwindle_smart_split=0
+dwindle_hsplit=0
+dwindle_vsplit=0
+dwindle_preserve_split=0
+dwindle_smart_resize=0
+dwindle_drop_simple_split=1
+```
+
+---
+
 ## Switching Layouts
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `circle_layout` | - | A comma-separated list of layouts `switch_layout` cycles through,the value sample:`tile,scroller`. |
 
 You can switch layouts dynamically or set a default for specific tags using [Tag Rules](/docs/window-management/rules#tag-rules).
 
@@ -91,6 +128,7 @@ You can switch layouts dynamically or set a default for specific tags using [Tag
 
 ```ini
 # Cycle through layouts
+circle_layout=grid,scroller,tile
 bind=SUPER,n,switch_layout
 
 # Set specific layout

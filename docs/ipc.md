@@ -3,152 +3,76 @@ title: IPC
 description: Control mangowm programmatically using mmsg.
 ---
 
-## Introduction
+# mmsg(1) - User Manual
 
-mangowm includes a powerful IPC (Inter-Process Communication) tool called `mmsg`. This allows you to query the window manager's state, watch for events, and execute commands from external scripts.
+`mmsg` is the command-line interface for the Mango compositor's Inter-Process Communication (IPC) system. It allows users and scripts to query the state of the compositor or subscribe to real-time events.
 
-## Basic Usage
+## SYNOPSIS
+`mmsg <command> [arguments...]`
 
-The general syntax for `mmsg` is:
+## DESCRIPTION
+`mmsg` acts as a client that connects to the Mango compositor via a Unix domain socket defined by the `MANGO_INSTANCE_SIGNATURE` environment variable. It supports two primary modes of operation:
+1. **One-shot Request (`get`)**: Sends a query to the compositor, receives a single JSON response, and terminates.
+2. **Persistent Stream (`watch`)**: Subscribes to a specific state, receiving continuous JSON updates whenever that state changes.
 
-```bash
-mmsg [-OTLq]
-mmsg [-o <output>] -s [-t <tags>] [-l <layout>] [-c <tags>] [-d <cmd>,<arg1>,<arg2>,<arg3>,<arg4>,<arg5>]
-mmsg [-o <output>] (-g | -w) [-OotlcvmfxekbA]
-```
+## ENVIRONMENT VARIABLES
+* **`MANGO_INSTANCE_SIGNATURE`**: Must be set to the path of the Unix socket created by the running Mango instance. This is typically handled automatically when running `mmsg` from within a terminal spawned by the compositor.
 
-### Options
+## COMMANDS
 
-| Flag | Description |
+### GET (One-Shot Queries)
+| Command | Description |
 | :--- | :--- |
-| `-q` | Quit mangowm. |
-| `-g` | **Get** values (tags, layout, focused client). |
-| `-s` | **Set** values (switch tags, layouts). |
-| `-w` | **Watch** mode (streams events). |
-| `-O` | Get all output (monitor) information. |
-| `-T` | Get number of tags. |
-| `-L` | Get all available layouts. |
-| `-o` | Select output (monitor). |
-| `-t` | Get/set selected tags (set with `[+-^.]`). |
-| `-l` | Get/set current layout. |
-| `-c` | Get title and appid of focused client. |
-| `-v` | Get visibility of statusbar. |
-| `-m` | Get fullscreen status. |
-| `-f` | Get floating status. |
-| `-d` | **Dispatch** an internal command. |
-| `-x` | Get focused client geometry. |
-| `-e` | Get the name of the last focused layer. |
-| `-k` | Get current keyboard layout. |
-| `-b` | Get current keybind mode. |
-| `-A` | Get scale factor of monitor. |
+| `get version` | Returns the current version of the compositor. |
+| `get keymode` | Returns the current active keyboard mode (e.g., normal, insert). |
+| `get keyboardlayout` | Returns the active XKB layout (abbreviated). |
+| `get monitor <name>` | Returns full JSON details for a specific monitor. |
+| `get focusing-client` | Returns full JSON details for the client currently in focus. |
+| `get client <id>` | Returns full JSON details for a client with the given ID. |
+| `get tag <mon> <idx>` | Queries status of a specific tag on a monitor. |
+| `get tags <mon>` | Returns a JSON object containing the status of all tags on a monitor. |
+| `get all-clients` | Returns a JSON array of all active clients. |
+| `get all-monitors` | Returns a JSON array of all connected monitors. |
+| `get all-tags` | Returns a JSON object containing the status of all tags. |
+| `get last_open_surface [<mon>]` | Returns the last focused surface name for a monitor,if the mon not set, it will get current monitor. |
 
-## Examples
-
-### Tag Management
-
-You can perform arithmetic on tags using the `-t` flag with `-s` (set).
-
+*Example:*
 ```bash
-# Switch to Tag 1
-mmsg -t 1
-
-# Add Tag 2 to current view (Multiview)
-mmsg -s -t 2+
-
-# Remove Tag 2 from current view
-mmsg -s -t 2-
-
-# Toggle Tag 2
-mmsg -s -t 2^
+mmsg get monitor eDP-1
+mmsg get all-clients
+mmsg get all-monitors
 ```
 
-### Layouts
+### WATCH (Event Subscription)
+Subscribes the client to real-time updates. When the state changes, the server pushes a new JSON object to the output stream.
 
-Switch layouts programmatically. Layout codes: `S` (Scroller), `T` (Tile), `G` (Grid), `M` (Monocle), `K` (Deck), `CT` (Center Tile), `RT` (Right Tile), `VS` (Vertical Scroller), `VT` (Vertical Tile), `VG` (Vertical Grid), `VK` (Vertical Deck), `TG` (TGMix).
+* `watch monitor <name>`
+* `watch focusing-client`
+* `watch client <id>`
+* `watch tags <mon_name>`
+* `watch all-monitors`
+* `watch all-tags`
+* `watch all-clients`
+* `watch keymode`
+* `watch keyboardlayout`
+* `watch last_open_surface [<mon_name>]`
 
+*Example:*
 ```bash
-# Switch to Scroller
-mmsg -l "S"
-
-# Switch to Tile
-mmsg -l "T"
+# watch all monitors
+mmsg watch all-monitors
+# watch all tags
+mmsg watch all-tags
 ```
 
-### Dispatching Commands
+### DISPATCH
+Allows sending commands to the compositor to alter its state.
+* `dispatch <func_name>,[args...] [client,<id>]`
 
-Any command available in `config.conf` keybindings can be run via IPC.
-
-```bash
-# Close the focused window
-mmsg -d killclient
-
-# Resize window by +10 width
-mmsg -d resizewin,+10,0
-
-# Toggle fullscreen
-mmsg -d togglefullscreen
-
-# Disable a monitor power
-mmsg -d disable_monitor,eDP-1
-```
-
-### Monitoring & Status
-
-Use `-g` or `-w` to build custom status bars or automation scripts.
-
-```bash
-# Watch for all message changes
-mmsg -w
-
-# Get all messages without watch
-mmsg -g
-
-# Watch focused client appid and title
-mmsg -w -c
-
-# Get all available outputs
-mmsg -O
-
-# Get all tags message
-mmsg -g -t
-
-# Get current focused client message
-mmsg -g -c
-
-# Get current keyboard layout
-mmsg -g -k
-
-# Get current keybind mode
-mmsg -g -b
-
-# Get scale factor of current monitor
-mmsg -g -A
-```
-
-#### Tag Message Format
-
-- State: 0 → none, 1 → active, 2 → urgent
-
-Example output:
-
-| Monitor | Tag Number | Tag State | Clients in Tag | Focused Client |
-|---------|------------|-----------|----------------|----------------|
-| eDP-1   | tag 2      | 0         | 1              | 0              |
-
-| Monitor | occupied tags mask | active tags mask | urgent tags mask |
-|---------|--------------------|------------------|------------------|
-| eDP-1   | 14                 | 6                | 0                |
-
-## Virtual Monitors
-
-You can create headless outputs for screen mirroring or remote desktop access (e.g., Sunshine/Moonlight).
-
-```bash
-# Create a virtual output
-mmsg -d create_virtual_output
-
-# Configure it (set resolution)
-wlr-randr --output HEADLESS-1 --pos 1920,0 --mode 1920x1080@60Hz
-
-# Destroy all virtual outputs
-mmsg -d destroy_all_virtual_output
+*Example:* 
+```bash   
+# operate specific client by id
+mmsg dispatch exchange_client,left client,375
+# operate current client
+mmsg dispatch exchange_client,left
+````

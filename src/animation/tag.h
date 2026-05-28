@@ -5,7 +5,21 @@ void set_tagin_animation(Monitor *m, Client *c) {
 		return;
 	}
 
-	if (m->pertag->curtag > m->pertag->prevtag) {
+	if ((c->isglobal || c->isunglobal) ||
+		(c->tags & (1 << (m->pertag->prevtag - 1)) &&
+		 c->tags & (1 << (m->pertag->curtag - 1)))) {
+		c->animation.tagouting = false;
+		c->animation.tagouted = false;
+		c->animation.tagining = false;
+		c->animation.action = MOVE;
+		return;
+	}
+
+	bool going_forward = m->carousel_anim_dir
+							 ? m->carousel_anim_dir > 0
+							 : m->pertag->curtag > m->pertag->prevtag;
+
+	if (going_forward) {
 
 		c->animainit_geom.x = config.tag_animation_direction == VERTICAL
 								  ? c->animation.current.x
@@ -36,7 +50,6 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 	}
-	client_set_suspended(c, false);
 
 	if (!c->animation.tag_from_rule && want_animation &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
@@ -55,7 +68,21 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 }
 
 void set_tagout_animation(Monitor *m, Client *c) {
-	if (m->pertag->curtag > m->pertag->prevtag) {
+
+	if ((c->isglobal || c->isunglobal) ||
+		(c->tags & (1 << (m->pertag->prevtag - 1)) &&
+		 c->tags & (1 << (m->pertag->curtag - 1)))) {
+		c->animation.tagouting = false;
+		c->animation.tagouted = false;
+		c->animation.tagining = false;
+		c->animation.action = MOVE;
+		return;
+	}
+
+	bool going_forward = m->carousel_anim_dir
+							 ? m->carousel_anim_dir > 0
+							 : m->pertag->curtag > m->pertag->prevtag;
+	if (going_forward) {
 		c->pending = c->geom;
 		c->pending.x =
 			config.tag_animation_direction == VERTICAL
@@ -82,6 +109,7 @@ void set_tagout_animation(Monitor *m, Client *c) {
 }
 
 void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
+
 	if ((c->tags & (1 << (m->pertag->prevtag - 1))) &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
 		config.animations) {
@@ -90,6 +118,5 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		set_tagout_animation(m, c);
 	} else {
 		wlr_scene_node_set_enabled(&c->scene->node, false);
-		client_set_suspended(c, true);
 	}
 }

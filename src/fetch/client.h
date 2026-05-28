@@ -1,5 +1,12 @@
 bool check_hit_no_border(Client *c) {
 	bool hit_no_border = false;
+
+	if (!c->mon)
+		return false;
+
+	if (c->tags <= 0)
+		return false;
+
 	if (!render_border) {
 		hit_no_border = true;
 	}
@@ -445,7 +452,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating,
 
 Client *direction_select(const Arg *arg) {
 
-	Client *tc = selmon->sel;
+	Client *tc = arg->tc ? arg->tc : selmon->sel;
 
 	if (!tc)
 		return NULL;
@@ -538,18 +545,6 @@ bool client_only_in_one_tag(Client *c) {
 	}
 }
 
-Client *get_scroll_stack_head(Client *c) {
-	Client *scroller_stack_head = c;
-
-	if (!scroller_stack_head)
-		return NULL;
-
-	while (scroller_stack_head->prev_in_stack) {
-		scroller_stack_head = scroller_stack_head->prev_in_stack;
-	}
-	return scroller_stack_head;
-}
-
 bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 	if (!sc || !tc)
 		return false;
@@ -558,14 +553,15 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 
 	if (id != SCROLLER && id != VERTICAL_SCROLLER && id != TILE &&
 		id != VERTICAL_TILE && id != DECK && id != VERTICAL_DECK &&
-		id != CENTER_TILE && id != RIGHT_TILE && id != TGMIX)
+		id != CENTER_TILE && id != RIGHT_TILE)
 		return false;
 
 	if (id == SCROLLER || id == VERTICAL_SCROLLER) {
-		Client *source_stack_head = get_scroll_stack_head(sc);
-		Client *target_stack_head = get_scroll_stack_head(tc);
-		Client *fc_head = fc ? get_scroll_stack_head(fc) : NULL;
-		if (fc && fc->prev_in_stack && fc_head == source_stack_head)
+		Client *source_stack_head = scroll_get_stack_head_client(sc);
+		Client *target_stack_head = scroll_get_stack_head_client(tc);
+		Client *fc_head = fc ? scroll_get_stack_head_client(fc) : NULL;
+
+		if (fc && fc_head == source_stack_head)
 			return false;
 		if (source_stack_head == target_stack_head)
 			return true;
@@ -583,15 +579,6 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 			return true;
 	}
 
-	if (id == TGMIX) {
-		if (tc->ismaster ^ sc->ismaster)
-			return false;
-		if (fc && !(fc->ismaster ^ sc->ismaster))
-			return false;
-		if (!sc->ismaster && sc->mon->visible_tiling_clients <= 3)
-			return true;
-	}
-
 	if (id == CENTER_TILE) {
 		if (tc->ismaster ^ sc->ismaster)
 			return false;
@@ -606,12 +593,12 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 	return false;
 }
 
-Client *get_focused_stack_client(Client *sc) {
+Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 	if (!sc || sc->isfloating)
 		return sc;
 
 	Client *tc = NULL;
-	Client *fc = focustop(sc->mon);
+	Client *fc = custom_focus_client ? custom_focus_client : focustop(sc->mon);
 
 	if (fc->isfloating || sc->isfloating)
 		return sc;

@@ -1,5 +1,6 @@
 #include "dwl-ipc.h"
 #include "ext-workspace.h"
 #include "foreign-toplevel.h"
+#include "tablet.h"
 #include "tearing.h"
 #include "text-input.h"

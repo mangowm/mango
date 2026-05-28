@@ -13,10 +13,13 @@ Assign actions to mouse button presses with optional modifier keys.
 mousebind=MODIFIERS,BUTTON,COMMAND,PARAMETERS
 ```
 
-- **Modifiers**: `SUPER`, `CTRL`, `ALT`, `SHIFT`, `NONE`. Combine with `+` (e.g., `SUPER+CTRL`)
-- **Buttons**: `btn_left`, `btn_right`, `btn_middle`, `btn_side`, `btn_extra`, `btn_forward`, `btn_back`, `btn_task`
+- **Modifiers**: `SUPER`, `CTRL`, `ALT`, `SHIFT`, `NONE`. Combine with `+` (e.g., `SUPER+CTRL`).
+- **Buttons**: Can be specified in one of the following ways:
+  - **Standard Names**: `btn_left`, `btn_right`, `btn_middle`, `btn_side`, `btn_extra`, `btn_forward`, `btn_back`, `btn_task`
+  - **Hardware Codes**: `code:NUMBER` (e.g., `code:272`, `code:273`, useful for binding non-standard or extra mouse buttons)
 
 > **Warning:** When modifiers are set to `NONE`, only `btn_middle` works in normal mode. `btn_left` and `btn_right` only work in overview mode.
+
 
 ### Examples
 
@@ -26,10 +29,7 @@ mousebind=SUPER,btn_left,moveresize,curmove
 mousebind=SUPER,btn_right,moveresize,curresize
 mousebind=SUPER+CTRL,btn_right,killclient
 
-# Overview mode (requires NONE modifier)
-mousebind=NONE,btn_left,toggleoverview,-1
-mousebind=NONE,btn_right,killclient,0
-mousebind=NONE,btn_middle,togglemaximizescreen,0
+mousebind=NONE,code:273,togglemaximizescreen,0
 ```
 
 ---

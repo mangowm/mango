@@ -10,6 +10,7 @@
   #:use-module (gnu packages pciutils)
   #:use-module (gnu packages admin)
   #:use-module (gnu packages pcre)
+  #:use-module (gnu packages cjson)
   #:use-module (gnu packages xorg)
   #:use-module (gnu packages build-tools)
   #:use-module (gnu packages ninja)
@@ -53,7 +54,9 @@
                   hwdata
                   seatd
                   pcre2
+                  cjson
                   libxcb
+                  pixman
                   xcb-util-wm
                   wlroots-0.19
                   scenefx))
