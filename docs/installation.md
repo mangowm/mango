@@ -18,6 +18,7 @@ You can install it using the `moss` package manager:
 ```bash
 sudo moss install mangowm
 ```
+* The Default config will be located at `/usr/share/defaults/mango`.
 
 ---
 
