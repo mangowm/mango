@@ -1,3 +1,7 @@
+#ifdef __OpenBSD__
+#define SPAWN_MAX_ARGS 64
+#endif
+
 int32_t bind_to_view(const Arg *arg) {
 	if (!selmon)
 		return 0;
@@ -952,6 +956,7 @@ int32_t spawn(const Arg *arg) {
 		dup2(STDERR_FILENO, STDOUT_FILENO);
 		setsid();
 
+#ifndef __OpenBSD__
 		wordexp_t p;
 		if (wordexp(arg->v, &p, 0) != 0) {
 			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n",
@@ -964,6 +969,42 @@ int32_t spawn(const Arg *arg) {
 		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
 				strerror(errno));
 		wordfree(&p);
+#else
+		int argc = 0;
+		char *last;
+		char *argv[SPAWN_MAX_ARGS];
+
+		char *token = strtok_r((char *)arg->v, " ", &last);
+
+		while (token != NULL && argc < SPAWN_MAX_ARGS - 1) {
+			glob_t p;
+			if (glob(token, GLOB_DOOFFS, NULL, &p) == 0 && p.gl_pathc > 0) {
+				argv[argc] = strdup(p.gl_pathv[0]);
+				globfree(&p);
+			} else {
+				argv[argc] = strdup(token);
+			}
+			argc++;
+			token = strtok_r(NULL, " ", &last);
+		}
+
+		if (argc == 0) {
+			return 0;
+		}
+
+		argv[argc] = NULL;
+
+		execvp(argv[0], argv);
+
+		wlr_log(WLR_ERROR, "mango: execvp '%s' failed: %s\n",
+				argv[0] ? argv[0] : "NULL", strerror(errno));
+
+		/* Cleanup */
+		for (int i = 0; i < argc; i++) {
+			free(argv[i]);
+		}
+
+#endif
 		_exit(EXIT_FAILURE);
 	}
 	return 0;
