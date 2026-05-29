@@ -469,7 +469,7 @@ typedef struct {
 	struct wl_listener key;
 	struct wl_listener destroy;
 
-	u_int32_t layout_index;
+	uint32_t layout_index;
 } KeyboardGroup;
 
 typedef struct {
