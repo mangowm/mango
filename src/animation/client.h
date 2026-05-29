@@ -363,6 +363,8 @@ void client_draw_shadow(Client *c) {
 	int32_t right_offset, bottom_offset, left_offset, top_offset;
 
 	if (c == grabc) {
+		// Interactive move: the window (and its shadow) genuinely follow the
+		// cursor, possibly across monitors, so never clamp.
 		right_offset = 0;
 		bottom_offset = 0;
 		left_offset = 0;
@@ -377,6 +379,46 @@ void client_draw_shadow(Client *c) {
 
 		left_offset = GEZERO(c->mon->m.x - absolute_shadow_box.x);
 		top_offset = GEZERO(c->mon->m.y - absolute_shadow_box.y);
+
+		// While the window is animating (tag switch, scroller focus scroll,
+		// generic move) it legitimately slides past its monitor edge. Clamping
+		// the shadow to the monitor bounds then pins the shadow's leading edge
+		// to the screen border, so it lags behind the moving window. Only keep
+		// the clamp on edges that actually border another monitor (to stop the
+		// shadow bleeding onto it); release it on free edges so the shadow
+		// travels with the window. The clamp is fully active again at rest.
+		if (c->animation.running) {
+			struct wlr_box *me = &c->mon->m;
+			bool nb_right = false, nb_left = false, nb_below = false,
+				 nb_above = false;
+			Monitor *om;
+			wl_list_for_each(om, &mons, link) {
+				if (om == c->mon || !om->wlr_output ||
+					!om->wlr_output->enabled)
+					continue;
+				struct wlr_box *o = &om->m;
+				bool voverlap =
+					o->y < me->y + me->height && o->y + o->height > me->y;
+				bool hoverlap =
+					o->x < me->x + me->width && o->x + o->width > me->x;
+				if (voverlap && o->x >= me->x + me->width)
+					nb_right = true;
+				if (voverlap && o->x + o->width <= me->x)
+					nb_left = true;
+				if (hoverlap && o->y >= me->y + me->height)
+					nb_below = true;
+				if (hoverlap && o->y + o->height <= me->y)
+					nb_above = true;
+			}
+			if (!nb_right)
+				right_offset = 0;
+			if (!nb_left)
+				left_offset = 0;
+			if (!nb_below)
+				bottom_offset = 0;
+			if (!nb_above)
+				top_offset = 0;
+		}
 	}
 
 	left_offset = MIN(left_offset, shadow_box.width);
