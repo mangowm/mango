@@ -5805,12 +5805,19 @@ void setup(void) {
 	}
 	init_baked_points();
 
-	int32_t drm_fd, i, sig[] = {SIGCHLD, SIGINT, SIGTERM, SIGPIPE};
+	int32_t drm_fd, i;
+	int32_t sig[] = {SIGCHLD, SIGINT,
+					 SIGTERM}; // 不设置SIGPIPE,因为ipc发送失败不应该影响主程序
 	struct sigaction sa = {.sa_flags = SA_RESTART, .sa_handler = handlesig};
 	sigemptyset(&sa.sa_mask);
 
 	for (i = 0; i < LENGTH(sig); i++)
 		sigaction(sig[i], &sa, NULL);
+
+	// 单独为 SIGPIPE 设置忽略
+	struct sigaction sa_pipe = {.sa_flags = 0, .sa_handler = SIG_IGN};
+	sigemptyset(&sa_pipe.sa_mask);
+	sigaction(SIGPIPE, &sa_pipe, NULL);
 
 	wlr_log_init(config.log_level, NULL);
 
