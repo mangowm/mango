@@ -1,4 +1,4 @@
-project('mango', ['c', 'cpp'],
+project('mango', ['c'],
   version : '0.14.0',
 )
 
@@ -24,10 +24,6 @@ if sysconfdir.startswith(prefix) and not is_nixos
   endif
 endif
 
-# 打印调试信息，确认 sysconfdir 的值
-# message('prefix: ' + prefix)
-# message('sysconfdir: ' + sysconfdir)
-
 cc = meson.get_compiler('c')
 libm = cc.find_library('m')
 xcb = dependency('xcb', required : get_option('xwayland'))
@@ -41,12 +37,11 @@ pcre2_dep = dependency('libpcre2-8')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
 
-
-# 获取版本信息
+# version info
 git = find_program('git', required : false)
 is_git_repo = false
 
-# 检查当前目录是否是 Git 仓库
+# check if current directory is a git repo
 if git.found()
   git_status = run_command(git, 'rev-parse', '--is-inside-work-tree', check : false)
   if git_status.returncode() == 0 and git_status.stdout().strip() == 'true'
@@ -55,18 +50,18 @@ if git.found()
 endif
 
 if is_git_repo
-  # 如果是 Git 目录，获取 Commit Hash 和最新的 tag
+  # if current directory is a git repo, get commit hash and latest tag
   commit_hash = run_command(git, 'rev-parse', '--short', 'HEAD', check : false).stdout().strip()
   latest_tag = meson.project_version()
   version_with_hash = '@0@(@1@)'.format(latest_tag, commit_hash)
 else
-  # 如果不是 Git 目录，使用项目版本号和 "release" 字符串
+  # if not a git repo, use project version and "release" string
   commit_hash = 'release'
   latest_tag = meson.project_version()
   version_with_hash = '@0@(@1@)'.format(latest_tag, commit_hash)
 endif
 
-# 定义编译参数
+# define compilation args
 c_args = [
   '-g',
   '-Wno-unused-function',
@@ -76,7 +71,7 @@ c_args = [
   '-DSYSCONFDIR="@0@"'.format('/etc'),
 ]
 
-# 仅在 debug 选项启用时添加调试参数
+# add debug args only when debug option is enabled
 if get_option('asan')
   c_args += [
     '-fsanitize=address',
@@ -89,7 +84,7 @@ if xcb.found() and xlibs.found()
   c_args += '-DXWAYLAND'
 endif
 
-# 链接参数（根据 debug 状态添加 ASAN）
+# define link args
 link_args = []
 if get_option('asan')
   link_args += '-fsanitize=address'
@@ -132,7 +127,7 @@ wayland_scanner_private_code = generator(
   arguments: ['private-code', '@INPUT@', '@OUTPUT@']
 )
 
-# 在 mmsg 目标中使用生成器
+# use generator in mmsg target
 executable('mmsg',
   'mmsg/mmsg.c',
   wayland_scanner_private_code.process(dwl_ipc_protocol),
@@ -147,8 +142,10 @@ executable('mmsg',
   ],
 )
 
+mandir = get_option('mandir')
 desktop_install_dir = join_paths(prefix, 'share/wayland-sessions')
 portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
 install_data('assets/mango.desktop', install_dir : desktop_install_dir)
 install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
 install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+install_data('mmsg/mmsg.1', install_dir : join_paths(mandir, 'man1'))
