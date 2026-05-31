@@ -37,6 +37,7 @@ void moveresize(const Arg *arg);
 void exchange_client(const Arg *arg);
 void exchange_stack_client(const Arg *arg);
 void killclient(const Arg *arg);
+void smartkillclient(const Arg *arg);
 void toggleglobal(const Arg *arg);
 void incnmaster(const Arg *arg);
 void focusmon(const Arg *arg);
