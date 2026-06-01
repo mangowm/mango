@@ -512,6 +512,8 @@ void smartkillclient(const Arg *arg) {
 		return;
 
 	uint32_t newtags = c->tags & ~(c->mon->tagset[c->mon->seltags] & TAGMASK);
+	// Kill the client if it's single-tag, or if removing the tag(s) would leave
+	// it on none
 	if (__builtin_popcount(c->tags & TAGMASK) <= 1 || !newtags) {
 		pending_kill_client(c);
 		return;
