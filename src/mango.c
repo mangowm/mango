@@ -2427,7 +2427,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 					cursor->y >= close_y &&
 					cursor->y < close_y + tb_height - 2 * tb_margin) {
 					pending_kill_client(c);
-					return;
+					return true;
 				}
 				grabc = c;
 				if (grabc->isfloating == 0) {
@@ -2440,7 +2440,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 					set_size_per(grabc->mon, grabc);
 				}
 				start_drag_window = true;
-				return;
+				return true;
 			}
 		}
 

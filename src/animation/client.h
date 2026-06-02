@@ -539,7 +539,7 @@ void apply_titlebar(Client *c, int32_t rect_width,
 }
 
 void update_titlebar_hover(Client *c) {
-	if (!c || !c->titlebar_close || !c->titlebar_bg)
+	if (!c || c->iskilling || !c->titlebar_close || !c->titlebar_bg)
 		return;
 	int32_t tb = titlebar_active_height();
 	if (tb <= 0 || c->isfullscreen) {
@@ -568,7 +568,6 @@ void update_titlebar_hover(Client *c) {
 	} else {
 		wlr_scene_rect_set_color(c->titlebar_close, config.title_close_color);
 	}
-}
 }
 
 void apply_border(Client *c) {
