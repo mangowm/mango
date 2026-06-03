@@ -22,6 +22,7 @@ static struct wlr_tablet_manager_v2 *tablet_mgr;
 struct Tablet {
 	struct wlr_tablet_v2_tablet *tablet_v2;
 	struct wl_listener destroy;
+	struct wlr_input_device *device;
 	struct wl_list link;
 };
 static struct wl_list tablets;
@@ -38,6 +39,7 @@ struct TabletTool {
 
 struct TabletPad {
 	struct wlr_tablet_v2_tablet_pad *pad_v2;
+	struct wlr_input_device *device;
 	struct Tablet *tablet;
 	struct wl_listener tablet_destroy;
 	struct wl_listener attach;
@@ -72,11 +74,18 @@ void createtablet(struct wlr_input_device *device) {
 		return;
 	}
 
+	tablet->device = device;
 	tablet->tablet_v2 = wlr_tablet_create(tablet_mgr, seat, device);
+
+	if (!tablet->tablet_v2) {
+		free(tablet);
+		return;
+	}
+
 	tablet->tablet_v2->wlr_tablet->data = tablet;
 	tablet->destroy.notify = destroytablet;
-	wl_signal_add(&tablet->tablet_v2->wlr_device->events.destroy,
-				  &tablet->destroy);
+	wl_signal_add(&tablet->device->events.destroy, &tablet->destroy);
+
 	if (libinput_device_config_send_events_get_modes(device_handle)) {
 		libinput_device_config_send_events_set_mode(device_handle,
 													config.send_events_mode);
@@ -90,7 +99,7 @@ void createtablet(struct wlr_input_device *device) {
 		wlr_libinput_get_device_handle(device));
 	struct TabletPad *tablet_pad;
 	wl_list_for_each(tablet_pad, &tablet_pads, link) {
-		struct wlr_input_device *pad_device = tablet_pad->pad_v2->wlr_device;
+		struct wlr_input_device *pad_device = tablet_pad->device;
 		if (!wlr_input_device_is_libinput(pad_device)) {
 			continue;
 		}
@@ -129,8 +138,7 @@ void attach_tablet_pad(struct TabletPad *tablet_pad, struct Tablet *tablet) {
 
 	wl_list_remove(&tablet_pad->tablet_destroy.link);
 	tablet_pad->tablet_destroy.notify = tabletpadtabletdestroy;
-	wl_signal_add(&tablet->tablet_v2->wlr_device->events.destroy,
-				  &tablet_pad->tablet_destroy);
+	wl_signal_add(&tablet->device->events.destroy, &tablet_pad->tablet_destroy);
 }
 
 void tabletpadattach(struct wl_listener *listener, void *data) {
@@ -152,27 +160,38 @@ void createtabletpad(struct wlr_input_device *device) {
 		wlr_log(WLR_ERROR, "could not allocate tablet_pad");
 		return;
 	}
+
+	tablet_pad->device = device;
 	tablet_pad->pad_v2 = wlr_tablet_pad_create(tablet_mgr, seat, device);
+
+	if (!tablet_pad->pad_v2) {
+		wlr_log(WLR_ERROR, "could not create tablet_pad_v2 wrapper");
+		free(tablet_pad);
+		return;
+	}
+
 	tablet_pad->destroy.notify = destroytabletpad;
 	tablet_pad->attach.notify = tabletpadattach;
 	wl_list_init(&tablet_pad->tablet_destroy.link);
-	wl_signal_add(&tablet_pad->pad_v2->wlr_device->events.destroy,
-				  &tablet_pad->destroy);
+
+	wl_signal_add(&device->events.destroy, &tablet_pad->destroy);
+
 	wl_signal_add(&tablet_pad->pad_v2->wlr_pad->events.attach_tablet,
 				  &tablet_pad->attach);
 	wl_list_insert(&tablet_pads, &tablet_pad->link);
 
 	/* Search for a sibling tablet */
-	if (!wlr_input_device_is_libinput(tablet_pad->pad_v2->wlr_device)) {
+	if (!wlr_input_device_is_libinput(device)) {
 		/* We can only do this on libinput devices */
 		return;
 	}
 
 	struct libinput_device_group *group = libinput_device_get_device_group(
-		wlr_libinput_get_device_handle(tablet_pad->pad_v2->wlr_device));
+		wlr_libinput_get_device_handle(device));
+
 	struct Tablet *tablet;
 	wl_list_for_each(tablet, &tablets, link) {
-		struct wlr_input_device *tablet_device = tablet->tablet_v2->wlr_device;
+		struct wlr_input_device *tablet_device = tablet->device;
 		if (!wlr_input_device_is_libinput(tablet_device)) {
 			continue;
 		}
@@ -249,11 +268,11 @@ void tablettoolmotion(struct TabletTool *tool, bool change_x, bool change_y,
 	switch (tool->tool_v2->wlr_tool->type) {
 	case WLR_TABLET_TOOL_TYPE_LENS:
 	case WLR_TABLET_TOOL_TYPE_MOUSE:
-		wlr_cursor_move(cursor, tablet->tablet_v2->wlr_device, dx, dy);
+		wlr_cursor_move(cursor, tablet->device, dx, dy);
 		break;
 	default:
-		wlr_cursor_warp_absolute(cursor, tablet->tablet_v2->wlr_device,
-								 change_x ? x : NAN, change_y ? y : NAN);
+		wlr_cursor_warp_absolute(cursor, tablet->device, change_x ? x : NAN,
+								 change_y ? y : NAN);
 		break;
 	}
 
