@@ -5154,7 +5154,8 @@ void exchange_two_client(Client *c1, Client *c2) {
 	const Layout *layout1 = m1->pertag->ltidxs[m1->pertag->curtag];
 	const Layout *layout2 = m2->pertag->ltidxs[m2->pertag->curtag];
 
-	if (layout1->id == SCROLLER || layout2->id == SCROLLER) {
+	if (layout1->id == SCROLLER || layout2->id == SCROLLER ||
+		layout1->id == VERTICAL_SCROLLER || layout2->id == VERTICAL_SCROLLER) {
 		exchange_two_scroller_clients(c1, c2);
 		return;
 	}
