@@ -87,3 +87,9 @@ void client_active(Client *c) {
 	view_in_mon(&(Arg){.ui = target}, true, c->mon, true);
 	focusclient(c, 1);
 }
+
+void client_pending_force_kill(Client *c) {
+	if (!c)
+		return;
+	kill(c->pid, SIGKILL);
+}

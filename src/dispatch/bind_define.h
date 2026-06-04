@@ -346,7 +346,11 @@ int32_t setmfact(const Arg *arg) {
 int32_t killclient(const Arg *arg) {
 	Client *c = arg->tc ? arg->tc : (selmon ? selmon->sel : NULL);
 	if (c) {
-		pending_kill_client(c);
+		if (arg->i == FORCE) {
+			client_pending_force_kill(c);
+		} else {
+			pending_kill_client(c);
+		}
 	}
 	return 0;
 }

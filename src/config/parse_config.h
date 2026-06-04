@@ -538,6 +538,26 @@ int32_t parse_direction(const char *str) {
 	}
 }
 
+int32_t parse_force(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[10];
+	int32_t i = 0;
+	while (str[i] && i < 9) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0';
+
+	// 根据转换后的小写字符串返回对应的枚举值
+	if (strcmp(lowerStr, "unforce") == 0) {
+		return UNFORCE;
+	} else if (strcmp(lowerStr, "force") == 0) {
+		return FORCE;
+	} else {
+		return UNFORCE;
+	}
+}
+
 int32_t parse_fold_state(const char *str) {
 	// 将输入字符串转换为小写
 	char lowerStr[10];
@@ -1008,6 +1028,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
+		(*arg).i = parse_force(arg_value);
 	} else if (strcmp(func_name, "centerwin") == 0) {
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
