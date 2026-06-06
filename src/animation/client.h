@@ -297,7 +297,7 @@ void apply_split_border(Client *c, bool hit_no_border) {
 	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
 
 	if (hit_no_border || !ISTILED(c) || layout->id != DWINDLE ||
-		!config.dwindle_manual_split) {
+		!config.dwindle_manual_split || c->isfullscreen) {
 		if (c->splitindicator[0]->node.enabled) {
 			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
 		}
@@ -377,12 +377,25 @@ void apply_split_border(Client *c, bool hit_no_border) {
 }
 
 void apply_border(Client *c) {
-	bool hit_no_border = false;
-
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
 
-	hit_no_border = check_hit_no_border(c);
+	if (c->isfullscreen) {
+		for (int32_t i = 0; i < 4; i++) {
+			if (c->border[i]->node.enabled) {
+				wlr_scene_node_set_enabled(&c->border[i]->node, false);
+			}
+		}
+		return;
+	} else {
+		for (int32_t i = 0; i < 4; i++) {
+			if (!c->border[i]->node.enabled) {
+				wlr_scene_node_set_enabled(&c->border[i]->node, true);
+			}
+		}
+	}
+
+	bool hit_no_border = check_hit_no_border(c);
 
 	apply_split_border(c, hit_no_border);
 

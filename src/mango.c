@@ -5526,6 +5526,7 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 		wlr_scene_node_raise_to_top(&c->scene->node); // 将视图提升到顶层
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, c->mon->m, 1);
+
 	} else {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 		if (c->isfloating)
