@@ -384,8 +384,10 @@ void apply_border(Client *c) {
 		for (int32_t i = 0; i < 4; i++) {
 			if (c->border[i]->node.enabled) {
 				wlr_scene_node_set_enabled(&c->border[i]->node, false);
+				wlr_scene_node_set_position(&c->scene_surface->node, 0, 0);
 			}
 		}
+
 		return;
 	} else {
 		for (int32_t i = 0; i < 4; i++) {
