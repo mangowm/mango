@@ -4158,6 +4158,11 @@ void keypress(struct wl_listener *listener, void *data) {
 		}
 	}
 
+	if (config.cursor_hide_on_keypress && !cursor_hidden &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		hidecursor(NULL);
+	}
+
 	/* On _press_ if there is no active screen locker,
 	 * attempt to process a compositor keybinding. */
 	for (i = 0; i < nsyms; i++)
