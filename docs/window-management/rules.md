@@ -115,7 +115,7 @@ windowrule=width:1000,height:900,appid:yesplaymusic,title:Demons
 
 # Global keybindings for OBS Studio
 windowrule=globalkeybinding:ctrl+alt-o,appid:com.obsproject.Studio
-windowrule=globalkeybinding:ctrl+alt+n,appid:com.obsproject.Studio
+windowrule=globalkeybinding:ctrl+alt-n,appid:com.obsproject.Studio
 windowrule=isopensilent:1,appid:com.obsproject.Studio
 
 # Force tearing for games
