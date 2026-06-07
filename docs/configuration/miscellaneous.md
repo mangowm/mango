@@ -21,6 +21,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `sloppyfocus` | `1` | Focus follows the mouse cursor. |
 | `warpcursor` | `1` | Warp the cursor to the center of the window when focus changes via keyboard. |
 | `cursor_hide_timeout` | `0` | Hide the cursor after `N` seconds of inactivity (`0` to disable). |
+| `cursor_hide_on_keypress` | `0` | Hide the cursor on keypress. |
 | `drag_tile_to_tile` | `0` | Allow dragging a tiled window onto another to swap their positions. |
 | `drag_tile_small` | `1` | Allow dragging a tiled window temporarily to small size.|
 | `drag_corner` | `3` | Corner for drag-to-tile detection (0: none, 1–3: corners, 4: auto-detect). |
