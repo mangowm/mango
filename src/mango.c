@@ -3099,7 +3099,6 @@ void createlayersurface(struct wl_listener *listener, void *data) {
 	LISTEN(&l->scene->node.events.destroy, &l->destroy, destroylayernodenotify);
 
 	wl_list_insert(&l->mon->layers[layer_surface->pending.layer], &l->link);
-	wlr_surface_send_enter(surface, layer_surface->output);
 }
 
 void createlocksurface(struct wl_listener *listener, void *data) {
