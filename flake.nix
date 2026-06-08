@@ -40,25 +40,25 @@
         system,
       }: let
         inherit (pkgs) callPackage;
-        mango = callPackage ./nix {
+        mango = callPackage ./nix/package.nix {
           inherit (scenefx.packages.${system}) scenefx;
         };
       in {
         inherit mango;
         default = mango;
         hm-options-json = callPackage (import ./nix/generate-options.nix self) {
-          module = ./nix/hm-modules.nix;
+          module = ./nix/hm-module.nix;
           optionPrefix = "wayland.windowManager.mango.";
         };
         nixos-options-json = callPackage (import ./nix/generate-options.nix self) {
-          module = ./nix/nixos-modules.nix;
+          module = ./nix/nixos-module.nix;
           optionPrefix = "programs.mango.";
         };
       }
     );
 
-    nixosModules.mango = import ./nix/nixos-modules.nix self;
-    hmModules.mango = import ./nix/hm-modules.nix self;
+    nixosModules.mango = import ./nix/nixos-module.nix self;
+    hmModules.mango = import ./nix/hm-module.nix self;
 
     devShells = forEachSystem (
       {system, ...}: {

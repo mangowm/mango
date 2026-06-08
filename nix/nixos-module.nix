@@ -23,10 +23,9 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages =
-      [
-        cfg.package
-      ];
+    environment.systemPackages = [
+      cfg.package
+    ];
 
     xdg.portal = {
       enable = lib.mkDefault true;
@@ -60,7 +59,7 @@ in {
     programs.xwayland.enable = lib.mkDefault true;
 
     services = {
-      displayManager.sessionPackages = lib.mkIf cfg.addLoginEntry [ cfg.package ];
+      displayManager.sessionPackages = lib.mkIf cfg.addLoginEntry [cfg.package];
 
       graphical-desktop.enable = lib.mkDefault true;
     };
