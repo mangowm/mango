@@ -91,9 +91,9 @@ setclient_coordinate_center(Client *c, Monitor *tm, struct wlr_box geom,
 	if (!m)
 		return geom;
 
-	uint32_t cbw = check_hit_no_border(c) ? c->bw : 0;
+	uint32_t cbw = c && check_hit_no_border(c) ? c->bw : 0;
 
-	if (!c->no_force_center && m) {
+	if ((!c || !c->no_force_center) && m) {
 		tempbox.x = m->w.x + (m->w.width - geom.width) / 2;
 		tempbox.y = m->w.y + (m->w.height - geom.height) / 2;
 	} else {

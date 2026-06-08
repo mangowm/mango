@@ -1094,7 +1094,7 @@ static struct wl_listener last_cursor_surface_destroy_listener = {
 	.notify = last_cursor_surface_destroy};
 
 #ifdef XWAYLAND
-static void fix_xwayland_unmanaged_coordinate(Client *c);
+static void fix_xwayland_coordinate(struct wlr_box *geom);
 static int32_t synckeymap(void *data);
 static void activatex11(struct wl_listener *listener, void *data);
 static void configurex11(struct wl_listener *listener, void *data);
@@ -1634,7 +1634,7 @@ void applyrules(Client *c) {
 
 #ifdef XWAYLAND
 	if (c->isfloating && client_is_x11(c)) {
-		fix_xwayland_unmanaged_coordinate(c);
+		fix_xwayland_coordinate(&c->geom);
 		c->float_geom = c->geom;
 	}
 #endif
@@ -4411,7 +4411,11 @@ mapnotify(struct wl_listener *listener, void *data) {
 		/* Unmanaged clients always are floating */
 #ifdef XWAYLAND
 		if (client_is_x11(c)) {
-			fix_xwayland_unmanaged_coordinate(c);
+			fix_xwayland_coordinate(&c->geom);
+			wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
+			wlr_xwayland_surface_configure(c->surface.xwayland, c->geom.x,
+										   c->geom.y, c->geom.width,
+										   c->geom.height);
 			LISTEN(&c->surface.xwayland->events.set_geometry, &c->set_geometry,
 				   setgeometrynotify);
 		}
@@ -6849,16 +6853,17 @@ void virtualpointer(struct wl_listener *listener, void *data) {
 }
 
 #ifdef XWAYLAND
-void fix_xwayland_unmanaged_coordinate(Client *c) {
+void fix_xwayland_coordinate(struct wlr_box *geom) {
 	if (!selmon)
 		return;
 
 	// 1. 如果窗口已经在当前活动显示器内，直接返回
-	if (c->geom.x >= selmon->m.x && c->geom.x < selmon->m.x + selmon->m.width &&
-		c->geom.y >= selmon->m.y && c->geom.y < selmon->m.y + selmon->m.height)
+	if (geom->x >= selmon->m.x && geom->x <= selmon->m.x + selmon->m.width &&
+		geom->y >= selmon->m.y && geom->y <= selmon->m.y + selmon->m.height)
 		return;
 
-	c->geom = setclient_coordinate_center(c, selmon, c->geom, 0, 0);
+	geom->x = selmon->m.x + (selmon->m.width - geom->width) / 2;
+	geom->y = selmon->m.y + (selmon->m.height - geom->height) / 2;
 }
 
 int32_t synckeymap(void *data) {
@@ -6913,24 +6918,41 @@ void activatex11(struct wl_listener *listener, void *data) {
 void configurex11(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, configure);
 	struct wlr_xwayland_surface_configure_event *event = data;
+	struct wlr_box new_geo;
+	new_geo.x = event->x;
+	new_geo.y = event->y;
+	new_geo.width = event->width;
+	new_geo.height = event->height;
+	fix_xwayland_coordinate(&new_geo);
+
 	if (!client_surface(c) || !client_surface(c)->mapped) {
-		wlr_xwayland_surface_configure(c->surface.xwayland, event->x, event->y,
-									   event->width, event->height);
+
+		wlr_xwayland_surface_configure(c->surface.xwayland, new_geo.x,
+									   new_geo.y, new_geo.width,
+									   new_geo.height);
 		return;
 	}
+
 	if (client_is_unmanaged(c)) {
-		wlr_scene_node_set_position(&c->scene->node, event->x, event->y);
-		wlr_xwayland_surface_configure(c->surface.xwayland, event->x, event->y,
-									   event->width, event->height);
+		wlr_scene_node_set_position(&c->scene->node, new_geo.x, new_geo.y);
+		wlr_xwayland_surface_configure(c->surface.xwayland, new_geo.x,
+									   new_geo.y, new_geo.width,
+									   new_geo.height);
 		return;
 	}
-	if ((c->isfloating && c != grabc) ||
-		!c->mon->pertag->ltidxs[c->mon->pertag->curtag]->arrange) {
+
+	if (c->isfloating && c != grabc) {
+		new_geo.x = new_geo.x - c->bw;
+		new_geo.y = new_geo.y - c->bw;
+		new_geo.width = new_geo.width + c->bw * 2;
+		new_geo.height = new_geo.height + c->bw * 2;
+		fix_xwayland_coordinate(&new_geo);
+
 		resize(c,
-			   (struct wlr_box){.x = event->x - c->bw,
-								.y = event->y - c->bw,
-								.width = event->width + c->bw * 2,
-								.height = event->height + c->bw * 2},
+			   (struct wlr_box){.x = new_geo.x,
+								.y = new_geo.y,
+								.width = new_geo.width,
+								.height = new_geo.height},
 			   0);
 	} else {
 		arrange(c->mon, false, false);
