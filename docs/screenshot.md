@@ -14,7 +14,7 @@ Instead, compose your own workflow from small Wayland utilities and bind them to
 | [`slurp`](https://github.com/emersion/slurp) | Interactively select a region for `grim` |
 | [`wl-copy`](https://github.com/bugaevc/wl-clipboard) | Copy screenshots directly to the clipboard |
 | [`satty`](https://github.com/gabm/Satty) | Annotate screenshots before saving |
-| [`wayfreeze`](https://github.com/nicbk/wayfreeze) | Freeze the screen before capture |
+| [`wayfreeze`](https://github.com/Jappie3/wayfreeze) | Freeze the screen before capture |
 
 Install the required with your package manager or from source.
 
