@@ -4412,27 +4412,26 @@ mapnotify(struct wl_listener *listener, void *data) {
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
 
+#ifdef XWAYLAND
 	if (client_is_unmanaged(c)) {
 		/* Unmanaged clients always are floating */
-#ifdef XWAYLAND
-		if (client_is_x11(c)) {
-			fix_xwayland_coordinate(&c->geom);
-			wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
-			wlr_xwayland_surface_configure(c->surface.xwayland, c->geom.x,
-										   c->geom.y, c->geom.width,
-										   c->geom.height);
-			LISTEN(&c->surface.xwayland->events.set_geometry, &c->set_geometry,
-				   setgeometrynotify);
-		}
-#endif
-		wlr_scene_node_reparent(&c->scene->node, layers[LyrOverlay]);
+		fix_xwayland_coordinate(&c->geom);
 		wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
+		wlr_xwayland_surface_configure(c->surface.xwayland, c->geom.x,
+									   c->geom.y, c->geom.width,
+									   c->geom.height);
+		LISTEN(&c->surface.xwayland->events.set_geometry, &c->set_geometry,
+			   setgeometrynotify);
+		wlr_scene_node_reparent(&c->scene->node, layers[LyrOverlay]);
 		if (client_wants_focus(c)) {
 			focusclient(c, 1);
 			exclusive_focus = c;
 		}
 		return;
 	}
+#endif
+
+	// extra node
 
 	for (i = 0; i < 4; i++) {
 		c->border[i] = wlr_scene_rect_create(c->scene, 0, 0,
@@ -4440,7 +4439,6 @@ mapnotify(struct wl_listener *listener, void *data) {
 														 : config.bordercolor);
 		c->border[i]->node.data = c;
 	}
-	// extra node
 
 	for (i = 0; i < 2; i++) {
 		c->splitindicator[i] = wlr_scene_rect_create(
