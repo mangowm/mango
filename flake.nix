@@ -60,12 +60,12 @@
       }
     );
 
-    nixosModules.mango = { pkgs, ... }: {
+    nixosModules.mango = {pkgs, ...}: {
       imports = [
         (import ./nix/nixos-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
       ];
     };
-    hmModules.mango = { pkgs, ... }: {
+    hmModules.mango = {pkgs, ...}: {
       imports = [
         (import ./nix/hm-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
       ];
