@@ -137,12 +137,10 @@ void vertical_deck(Monitor *m) {
 		return;
 
 	wl_list_for_each(fc, &clients, link) {
-
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
-	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
 
@@ -156,16 +154,18 @@ void vertical_deck(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < nmasters) {
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + cur_gappoh + mx,
-								 .y = m->w.y + cur_gappov,
-								 .width = (m->w.width - 2 * cur_gappoh - mx) /
-										  (MIN(n, nmasters) - i),
-								 .height = mh},
-				0);
-			mx += c->geom.width;
+			c->master_mfact_per = mfact;
+			int32_t w =
+				(m->w.width - 2 * cur_gappoh - mx) / (MIN(n, nmasters) - i);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + cur_gappoh + mx,
+												.y = m->w.y + cur_gappov,
+												.width = w,
+												.height = mh},
+							   0);
+			mx += w;
 		} else {
+			c->master_mfact_per = mfact;
 			client_tile_resize(
 				c,
 				(struct wlr_box){.x = m->w.x + cur_gappoh,

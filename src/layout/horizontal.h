@@ -500,16 +500,13 @@ void deck(Monitor *m) {
 		return;
 
 	wl_list_for_each(fc, &clients, link) {
-
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
-	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
 
-	// Calculate master width including outer gaps
 	if (n > nmasters)
 		mw = nmasters ? round((m->w.width - 2 * cur_gappoh) * mfact) : 0;
 	else
@@ -521,16 +518,15 @@ void deck(Monitor *m) {
 			continue;
 		if (i < nmasters) {
 			c->master_mfact_per = mfact;
-			// Master area clients
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + cur_gappoh,
-								 .y = m->w.y + cur_gappov + my,
-								 .width = mw,
-								 .height = (m->w.height - 2 * cur_gappov - my) /
-										   (MIN(n, nmasters) - i)},
-				0);
-			my += c->geom.height;
+			int32_t h =
+				(m->w.height - 2 * cur_gappov - my) / (MIN(n, nmasters) - i);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + cur_gappoh,
+												.y = m->w.y + cur_gappov + my,
+												.width = mw,
+												.height = h},
+							   0);
+			my += h;
 		} else {
 			// Stack area clients
 			c->master_mfact_per = mfact;
