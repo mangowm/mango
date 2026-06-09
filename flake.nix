@@ -13,6 +13,7 @@
     scenefx,
   }: let
     inherit (nixpkgs.lib) genAttrs;
+    inherit (nixpkgs.lib.modules) importApply;
 
     # Systems mangowm supports. Options that call `forEachSystem` will generate an attribute for each of these options.
     systems = [
@@ -62,12 +63,12 @@
 
     nixosModules.mango = {pkgs, ...}: {
       imports = [
-        (import ./nix/nixos-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
+        (importApply ./nix/nixos-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
       ];
     };
     hmModules.mango = {pkgs, ...}: {
       imports = [
-        (import ./nix/hm-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
+        (importApply ./nix/hm-module.nix self.packages.${pkgs.stdenv.hostPlatform.system}.default)
       ];
     };
 

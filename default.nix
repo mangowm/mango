@@ -21,6 +21,6 @@ in
 
     inherit package;
 
-    nixosModule = importApply ./nix/nix-module.nix package;
+    nixosModule = importApply ./nix/nixos-module.nix package;
     hmModule = importApply ./nix/hm-module.nix package;
   }
