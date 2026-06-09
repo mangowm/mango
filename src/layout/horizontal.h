@@ -588,6 +588,7 @@ void grid(Monitor *m) {
 	int32_t target_gappi = enablegaps ? config.gappih : 0;
 	float single_width_ratio = 0.9;
 	float single_height_ratio = 0.9;
+	struct wlr_box target_geom;
 
 	n = m->visible_fake_tiling_clients;
 
@@ -603,11 +604,11 @@ void grid(Monitor *m) {
 				 ISFAKETILED(c))) {
 				cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
 				ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
-				c->geom.x = m->w.x + (m->w.width - cw) / 2;
-				c->geom.y = m->w.y + (m->w.height - ch) / 2;
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.x = m->w.x + (m->w.width - cw) / 2;
+				target_geom.y = m->w.y + (m->w.height - ch) / 2;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				return;
 			}
 		}
@@ -651,16 +652,16 @@ void grid(Monitor *m) {
 				cw = avail_w * (col_pers[i] / sum_col);
 
 				if (i == 0) {
-					c->geom.x = m->w.x + target_gappo;
+					target_geom.x = m->w.x + target_gappo;
 				} else if (i == 1) {
 					// 第二个窗口的 X 坐标紧跟第一个窗口后面
 					float cw0 = avail_w * (col_pers[0] / sum_col);
-					c->geom.x = m->w.x + target_gappo + cw0 + target_gappi;
+					target_geom.x = m->w.x + target_gappo + cw0 + target_gappi;
 				}
-				c->geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				i++;
 			}
 		}
@@ -757,11 +758,11 @@ void grid(Monitor *m) {
 							  ? (m->w.y + m->w.height - target_gappo - fl_cy)
 							  : avail_h * (row_pers[r_idx] / sum_row);
 
-			c->geom.x = (int32_t)fl_cx;
-			c->geom.y = (int32_t)fl_cy;
-			c->geom.width = (int32_t)fl_cw;
-			c->geom.height = (int32_t)fl_ch;
-			client_tile_resize(c, c->geom, 0);
+			target_geom.x = (int32_t)fl_cx;
+			target_geom.y = (int32_t)fl_cy;
+			target_geom.width = (int32_t)fl_cw;
+			target_geom.height = (int32_t)fl_ch;
+			client_tile_resize(c, target_geom, 0);
 			i++;
 		}
 	}
