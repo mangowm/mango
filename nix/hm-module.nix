@@ -1,4 +1,4 @@
-self: {
+mangoPackage: {
   lib,
   config,
   pkgs,
@@ -23,7 +23,7 @@ in {
       };
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
+        default = mangoPackage;
         description = "The mango package to use";
       };
       systemd = {

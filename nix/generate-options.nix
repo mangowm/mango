@@ -9,7 +9,7 @@ self: {
 
   eval = lib.evalModules {
     modules = [
-      (import module self)
+      (import module self.packages.${pkgs.stdenv.hostPlatform.system}.default)
       {_module.check = false;}
     ];
     specialArgs = {inherit pkgs;};
