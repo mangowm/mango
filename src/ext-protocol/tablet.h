@@ -1,6 +1,7 @@
 #include <wlr/types/wlr_tablet_pad.h>
 #include <wlr/types/wlr_tablet_tool.h>
 #include <wlr/types/wlr_tablet_v2.h>
+#include <wlr/util/log.h>
 
 static const int tabletmaptosurface =
 	0; /* map tablet input to surface(1) or monitor(0) */
@@ -32,6 +33,7 @@ static struct wl_listener tablet_tool_destroy = {.notify = destroytablettool};
 static struct wl_listener tablet_tool_proximity = {.notify =
 													   tablettoolproximity};
 static struct wl_listener tablet_tool_tip = {.notify = tablettooltip};
+static Monitor *find_monitor_by_name(const char *output_name);
 
 void createtablet(struct wlr_input_device *device) {
 	if (!tablet) {
@@ -47,6 +49,17 @@ void createtablet(struct wlr_input_device *device) {
 			libinput_device_config_send_events_set_mode(device_handle,
 														send_events_mode);
 			wlr_cursor_attach_input_device(cursor, device);
+			// Map tablet to specific monitor if configured
+			if (config.tablet_output_name) {
+				Monitor *target_monitor = find_monitor_by_name(config.tablet_output_name);
+				if (target_monitor) {
+					wlr_log(WLR_INFO, "Mapping input to output for device: %s", config.tablet_output_name);
+					wlr_cursor_map_input_to_output(cursor, device, 
+																				 target_monitor->wlr_output);
+				} else {
+					wlr_log(WLR_WARN, "No monitor found with name: %s", config.tablet_output_name);
+				}
+			}
 		}
 	} else if (device == tablet->wlr_device) {
 		wlr_log(WLR_ERROR, "createtablet: duplicate device");

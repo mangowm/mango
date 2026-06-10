@@ -266,6 +266,8 @@ typedef struct {
 
 	char autostart[3][256];
 
+	char *tablet_output_name;
+
 	ConfigTagRule *tag_rules; // 动态数组
 	int tag_rules_count;	  // 数量
 
@@ -2007,6 +2009,11 @@ void parse_config_line(Config *config, const char *line) {
 
 	} else if (strncmp(key, "source", 6) == 0) {
 		parse_config_file(config, value);
+	} else if (strcmp(key, "tablet_output_name") == 0) {
+		if (config->tablet_output_name) {
+			free(config->tablet_output_name);
+		}
+		config->tablet_output_name = strdup(value);
 	} else {
 		fprintf(stderr, "Error: Unknown key: %s\n", key);
 	}
@@ -2292,6 +2299,11 @@ void free_config(void) {
 	if (config.cursor_theme) {
 		free(config.cursor_theme);
 		config.cursor_theme = NULL;
+	}
+
+	if (config.tablet_output_name) {
+		free(config.tablet_output_name);
+		config.tablet_output_name = NULL;
 	}
 
 	// 释放 circle_layout
@@ -2591,6 +2603,10 @@ void set_value_default() {
 	config.shadows_position_y = shadows_position_y;
 	config.focused_opacity = focused_opacity;
 	config.unfocused_opacity = unfocused_opacity;
+
+	/* Tablet */
+	config.tablet_output_name = NULL;
+
 	memcpy(config.shadowscolor, shadowscolor, sizeof(shadowscolor));
 
 	memcpy(config.animation_curve_move, animation_curve_move,

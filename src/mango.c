@@ -5655,6 +5655,17 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 }
 #endif
 
+static Monitor *find_monitor_by_name(const char *output_name) {
+	if (!output_name) return NULL;
+	Monitor *m;
+	wl_list_for_each(m, &mons, link) {
+			if (m->wlr_output && strcmp(m->wlr_output->name, output_name) == 0) {
+				return m;
+			}
+		}
+	return NULL;
+}
+
 int main(int argc, char *argv[]) {
 	char *startup_cmd = NULL;
 	int c;
