@@ -751,6 +751,7 @@ void resize_tile_grid_fair(Client *grabc, bool isdrag, int32_t offsetx,
 
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
+
 	if (!grabc || grabc->isfullscreen || grabc->ismaximizescreen)
 		return;
 	if (grabc->mon->isoverview)
@@ -772,7 +773,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 
 	Client *stack_head_client = headnode->client;
 
-	if (m->visible_tiling_clients == 1 &&
+	if (m->visible_scroll_tiling_clients == 1 &&
 		!config.scroller_ignore_proportion_single)
 		return;
 
