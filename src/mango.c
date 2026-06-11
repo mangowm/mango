@@ -4747,7 +4747,7 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 	if (!surface && !seat->drag && !cursor_hidden)
 		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
 
-	if (c && c->mon && !c->animation.running && (INSIDEMON(c) || !ISTILED(c))) {
+	if (c && c->mon && !c->animation.running && (INSIDEMON(c) || !ISSCROLLTILED(c))) {
 		scroller_focus_lock = 0;
 	}
 
