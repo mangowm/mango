@@ -284,6 +284,8 @@ typedef struct {
 	uint32_t scroll_button;
 	uint32_t click_method;
 	uint32_t send_events_mode;
+	int32_t _have_calibration_matrix;
+	float calibration_matrix[6];
 
 	/* mouse */
 	int32_t mouse_natural_scrolling;
@@ -1787,6 +1789,67 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->tablet_map_to_mon = strdup(value);
 	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
 		config->trackpad_scroll_factor = atof(value);
+	} else if (strcmp(key, "calibration_matrix") == 0) {
+		config->_have_calibration_matrix = 1;
+		if (value == NULL) {
+			config->_have_calibration_matrix = 0;
+			return false;
+		}
+
+		char *value_copy = strdup(value);
+		if (value_copy == NULL) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory allocation "
+							"failed for value_copy\n");
+			config->_have_calibration_matrix = 0;
+		} else {
+			float tmp[6] = {0};
+			char *saveptr;
+			int i = 0;
+
+			char *token = strtok_r(value_copy, " \t\r\n", &saveptr);
+
+			while (token != NULL) {
+				if (i >= 6) {
+					fprintf(
+						stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Too many calibration "
+						"matrix elements, expected exactly 6\n");
+					config->_have_calibration_matrix = 0;
+					break;
+				}
+
+				char *endptr = NULL;
+				errno = 0;
+				tmp[i] = strtof(token, &endptr);
+
+				if (errno == ERANGE || endptr == token || *endptr != '\0') {
+					fprintf(
+						stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Invalid calibration "
+						"matrix element '%s' (index %d), expect floats\n",
+						token, i);
+					config->_have_calibration_matrix = 0;
+					break;
+				}
+
+				i++;
+				token = strtok_r(NULL, " \t\r\n", &saveptr);
+			}
+
+			if (config->_have_calibration_matrix && i != 6) {
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Wrong number of "
+						"calibration matrix elements, expected 6, got %d\n",
+						i);
+				config->_have_calibration_matrix = 0;
+			}
+
+			if (config->_have_calibration_matrix) {
+				memcpy(config->calibration_matrix, tmp, sizeof(tmp));
+			}
+
+			free(value_copy);
+		}
 	} else if (strcmp(key, "gappih") == 0) {
 		config->gappih = atoi(value);
 	} else if (strcmp(key, "gappiv") == 0) {
@@ -3384,6 +3447,9 @@ void override_config(void) {
 		CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
 	config.trackpad_scroll_factor =
 		CLAMP_FLOAT(config.trackpad_scroll_factor, 0.1f, 10.0f);
+	config._have_calibration_matrix =
+		CLAMP_INT(config._have_calibration_matrix, 0, 1);
+
 	config.gappih = CLAMP_INT(config.gappih, 0, 1000);
 	config.gappiv = CLAMP_INT(config.gappiv, 0, 1000);
 	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
@@ -3540,6 +3606,17 @@ void set_value_default() {
 	config.click_method = LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
 	config.send_events_mode = LIBINPUT_CONFIG_SEND_EVENTS_ENABLED;
 	config.button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
+	config._have_calibration_matrix = 0;
+	config.calibration_matrix[0] = 0.0f;
+	config.calibration_matrix[1] = 0.0f;
+	config.calibration_matrix[2] = 0.0f;
+	config.calibration_matrix[3] = 0.0f;
+	config.calibration_matrix[4] = 0.0f;
+	config.calibration_matrix[5] = 0.0f;
+	config.calibration_matrix[6] = 0.0f;
+	config.calibration_matrix[7] = 0.0f;
+	config.calibration_matrix[8] = 0.0f;
+	config.calibration_matrix[9] = 0.0f;
 
 	config.blur = 0;
 	config.blur_layer = 0;
