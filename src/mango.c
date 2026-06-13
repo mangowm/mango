@@ -2221,9 +2221,10 @@ void hold_end(struct wl_listener *listener, void *data) {
 Client *find_closest_tiled_client(Client *c) {
 	Client *tc, *closest = NULL;
 	long min_dist = LONG_MAX;
+	Monitor *cursor_mon = xytomon(cursor->x, cursor->y);
 
 	wl_list_for_each(tc, &clients, link) {
-		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, c->mon))
+		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, cursor_mon))
 			continue;
 
 		if (cursor->x >= tc->geom.x &&
@@ -2255,7 +2256,9 @@ void place_drag_tile_client(Client *c) {
 
 		if (closest->drop_direction == UNDIR) {
 			setfloating(c, 0);
-			exchange_two_client(c, closest);
+			wl_list_remove(&c->link);
+			wl_list_insert(closest->link.prev, &c->link);
+			arrange(closest->mon, false, false);
 			return;
 		}
 

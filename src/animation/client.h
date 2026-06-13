@@ -587,17 +587,6 @@ void client_set_drop_area(Client *c) {
 	bool dwindle_familiar =
 		cur_layout->id == DWINDLE && config.dwindle_drop_simple_split;
 
-	uint32_t nmaster = c->mon->pertag->nmasters[c->mon->pertag->curtag];
-
-	bool should_swap =
-		(cur_layout->id == DECK || cur_layout->id == VERTICAL_DECK ||
-		 cur_layout->id == MONOCLE || cur_layout->id == GRID ||
-		 cur_layout->id == FAIR || cur_layout->id == VERTICAL_FAIR ||
-		 cur_layout->id == VERTICAL_GRID) ||
-		((cur_layout->id == TILE || cur_layout->id == VERTICAL_TILE ||
-		  cur_layout->id == CENTER_TILE || cur_layout->id == RIGHT_TILE) &&
-		 nmaster == 1 && c->ismaster);
-
 	if (dwindle_familiar) {
 		bool split_h = c->geom.width >= c->geom.height;
 		float ratio = config.dwindle_split_ratio;
@@ -631,42 +620,87 @@ void client_set_drop_area(Client *c) {
 					client_height - (int32_t)(client_height * ratio);
 			}
 		}
-	} else if (should_swap) {
-		drop_box.x = bw;
-		drop_box.y = bw;
-		drop_box.width = client_width;
-		drop_box.height = client_height;
-		drop_direction = UNDIR;
 	} else if (cur_layout->id == TILE || cur_layout->id == DECK ||
 			   cur_layout->id == CENTER_TILE || cur_layout->id == RIGHT_TILE) {
-		if (rel_y < client_height * 0.5) {
-			drop_direction = UP;
-			drop_box.x = bw;
-			drop_box.y = bw;
-			drop_box.width = client_width;
-			drop_box.height = client_height / 2;
+
+		if (c->ismaster) {
+			if (c->mon->visible_tiling_clients == 1) {
+				if (rel_x < client_width * 0.5) {
+					drop_direction = LEFT;
+					drop_box.x = bw;
+					drop_box.y = bw;
+					drop_box.width = client_width / 2;
+					drop_box.height = client_height;
+				} else {
+					drop_direction = RIGHT;
+					drop_box.x = bw + client_width / 2;
+					drop_box.y = bw;
+					drop_box.width = client_width / 2;
+					drop_box.height = client_height;
+				}
+			} else {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = client_height;
+				drop_direction = UNDIR;
+			}
 		} else {
-			drop_direction = DOWN;
-			drop_box.x = bw;
-			drop_box.y = bw + client_height / 2;
-			drop_box.width = client_width;
-			drop_box.height = client_height / 2;
+			if (rel_y < client_height * 0.5) {
+				drop_direction = UP;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = client_height / 2;
+			} else {
+				drop_direction = DOWN;
+				drop_box.x = bw;
+				drop_box.y = bw + client_height / 2;
+				drop_box.width = client_width;
+				drop_box.height = client_height / 2;
+			}
 		}
 	} else if (cur_layout->id == VERTICAL_TILE ||
 			   cur_layout->id == VERTICAL_DECK) {
-		if (rel_x < client_width * 0.5) {
-			drop_direction = LEFT;
-			drop_box.x = bw;
-			drop_box.y = bw;
-			drop_box.width = client_width / 2;
-			drop_box.height = client_height;
+		if (c->ismaster) {
+			if (c->mon->visible_tiling_clients == 1) {
+				if (rel_y < client_height * 0.5) {
+					drop_direction = UP;
+					drop_box.x = bw;
+					drop_box.y = bw;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 2;
+				} else {
+					drop_direction = DOWN;
+					drop_box.x = bw;
+					drop_box.y = bw + client_height / 2;
+					drop_box.width = client_width;
+					drop_box.height = client_height / 2;
+				}
+			} else {
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width;
+				drop_box.height = client_height;
+				drop_direction = UNDIR;
+			}
+
 		} else {
-			drop_direction = RIGHT;
-			drop_box.x = bw + client_width / 2;
-			drop_box.y = bw;
-			drop_box.width = client_width / 2;
-			drop_box.height = client_height;
+			if (rel_x < client_width * 0.5) {
+				drop_direction = LEFT;
+				drop_box.x = bw;
+				drop_box.y = bw;
+				drop_box.width = client_width / 2;
+				drop_box.height = client_height;
+			} else {
+				drop_direction = RIGHT;
+				drop_box.x = bw + client_width / 2;
+				drop_box.y = bw;
+				drop_box.width = client_width / 2;
+				drop_box.height = client_height;
+			}
 		}
+
 	} else {
 		double dist_left = rel_x;
 		double dist_right = client_width - rel_x;
