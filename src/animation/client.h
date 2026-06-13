@@ -1243,6 +1243,10 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!c->mon)
 		return;
 
+	if (config.blur && c->mon->blur) {
+		wlr_scene_optimized_blur_mark_dirty(c->mon->blur);
+	}
+
 	c->need_output_flush = true;
 	c->dirty = true;
 
