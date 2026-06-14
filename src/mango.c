@@ -2357,6 +2357,17 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 			}
 		}
 
+		// overview模式下鼠标左键跳转，右键关闭窗口
+		if (selmon && selmon->isoverview && event->button == BTN_LEFT && c) {
+			toggleoverview(&(Arg){.i = 1});
+			return true;
+		}
+
+		if (selmon && selmon->isoverview && event->button == BTN_RIGHT && c) {
+			pending_kill_client(c);
+			return true;
+		}
+
 		// 当鼠标焦点在layer上的时候，不检测虚拟键盘的mod状态，
 		// 避免layer虚拟键盘锁死mod按键状态
 		hard_keyboard = &kb_group->wlr_group->keyboard;
@@ -2372,16 +2383,6 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 			if (config.mouse_bindings_count < 1)
 				break;
 			m = &config.mouse_bindings[ji];
-
-			if (selmon->isoverview && event->button == BTN_LEFT && c) {
-				toggleoverview(&(Arg){.i = 1});
-				return true;
-			}
-
-			if (selmon->isoverview && event->button == BTN_RIGHT && c) {
-				pending_kill_client(c);
-				return true;
-			}
 
 			if (CLEANMASK(mods) == CLEANMASK(m->mod) &&
 				event->button == m->button && m->func &&
