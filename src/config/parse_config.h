@@ -344,6 +344,14 @@ typedef struct {
 	float globalcolor[4];
 	float overlaycolor[4];
 
+	float default_focuscolor[4];
+	float xkb_layout_focuscolors[8][4];
+	int32_t xkb_layout_focuscolors_count;
+
+	float default_bordercolor[4];
+	float xkb_layout_bordercolors[8][4];
+	int32_t xkb_layout_bordercolors_count;
+
 	int32_t log_level;
 	uint32_t capslock;
 
@@ -1838,7 +1846,22 @@ bool parse_option(Config *config, char *key, char *value) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->bordercolor, color);
+			memcpy(config->default_bordercolor, config->bordercolor, sizeof(config->bordercolor));
 		}
+	} else if (strcmp(key, "xkb_layout_bordercolors") == 0) {
+		char *value_copy = strdup(value);
+		char *token = strtok(value_copy, ",");
+		config->xkb_layout_bordercolors_count = 0;
+		while (token != NULL && config->xkb_layout_bordercolors_count < 8) {
+			trim_whitespace(token);
+			int64_t color = parse_color(token);
+			if (color != -1) {
+				convert_hex_to_rgba(config->xkb_layout_bordercolors[config->xkb_layout_bordercolors_count], color);
+				config->xkb_layout_bordercolors_count++;
+			}
+			token = strtok(NULL, ",");
+		}
+		free(value_copy);
 	} else if (strcmp(key, "dropcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -1871,7 +1894,22 @@ bool parse_option(Config *config, char *key, char *value) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->focuscolor, color);
+			memcpy(config->default_focuscolor, config->focuscolor, sizeof(config->focuscolor));
 		}
+	} else if (strcmp(key, "xkb_layout_focuscolors") == 0) {
+		char *value_copy = strdup(value);
+		char *token = strtok(value_copy, ",");
+		config->xkb_layout_focuscolors_count = 0;
+		while (token != NULL && config->xkb_layout_focuscolors_count < 8) {
+			trim_whitespace(token);
+			int64_t color = parse_color(token);
+			if (color != -1) {
+				convert_hex_to_rgba(config->xkb_layout_focuscolors[config->xkb_layout_focuscolors_count], color);
+				config->xkb_layout_focuscolors_count++;
+			}
+			token = strtok(NULL, ",");
+		}
+		free(value_copy);
 	} else if (strcmp(key, "maximizescreencolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -3653,6 +3691,9 @@ void set_value_default() {
 	config.overlaycolor[1] = 0xa5 / 255.0f;
 	config.overlaycolor[2] = 0x7c / 255.0f;
 	config.overlaycolor[3] = 1.0f;
+
+	memcpy(config.default_focuscolor, config.focuscolor, sizeof(config.focuscolor));
+	memcpy(config.default_bordercolor, config.bordercolor, sizeof(config.bordercolor));
 }
 
 void set_default_key_bindings(Config *config) {
