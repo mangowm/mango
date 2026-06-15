@@ -183,6 +183,9 @@ tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
 | `no_hide` | integer | `0` / `1` | Not hide even if the tag is empty |
 | `nmaster` | integer | 0, 99 | Number of master windows |
 | `mfact` | float | 0.1–0.9 | Master area factor |
+| `scroller_default_proportion` | float | 0.1-1.0 | Set scroller  default proportion. |
+| `scroller_default_proportion_single` | float | 0.1-1.0 | Set scroller auto adjust proportion when it is single window(only apply when set `scroller_ignore_proportion_single` to `0`) |
+| `scroller_ignore_proportion_single` | integer | `0` / `1` | Ignore scroller single proportion setting. |
 
 ### Examples
 
@@ -204,6 +207,10 @@ tagrule=id:4,monitor_name:eDP-1,no_hide:1,layout_name:scroller
 # Advanced tag configuration with master layout settings
 tagrule=id:5,layout_name:tile,nmaster:2,mfact:0.6
 tagrule=id:6,monitor_name:HDMI-A-1,layout_name:monocle,no_render_border:1
+
+# set scroller proportion for specific tag
+tagrule=id:1,layout_name:scroller,scroller_default_proportion_single:0.5,scroller_ignore_proportion_single:0,scroller_default_proportion:0.9,monitor_name:HDMI-A-1
+
 ```
 
 > **Tip:** For Waybar configuration with persistent tags, see [Status Bar](/docs/visuals/status-bar) documentation.
