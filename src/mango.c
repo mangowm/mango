@@ -1046,6 +1046,9 @@ struct Pertag {
 	int32_t no_hide[LENGTH(tags) + 1];
 	int32_t no_render_border[LENGTH(tags) + 1];
 	int32_t open_as_floating[LENGTH(tags) + 1];
+	float scroller_default_proportion[LENGTH(tags) + 1];
+	float scroller_default_proportion_single[LENGTH(tags) + 1];
+	int32_t scroller_ignore_proportion_single[LENGTH(tags) + 1];
 	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
 	const Layout *ltidxs[LENGTH(tags) + 1];
 	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];

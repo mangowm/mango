@@ -165,6 +165,9 @@ typedef struct {
 	char *monitor_serial;
 	float mfact;
 	int32_t nmaster;
+	float scroller_default_proportion;
+	float scroller_default_proportion_single;
+	int32_t scroller_ignore_proportion_single;
 	int32_t no_render_border;
 	int32_t open_as_floating;
 	int32_t no_hide;
@@ -1973,6 +1976,9 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->no_render_border = 0;
 		rule->open_as_floating = 0;
 		rule->no_hide = 0;
+		rule->scroller_default_proportion = 0.0f;
+		rule->scroller_default_proportion_single = 0.0f;
+		rule->scroller_ignore_proportion_single = -1;
 
 		bool parse_error = false;
 		char *token = strtok(value, ",");
@@ -2008,6 +2014,17 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->nmaster = CLAMP_INT(atoi(val), 1, 99);
 				} else if (strcmp(key, "mfact") == 0) {
 					rule->mfact = CLAMP_FLOAT(atof(val), 0.1f, 0.9f);
+				} else if (strcmp(key, "scroller_default_proportion") == 0) {
+					rule->scroller_default_proportion =
+						CLAMP_FLOAT(atof(val), 0.0f, 1.0f);
+				} else if (strcmp(key, "scroller_default_proportion_single") ==
+						   0) {
+					rule->scroller_default_proportion_single =
+						CLAMP_FLOAT(atof(val), 0.0f, 1.0f);
+				} else if (strcmp(key, "scroller_ignore_proportion_single") ==
+						   0) {
+					rule->scroller_ignore_proportion_single =
+						CLAMP_INT(atoi(val), 0, 1);
 				} else {
 					fprintf(stderr,
 							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
@@ -3771,6 +3788,12 @@ void parse_tagrule(Monitor *m) {
 	for (i = 0; i <= LENGTH(tags); i++) {
 		m->pertag->nmasters[i] = config.default_nmaster;
 		m->pertag->mfacts[i] = config.default_mfact;
+		m->pertag->scroller_default_proportion[i] =
+			config.scroller_default_proportion;
+		m->pertag->scroller_default_proportion_single[i] =
+			config.scroller_default_proportion_single;
+		m->pertag->scroller_ignore_proportion_single[i] =
+			config.scroller_ignore_proportion_single;
 	}
 
 	for (i = 0; i < config.tag_rules_count; i++) {
@@ -3825,6 +3848,15 @@ void parse_tagrule(Monitor *m) {
 				m->pertag->no_render_border[tr.id] = tr.no_render_border;
 			if (tr.open_as_floating >= 0)
 				m->pertag->open_as_floating[tr.id] = tr.open_as_floating;
+			if (tr.scroller_default_proportion > 0.0f)
+				m->pertag->scroller_default_proportion[tr.id] =
+					tr.scroller_default_proportion;
+			if (tr.scroller_default_proportion_single > 0.0f)
+				m->pertag->scroller_default_proportion_single[tr.id] =
+					tr.scroller_default_proportion_single;
+			if (tr.scroller_ignore_proportion_single >= 0)
+				m->pertag->scroller_ignore_proportion_single[tr.id] =
+					tr.scroller_ignore_proportion_single;
 		}
 	}
 

@@ -25,6 +25,9 @@ void set_size_per(Monitor *m, Client *c) {
 		c->master_inner_per = 1.0f;
 		c->stack_inner_per = 1.0f;
 	}
+
+	c->scroller_proportion =
+		m->pertag->scroller_default_proportion[m->pertag->curtag];
 }
 
 void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
