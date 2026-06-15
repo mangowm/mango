@@ -1761,7 +1761,12 @@ int32_t toggleoverview(const Arg *arg) {
 
 	if (selmon->isoverview) {
 		wlr_seat_pointer_clear_focus(seat);
-		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+
+		if (cursor_hidden) {
+			handlecursoractivity();
+		} else {
+			wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+		}
 
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !client_is_unmanaged(c) &&
