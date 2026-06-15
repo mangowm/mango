@@ -1356,9 +1356,9 @@ int32_t togglefullscreen(const Arg *arg) {
 	sel->isnamedscratchpad = 0;
 
 	if (sel->isfullscreen)
-		setfullscreen(sel, 0);
+		setfullscreen(sel, 0, true);
 	else
-		setfullscreen(sel, 1);
+		setfullscreen(sel, 1, true);
 	return 0;
 }
 
@@ -1402,9 +1402,9 @@ int32_t togglemaximizescreen(const Arg *arg) {
 	sel->isnamedscratchpad = 0;
 
 	if (sel->ismaximizescreen)
-		setmaximizescreen(sel, 0);
+		setmaximizescreen(sel, 0, true);
 	else
-		setmaximizescreen(sel, 1);
+		setmaximizescreen(sel, 1, true);
 
 	setborder_color(sel);
 	return 0;

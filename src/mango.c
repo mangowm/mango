@@ -746,8 +746,9 @@ static void run(char *startup_cmd);
 static void setcursor(struct wl_listener *listener, void *data);
 static void setfloating(Client *c, int32_t floating);
 static void setfakefullscreen(Client *c, int32_t fakefullscreen);
-static void setfullscreen(Client *c, int32_t fullscreen);
-static void setmaximizescreen(Client *c, int32_t maximizescreen);
+static void setfullscreen(Client *c, int32_t fullscreen, bool rearrange);
+static void setmaximizescreen(Client *c, int32_t maximizescreen,
+							  bool rearrange);
 static void reset_maximizescreen_size(Client *c);
 static void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv);
 
@@ -1171,11 +1172,11 @@ void clear_fullscreen_flag(Client *c) {
 	}
 
 	if (c->isfullscreen) {
-		setfullscreen(c, false);
+		setfullscreen(c, false, true);
 	}
 
 	if (c->ismaximizescreen) {
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 	}
 }
 
@@ -1767,7 +1768,7 @@ void applyrules(Client *c) {
 		view_in_mon(&(Arg){.ui = c->tags}, true, c->mon, true);
 	}
 
-	setfullscreen(c, fullscreen_state_backup);
+	setfullscreen(c, fullscreen_state_backup, true);
 
 	if (c->isfakefullscreen) {
 		setfakefullscreen(c, 1);
@@ -3896,7 +3897,7 @@ fullscreennotify(struct wl_listener *listener, void *data) {
 	if (!c || c->iskilling)
 		return;
 
-	setfullscreen(c, client_wants_fullscreen(c));
+	setfullscreen(c, client_wants_fullscreen(c), true);
 }
 
 void requestmonstate(struct wl_listener *listener, void *data) {
@@ -4521,9 +4522,9 @@ void maximizenotify(struct wl_listener *listener, void *data) {
 	}
 
 	if (client_request_maximize(c, data)) {
-		setmaximizescreen(c, 1);
+		setmaximizescreen(c, 1, true);
 	} else {
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 	}
 }
 
@@ -5455,7 +5456,7 @@ void exit_scroller_stack(Client *c) {
 	}
 }
 
-void setmaximizescreen(Client *c, int32_t maximizescreen) {
+void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 	struct wlr_box maximizescreen_box;
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
 		return;
@@ -5496,7 +5497,8 @@ void setmaximizescreen(Client *c, int32_t maximizescreen) {
 		client_set_maximized(c, true);
 	}
 
-	arrange(c->mon, false, false);
+	if (rearrange)
+		arrange(c->mon, false, false);
 }
 
 void setfakefullscreen(Client *c, int32_t fakefullscreen) {
@@ -5505,12 +5507,13 @@ void setfakefullscreen(Client *c, int32_t fakefullscreen) {
 		return;
 
 	if (c->isfullscreen)
-		setfullscreen(c, 0);
+		setfullscreen(c, 0, true);
 
 	client_set_fullscreen(c, fakefullscreen);
 }
 
-void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自带全屏
+void setfullscreen(Client *c, int32_t fullscreen,
+				   bool rearrange) // 用自定义全屏代理自带全屏
 {
 
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
@@ -5556,7 +5559,8 @@ void setfullscreen(Client *c, int32_t fullscreen) // 用自定义全屏代理自
 			layers[fullscreen || c->isfloating ? LyrTop : LyrTile]);
 	}
 
-	arrange(c->mon, false, false);
+	if (rearrange)
+		arrange(c->mon, false, false);
 }
 
 void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
@@ -5685,7 +5689,8 @@ void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
 		setfloating(c, c->isfloating);
-		setfullscreen(c, c->isfullscreen); /* This will call arrange(c->mon) */
+		setfullscreen(c, c->isfullscreen,
+					  true); /* This will call arrange(c->mon) */
 	}
 
 	if (focus && !client_is_x11_popup(c)) {
@@ -6286,13 +6291,13 @@ void overview_restore(Client *c, const Arg *arg) {
 		resize(c, c->overview_backup_geom, 0);
 	} else if (c->isfullscreen || c->ismaximizescreen) {
 		if (want_restore_fullscreen(c) && c->ismaximizescreen) {
-			setmaximizescreen(c, 1);
+			setmaximizescreen(c, 1, false);
 		} else if (want_restore_fullscreen(c) && c->isfullscreen) {
-			setfullscreen(c, 1);
+			setfullscreen(c, 1, false);
 		} else {
 			client_pending_fullscreen_state(c, 0);
 			client_pending_maximized_state(c, 0);
-			setfullscreen(c, false);
+			setfullscreen(c, false, false);
 		}
 	} else {
 		if (c->is_restoring_from_ov) {
@@ -6491,8 +6496,8 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	if (c->swallowedby) {
-		setmaximizescreen(c->swallowedby, c->ismaximizescreen);
-		setfullscreen(c->swallowedby, c->isfullscreen);
+		setmaximizescreen(c->swallowedby, c->ismaximizescreen, true);
+		setfullscreen(c->swallowedby, c->isfullscreen, true);
 		c->swallowedby->swallowing = NULL;
 		c->swallowedby = NULL;
 	}

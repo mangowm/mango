@@ -743,9 +743,9 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		return;
 
 	if (c->isfullscreen)
-		setfullscreen(c, 0);
+		setfullscreen(c, 0, true);
 	if (c->ismaximizescreen)
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 
 	Monitor *m = c->mon;
 	uint32_t tag = m->pertag->curtag;
@@ -785,9 +785,9 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		head = head->prev_in_stack;
 	Client *stack_head = head->client;
 	if (stack_head->ismaximizescreen)
-		setmaximizescreen(stack_head, 0);
+		setmaximizescreen(stack_head, 0, true);
 	if (stack_head->isfullscreen)
-		setfullscreen(stack_head, 0);
+		setfullscreen(stack_head, 0, true);
 
 	/* 同步到 Client 字段 */
 	sync_scroller_state_to_clients(m, tag);

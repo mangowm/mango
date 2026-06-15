@@ -16,12 +16,12 @@ void handle_foreign_maximize_request(struct wl_listener *listener, void *data) {
 		return;
 
 	if (c->ismaximizescreen && !event->maximized) {
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 		return;
 	}
 
 	if (!c->ismaximizescreen && event->maximized) {
-		setmaximizescreen(c, 1);
+		setmaximizescreen(c, 1, true);
 		return;
 	}
 }
@@ -59,12 +59,12 @@ void handle_foreign_fullscreen_request(struct wl_listener *listener,
 		return;
 
 	if (c->isfullscreen && !event->fullscreen) {
-		setfullscreen(c, 0);
+		setfullscreen(c, 0, true);
 		return;
 	}
 
 	if (!c->isfullscreen && event->fullscreen) {
-		setfullscreen(c, 1);
+		setfullscreen(c, 1, true);
 		return;
 	}
 }
