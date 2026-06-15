@@ -117,6 +117,9 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		c->animation.tagining = false;
 		set_tagout_animation(m, c);
 	} else {
+		c->animation.running = false;
 		wlr_scene_node_set_enabled(&c->scene->node, false);
+		c->animainit_geom = c->current = c->pending = c->animation.current =
+			c->geom;
 	}
 }
