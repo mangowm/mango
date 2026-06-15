@@ -1919,7 +1919,7 @@ int32_t scroller_stack(const Arg *arg) {
 	if (!c || !c->mon || c->isfloating || !is_scroller_layout(selmon))
 		return 0;
 
-	Client *target_client = find_client_by_direction(c, arg, false, true);
+	Client *target_client = find_client_by_direction(c, arg, false);
 
 	return scroller_apply_stack(c, target_client, arg->i);
 }
