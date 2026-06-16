@@ -26,6 +26,7 @@ endif
 
 cc = meson.get_compiler('c')
 libm = cc.find_library('m')
+libdrm = dependency('libdrm')
 xcb = dependency('xcb', required : get_option('xwayland'))
 xlibs = dependency('xcb-icccm', required : get_option('xwayland'))
 wlroots_dep = dependency('wlroots-0.20',version: '>=0.20.0')
@@ -99,6 +100,7 @@ executable('mango',
   wayland_sources,
   dependencies : [
     libm,
+    libdrm,
     xcb,
     xlibs,
     wayland_server_dep,
