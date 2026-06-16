@@ -913,10 +913,13 @@ int32_t centerwin(const Arg *arg) {
 }
 
 int32_t spawn_shell(const Arg *arg) {
+	pid_t pid;
+
 	if (!arg->v)
 		return 0;
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -938,14 +941,18 @@ int32_t spawn_shell(const Arg *arg) {
 				(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return 0;
 }
 
 int32_t spawn(const Arg *arg) {
+	pid_t pid;
 	if (!arg->v)
 		return 0;
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -975,6 +982,8 @@ int32_t spawn(const Arg *arg) {
 		wordfree(&p);
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return 0;
 }
 
