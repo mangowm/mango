@@ -131,9 +131,14 @@ int32_t exchange_stack_client(const Arg *arg) {
 }
 
 int32_t focusdir(const Arg *arg) {
+
+	if(!selmon)
+		return 0;
+
 	Client *c = NULL;
 	c = direction_select(arg);
-	c = get_focused_stack_client(c, arg->tc);
+	if(!selmon->isoverview)
+		c = get_focused_stack_client(c, arg->tc);
 	if (c) {
 		focusclient(c, 1);
 		if (config.warpcursor)
