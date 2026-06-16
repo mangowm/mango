@@ -26,6 +26,7 @@ endif
 
 cc = meson.get_compiler('c')
 libm = cc.find_library('m')
+libdrm = dependency('libdrm')
 xcb = dependency('xcb', required : get_option('xwayland'))
 xlibs = dependency('xcb-icccm', required : get_option('xwayland'))
 wayland_server_dep = dependency('wayland-server',version: '>=1.23.1')
@@ -100,6 +101,7 @@ executable('mango',
   wayland_sources,
   dependencies : [
     libm,
+    libdrm,
     xcb,
     xlibs,
     libscenefx_dep,
