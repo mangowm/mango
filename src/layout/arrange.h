@@ -26,8 +26,15 @@ void set_size_per(Monitor *m, Client *c) {
 		c->stack_inner_per = 1.0f;
 	}
 
-	c->scroller_proportion =
-		m->pertag->scroller_default_proportion[m->pertag->curtag];
+	if (!c->iscustom_scroller_proportion) {
+		c->scroller_proportion =
+			m->pertag->scroller_default_proportion[m->pertag->curtag];
+	}
+
+	if (!c->iscustom_scroller_proportion_single) {
+		c->scroller_proportion_single =
+			m->pertag->scroller_default_proportion_single[m->pertag->curtag];
+	}
 }
 
 void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,

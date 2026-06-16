@@ -383,6 +383,8 @@ struct Client {
 	int32_t is_in_scratchpad;
 	int32_t iscustomsize;
 	int32_t iscustompos;
+	int32_t iscustom_scroller_proportion;
+	int32_t iscustom_scroller_proportion_single;
 	int32_t is_scratchpad_show;
 	int32_t isglobal;
 	int32_t isnoborder;
@@ -1675,6 +1677,14 @@ void applyrules(Client *c) {
 
 		if (c->isnamedscratchpad) {
 			c->isfloating = 1;
+		}
+
+		if (r->scroller_proportion > 0.0f) {
+			c->iscustom_scroller_proportion = 1;
+		}
+
+		if (r->scroller_proportion_single > 0.0f) {
+			c->iscustom_scroller_proportion_single = 1;
 		}
 
 		// set geometry of floating client
@@ -4333,6 +4343,8 @@ void init_client_properties(Client *c) {
 	c->ignore_minimize = 1;
 	c->iscustomsize = 0;
 	c->iscustompos = 0;
+	c->iscustom_scroller_proportion = 0;
+	c->iscustom_scroller_proportion_single = 0;
 	c->master_mfact_per = 0.0f;
 	c->master_inner_per = 0.0f;
 	c->stack_inner_per = 0.0f;
