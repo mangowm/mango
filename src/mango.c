@@ -96,6 +96,7 @@
 #include <xcb/xcb_icccm.h>
 #endif
 #include "common/util.h"
+#include "draw/text-node.h"
 
 /* macros */
 #define MAX(A, B) ((A) > (B) ? (A) : (B))
@@ -327,6 +328,7 @@ struct Client {
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_tree *scene_surface;
 	struct wlr_scene_tree *overview_scene_surface;
+	struct mango_text_node *text_node;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -4512,6 +4514,11 @@ mapnotify(struct wl_listener *listener, void *data) {
 	}
 #endif
 	// extra node
+
+	c->text_node =  mango_text_node_create(c->scene);
+	mango_text_node_update(c->text_node, "hello world", "Sans 50", config.focuscolor, 1.0f);
+	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
 
 	for (i = 0; i < 2; i++) {
 		c->splitindicator[i] = wlr_scene_rect_create(
