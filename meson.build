@@ -37,8 +37,6 @@ pcre2_dep = dependency('libpcre2-8')
 libscenefx_dep = dependency('scenefx-0.4',version: '>=0.4.1')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
-cairo_dep = dependency('cairo')
-pango_dep = dependency('pango')
 pangocairo_dep = dependency('pangocairo')
 
 # version info
@@ -113,8 +111,6 @@ executable('mango',
     pcre2_dep,
     pixman_dep,
     cjson_dep,
-    cairo_dep,
-    pango_dep,
     pangocairo_dep,
   ],
   install : true,

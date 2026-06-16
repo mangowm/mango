@@ -261,6 +261,7 @@ typedef struct {
 	int32_t enable_hotarea;
 	int32_t ov_tab_mode;
 	int32_t ov_no_resize;
+
 	int32_t overviewgappi;
 	int32_t overviewgappo;
 	uint32_t cursor_hide_timeout;
@@ -407,6 +408,7 @@ typedef struct {
 
 	struct xkb_context *ctx;
 	struct xkb_keymap *keymap;
+	JumphitData jumhitdata;
 } Config;
 
 typedef int32_t (*FuncType)(const Arg *);
@@ -1029,6 +1031,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = toggleglobal;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
+		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "togglejump") == 0) {
+		func = togglejump;
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
@@ -1758,6 +1763,50 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->cursor_size = atoi(value);
 	} else if (strcmp(key, "cursor_theme") == 0) {
 		config->cursor_theme = strdup(value);
+	} else if (strcmp(key, "jump_hit_fg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid jump_hit_fg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumhitdata.fg_color, color);
+		}
+	} else if (strcmp(key, "jump_hit_font_desc") == 0) {
+		config->jumhitdata.font_desc = strdup(value);
+	} else if (strcmp(key, "jump_hit_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid jump_hit_bg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumhitdata.bg_color, color);
+		}
+	} else if (strcmp(key, "jump_hit_border_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(
+				stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Invalid jump_hit_border_color "
+				"format: %s\n",
+				value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumhitdata.border_color, color);
+		}
+	} else if (strcmp(key, "jump_hit_border_width") == 0) {
+		config->jumhitdata.border_width = CLAMP_FLOAT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_hit_corner_radius") == 0) {
+		config->jumhitdata.corner_radius = CLAMP_FLOAT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_hit_padding_x") == 0) {
+		config->jumhitdata.padding_x = CLAMP_FLOAT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_hit_padding_y") == 0) {
+		config->jumhitdata.padding_y = CLAMP_FLOAT(atoi(value), 0, 100);
 	} else if (strcmp(key, "disable_while_typing") == 0) {
 		config->disable_while_typing = atoi(value);
 	} else if (strcmp(key, "left_handed") == 0) {
@@ -3247,6 +3296,11 @@ void free_config(void) {
 		config.cursor_theme = NULL;
 	}
 
+	if (config.jumhitdata.font_desc) {
+		free((void *)config.jumhitdata.font_desc);
+		config.jumhitdata.font_desc = NULL;
+	}
+
 	if (config.tablet_map_to_mon) {
 		free(config.tablet_map_to_mon);
 		config.tablet_map_to_mon = NULL;
@@ -3437,6 +3491,15 @@ void override_config(void) {
 	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
+
+	config.jumhitdata.border_width =
+		CLAMP_INT(config.jumhitdata.border_width, 0, 100);
+	config.jumhitdata.corner_radius =
+		CLAMP_INT(config.jumhitdata.corner_radius, 0, 100);
+	config.jumhitdata.padding_x =
+		CLAMP_INT(config.jumhitdata.padding_x, 0, 100);
+	config.jumhitdata.padding_y =
+		CLAMP_INT(config.jumhitdata.padding_y, 0, 100);
 }
 
 void set_value_default() {
@@ -3475,7 +3538,6 @@ void set_value_default() {
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;
 	config.capslock = 0;
-
 	config.ov_tab_mode = 1;
 	config.ov_no_resize = 1;
 	config.hotarea_size = 10;
@@ -3613,6 +3675,23 @@ void set_value_default() {
 	config.animation_curve_opafadeout[2] = 0.5;
 	config.animation_curve_opafadeout[3] = 0.5;
 
+	config.jumhitdata.fg_color[0] = 0xc4 / 255.0f;
+	config.jumhitdata.fg_color[1] = 0x93 / 255.0f;
+	config.jumhitdata.fg_color[2] = 0x9d / 255.0f;
+	config.jumhitdata.fg_color[3] = 1.0f;
+	config.jumhitdata.bg_color[0] = 0x32 / 255.0f;
+	config.jumhitdata.bg_color[1] = 0x32 / 255.0f;
+	config.jumhitdata.bg_color[2] = 0x32 / 255.0f;
+	config.jumhitdata.bg_color[3] = 1.0f;
+	config.jumhitdata.border_color[0] = 0x8b / 255.0f;
+	config.jumhitdata.border_color[1] = 0xaa / 255.0f;
+	config.jumhitdata.border_color[2] = 0x9b / 255.0f;
+	config.jumhitdata.border_color[3] = 1.0f;
+	config.jumhitdata.border_width = 4;
+	config.jumhitdata.corner_radius = 5;
+	config.jumhitdata.padding_x = 10;
+	config.jumhitdata.padding_y = 10;
+
 	config.rootcolor[0] = 0x32 / 255.0f;
 	config.rootcolor[1] = 0x32 / 255.0f;
 	config.rootcolor[2] = 0x32 / 255.0f;
@@ -3725,6 +3804,7 @@ bool parse_config(void) {
 	config.tag_rules = NULL;
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
+	config.jumhitdata.font_desc = NULL;
 	config.tablet_map_to_mon = NULL;
 	strcpy(config.keymode, "default");
 

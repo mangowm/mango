@@ -435,6 +435,7 @@ struct Client {
 	int32_t allow_shortcuts_inhibit;
 	float scroller_proportion_single;
 	bool isfocusing;
+	char jump_char;
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
 	struct wlr_box drag_tile_float_backup_geom;
@@ -556,6 +557,7 @@ struct Monitor {
 	uint32_t ovbk_prev_tagset;
 	Client *sel, *prevsel;
 	int32_t isoverview;
+	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t asleep;
 	uint32_t visible_clients;
@@ -900,6 +902,10 @@ static void update_scroller_state(Monitor *m);
 Client *scroll_get_stack_tail_client(Client *c);
 static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
 static void overview_backup_surface(Client *c);
+
+static void create_jump_hints(Monitor *m);
+static void finish_jump_mode(Monitor *m);
+static void begin_jump_mode(Monitor *m);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -2563,6 +2569,8 @@ void cleanup(void) {
 	/* Destroy after the wayland display (when the monitors are already
 	   destroyed) to avoid destroying them with an invalid scene output. */
 	wlr_scene_node_destroy(&scene->tree.node);
+
+	mango_text_global_finish();
 }
 
 void cleanupmon(struct wl_listener *listener, void *data) {
@@ -4256,6 +4264,27 @@ void keypress(struct wl_listener *listener, void *data) {
 	if (handled)
 		return;
 
+	if (selmon && selmon->is_jump_mode &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		for (i = 0; i < nsyms; i++) {
+			xkb_keysym_t sym = xkb_keysym_to_lower(syms[i]);
+			if (sym >= XKB_KEY_a && sym <= XKB_KEY_z) {
+				char c_char = 'A' + (sym - XKB_KEY_a);
+				Client *c;
+				wl_list_for_each(c, &clients, link) {
+					if (c->mon == selmon && c->jump_char == c_char) {
+						focusclient(c, 1);
+						toggleoverview(&(Arg){.i = 1});
+						return;
+					}
+				}
+			} else if (sym == XKB_KEY_Escape) {
+				togglejump(&(Arg){.i = 0});
+				return;
+			}
+		}
+	}
+
 	/* don't pass when popup is focused
 	 * this is better than having popups (like fuzzel or wmenu) closing
 	 * while typing in a passed keybind */
@@ -4515,8 +4544,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 #endif
 	// extra node
 
-	c->text_node =  mango_text_node_create(c->scene);
-	mango_text_node_update(c->text_node, "hello world", "Sans 50", config.focuscolor, 1.0f);
+	c->text_node = mango_text_node_create(c->scene, config.jumhitdata);
 	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
 
@@ -6517,6 +6545,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 
 	c->stack_proportion = 0.0f;
 
+	mango_text_node_destroy(c->text_node);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus(IPC_WATCH_ARRANGGE);
 	motionnotify(0, NULL, 0, 0, 0, 0);
