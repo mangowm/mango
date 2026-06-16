@@ -565,6 +565,7 @@ void dwindle(Monitor *m) {
 			break;
 	}
 
+	// 清理树中已不存在的客户端
 	{
 		DwindleNode *leaves[512];
 		int32_t lc = 0;
@@ -602,9 +603,14 @@ void dwindle(Monitor *m) {
 		}
 	}
 
+	// 获得焦点客户端，若为空则用第一个可见平铺客户端兜底
 	Client *focused = focustop(m);
 	if (focused && !dwindle_find_leaf(*root, focused))
 		focused = m->sel;
+
+	if (!focused && count > 0)
+		focused = vis[0];
+
 	for (int32_t i = 0; i < count; i++) {
 		if (!dwindle_find_leaf(*root, vis[i]))
 			dwindle_insert_with_config(root, vis[i], focused, ratio);
