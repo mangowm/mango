@@ -161,6 +161,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `reload_config` | - | Hot-reload configuration. |
 | `quit` | - | Exit mangowm. |
 | `toggleoverview` | - | Toggle overview mode. |
+| `togglejump` | - | Toggle overview with jump mode. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |
 | `toggleoverlay` | - | Toggle overlay state for the focused window. |

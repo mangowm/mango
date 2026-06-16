@@ -36,6 +36,7 @@ libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
+pangocairo_dep = dependency('pangocairo')
 
 # version info
 git = find_program('git', required : false)
@@ -93,6 +94,8 @@ endif
 executable('mango',
   'src/mango.c',
   'src/common/util.c',
+  'src/draw/text-node.c',
+
   wayland_sources,
   dependencies : [
     libm,
@@ -106,6 +109,7 @@ executable('mango',
     pcre2_dep,
     pixman_dep,
     cjson_dep,
+    pangocairo_dep,
   ],
   install : true,
   c_args : c_args,

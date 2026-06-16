@@ -54,6 +54,7 @@
                   hwdata
                   seatd
                   pcre2
+                  pango
                   cjson
                   libxcb
                   pixman

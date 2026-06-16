@@ -52,6 +52,18 @@ You can also color-code windows based on their state:
 
 > **Tip:** For scratchpad window sizing, see [Scratchpad](/docs/window-management/scratchpad) configuration.
 
+### Overview Jump Mode
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `jump_hit_fg_color` | `0xc4939dff` | label text color. |
+| `jump_hit_bg_color` | `0x201b14ff` | label background color.
+| `jump_hit_border_color` | `0x8BAA9Bff` | label border color.
+| `jump_hit_border_width` | `4` | label border width.
+| `jump_hit_corner_radius` | `5` | label corner radius.
+| `jump_hit_padding_x` | `10` | label horizontal padding.
+| `jump_hit_padding_y` | `10` | label vertical padding.
+| `jump_hit_font_desc` | `monospace Bold 24` | label font set.|
+
 ## Cursor Theme
 
 Set the size and theme of your mouse cursor.
