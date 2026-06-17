@@ -289,6 +289,16 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 	}
 }
 
+void global_draw_titlebar(Client *c, int32_t x, int32_t y, int32_t width,
+						  int32_t height) {
+	if (!c->titlebar_node)
+		return;
+
+	wlr_scene_node_set_position(&c->titlebar_node->scene_buffer->node, x, y);
+	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, true);
+	mango_titlebar_node_set_size(c->titlebar_node, width, height);
+}
+
 void apply_split_border(Client *c, bool hit_no_border) {
 
 	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
@@ -544,8 +554,10 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 		(ISSCROLLTILED(c) || c->animation.tagouting || c->animation.tagining)) {
 		c->is_clip_to_hide = true;
 		wlr_scene_node_set_enabled(&c->scene->node, false);
-	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon)) {
+	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon) &&
+			   (!c->is_monocle_hide || !is_monocle_layout(c->mon))) {
 		c->is_clip_to_hide = false;
+		c->is_monocle_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 	}
 

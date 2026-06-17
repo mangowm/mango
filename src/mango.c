@@ -166,6 +166,7 @@ enum { AxisUp, AxisDown, AxisLeft, AxisRight };		// 滚轮滚动的方向
 enum {
 	LyrBg,
 	LyrBottom,
+	LyrDecorate,
 	LyrTile,
 	LyrTop,
 	LyrFadeOut,
@@ -174,6 +175,9 @@ enum {
 	LyrBlock,
 	NUM_LAYERS
 }; /* scene layers */
+
+enum mango_node_type { MANGO_TITLE_NODE, MANGO_TEXT_NODE };
+
 #ifdef XWAYLAND
 enum {
 	NetWMWindowTypeDialog,
@@ -241,6 +245,11 @@ typedef struct {
 } Arg;
 
 typedef struct {
+	enum mango_node_type type;
+	void *node_data;
+} MangoNodeData;
+
+typedef struct {
 	uint32_t mod;
 	uint32_t button;
 	int32_t (*func)(const Arg *);
@@ -263,8 +272,8 @@ typedef struct {
 	struct wl_list link;
 	struct wlr_input_device *wlr_device;
 	struct libinput_device *libinput_device;
-	struct wl_listener destroy_listener; // 用于监听设备销毁事件
-	void *device_data;					 // 新增：指向设备特定数据（如 Switch）
+	struct wl_listener destroy_listener;
+	void *device_data;
 } InputDevice;
 
 typedef struct {
@@ -331,6 +340,7 @@ struct Client {
 
 	struct wlr_scene_tree *overview_scene_surface;
 	struct mango_text_node *text_node;
+	struct mango_titlebar_node *titlebar_node;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -397,6 +407,7 @@ struct Client {
 	int32_t istagswitching;
 	int32_t isnamedscratchpad;
 	int32_t shield_when_capture;
+	bool is_monocle_hide;
 	bool is_pending_open_animation;
 	bool is_restoring_from_ov;
 	float scroller_proportion;
@@ -851,6 +862,7 @@ static struct wlr_scene_tree *
 wlr_scene_tree_snapshot(struct wlr_scene_node *node,
 						struct wlr_scene_tree *parent);
 static bool is_scroller_layout(Monitor *m);
+static bool is_monocle_layout(Monitor *m);
 static bool is_centertile_layout(Monitor *m);
 static void create_output(struct wlr_backend *backend, void *data);
 static void get_layout_abbr(char *abbr, const char *full_name);
@@ -1281,6 +1293,11 @@ void swallow(Client *c, Client *w) {
 
 	if (c->mon && c->mon->isoverview && config.ov_no_resize) {
 		overview_backup_surface(c);
+	}
+
+	if (w->titlebar_node) {
+		wlr_scene_node_set_enabled(&w->titlebar_node->scene_buffer->node,
+								   false);
 	}
 
 	/* 全局链表替换 */
@@ -2388,6 +2405,17 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		if (selmon && selmon->isoverview && event->button == BTN_RIGHT && c) {
 			pending_kill_client(c);
 			return true;
+		}
+
+		// handle click on tile node
+		struct wlr_scene_node *node = wlr_scene_node_at(
+			&layers[LyrDecorate]->node, cursor->x, cursor->y, NULL, NULL);
+		if (node && node->data) {
+			MangoNodeData *mangonodedata = (MangoNodeData *)node->data;
+			if (mangonodedata->type == MANGO_TITLE_NODE) {
+				Client *c = mangonodedata->node_data;
+				focusclient(c, 1);
+			}
 		}
 
 		// 当鼠标焦点在layer上的时候，不检测虚拟键盘的mod状态，
@@ -3810,16 +3838,16 @@ void focusclient(Client *c, int32_t lift) {
 
 		// decide whether need to re-arrange
 
-		if (c && selmon->prevsel &&
-			(selmon->prevsel->tags & selmon->tagset[selmon->seltags]) &&
-			(c->tags & selmon->tagset[selmon->seltags]) && !c->isfloating &&
-			is_scroller_layout(selmon)) {
-			arrange(selmon, false, false);
-		}
-
 		// change focus link position
 		wl_list_remove(&c->flink);
 		wl_list_insert(&fstack, &c->flink);
+
+		if (c && selmon->prevsel &&
+			(selmon->prevsel->tags & selmon->tagset[selmon->seltags]) &&
+			(c->tags & selmon->tagset[selmon->seltags]) && !c->isfloating &&
+			(is_scroller_layout(selmon) || is_monocle_layout(selmon))) {
+			arrange(selmon, false, false);
+		}
 
 		// change border color
 		c->isurgent = 0;
@@ -4319,6 +4347,7 @@ void locksession(struct wl_listener *listener, void *data) {
 void init_client_properties(Client *c) {
 	c->grid_col_per = 1.0f;
 	c->grid_row_per = 1.0f;
+	c->is_monocle_hide = false;
 	c->overview_scene_surface = NULL;
 	c->drop_direction = UNDIR;
 	c->enable_drop_area_draw = false;
@@ -4490,9 +4519,6 @@ mapnotify(struct wl_listener *listener, void *data) {
 														 : config.bordercolor);
 		c->border[i]->node.data = c;
 	}
-	c->text_node = mango_text_node_create(c->scene, config.jumhitdata);
-	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
 
 	for (i = 0; i < 2; i++) {
 		c->splitindicator[i] = wlr_scene_rect_create(
@@ -6569,6 +6595,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	c->stack_proportion = 0.0f;
 
 	mango_text_node_destroy(c->text_node);
+	mango_titlebar_node_destroy(c->titlebar_node);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus(IPC_WATCH_ARRANGGE);
 	motionnotify(0, NULL, 0, 0, 0, 0);
@@ -6716,6 +6743,7 @@ void updatetitle(struct wl_listener *listener, void *data) {
 
 	const char *title;
 	title = client_get_title(c);
+	mango_titlebar_node_update(c->titlebar_node, title, 1.0);
 	if (title && c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
 	if (title && c->ext_foreign_toplevel) {
