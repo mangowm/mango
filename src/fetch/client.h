@@ -190,6 +190,8 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 			if (c->isunglobal)
 				continue;
+			if (c->is_monocle_hide)
+				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
 				continue;
 			if (!(c->tags & c->mon->tagset[c->mon->seltags]))
@@ -310,7 +312,7 @@ Client *direction_select(const Arg *arg) {
 Client *focustop(Monitor *m) {
 	Client *c = NULL;
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->iskilling || c->isunglobal)
+		if (c->iskilling || c->isunglobal || c->is_monocle_hide)
 			continue;
 		if (VISIBLEON(c, m))
 			return c;
