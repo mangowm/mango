@@ -584,7 +584,7 @@ void monocle(Monitor *m) {
 	int title_y = m->w.y + cur_gappov;
 	int main_y = title_y + titlebar_height + cur_gapiv;
 	int main_height =
-		m->w.height - 2 * cur_gappov - 2 * cur_gapiv - titlebar_height;
+		m->w.height - 2 * cur_gappov - cur_gapiv - titlebar_height;
 
 	int title_area_width = m->w.width - 2 * cur_gappoh;
 	int tw = (title_area_width - (n - 1) * cur_gapih) / n;
