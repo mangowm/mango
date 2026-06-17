@@ -545,32 +545,72 @@ void deck(Monitor *m) {
 	}
 }
 
-void // 17
-monocle(Monitor *m) {
-	Client *c = NULL;
+void monocle(Monitor *m) {
+	Client *c, *fc;
 	struct wlr_box geom;
-
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
+	int32_t cur_gapiv = enablegaps ? m->gappiv : 0;
+	int32_t cur_gapih = enablegaps ? m->gappih : 0;
 
-	cur_gappoh = config.smartgaps && m->visible_fake_tiling_clients == 1
-					 ? 0
-					 : cur_gappoh;
-	cur_gappov = config.smartgaps && m->visible_fake_tiling_clients == 1
-					 ? 0
-					 : cur_gappov;
+	if (config.smartgaps && m->visible_tiling_clients == 1) {
+		cur_gappov = cur_gappoh = cur_gapiv = cur_gapih = 0;
+	}
 
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+	int n = m->visible_tiling_clients;
+	if (n == 0)
+		return;
+
+	wl_list_for_each(c, &fstack, flink) {
+		if (c->iskilling || c->isunglobal || !ISTILED(c))
 			continue;
+		if (VISIBLEON(c, m)) {
+			fc = c;
+			break;
+		}
+	}
+
+	if (n == 1) {
 		geom.x = m->w.x + cur_gappoh;
 		geom.y = m->w.y + cur_gappov;
 		geom.width = m->w.width - 2 * cur_gappoh;
 		geom.height = m->w.height - 2 * cur_gappov;
-		client_tile_resize(c, geom, 0);
+		client_tile_resize(fc, geom, 0);
+		monocle_set_focus(fc, true);
+		wlr_scene_node_raise_to_top(&fc->scene->node);
+		return;
 	}
-	if ((c = focustop(m)))
-		wlr_scene_node_raise_to_top(&c->scene->node);
+
+	int titlebar_height = config.tab_bar_height;
+	int title_y = m->w.y + cur_gappov;
+	int main_y = title_y + titlebar_height + cur_gapiv;
+	int main_height =
+		m->w.height - 2 * cur_gappov - 2 * cur_gapiv - titlebar_height;
+
+	int title_area_width = m->w.width - 2 * cur_gappoh;
+	int tw = (title_area_width - (n - 1) * cur_gapih) / n;
+	int title_x = m->w.x + cur_gappoh;
+
+	wl_list_for_each(c, &clients, link) {
+		if (!VISIBLEON(c, m) || !ISTILED(c))
+			continue;
+
+		if (c == fc) {
+			monocle_set_focus(c, true);
+			wlr_scene_node_raise_to_top(&c->scene->node);
+		} else {
+			monocle_set_focus(c, false);
+		}
+
+		geom.x = m->w.x + cur_gappoh;
+		geom.y = main_y;
+		geom.width = m->w.width - 2 * cur_gappoh;
+		geom.height = main_height;
+		client_tile_resize(c, geom, 0);
+
+		global_draw_titlebar(c, title_x, title_y, tw, titlebar_height);
+		title_x += tw + cur_gapih;
+	}
 }
 
 // 网格布局窗口大小和位置计算
