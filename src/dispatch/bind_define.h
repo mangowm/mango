@@ -265,7 +265,7 @@ int32_t incnmaster(const Arg *arg) {
 	if (!arg || !selmon)
 		return 0;
 	selmon->pertag->nmasters[selmon->pertag->curtag] =
-		MAX(selmon->pertag->nmasters[selmon->pertag->curtag] + arg->i, 0);
+		MANGO_MAX(selmon->pertag->nmasters[selmon->pertag->curtag] + arg->i, 0);
 	arrange(selmon, false, false);
 	return 0;
 }
@@ -737,12 +737,12 @@ int32_t smartmovewin(const Arg *arg) {
 				continue;
 			buttom = tc->geom.y + tc->geom.height + config.gappiv;
 			if (top > buttom && ny < buttom) {
-				tar = MAX(tar, buttom);
+				tar = MANGO_MAX(tar, buttom);
 			};
 		}
 
 		ny = tar == -99999 ? ny : tar;
-		ny = MAX(ny, c->mon->w.y + c->mon->gappov);
+		ny = MANGO_MAX(ny, c->mon->w.y + c->mon->gappov);
 		break;
 	case DOWN:
 		tar = 99999;
@@ -757,12 +757,12 @@ int32_t smartmovewin(const Arg *arg) {
 				continue;
 			top = tc->geom.y - config.gappiv;
 			if (buttom < top && (ny + c->geom.height) > top) {
-				tar = MIN(tar, top - c->geom.height);
+				tar = MANGO_MIN(tar, top - c->geom.height);
 			};
 		}
 		ny = tar == 99999 ? ny : tar;
-		ny = MIN(ny, c->mon->w.y + c->mon->w.height - c->geom.height -
-						 c->mon->gappov);
+		ny = MANGO_MIN(ny, c->mon->w.y + c->mon->w.height - c->geom.height -
+							   c->mon->gappov);
 		break;
 	case LEFT:
 		tar = -99999;
@@ -777,12 +777,12 @@ int32_t smartmovewin(const Arg *arg) {
 				continue;
 			right = tc->geom.x + tc->geom.width + config.gappih;
 			if (left > right && nx < right) {
-				tar = MAX(tar, right);
+				tar = MANGO_MAX(tar, right);
 			};
 		}
 
 		nx = tar == -99999 ? nx : tar;
-		nx = MAX(nx, c->mon->w.x + c->mon->gappoh);
+		nx = MANGO_MAX(nx, c->mon->w.x + c->mon->gappoh);
 		break;
 	case RIGHT:
 		tar = 99999;
@@ -796,12 +796,12 @@ int32_t smartmovewin(const Arg *arg) {
 				continue;
 			left = tc->geom.x - config.gappih;
 			if (right < left && (nx + c->geom.width) > left) {
-				tar = MIN(tar, left - c->geom.width);
+				tar = MANGO_MIN(tar, left - c->geom.width);
 			};
 		}
 		nx = tar == 99999 ? nx : tar;
-		nx = MIN(nx, c->mon->w.x + c->mon->w.width - c->geom.width -
-						 c->mon->gappoh);
+		nx = MANGO_MIN(nx, c->mon->w.x + c->mon->w.width - c->geom.width -
+							   c->mon->gappoh);
 		break;
 	}
 
@@ -829,7 +829,7 @@ int32_t smartresizewin(const Arg *arg) {
 	switch (arg->i) {
 	case UP:
 		nh -= selmon->w.height / 8;
-		nh = MAX(nh, selmon->w.height / 10);
+		nh = MANGO_MAX(nh, selmon->w.height / 10);
 		break;
 	case DOWN:
 		tar = -99999;
@@ -844,7 +844,7 @@ int32_t smartresizewin(const Arg *arg) {
 				continue;
 			top = tc->geom.y - config.gappiv;
 			if (buttom < top && (nh + c->geom.y) > top) {
-				tar = MAX(tar, top - c->geom.y);
+				tar = MANGO_MAX(tar, top - c->geom.y);
 			};
 		}
 		nh = tar == -99999 ? nh : tar;
@@ -853,7 +853,7 @@ int32_t smartresizewin(const Arg *arg) {
 		break;
 	case LEFT:
 		nw -= selmon->w.width / 16;
-		nw = MAX(nw, selmon->w.width / 10);
+		nw = MANGO_MAX(nw, selmon->w.width / 10);
 		break;
 	case RIGHT:
 		tar = 99999;
@@ -867,7 +867,7 @@ int32_t smartresizewin(const Arg *arg) {
 				continue;
 			left = tc->geom.x - config.gappih;
 			if (right < left && (nw + c->geom.x) > left) {
-				tar = MIN(tar, left - c->geom.x);
+				tar = MANGO_MIN(tar, left - c->geom.x);
 			};
 		}
 
@@ -1064,7 +1064,7 @@ int32_t switch_layout(const Arg *arg) {
 	if (config.circle_layout_count != 0) {
 		for (jk = 0; jk < config.circle_layout_count; jk++) {
 
-			len = MAX(
+			len = MANGO_MAX(
 				strlen(config.circle_layout[jk]),
 				strlen(selmon->pertag->ltidxs[selmon->pertag->curtag]->name));
 
@@ -1083,7 +1083,8 @@ int32_t switch_layout(const Arg *arg) {
 		}
 
 		for (ji = 0; ji < LENGTH(layouts); ji++) {
-			len = MAX(strlen(layouts[ji].name), strlen(target_layout_name));
+			len =
+				MANGO_MAX(strlen(layouts[ji].name), strlen(target_layout_name));
 			if (strncmp(layouts[ji].name, target_layout_name, len) == 0) {
 				selmon->pertag->ltidxs[selmon->pertag->curtag] = &layouts[ji];
 

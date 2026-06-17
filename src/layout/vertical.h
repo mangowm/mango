@@ -58,7 +58,7 @@ void vertical_tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				w = master_surplus_width * c->master_inner_per /
 					master_surplus_ratio;
@@ -155,8 +155,8 @@ void vertical_deck(Monitor *m) {
 			continue;
 		if (i < nmasters) {
 			c->master_mfact_per = mfact;
-			int32_t w =
-				(m->w.width - 2 * cur_gappoh - mx) / (MIN(n, nmasters) - i);
+			int32_t w = (m->w.width - 2 * cur_gappoh - mx) /
+						(MANGO_MIN(n, nmasters) - i);
 			client_tile_resize(c,
 							   (struct wlr_box){.x = m->w.x + cur_gappoh + mx,
 												.y = m->w.y + cur_gappov,

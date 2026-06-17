@@ -62,7 +62,7 @@ void tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -179,7 +179,7 @@ void right_tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -345,7 +345,7 @@ void center_tile(Monitor *m) {
 
 		if (i < nmasters) {
 			// 主区域窗口
-			r = MIN(n, nmasters) - i;
+			r = MANGO_MIN(n, nmasters) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -518,8 +518,8 @@ void deck(Monitor *m) {
 			continue;
 		if (i < nmasters) {
 			c->master_mfact_per = mfact;
-			int32_t h =
-				(m->w.height - 2 * cur_gappov - my) / (MIN(n, nmasters) - i);
+			int32_t h = (m->w.height - 2 * cur_gappov - my) /
+						(MANGO_MIN(n, nmasters) - i);
 			client_tile_resize(c,
 							   (struct wlr_box){.x = m->w.x + cur_gappoh,
 												.y = m->w.y + cur_gappov + my,

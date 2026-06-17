@@ -97,8 +97,8 @@
 #include "draw/text-node.h"
 
 /* macros */
-#define MAX(A, B) ((A) > (B) ? (A) : (B))
-#define MIN(A, B) ((A) < (B) ? (A) : (B))
+#define MANGO_MAX(A, B) ((A) > (B) ? (A) : (B))
+#define MANGO_MIN(A, B) ((A) < (B) ? (A) : (B))
 #define GEZERO(A) ((A) >= 0 ? (A) : 0)
 #define CLEANMASK(mask) (mask & ~WLR_MODIFIER_CAPS)
 #define INSIDEMON(A)                                                           \
@@ -1151,8 +1151,8 @@ void client_change_mon(Client *c, Monitor *m) {
 
 void applybounds(Client *c, struct wlr_box *bbox) {
 	/* set minimum possible */
-	c->geom.width = MAX(1 + 2 * (int32_t)c->bw, c->geom.width);
-	c->geom.height = MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
+	c->geom.width = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.width);
+	c->geom.height = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
 
 	if (c->geom.x >= bbox->x + bbox->width)
 		c->geom.x = bbox->x + bbox->width - c->geom.width;
@@ -1575,7 +1575,7 @@ void set_float_malposition(Client *tc) {
 	y = tc->geom.y;
 	xreverse = 1;
 	yreverse = 1;
-	offset = MIN(tc->mon->w.width / 20, tc->mon->w.height / 20);
+	offset = MANGO_MIN(tc->mon->w.width / 20, tc->mon->w.height / 20);
 
 	wl_list_for_each(c, &clients, link) {
 		if (c->isfloating && c != tc && VISIBLEON(c, tc->mon) &&
@@ -5613,10 +5613,10 @@ void setfullscreen(Client *c, int32_t fullscreen,
 }
 
 void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
-	selmon->gappoh = MAX(oh, 0);
-	selmon->gappov = MAX(ov, 0);
-	selmon->gappih = MAX(ih, 0);
-	selmon->gappiv = MAX(iv, 0);
+	selmon->gappoh = MANGO_MAX(oh, 0);
+	selmon->gappov = MANGO_MAX(ov, 0);
+	selmon->gappih = MANGO_MAX(ih, 0);
+	selmon->gappiv = MANGO_MAX(iv, 0);
 	arrange(selmon, false, false);
 }
 

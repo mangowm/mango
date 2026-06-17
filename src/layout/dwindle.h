@@ -259,7 +259,8 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 		if (node->client) {
 			if (!node->client->isfullscreen &&
 				!node->client->ismaximizescreen) {
-				struct wlr_box box = {ax, ay, MAX(1, aw), MAX(1, ah)};
+				struct wlr_box box = {ax, ay, MANGO_MAX(1, aw),
+									  MANGO_MAX(1, ah)};
 				resize(node->client, box, 0);
 			}
 		}
@@ -273,12 +274,12 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 	node->container_w = aw;
 	node->container_h = ah;
 	if (node->split_h) {
-		int32_t w1 = MAX(1, (int32_t)(aw * node->ratio) - gap_h / 2);
+		int32_t w1 = MANGO_MAX(1, (int32_t)(aw * node->ratio) - gap_h / 2);
 		dwindle_assign(node->first, ax, ay, w1, ah, gap_h, gap_v);
 		dwindle_assign(node->second, ax + w1 + gap_h, ay, aw - w1 - gap_h, ah,
 					   gap_h, gap_v);
 	} else {
-		int32_t h1 = MAX(1, (int32_t)(ah * node->ratio) - gap_v / 2);
+		int32_t h1 = MANGO_MAX(1, (int32_t)(ah * node->ratio) - gap_v / 2);
 		dwindle_assign(node->first, ax, ay, aw, h1, gap_h, gap_v);
 		dwindle_assign(node->second, ax, ay + h1 + gap_v, aw, ah - h1 - gap_v,
 					   gap_h, gap_v);
@@ -357,7 +358,7 @@ static void dwindle_resize_client(Monitor *m, Client *c) {
 		return;
 
 	if (dwindle_locked_h_node) {
-		float cw = (float)MAX(1, dwindle_locked_h_node->container_w);
+		float cw = (float)MANGO_MAX(1, dwindle_locked_h_node->container_w);
 		float ox = (float)(cursor->x - drag_begin_cursorx);
 		if (config.dwindle_smart_resize) {
 			/* Move the boundary toward the cursor: invert direction when
@@ -374,7 +375,7 @@ static void dwindle_resize_client(Monitor *m, Client *c) {
 	}
 
 	if (dwindle_locked_v_node) {
-		float ch = (float)MAX(1, dwindle_locked_v_node->container_h);
+		float ch = (float)MANGO_MAX(1, dwindle_locked_v_node->container_h);
 		float oy = (float)(cursor->y - drag_begin_cursory);
 		if (config.dwindle_smart_resize) {
 			/* Same logic for the vertical split line. */
@@ -427,13 +428,13 @@ static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 		return;
 
 	if (h_node && dx) {
-		float cw = (float)MAX(1, h_node->container_w);
+		float cw = (float)MANGO_MAX(1, h_node->container_w);
 		float delta = (float)dx / cw;
 		h_node->ratio = CLAMP_FLOAT(h_node->ratio + delta, 0.05f, 0.95f);
 	}
 
 	if (v_node && dy) {
-		float ch = (float)MAX(1, v_node->container_h);
+		float ch = (float)MANGO_MAX(1, v_node->container_h);
 		float delta = (float)dy / ch;
 		v_node->ratio = CLAMP_FLOAT(v_node->ratio + delta, 0.05f, 0.95f);
 	}
