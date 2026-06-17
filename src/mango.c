@@ -170,6 +170,7 @@ enum {
 	LyrBlur,
 	LyrBottom,
 	LyrTile,
+	LyrDecorate,
 	LyrTop,
 	LyrFadeOut,
 	LyrOverlay,
@@ -177,6 +178,9 @@ enum {
 	LyrBlock,
 	NUM_LAYERS
 }; /* scene layers */
+
+enum mango_node_type { MANGO_TITLE_NODE, MANGO_TEXT_NODE };
+
 #ifdef XWAYLAND
 enum {
 	NetWMWindowTypeDialog,
@@ -242,6 +246,11 @@ typedef struct {
 	uint32_t ui2;
 	Client *tc;
 } Arg;
+
+typedef struct {
+	enum mango_node_type type;
+	void *node_data;
+} MangoNodeData;
 
 typedef struct {
 	uint32_t mod;
@@ -2377,6 +2386,17 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		if (selmon && selmon->isoverview && event->button == BTN_RIGHT && c) {
 			pending_kill_client(c);
 			return true;
+		}
+
+		// handle click on tile node
+		struct wlr_scene_node *node = wlr_scene_node_at(
+			&layers[LyrDecorate]->node, cursor->x, cursor->y, NULL, NULL);
+		if (node && node->data) {
+			MangoNodeData *mangonodedata = (MangoNodeData *)node->data;
+			if (mangonodedata->type == MANGO_TITLE_NODE) {
+				Client *c = mangonodedata->node_data;
+				focusclient(c, 1);
+			}
 		}
 
 		// 当鼠标焦点在layer上的时候，不检测虚拟键盘的mod状态，
@@ -4557,8 +4577,12 @@ mapnotify(struct wl_listener *listener, void *data) {
 	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
 
-	c->titlebar_node =
-		mango_titlebar_node_create(layers[LyrTile], config.textdata, 0, 0);
+	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
+	mangonodedata->node_data = c;
+	mangonodedata->type = MANGO_TITLE_NODE;
+
+	c->titlebar_node = mango_titlebar_node_create(
+		mangonodedata, layers[LyrDecorate], config.textdata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->titlebar_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, false);
 

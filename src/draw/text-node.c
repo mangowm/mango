@@ -83,7 +83,7 @@ struct mango_text_node *mango_text_node_create(struct wlr_scene_tree *parent,
 	node->padding_x = data.padding_x;
 	node->padding_y = data.padding_y;
 	node->font_desc =
-		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 24");
+		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 12");
 
 	node->cached_text = NULL;
 	node->cached_scale = -1.0f;
@@ -97,6 +97,8 @@ struct mango_text_node *mango_text_node_create(struct wlr_scene_tree *parent,
 	node->measure_context = pango_cairo_create_context(node->measure_cr);
 	node->measure_layout = pango_layout_new(node->measure_context);
 	node->measure_scale = 1.0f;
+
+	node->scene_buffer->node.data = NULL;
 
 	return node;
 }
@@ -414,8 +416,8 @@ void mango_text_node_set_focus(struct mango_text_node *node, bool focused) {
 }
 
 struct mango_titlebar_node *
-mango_titlebar_node_create(struct wlr_scene_tree *parent, TextDrawData data,
-						   int32_t width, int32_t height) {
+mango_titlebar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
+						   TextDrawData data, int32_t width, int32_t height) {
 	struct mango_titlebar_node *node = calloc(1, sizeof(*node));
 	if (!node)
 		return NULL;
@@ -438,7 +440,7 @@ mango_titlebar_node_create(struct wlr_scene_tree *parent, TextDrawData data,
 	node->padding_x = data.padding_x;
 	node->padding_y = data.padding_y;
 	node->font_desc =
-		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 24");
+		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 12");
 
 	node->target_width = width;
 	node->target_height = height;
@@ -455,6 +457,7 @@ mango_titlebar_node_create(struct wlr_scene_tree *parent, TextDrawData data,
 	node->cached_scale = -1.0f;
 	node->last_text = NULL;
 	node->last_scale = 0.0f;
+	node->scene_buffer->node.data = mango_node_data;
 
 	return node;
 }
@@ -484,13 +487,14 @@ void mango_titlebar_node_destroy(struct mango_titlebar_node *node) {
 	if (node->measure_cr)
 		cairo_destroy(node->measure_cr);
 
+	void *data = node->scene_buffer->node.data;
 	wlr_scene_node_destroy(&node->scene_buffer->node);
 
 	g_free(node->font_desc);
 	g_free(node->cached_text);
 	g_free(node->cached_font_desc);
 	g_free(node->last_text);
-
+	free(data);
 	free(node);
 }
 

@@ -143,8 +143,8 @@ void mango_text_node_update(struct mango_text_node *node, const char *text,
 							float scale);
 
 struct mango_titlebar_node *
-mango_titlebar_node_create(struct wlr_scene_tree *parent, TextDrawData data,
-						   int32_t width, int32_t height);
+mango_titlebar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
+						   TextDrawData data, int32_t width, int32_t height);
 void mango_titlebar_node_destroy(struct mango_titlebar_node *node);
 void mango_titlebar_node_set_size(struct mango_titlebar_node *node,
 								  int32_t width, int32_t height);
