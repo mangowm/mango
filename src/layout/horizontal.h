@@ -553,16 +553,16 @@ void monocle(Monitor *m) {
 	int32_t cur_gapiv = enablegaps ? m->gappiv : 0;
 	int32_t cur_gapih = enablegaps ? m->gappih : 0;
 
-	if (config.smartgaps && m->visible_tiling_clients == 1) {
+	if (config.smartgaps && m->visible_fake_tiling_clients == 1) {
 		cur_gappov = cur_gappoh = cur_gapiv = cur_gapih = 0;
 	}
 
-	int n = m->visible_tiling_clients;
+	int n = m->visible_fake_tiling_clients;
 	if (n == 0)
 		return;
 
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->iskilling || c->isunglobal || !ISTILED(c))
+		if (c->iskilling || c->isunglobal || !ISFAKETILED(c))
 			continue;
 		if (VISIBLEON(c, m)) {
 			fc = c;
@@ -577,7 +577,6 @@ void monocle(Monitor *m) {
 		geom.height = m->w.height - 2 * cur_gappov;
 		client_tile_resize(fc, geom, 0);
 		monocle_set_focus(fc, true);
-		wlr_scene_node_raise_to_top(&fc->scene->node);
 		return;
 	}
 
@@ -592,12 +591,11 @@ void monocle(Monitor *m) {
 	int title_x = m->w.x + cur_gappoh;
 
 	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISTILED(c))
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 
 		if (c == fc) {
 			monocle_set_focus(c, true);
-			wlr_scene_node_raise_to_top(&c->scene->node);
 		} else {
 			monocle_set_focus(c, false);
 		}

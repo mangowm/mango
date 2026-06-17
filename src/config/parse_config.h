@@ -3712,13 +3712,13 @@ void set_value_default() {
 	config.textdata.bg_color[1] = 0x32 / 255.0f;
 	config.textdata.bg_color[2] = 0x32 / 255.0f;
 	config.textdata.bg_color[3] = 1.0f;
-	config.textdata.focus_fg_color[0] = 0x32 / 255.0f;
-	config.textdata.focus_fg_color[1] = 0x32 / 255.0f;
-	config.textdata.focus_fg_color[2] = 0x32 / 255.0f;
+	config.textdata.focus_fg_color[0] = 0xed / 255.0f;
+	config.textdata.focus_fg_color[1] = 0xa6 / 255.0f;
+	config.textdata.focus_fg_color[2] = 0xb4 / 255.0f;
 	config.textdata.focus_fg_color[3] = 1.0f;
-	config.textdata.focus_bg_color[0] = 0xc4 / 255.0f;
-	config.textdata.focus_bg_color[1] = 0x93 / 255.0f;
-	config.textdata.focus_bg_color[2] = 0x9d / 255.0f;
+	config.textdata.focus_bg_color[0] = 0x4e / 255.0f;
+	config.textdata.focus_bg_color[1] = 0x45 / 255.0f;
+	config.textdata.focus_bg_color[2] = 0x3c / 255.0f;
 	config.textdata.focus_bg_color[3] = 1.0f;
 	config.textdata.border_color[0] = 0x8b / 255.0f;
 	config.textdata.border_color[1] = 0xaa / 255.0f;
@@ -4005,6 +4005,10 @@ void reapply_property(void) {
 			if (!c->isnoborder && !c->isfullscreen) {
 				c->bw = config.borderpx;
 			}
+
+			mango_text_node_apply_config(c->text_node, &config.textdata);
+			mango_titlebar_node_apply_config(c->titlebar_node,
+											 &config.textdata);
 
 			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
 			wlr_scene_rect_set_color(c->splitindicator[0], config.splitcolor);

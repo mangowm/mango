@@ -169,8 +169,8 @@ enum {
 	LyrBg,
 	LyrBlur,
 	LyrBottom,
-	LyrTile,
 	LyrDecorate,
+	LyrTile,
 	LyrTop,
 	LyrFadeOut,
 	LyrOverlay,
@@ -4585,6 +4585,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 		mangonodedata, layers[LyrDecorate], config.textdata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->titlebar_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, false);
+	mango_titlebar_node_update(c->titlebar_node, client_get_title(c), 1.0);
 
 	for (i = 0; i < 2; i++) {
 		c->splitindicator[i] = wlr_scene_rect_create(

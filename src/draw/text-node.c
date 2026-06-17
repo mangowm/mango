@@ -83,7 +83,7 @@ struct mango_text_node *mango_text_node_create(struct wlr_scene_tree *parent,
 	node->padding_x = data.padding_x;
 	node->padding_y = data.padding_y;
 	node->font_desc =
-		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 12");
+		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 16");
 
 	node->cached_text = NULL;
 	node->cached_scale = -1.0f;
@@ -440,7 +440,7 @@ mango_titlebar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
 	node->padding_x = data.padding_x;
 	node->padding_y = data.padding_y;
 	node->font_desc =
-		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 12");
+		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 16");
 
 	node->target_width = width;
 	node->target_height = height;
@@ -780,6 +780,59 @@ void mango_titlebar_node_set_colors(struct mango_titlebar_node *node,
 	memcpy(node->bg_color, bg, sizeof(node->bg_color));
 
 	if (!node->focused && node->last_text) {
+		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
+		mango_titlebar_node_update(node, node->last_text, scale);
+	}
+}
+
+void mango_text_node_apply_config(struct mango_text_node *node,
+								  const TextDrawData *data) {
+	if (!node || !data)
+		return;
+
+	memcpy(node->fg_color, data->fg_color, sizeof(node->fg_color));
+	memcpy(node->bg_color, data->bg_color, sizeof(node->bg_color));
+	memcpy(node->focus_fg_color, data->focus_fg_color,
+		   sizeof(node->focus_fg_color));
+	memcpy(node->focus_bg_color, data->focus_bg_color,
+		   sizeof(node->focus_bg_color));
+	memcpy(node->border_color, data->border_color, sizeof(node->border_color));
+	node->border_width = data->border_width;
+	node->corner_radius = data->corner_radius;
+	node->padding_x = data->padding_x;
+	node->padding_y = data->padding_y;
+
+	g_free(node->font_desc);
+	node->font_desc =
+		g_strdup(data->font_desc ? data->font_desc : "monospace Bold 16");
+
+	if (node->cached_text && node->cached_scale > 0.0f) {
+		mango_text_node_update(node, node->cached_text, node->cached_scale);
+	}
+}
+
+void mango_titlebar_node_apply_config(struct mango_titlebar_node *node,
+									  const TextDrawData *data) {
+	if (!node || !data)
+		return;
+
+	memcpy(node->fg_color, data->fg_color, sizeof(node->fg_color));
+	memcpy(node->bg_color, data->bg_color, sizeof(node->bg_color));
+	memcpy(node->focus_fg_color, data->focus_fg_color,
+		   sizeof(node->focus_fg_color));
+	memcpy(node->focus_bg_color, data->focus_bg_color,
+		   sizeof(node->focus_bg_color));
+	memcpy(node->border_color, data->border_color, sizeof(node->border_color));
+	node->border_width = data->border_width;
+	node->corner_radius = data->corner_radius;
+	node->padding_x = data->padding_x;
+	node->padding_y = data->padding_y;
+
+	g_free(node->font_desc);
+	node->font_desc =
+		g_strdup(data->font_desc ? data->font_desc : "monospace Bold 16");
+
+	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
 		mango_titlebar_node_update(node, node->last_text, scale);
 	}

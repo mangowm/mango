@@ -65,7 +65,7 @@ You can also color-code windows based on their state:
 | `text_decorate_corner_radius` | `5` | label corner radius.|
 | `text_decorate_padding_x` | `10` | label horizontal padding.|
 | `text_decorate_padding_y` | `10` | label vertical padding.|
-| `text_decorate_font_desc` | `monospace Bold 12` | label font set.|
+| `text_decorate_font_desc` | `monospace Bold 16` | label font set.|
 
 ## Cursor Theme
 

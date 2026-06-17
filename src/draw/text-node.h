@@ -157,5 +157,8 @@ void mango_titlebar_node_set_focus(struct mango_titlebar_node *node,
 
 void mango_titlebar_node_set_colors(struct mango_titlebar_node *node,
 									const float fg[4], const float bg[4]);
-
+void mango_text_node_apply_config(struct mango_text_node *node,
+								  const TextDrawData *data);
+void mango_titlebar_node_apply_config(struct mango_titlebar_node *node,
+									  const TextDrawData *data);
 #endif // TEXT_NODE_H
