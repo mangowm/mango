@@ -96,3 +96,21 @@ void client_pending_force_kill(Client *c) {
 		return;
 	kill(c->pid, SIGKILL);
 }
+
+void client_add_text_node(Client *c) {
+	c->text_node = mango_text_node_create(c->scene, config.textdata);
+	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
+}
+
+void client_add_titlebar_node(Client *c) {
+	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
+	mangonodedata->node_data = c;
+	mangonodedata->type = MANGO_TITLE_NODE;
+
+	c->titlebar_node = mango_titlebar_node_create(
+		mangonodedata, layers[LyrDecorate], config.textdata, 0, 0);
+	wlr_scene_node_lower_to_bottom(&c->titlebar_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, false);
+	mango_titlebar_node_update(c->titlebar_node, client_get_title(c), 1.0);
+}
