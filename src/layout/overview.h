@@ -359,8 +359,7 @@ void create_jump_hints(Monitor *m) {
 	Client *c;
 
 	wl_list_for_each(c, &clients, link) {
-		if (VISIBLEON(c, m) &&
-			((m->isoverview && !client_is_x11_popup(c)) || ISTILED(c))) {
+		if (VISIBLEON(c, m) && !c->isunglobal && !client_is_x11_popup(c)) {
 			if (label_idx >= 26)
 				break;
 			char c_char = jump_labels[label_idx];
