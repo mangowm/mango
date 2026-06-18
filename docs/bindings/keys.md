@@ -106,6 +106,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 
 | Command | Param | Description |
 | :--- | :--- | :--- |
+| `focusid` | - | Focus window (can target any window via IPC: `mmsg dispatch focusid client,<id>`) |
 | `focusdir` | `left/right/up/down` | Focus window in direction. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
 | `focuslast` | - | Focus the previously active window. |
@@ -172,6 +173,8 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `disable_monitor` | `monitor_spec` | Shutdown monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `enable_monitor` | `monitor_spec` | Power on monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggle_monitor` | `monitor_spec` | Toggle monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `chvt` | `1-9` | Change virtual terminal (tty, equivalent to using ctrl+alt+Fkeys) |
+
 
 ### Media Controls
 
