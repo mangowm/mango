@@ -579,8 +579,8 @@ void monocle(Monitor *m) {
 		wl_list_for_each(c, &clients, link) {
 			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 				continue;
-			client_tile_resize(fc, geom, 0);
-			monocle_set_focus(fc, true);
+			client_tile_resize(c, geom, 0);
+			monocle_set_focus(c, c == fc);
 		}
 		return;
 	}
