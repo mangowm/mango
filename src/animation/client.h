@@ -289,10 +289,14 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 	}
 }
 
-void global_draw_titlebar(Client *c, int32_t x, int32_t y, int32_t width,
-						  int32_t height) {
+void global_draw_tab_bar(Client *c, int32_t x, int32_t y, int32_t width,
+						 int32_t height) {
 	if (!c->tab_bar_node)
 		return;
+
+	if (height <= 0) {
+		wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
+	}
 
 	wlr_scene_node_set_position(&c->tab_bar_node->scene_buffer->node, x, y);
 	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, true);

@@ -105,6 +105,11 @@ void client_add_jump_label_node(Client *c) {
 }
 
 void client_add_tab_bar_node(Client *c) {
+
+	if (config.tab_bar_height <= 0) {
+		return;
+	}
+
 	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
 	mangonodedata->node_data = c;
 	mangonodedata->type = MANGO_TITLE_NODE;

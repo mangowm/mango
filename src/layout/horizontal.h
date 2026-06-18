@@ -546,7 +546,7 @@ void deck(Monitor *m) {
 }
 
 void monocle(Monitor *m) {
-	Client *c, *fc;
+	Client *c = NULL, *fc = NULL;
 	struct wlr_box geom;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -580,19 +580,24 @@ void monocle(Monitor *m) {
 		return;
 	}
 
-	int titlebar_height = config.tab_bar_height;
-	int title_y = m->w.y + cur_gappov;
-	int main_y = title_y + titlebar_height + cur_gapiv;
-	int main_height =
-		m->w.height - 2 * cur_gappov - 2 * cur_gapiv - titlebar_height;
+	int tab_bar_height = config.tab_bar_height;
 
-	int title_area_width = m->w.width - 2 * cur_gappoh;
+	int tab_bar_inner_gap_height =
+		config.tab_bar_height > 0 ? 2 * cur_gapiv : 0;
+	int tab_bar_y_offset = config.tab_bar_height > 0 ? cur_gapiv : 0;
+
+	int tab_y = m->w.y + cur_gappov;
+	int main_y = tab_y + tab_bar_height + tab_bar_y_offset;
+	int main_height = m->w.height - 2 * cur_gappov - tab_bar_inner_gap_height -
+					  tab_bar_height;
+
+	int tab_area_width = m->w.width - 2 * cur_gappoh;
 
 	int total_gaps = (n - 1) * cur_gapih;
-	int base_width = (title_area_width - total_gaps) / n;
-	int remainder = (title_area_width - total_gaps) % n;
+	int base_width = (tab_area_width - total_gaps) / n;
+	int remainder = (tab_area_width - total_gaps) % n;
 
-	int title_x = m->w.x + cur_gappoh;
+	int tab_x = m->w.x + cur_gappoh;
 	int idx = 0;
 
 	wl_list_for_each(c, &clients, link) {
@@ -612,9 +617,9 @@ void monocle(Monitor *m) {
 		client_tile_resize(c, geom, 0);
 
 		int tw = base_width + (idx < remainder ? 1 : 0);
-		global_draw_titlebar(c, title_x, title_y, tw, titlebar_height);
+		global_draw_tab_bar(c, tab_x, tab_y, tw, tab_bar_height);
 
-		title_x += tw + cur_gapih;
+		tab_x += tw + cur_gapih;
 		idx++;
 	}
 }
