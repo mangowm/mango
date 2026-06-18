@@ -587,8 +587,13 @@ void monocle(Monitor *m) {
 		m->w.height - 2 * cur_gappov - 2 * cur_gapiv - titlebar_height;
 
 	int title_area_width = m->w.width - 2 * cur_gappoh;
-	int tw = (title_area_width - (n - 1) * cur_gapih) / n;
+
+	int total_gaps = (n - 1) * cur_gapih;
+	int base_width = (title_area_width - total_gaps) / n;
+	int remainder = (title_area_width - total_gaps) % n;
+
 	int title_x = m->w.x + cur_gappoh;
+	int idx = 0;
 
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
@@ -606,8 +611,11 @@ void monocle(Monitor *m) {
 		geom.height = main_height;
 		client_tile_resize(c, geom, 0);
 
+		int tw = base_width + (idx < remainder ? 1 : 0);
 		global_draw_titlebar(c, title_x, title_y, tw, titlebar_height);
+
 		title_x += tw + cur_gapih;
+		idx++;
 	}
 }
 
