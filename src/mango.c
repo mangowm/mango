@@ -176,7 +176,7 @@ enum {
 	NUM_LAYERS
 }; /* scene layers */
 
-enum mango_node_type { MANGO_TITLE_NODE, MANGO_TEXT_NODE };
+enum mango_node_type { MANGO_TITLE_NODE, MANGO_jump_label_node };
 
 #ifdef XWAYLAND
 enum {
@@ -339,8 +339,8 @@ struct Client {
 	struct wlr_ext_image_capture_source_v1 *image_capture_source;
 
 	struct wlr_scene_tree *overview_scene_surface;
-	struct mango_text_node *text_node;
-	struct mango_titlebar_node *titlebar_node;
+	struct mango_jump_label_node *jump_label_node;
+	struct mango_tab_bar_node *tab_bar_node;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -1295,8 +1295,8 @@ void swallow(Client *c, Client *w) {
 		overview_backup_surface(c);
 	}
 
-	if (w->titlebar_node) {
-		wlr_scene_node_set_enabled(&w->titlebar_node->scene_buffer->node,
+	if (w->tab_bar_node) {
+		wlr_scene_node_set_enabled(&w->tab_bar_node->scene_buffer->node,
 								   false);
 	}
 
@@ -6594,8 +6594,8 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 
 	c->stack_proportion = 0.0f;
 
-	mango_text_node_destroy(c->text_node);
-	mango_titlebar_node_destroy(c->titlebar_node);
+	mango_jump_label_node_destroy(c->jump_label_node);
+	mango_tab_bar_node_destroy(c->tab_bar_node);
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus(IPC_WATCH_ARRANGGE);
 	motionnotify(0, NULL, 0, 0, 0, 0);
@@ -6743,7 +6743,7 @@ void updatetitle(struct wl_listener *listener, void *data) {
 
 	const char *title;
 	title = client_get_title(c);
-	mango_titlebar_node_update(c->titlebar_node, title, 1.0);
+	mango_tab_bar_node_update(c->tab_bar_node, title, 1.0);
 	if (title && c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
 	if (title && c->ext_foreign_toplevel) {

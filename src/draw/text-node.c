@@ -59,9 +59,9 @@ static const struct wlr_buffer_impl text_buffer_impl = {
 	.end_data_ptr_access = text_buffer_end_data_ptr_access,
 };
 
-struct mango_text_node *mango_text_node_create(struct wlr_scene_tree *parent,
-											   TextDrawData data) {
-	struct mango_text_node *node = calloc(1, sizeof(*node));
+struct mango_jump_label_node *mango_jump_label_node_create(struct wlr_scene_tree *parent,
+											   DecorateDrawData data) {
+	struct mango_jump_label_node *node = calloc(1, sizeof(*node));
 	if (!node)
 		return NULL;
 
@@ -103,7 +103,7 @@ struct mango_text_node *mango_text_node_create(struct wlr_scene_tree *parent,
 	return node;
 }
 
-void mango_text_node_destroy(struct mango_text_node *node) {
+void mango_jump_label_node_destroy(struct mango_jump_label_node *node) {
 	if (!node)
 		return;
 
@@ -135,7 +135,7 @@ void mango_text_node_destroy(struct mango_text_node *node) {
 	free(node);
 }
 
-void mango_text_node_set_background(struct mango_text_node *node, float r,
+void mango_jump_label_node_set_background(struct mango_jump_label_node *node, float r,
 									float g, float b, float a) {
 	if (!node)
 		return;
@@ -145,7 +145,7 @@ void mango_text_node_set_background(struct mango_text_node *node, float r,
 	node->bg_color[3] = a;
 }
 
-void mango_text_node_set_border(struct mango_text_node *node, float r, float g,
+void mango_jump_label_node_set_border(struct mango_jump_label_node *node, float r, float g,
 								float b, float a, int32_t width,
 								int32_t radius) {
 	if (!node)
@@ -158,7 +158,7 @@ void mango_text_node_set_border(struct mango_text_node *node, float r, float g,
 	node->corner_radius = radius;
 }
 
-void mango_text_node_set_padding(struct mango_text_node *node, int32_t pad_x,
+void mango_jump_label_node_set_padding(struct mango_jump_label_node *node, int32_t pad_x,
 								 int32_t pad_y) {
 	if (!node)
 		return;
@@ -166,7 +166,7 @@ void mango_text_node_set_padding(struct mango_text_node *node, int32_t pad_x,
 	node->padding_y = pad_y >= 0 ? pad_y : 0;
 }
 
-static void get_text_pixel_size(struct mango_text_node *node, const char *text,
+static void get_text_pixel_size(struct mango_jump_label_node *node, const char *text,
 								float scale, int32_t *out_w, int32_t *out_h) {
 	if (node->measure_scale != scale) {
 		pango_cairo_context_set_resolution(node->measure_context, 96.0 * scale);
@@ -191,7 +191,7 @@ static void draw_rounded_rect(cairo_t *cr, double x, double y, double w,
 	cairo_close_path(cr);
 }
 
-void mango_text_node_update(struct mango_text_node *node, const char *text,
+void mango_jump_label_node_update(struct mango_jump_label_node *node, const char *text,
 							float scale) {
 	if (!node || !text)
 		return;
@@ -405,20 +405,20 @@ void mango_text_node_update(struct mango_text_node *node, const char *text,
 								   node->logical_height);
 }
 
-void mango_text_node_set_focus(struct mango_text_node *node, bool focused) {
+void mango_jump_label_node_set_focus(struct mango_jump_label_node *node, bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
 	// 使用缓存的文本和缩放触发重绘（如果无文本则不重绘）
 	if (node->cached_text && node->cached_scale > 0.0f) {
-		mango_text_node_update(node, node->cached_text, node->cached_scale);
+		mango_jump_label_node_update(node, node->cached_text, node->cached_scale);
 	}
 }
 
-struct mango_titlebar_node *
-mango_titlebar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
-						   TextDrawData data, int32_t width, int32_t height) {
-	struct mango_titlebar_node *node = calloc(1, sizeof(*node));
+struct mango_tab_bar_node *
+mango_tab_bar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
+						   DecorateDrawData data, int32_t width, int32_t height) {
+	struct mango_tab_bar_node *node = calloc(1, sizeof(*node));
 	if (!node)
 		return NULL;
 
@@ -462,7 +462,7 @@ mango_titlebar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
 	return node;
 }
 
-void mango_titlebar_node_destroy(struct mango_titlebar_node *node) {
+void mango_tab_bar_node_destroy(struct mango_tab_bar_node *node) {
 	if (!node)
 		return;
 
@@ -498,7 +498,7 @@ void mango_titlebar_node_destroy(struct mango_titlebar_node *node) {
 	free(node);
 }
 
-void mango_titlebar_node_set_size(struct mango_titlebar_node *node,
+void mango_tab_bar_node_set_size(struct mango_tab_bar_node *node,
 								  int32_t width, int32_t height) {
 	if (!node)
 		return;
@@ -517,10 +517,10 @@ void mango_titlebar_node_set_size(struct mango_titlebar_node *node,
 	const char *redraw_text = node->last_text ? node->last_text : "";
 	float redraw_scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
 
-	mango_titlebar_node_update(node, redraw_text, redraw_scale);
+	mango_tab_bar_node_update(node, redraw_text, redraw_scale);
 }
 
-void mango_titlebar_node_update(struct mango_titlebar_node *node,
+void mango_tab_bar_node_update(struct mango_tab_bar_node *node,
 								const char *text, float scale) {
 	if (!node || !text)
 		return;
@@ -760,18 +760,18 @@ void mango_titlebar_node_update(struct mango_titlebar_node *node,
 								   node->logical_height);
 }
 
-void mango_titlebar_node_set_focus(struct mango_titlebar_node *node,
+void mango_tab_bar_node_set_focus(struct mango_tab_bar_node *node,
 								   bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_titlebar_node_update(node, node->last_text, scale);
+		mango_tab_bar_node_update(node, node->last_text, scale);
 	}
 }
 
-void mango_titlebar_node_set_colors(struct mango_titlebar_node *node,
+void mango_tab_bar_node_set_colors(struct mango_tab_bar_node *node,
 									const float fg[4], const float bg[4]) {
 	if (!node)
 		return;
@@ -781,12 +781,12 @@ void mango_titlebar_node_set_colors(struct mango_titlebar_node *node,
 
 	if (!node->focused && node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_titlebar_node_update(node, node->last_text, scale);
+		mango_tab_bar_node_update(node, node->last_text, scale);
 	}
 }
 
-void mango_text_node_apply_config(struct mango_text_node *node,
-								  const TextDrawData *data) {
+void mango_jump_label_node_apply_config(struct mango_jump_label_node *node,
+								  const DecorateDrawData *data) {
 	if (!node || !data)
 		return;
 
@@ -807,12 +807,12 @@ void mango_text_node_apply_config(struct mango_text_node *node,
 		g_strdup(data->font_desc ? data->font_desc : "monospace Bold 16");
 
 	if (node->cached_text && node->cached_scale > 0.0f) {
-		mango_text_node_update(node, node->cached_text, node->cached_scale);
+		mango_jump_label_node_update(node, node->cached_text, node->cached_scale);
 	}
 }
 
-void mango_titlebar_node_apply_config(struct mango_titlebar_node *node,
-									  const TextDrawData *data) {
+void mango_tab_bar_node_apply_config(struct mango_tab_bar_node *node,
+									  const DecorateDrawData *data) {
 	if (!node || !data)
 		return;
 
@@ -834,6 +834,6 @@ void mango_titlebar_node_apply_config(struct mango_titlebar_node *node,
 
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_titlebar_node_update(node, node->last_text, scale);
+		mango_tab_bar_node_update(node, node->last_text, scale);
 	}
 }

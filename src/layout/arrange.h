@@ -43,7 +43,7 @@ void monocle_set_focus(Client *c, bool focused) {
 		return;
 
 	c->is_monocle_hide = !focused;
-	mango_titlebar_node_set_focus(c->titlebar_node, focused);
+	mango_tab_bar_node_set_focus(c->tab_bar_node, focused);
 	wlr_scene_node_set_enabled(&c->scene->node, focused);
 
 	if (!focused) {
@@ -1143,17 +1143,17 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 			set_size_per(m, c);
 		}
 
-		if (m->is_jump_mode && !c->text_node) {
-			client_add_text_node(c);
+		if (m->is_jump_mode && !c->jump_label_node) {
+			client_add_jump_label_node(c);
 		}
 
 		if (m->pertag->ltidxs[m->pertag->curtag]->id == MONOCLE &&
-			!c->titlebar_node) {
-			client_add_titlebar_node(c);
+			!c->tab_bar_node) {
+			client_add_tab_bar_node(c);
 		}
 
-		if (c->titlebar_node && c->mon == m) {
-			wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node,
+		if (c->tab_bar_node && c->mon == m) {
+			wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node,
 									   false);
 		}
 

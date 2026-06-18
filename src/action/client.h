@@ -97,20 +97,20 @@ void client_pending_force_kill(Client *c) {
 	kill(c->pid, SIGKILL);
 }
 
-void client_add_text_node(Client *c) {
-	c->text_node = mango_text_node_create(c->scene, config.textdata);
-	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
+void client_add_jump_label_node(Client *c) {
+	c->jump_label_node = mango_jump_label_node_create(c->scene, config.jumplabeldata);
+	wlr_scene_node_lower_to_bottom(&c->jump_label_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, false);
 }
 
-void client_add_titlebar_node(Client *c) {
+void client_add_tab_bar_node(Client *c) {
 	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
 	mangonodedata->node_data = c;
 	mangonodedata->type = MANGO_TITLE_NODE;
 
-	c->titlebar_node = mango_titlebar_node_create(
-		mangonodedata, layers[LyrDecorate], config.textdata, 0, 0);
-	wlr_scene_node_lower_to_bottom(&c->titlebar_node->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, false);
-	mango_titlebar_node_update(c->titlebar_node, client_get_title(c), 1.0);
+	c->tab_bar_node = mango_tab_bar_node_create(
+		mangonodedata, layers[LyrDecorate], config.tabdata, 0, 0);
+	wlr_scene_node_lower_to_bottom(&c->tab_bar_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
+	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), 1.0);
 }

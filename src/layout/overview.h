@@ -368,13 +368,13 @@ void create_jump_hints(Monitor *m) {
 			// 把字符变成字符串
 			char label_text[2] = {c_char, '\0'};
 
-			mango_text_node_update(c->text_node, label_text, 1.0f);
-			wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, true);
-			wlr_scene_node_raise_to_top(&c->text_node->scene_buffer->node);
+			mango_jump_label_node_update(c->jump_label_node, label_text, 1.0f);
+			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, true);
+			wlr_scene_node_raise_to_top(&c->jump_label_node->scene_buffer->node);
 			wlr_scene_node_set_position(
-				&c->text_node->scene_buffer->node,
-				c->geom.width / 2 - c->text_node->logical_width / 2,
-				c->geom.height / 2 - c->text_node->logical_height / 2);
+				&c->jump_label_node->scene_buffer->node,
+				c->geom.width / 2 - c->jump_label_node->logical_width / 2,
+				c->geom.height / 2 - c->jump_label_node->logical_height / 2);
 			label_idx++;
 		}
 	}
@@ -391,9 +391,9 @@ void finish_jump_mode(Monitor *m) {
 
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m)) {
-			if (c->text_node->scene_buffer->node.enabled) {
+			if (c->jump_label_node->scene_buffer->node.enabled) {
 				c->jump_char = '\0';
-				wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node,
+				wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
 										   false);
 			}
 		}

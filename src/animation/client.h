@@ -291,12 +291,12 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 
 void global_draw_titlebar(Client *c, int32_t x, int32_t y, int32_t width,
 						  int32_t height) {
-	if (!c->titlebar_node)
+	if (!c->tab_bar_node)
 		return;
 
-	wlr_scene_node_set_position(&c->titlebar_node->scene_buffer->node, x, y);
-	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, true);
-	mango_titlebar_node_set_size(c->titlebar_node, width, height);
+	wlr_scene_node_set_position(&c->tab_bar_node->scene_buffer->node, x, y);
+	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, true);
+	mango_tab_bar_node_set_size(c->tab_bar_node, width, height);
 }
 
 void apply_split_border(Client *c, bool hit_no_border) {
