@@ -164,6 +164,7 @@ static cJSON *build_client_json(Client *c) {
 	cJSON_AddNumberToObject(obj, "y", c->geom.y);
 	cJSON_AddNumberToObject(obj, "width", c->geom.width);
 	cJSON_AddNumberToObject(obj, "height", c->geom.height);
+	cJSON_AddNumberToObject(obj, "scroller_proportion", (double)c->scroller_proportion);
 	return obj;
 }
 
