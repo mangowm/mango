@@ -312,7 +312,7 @@ Client *direction_select(const Arg *arg) {
 Client *focustop(Monitor *m) {
 	Client *c = NULL;
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->iskilling || c->isunglobal || c->is_monocle_hide)
+		if (c->iskilling || c->isunglobal)
 			continue;
 		if (VISIBLEON(c, m))
 			return c;
