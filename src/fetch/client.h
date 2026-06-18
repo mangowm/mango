@@ -188,6 +188,8 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 			if (!findfloating && c->isfloating)
 				continue;
+			if (c->is_monocle_hide)
+				continue;
 			if (c->isunglobal)
 				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
@@ -310,7 +312,7 @@ Client *direction_select(const Arg *arg) {
 Client *focustop(Monitor *m) {
 	Client *c = NULL;
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->iskilling || c->isunglobal)
+		if (c->iskilling || c->isunglobal || c->is_monocle_hide)
 			continue;
 		if (VISIBLEON(c, m))
 			return c;
@@ -440,7 +442,7 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		return sc;
 
 	wl_list_for_each(tc, &fstack, flink) {
-		if (tc->iskilling || tc->isunglobal)
+		if (tc->iskilling || tc->isunglobal || tc->is_monocle_hide)
 			continue;
 		if (!VISIBLEON(tc, sc->mon))
 			continue;
