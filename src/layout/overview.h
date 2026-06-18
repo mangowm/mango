@@ -369,8 +369,10 @@ void create_jump_hints(Monitor *m) {
 			char label_text[2] = {c_char, '\0'};
 
 			mango_jump_label_node_update(c->jump_label_node, label_text, 1.0f);
-			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, true);
-			wlr_scene_node_raise_to_top(&c->jump_label_node->scene_buffer->node);
+			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
+									   true);
+			wlr_scene_node_raise_to_top(
+				&c->jump_label_node->scene_buffer->node);
 			wlr_scene_node_set_position(
 				&c->jump_label_node->scene_buffer->node,
 				c->geom.width / 2 - c->jump_label_node->logical_width / 2,
@@ -393,8 +395,8 @@ void finish_jump_mode(Monitor *m) {
 		if (VISIBLEON(c, m)) {
 			if (c->jump_label_node->scene_buffer->node.enabled) {
 				c->jump_char = '\0';
-				wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
-										   false);
+				wlr_scene_node_set_enabled(
+					&c->jump_label_node->scene_buffer->node, false);
 			}
 		}
 	}

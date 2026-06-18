@@ -3497,8 +3497,10 @@ void override_config(void) {
 		CLAMP_INT(config.jumplabeldata.border_width, 0, 100);
 	config.jumplabeldata.corner_radius =
 		CLAMP_INT(config.jumplabeldata.corner_radius, 0, 100);
-	config.jumplabeldata.padding_x = CLAMP_INT(config.jumplabeldata.padding_x, 0, 100);
-	config.jumplabeldata.padding_y = CLAMP_INT(config.jumplabeldata.padding_y, 0, 100);
+	config.jumplabeldata.padding_x =
+		CLAMP_INT(config.jumplabeldata.padding_x, 0, 100);
+	config.jumplabeldata.padding_y =
+		CLAMP_INT(config.jumplabeldata.padding_y, 0, 100);
 }
 
 void set_value_default() {
@@ -3952,7 +3954,8 @@ void reapply_property(void) {
 				c->bw = config.borderpx;
 			}
 
-			mango_jump_label_node_apply_config(c->jump_label_node, &config.jumplabeldata);
+			mango_jump_label_node_apply_config(c->jump_label_node,
+											   &config.jumplabeldata);
 			mango_tab_bar_node_apply_config(c->tab_bar_node, &config.tabdata);
 
 			wlr_scene_rect_set_color(c->droparea, config.dropcolor);

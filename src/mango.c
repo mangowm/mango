@@ -1296,8 +1296,7 @@ void swallow(Client *c, Client *w) {
 	}
 
 	if (w->tab_bar_node) {
-		wlr_scene_node_set_enabled(&w->tab_bar_node->scene_buffer->node,
-								   false);
+		wlr_scene_node_set_enabled(&w->tab_bar_node->scene_buffer->node, false);
 	}
 
 	/* 全局链表替换 */
@@ -4348,6 +4347,8 @@ void init_client_properties(Client *c) {
 	c->grid_col_per = 1.0f;
 	c->grid_row_per = 1.0f;
 	c->is_monocle_hide = false;
+	c->jump_label_node = NULL;
+	c->tab_bar_node = NULL;
 	c->overview_scene_surface = NULL;
 	c->drop_direction = UNDIR;
 	c->enable_drop_area_draw = false;
@@ -6594,8 +6595,15 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 
 	c->stack_proportion = 0.0f;
 
-	mango_jump_label_node_destroy(c->jump_label_node);
-	mango_tab_bar_node_destroy(c->tab_bar_node);
+	if (c->jump_label_node) {
+		mango_jump_label_node_destroy(c->jump_label_node);
+		c->jump_label_node = NULL;
+	}
+	if (c->tab_bar_node) {
+		mango_tab_bar_node_destroy(c->tab_bar_node);
+		c->tab_bar_node = NULL;
+	}
+
 	wlr_scene_node_destroy(&c->scene->node);
 	printstatus(IPC_WATCH_ARRANGGE);
 	motionnotify(0, NULL, 0, 0, 0, 0);
