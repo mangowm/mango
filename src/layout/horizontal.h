@@ -546,7 +546,7 @@ void deck(Monitor *m) {
 }
 
 void monocle(Monitor *m) {
-	Client *c, *fc;
+	Client *c, *fc = NULL;
 	struct wlr_box geom;
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -570,13 +570,18 @@ void monocle(Monitor *m) {
 		}
 	}
 
-	if (n == 1) {
+	if (n == 1 || !config.tab_bar_enable) {
 		geom.x = m->w.x + cur_gappoh;
 		geom.y = m->w.y + cur_gappov;
 		geom.width = m->w.width - 2 * cur_gappoh;
 		geom.height = m->w.height - 2 * cur_gappov;
-		client_tile_resize(fc, geom, 0);
-		monocle_set_focus(fc, true);
+
+		wl_list_for_each(c, &clients, link) {
+			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+				continue;
+			client_tile_resize(fc, geom, 0);
+			monocle_set_focus(fc, true);
+		}
 		return;
 	}
 

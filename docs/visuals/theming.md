@@ -69,6 +69,7 @@ You can also color-code windows based on their state:
 ### Tab Bar For Monocle Layout
 | Setting | Default | Description |
 | :--- | :--- | :--- |
+| `tab_bar_enable` | `1` | Set to `0` to disable the monocle tab bar. |
 | `tab_bar_height` | `50` | Height of the tab bar for monocle layout. |
 | `tab_bar_decorate_fg_color` | `0xc4939dff` | text color.
 | `tab_bar_decorate_bg_color` | `0x201b14ff` | background color.|

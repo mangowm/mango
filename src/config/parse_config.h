@@ -332,6 +332,7 @@ typedef struct {
 	uint32_t gappoh;
 	uint32_t gappov;
 	uint32_t borderpx;
+	uint32_t tab_bar_enable;
 	uint32_t tab_bar_height;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
@@ -1953,6 +1954,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->borderpx = atoi(value);
 	} else if (strcmp(key, "tab_bar_height") == 0) {
 		config->tab_bar_height = atoi(value);
+	} else if (strcmp(key, "tab_bar_enable") == 0) {
+		config->tab_bar_enable = atoi(value);
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -3569,6 +3572,7 @@ void override_config(void) {
 	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
+	config.tab_bar_enable = CLAMP_INT(config.tab_bar_enable, 0, 1);
 	config.tab_bar_height = CLAMP_INT(config.tab_bar_height, 5, 500);
 	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
 	config.blur = CLAMP_INT(config.blur, 0, 1);
@@ -3701,6 +3705,7 @@ void set_value_default() {
 	config.idleinhibit_ignore_visible = 0;
 
 	config.borderpx = 4;
+	config.tab_bar_enable = 1;
 	config.tab_bar_height = 50;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
