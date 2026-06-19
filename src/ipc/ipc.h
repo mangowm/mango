@@ -237,6 +237,15 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 	if (strcmp(cmd, "get version") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "version", VERSION);
+	} else if (strcmp(cmd, "get cursorpos") == 0) {
+		resp = cJSON_CreateObject();
+		cJSON_AddNumberToObject(resp, "x", cursor->x);
+		cJSON_AddNumberToObject(resp, "y", cursor->y);
+		Monitor *m = xytomon(cursor->x, cursor->y);
+		if (m)
+			cJSON_AddStringToObject(resp, "monitor", m->wlr_output->name);
+		else
+			cJSON_AddNullToObject(resp, "monitor");
 	} else if (strcmp(cmd, "get keymode") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "keymode", keymode.mode);
@@ -342,6 +351,16 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_tags_response(m);
+	} else if (strncmp(cmd, "get option ", 11) == 0) {
+		cJSON *val = read_option(&config, cmd + 11);
+		if (!val) {
+			send_static_json(client_fd,
+							 "{\"error\":\"unknown or unreadable option\"}\n");
+			return;
+		}
+		resp = cJSON_CreateObject();
+		cJSON_AddStringToObject(resp, "option", cmd + 11);
+		cJSON_AddItemToObject(resp, "value", val);
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
