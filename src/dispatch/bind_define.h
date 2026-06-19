@@ -1731,7 +1731,8 @@ int32_t toggleoverview(const Arg *arg) {
 
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
 
-	if (selmon->isoverview && config.ov_tab_mode && arg->i != 1 && sel) {
+	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
+		arg->i != 1 && sel) {
 		focusstack(&(Arg){.i = 1});
 		return 0;
 	}

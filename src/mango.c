@@ -1747,10 +1747,11 @@ void applyrules(Client *c) {
 	// the hit size
 	if (!c->iscustompos &&
 		(!client_is_x11(c) || (c->geom.x == 0 && c->geom.y == 0))) {
-		struct wlr_box pending_center_geom = c->iscustomsize ? c->float_geom : c->geom;
+		struct wlr_box pending_center_geom =
+			c->iscustomsize ? c->float_geom : c->geom;
 		c->float_geom = c->geom =
 			setclient_coordinate_center(c, mon, pending_center_geom, 0, 0);
-	} else if(!c->iscustomsize) {
+	} else if (!c->iscustomsize) {
 		c->float_geom = c->geom;
 	}
 
@@ -4204,8 +4205,8 @@ void keypress(struct wl_listener *listener, void *data) {
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	// ov tab mode detect moe key release
-	if (config.ov_tab_mode && !locked && group == kb_group &&
-		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+	if (config.ov_tab_mode && !selmon->is_jump_mode && !locked &&
+		group == kb_group && event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
 		(keycode == 133 || keycode == 37 || keycode == 64 || keycode == 50 ||
 		 keycode == 134 || keycode == 105 || keycode == 108 || keycode == 62) &&
 		selmon && selmon->sel) {
