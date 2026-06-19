@@ -404,6 +404,11 @@ void client_draw_shadow(Client *c) {
 }
 
 void apply_shield(Client *c, struct wlr_box clip_box) {
+
+	if (clip_box.width <= 0 || clip_box.height <= 0) {
+		return;
+	}
+
 	if (active_capture_count > 0 && c->shield_when_capture) {
 		wlr_scene_node_raise_to_top(&c->shield->node);
 		wlr_scene_node_set_position(&c->shield->node, clip_box.x, clip_box.y);
@@ -933,8 +938,8 @@ void client_apply_clip(Client *c, float factor) {
 
 		apply_border(c);
 		client_draw_shadow(c);
-		apply_shield(c, clip_box);
 		client_draw_blur(c, clip_box, offset);
+		apply_shield(c, clip_box);
 
 		if (clip_box.width <= 0 || clip_box.height <= 0) {
 			return;
@@ -1426,11 +1431,10 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		struct ivec2 offset = clip_to_hide(c, &clip_box);
 
 		apply_border(c);
-		client_draw_shadow(c);
-		apply_shield(c, clip_box);
-		client_draw_blur(c, clip_box, offset);
-
 		client_get_clip(c, &clip_box);
+		apply_shield(c, clip_box);
+		client_draw_shadow(c);
+		client_draw_blur(c, clip_box, offset);
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
 		if (config.blur && !c->noblur)
 			wlr_scene_blur_set_size(c->blur,

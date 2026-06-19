@@ -5013,6 +5013,9 @@ handle_new_foreign_toplevel_capture_request(struct wl_listener *listener,
 		*request = data;
 	Client *c = request->toplevel_handle->data;
 
+	if (c->shield_when_capture)
+		return;
+
 	if (c->image_capture_source == NULL) {
 		c->image_capture_source =
 			wlr_ext_image_capture_source_v1_create_with_scene_node(
