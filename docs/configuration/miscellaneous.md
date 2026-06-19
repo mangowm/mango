@@ -8,7 +8,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `xwayland_persistence` | `1` | Keep XWayland running even when no X11 apps are open (reduces startup lag). |
-| `syncobj_enable` | `0` | Enable `drm_syncobj` timeline support (helps with gaming stutter/lag). **Requires restart.** |
+| `syncobj_enable` | `1` | Enable `drm_syncobj` timeline support (helps with gaming stutter/lag). **Requires restart.** |
 | `allow_lock_transparent` | `0` | Allow the lock screen to be transparent. |
 | `allow_shortcuts_inhibit` | `1` | Allow shortcuts to be inhibited by clients. |
 | `vrr` | - | Set via [monitor rule](/docs/configuration/monitors#monitor-rules). |
