@@ -3,15 +3,18 @@
   libX11,
   libinput,
   libxcb,
+  libdrm,
   libxkbcommon,
   pcre2,
+  pango,
+  cjson,
   pixman,
   pkg-config,
   stdenv,
   wayland,
   wayland-protocols,
   wayland-scanner,
-  xcbutilwm,
+  libxcb-wm,
   xwayland,
   meson,
   ninja,
@@ -48,16 +51,19 @@ stdenv.mkDerivation {
       libxcb
       libxkbcommon
       pcre2
+      pango
+      cjson
       pixman
       wayland
       wayland-protocols
       wlroots_0_19
       scenefx
       libGL
+      libdrm
     ]
     ++ lib.optionals enableXWayland [
       libX11
-      xcbutilwm
+      libxcb-wm
       xwayland
     ];
 
@@ -67,8 +73,8 @@ stdenv.mkDerivation {
 
   meta = {
     mainProgram = "mango";
-    description = "A streamlined but feature-rich Wayland compositor";
-    homepage = "https://github.com/DreamMaoMao/mango";
+    description = "Practical and Powerful wayland compositor (dwm but wayland)";
+    homepage = "https://github.com/mangowm/mango";
     license = lib.licenses.gpl3Plus;
     maintainers = [];
     platforms = lib.platforms.unix;

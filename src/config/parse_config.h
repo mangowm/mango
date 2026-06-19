@@ -58,6 +58,7 @@ typedef struct {
 	uint32_t tags;
 	int32_t isfloating;
 	int32_t isfullscreen;
+	int32_t isfakefullscreen;
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
@@ -77,18 +78,20 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
-	const char *monitor;
+	int32_t idleinhibit_when_focus;
+	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
-	int32_t width;
-	int32_t height;
+	float width;
+	float height;
 	int32_t nofocus;
 	int32_t nofadein;
 	int32_t nofadeout;
 	int32_t no_force_center;
 	int32_t isterm;
 	int32_t allow_csd;
-	int32_t force_maximize;
+	int32_t force_fakemaximize;
+	int32_t force_tiled_state;
 	int32_t force_tearing;
 	int32_t noswallow;
 	int32_t noblur;
@@ -101,13 +104,15 @@ typedef struct {
 } ConfigWinRule;
 
 typedef struct {
-	const char *name;	   // Monitor name
-	int32_t rr;			   // Rotate and flip (assume integer)
-	float scale;		   // Monitor scale factor
-	int32_t x, y;		   // Monitor position
-	int32_t width, height; // Monitor resolution
-	float refresh;		   // Refresh rate
-	int32_t vrr;		   // variable refresh rate
+	const char *name;			 // Monitor name
+	char *make, *model, *serial; // may be NULL
+	int32_t rr;					 // Rotate and flip (assume integer)
+	float scale;				 // Monitor scale factor
+	int32_t x, y;				 // Monitor position
+	int32_t width, height;		 // Monitor resolution
+	float refresh;				 // Refresh rate
+	int32_t vrr;				 // variable refresh rate
+	int32_t custom;				 // enable custom mode
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -157,9 +162,16 @@ typedef struct {
 	int32_t id;
 	char *layout_name;
 	char *monitor_name;
+	char *monitor_make;
+	char *monitor_model;
+	char *monitor_serial;
 	float mfact;
 	int32_t nmaster;
+	float scroller_default_proportion;
+	float scroller_default_proportion_single;
+	int32_t scroller_ignore_proportion_single;
 	int32_t no_render_border;
+	int32_t open_as_floating;
 	int32_t no_hide;
 } ConfigTagRule;
 
@@ -205,7 +217,9 @@ typedef struct {
 	int32_t scroller_ignore_proportion_single;
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
+	int32_t scroller_prefer_overspread;
 	int32_t edge_scroller_pointer_focus;
+	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
@@ -216,6 +230,7 @@ typedef struct {
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t drag_tile_to_tile;
+	int32_t drag_tile_small;
 	uint32_t swipe_min_threshold;
 	float focused_opacity;
 	float unfocused_opacity;
@@ -231,13 +246,26 @@ typedef struct {
 	int32_t center_master_overspread;
 	int32_t center_when_single_stack;
 
-	uint32_t hotarea_size;
-	uint32_t hotarea_corner;
-	uint32_t enable_hotarea;
-	uint32_t ov_tab_mode;
+	/* dwindle layout */
+	int32_t dwindle_vsplit;
+	int32_t dwindle_hsplit;
+	int32_t dwindle_preserve_split;
+	int32_t dwindle_smart_split;
+	int32_t dwindle_smart_resize;
+	int32_t dwindle_drop_simple_split;
+	int32_t dwindle_manual_split;
+	float dwindle_split_ratio;
+
+	int32_t hotarea_size;
+	int32_t hotarea_corner;
+	int32_t enable_hotarea;
+	int32_t ov_tab_mode;
+	int32_t ov_no_resize;
+
 	int32_t overviewgappi;
 	int32_t overviewgappo;
 	uint32_t cursor_hide_timeout;
+	uint32_t cursor_hide_on_keypress;
 
 	uint32_t axis_bind_apply_timeout;
 	uint32_t focus_on_activate;
@@ -252,30 +280,41 @@ typedef struct {
 	int32_t repeat_delay;
 	uint32_t numlockon;
 
-	/* Trackpad */
-	int32_t disable_trackpad;
-	int32_t tap_to_click;
-	int32_t tap_and_drag;
-	int32_t drag_lock;
-	int32_t mouse_natural_scrolling;
-	int32_t trackpad_natural_scrolling;
+	/* common pointer */
 	int32_t disable_while_typing;
 	int32_t left_handed;
 	int32_t middle_button_emulation;
-	uint32_t accel_profile;
-	double accel_speed;
 	uint32_t scroll_method;
 	uint32_t scroll_button;
 	uint32_t click_method;
 	uint32_t send_events_mode;
-	uint32_t button_map;
 
+	/* mouse */
+	int32_t mouse_natural_scrolling;
+	uint32_t mouse_accel_profile;
+	double mouse_accel_speed;
 	double axis_scroll_factor;
 
+	/* tablet */
+	char *tablet_map_to_mon;
+
+	/* Trackpad */
+	int32_t trackpad_natural_scrolling;
+	uint32_t trackpad_accel_profile;
+	double trackpad_accel_speed;
+	double trackpad_scroll_factor;
+	int32_t disable_trackpad;
+	int32_t tap_to_click;
+	int32_t tap_and_drag;
+	int32_t drag_lock;
+	uint32_t button_map;
+
+	/* window effects */
 	int32_t blur;
 	int32_t blur_layer;
 	int32_t blur_optimized;
 	int32_t border_radius;
+	int32_t border_radius_location_default;
 	struct blur_data blur_params;
 	int32_t shadows;
 	int32_t shadow_only_floating;
@@ -286,16 +325,20 @@ typedef struct {
 	int32_t shadows_position_y;
 	float shadowscolor[4];
 
+	/* appearance */
 	int32_t smartgaps;
 	uint32_t gappih;
 	uint32_t gappiv;
 	uint32_t gappoh;
 	uint32_t gappov;
 	uint32_t borderpx;
+	uint32_t tab_bar_height;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float rootcolor[4];
 	float bordercolor[4];
+	float dropcolor[4];
+	float splitcolor[4];
 	float focuscolor[4];
 	float maximizescreencolor[4];
 	float urgentcolor[4];
@@ -303,7 +346,8 @@ typedef struct {
 	float globalcolor[4];
 	float overlaycolor[4];
 
-	char autostart[3][256];
+	int32_t log_level;
+	uint32_t capslock;
 
 	ConfigTagRule *tag_rules; // 动态数组
 	int32_t tag_rules_count;  // 数量
@@ -347,22 +391,35 @@ typedef struct {
 	int32_t single_scratchpad;
 	int32_t xwayland_persistence;
 	int32_t syncobj_enable;
+	int32_t tag_carousel;
+	float drag_tile_refresh_interval;
+	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
 
 	struct xkb_rule_names xkb_rules;
+	char xkb_rules_rules[128];
+	char xkb_rules_model[128];
+	char xkb_rules_layout[128];
+	char xkb_rules_variant[128];
+	char xkb_rules_options[128];
 
 	char keymode[28];
 
 	struct xkb_context *ctx;
 	struct xkb_keymap *keymap;
+	DecorateDrawData jumplabeldata;
+	DecorateDrawData tabdata;
 } Config;
 
 typedef int32_t (*FuncType)(const Arg *);
 Config config;
 
-void parse_config_file(Config *config, const char *file_path);
+bool parse_config_file(Config *config, const char *file_path, bool must_exist);
+bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
+						 struct wlr_output_state *state, int vrr, int custom);
+bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -405,7 +462,10 @@ int32_t parse_double_array(const char *input, double *output,
 		char *endptr;
 		double val = strtod(token, &endptr);
 		if (endptr == token || *endptr != '\0') {
-			fprintf(stderr, "Error: Invalid number in array: %s\n", token);
+			fprintf(
+				stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Invalid number in array: %s\n",
+				token);
 			free(dup);
 			return -1;
 		}
@@ -457,7 +517,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 			kb->ispassapply = true;
 			break;
 		default:
-			// 忽略其他字符或可根据需要处理错误
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Unknown bind flag: %c\n",
+					suffix[i]);
 			break;
 		}
 	}
@@ -505,6 +567,26 @@ int32_t parse_direction(const char *str) {
 	}
 }
 
+int32_t parse_force(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[10];
+	int32_t i = 0;
+	while (str[i] && i < 9) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0';
+
+	// 根据转换后的小写字符串返回对应的枚举值
+	if (strcmp(lowerStr, "unforce") == 0) {
+		return UNFORCE;
+	} else if (strcmp(lowerStr, "force") == 0) {
+		return FORCE;
+	} else {
+		return UNFORCE;
+	}
+}
+
 int32_t parse_fold_state(const char *str) {
 	// 将输入字符串转换为小写
 	char lowerStr[10];
@@ -545,15 +627,58 @@ static bool starts_with_ignore_case(const char *str, const char *prefix) {
 	return true;
 }
 
+static char *combine_args_until_empty(char *values[], int count) {
+	// find the first empty string
+	int first_empty = count;
+	for (int i = 0; i < count; i++) {
+		// check if it's empty: empty string or only contains "0" (initialized)
+		if (values[i][0] == '\0' ||
+			(strlen(values[i]) == 1 && values[i][0] == '0')) {
+			first_empty = i;
+			break;
+		}
+	}
+
+	// 	if there are no valid parameters, return an empty string
+	if (first_empty == 0) {
+		return strdup("");
+	}
+
+	// 	calculate the total length
+	size_t total_len = 0;
+	for (int i = 0; i < first_empty; i++) {
+		total_len += strlen(values[i]);
+	}
+	// 	plus the number of commas (first_empty-1 commas)
+	total_len += (first_empty - 1);
+
+	// 	allocate memory and concatenate
+	char *combined = malloc(total_len + 1);
+	if (combined == NULL) {
+		return strdup("");
+	}
+
+	combined[0] = '\0';
+	for (int i = 0; i < first_empty; i++) {
+		if (i > 0) {
+			strcat(combined, ",");
+		}
+		strcat(combined, values[i]);
+	}
+
+	return combined;
+}
+
 uint32_t parse_mod(const char *mod_str) {
 	if (!mod_str || !*mod_str) {
-		return 0;
+		return UINT32_MAX;
 	}
 
 	uint32_t mod = 0;
 	char input_copy[256];
 	char *token;
 	char *saveptr = NULL;
+	bool match_success = false;
 
 	// 复制并转换为小写
 	strncpy(input_copy, mod_str, sizeof(input_copy) - 1);
@@ -565,9 +690,14 @@ uint32_t parse_mod(const char *mod_str) {
 	// 分割处理每个部分
 	token = strtok_r(input_copy, "+", &saveptr);
 	while (token != NULL) {
-		// 去除空白
-		while (*token == ' ' || *token == '\t')
-			token++;
+		// 去除前后空白
+		trim_whitespace(token);
+
+		// 如果 token 变成空字符串则跳过
+		if (*token == '\0') {
+			token = strtok_r(NULL, "+", &saveptr);
+			continue;
+		}
 
 		if (strncmp(token, "code:", 5) == 0) {
 			// 处理 code: 形式
@@ -591,33 +721,53 @@ uint32_t parse_mod(const char *mod_str) {
 				case 108:
 					mod |= WLR_MODIFIER_ALT;
 					break;
+				default:
+					fprintf(stderr,
+							"unknown modifier keycode: \033[1m\033[31m%s\n",
+							token);
+					break;
 				}
 			}
 		} else {
-			// 完整的 modifier 检查（保留原始所有检查项）
-			if (strstr(token, "super") || strstr(token, "super_l") ||
-				strstr(token, "super_r")) {
+			if (!strcmp(token, "super") || !strcmp(token, "super_l") ||
+				!strcmp(token, "super_r")) {
 				mod |= WLR_MODIFIER_LOGO;
+				match_success = true;
 			}
-			if (strstr(token, "ctrl") || strstr(token, "ctrl_l") ||
-				strstr(token, "ctrl_r")) {
+			if (!strcmp(token, "ctrl") || !strcmp(token, "ctrl_l") ||
+				!strcmp(token, "ctrl_r")) {
 				mod |= WLR_MODIFIER_CTRL;
+				match_success = true;
 			}
-			if (strstr(token, "shift") || strstr(token, "shift_l") ||
-				strstr(token, "shift_r")) {
+			if (!strcmp(token, "shift") || !strcmp(token, "shift_l") ||
+				!strcmp(token, "shift_r")) {
 				mod |= WLR_MODIFIER_SHIFT;
+				match_success = true;
 			}
-			if (strstr(token, "alt") || strstr(token, "alt_l") ||
-				strstr(token, "alt_r")) {
+			if (!strcmp(token, "alt") || !strcmp(token, "alt_l") ||
+				!strcmp(token, "alt_r")) {
 				mod |= WLR_MODIFIER_ALT;
+				match_success = true;
 			}
-			if (strstr(token, "hyper") || strstr(token, "hyper_l") ||
-				strstr(token, "hyper_r")) {
+			if (!strcmp(token, "hyper") || !strcmp(token, "hyper_l") ||
+				!strcmp(token, "hyper_r")) {
 				mod |= WLR_MODIFIER_MOD3;
+				match_success = true;
+			}
+			if (!strcmp(token, "none")) {
+				match_success = true;
 			}
 		}
 
 		token = strtok_r(NULL, "+", &saveptr);
+	}
+
+	if (!match_success) {
+		mod = UINT32_MAX;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown modifier: "
+				"\033[1m\033[31m%s\n",
+				mod_str);
 	}
 
 	return mod;
@@ -710,8 +860,9 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		return kc;
 	}
 
-	// 普通键名直接转换
-	xkb_keysym_t sym = xkb_keysym_from_name(key_str, XKB_KEYSYM_NO_FLAGS);
+	// change key string to keysym, case insensitive
+	xkb_keysym_t sym =
+		xkb_keysym_from_name(key_str, XKB_KEYSYM_CASE_INSENSITIVE);
 
 	if (isbindsym) {
 		kc.type = KEY_TYPE_SYM;
@@ -735,13 +886,17 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		// 无法解析的键名
 		kc.type = KEY_TYPE_SYM;
 		kc.keysym = XKB_KEY_NoSymbol;
+		fprintf(
+			stderr,
+			"\033[1m\033[31m[ERROR]:\033[33m Unknown key: \033[1m\033[31m%s\n",
+			key_str);
 		// keycode 字段保持为0
 	}
 
 	return kc;
 }
 
-int32_t parse_button(const char *str) {
+uint32_t parse_button(const char *str) {
 	// 将输入字符串转换为小写
 	char lowerStr[20];
 	int32_t i = 0;
@@ -750,6 +905,24 @@ int32_t parse_button(const char *str) {
 		i++;
 	}
 	lowerStr[i] = '\0'; // 确保字符串正确终止
+
+	// 解析 "code:数字" 格式
+	if (strncmp(lowerStr, "code:", 5) == 0) {
+		const char *numStart = lowerStr + 5; // 跳过 "code:"
+		char *endptr;
+		unsigned long val = strtoul(numStart, &endptr, 10);
+
+		// 检查是否成功转换且无多余字符，且值未溢出（在 uint32_t 范围内）
+		if (endptr != numStart && *endptr == '\0' && val <= UINT32_MAX) {
+			return (uint32_t)val;
+		} else {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid code format: "
+					"\033[1m\033[31m%s\n",
+					str);
+			return UINT32_MAX;
+		}
+	}
 
 	// 根据转换后的小写字符串返回对应的按钮编号
 	if (strcmp(lowerStr, "btn_left") == 0) {
@@ -769,7 +942,11 @@ int32_t parse_button(const char *str) {
 	} else if (strcmp(lowerStr, "btn_task") == 0) {
 		return BTN_TASK;
 	} else {
-		return 0;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown button: "
+				"\033[1m\033[31m%s\n",
+				str);
+		return UINT32_MAX;
 	}
 }
 
@@ -820,6 +997,12 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						 char *arg_value5) {
 
 	FuncType func = NULL;
+	(*arg).i = 0;
+	(*arg).i2 = 0;
+	(*arg).f = 0.0f;
+	(*arg).f2 = 0.0f;
+	(*arg).ui = 0;
+	(*arg).ui2 = 0;
 	(*arg).v = NULL;
 	(*arg).v2 = NULL;
 	(*arg).v3 = NULL;
@@ -830,6 +1013,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "focusid") == 0) {
+		func = focusid;
 	} else if (strcmp(func_name, "incnmaster") == 0) {
 		func = incnmaster;
 		(*arg).i = atoi(arg_value);
@@ -849,11 +1034,15 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
 		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "togglejump") == 0) {
+		func = togglejump;
+		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);
 	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
 		func = switch_proportion_preset;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "viewtoleft") == 0) {
 		func = viewtoleft;
 		(*arg).i = atoi(arg_value);
@@ -871,6 +1060,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
+		(*arg).i = parse_force(arg_value);
 	} else if (strcmp(func_name, "centerwin") == 0) {
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
@@ -926,6 +1116,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "switch_keyboard_layout") == 0) {
 		func = switch_keyboard_layout;
+		(*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
 	} else if (strcmp(func_name, "setlayout") == 0) {
 		func = setlayout;
 		(*arg).v = strdup(arg_value);
@@ -970,10 +1161,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).ui = atoi(arg_value);
 	} else if (strcmp(func_name, "spawn") == 0) {
 		func = spawn;
-		(*arg).v = strdup(arg_value);
+		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+						  arg_value5};
+		(*arg).v = combine_args_until_empty(values, 5);
 	} else if (strcmp(func_name, "spawn_shell") == 0) {
 		func = spawn_shell;
-		(*arg).v = strdup(arg_value);
+		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
+						  arg_value5};
+		(*arg).v = combine_args_until_empty(values, 5);
 	} else if (strcmp(func_name, "spawn_on_empty") == 0) {
 		func = spawn_on_empty;
 		(*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
@@ -1085,6 +1280,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
+		func = toggle_all_floating;
+	} else if (strcmp(func_name, "dwindle_toggle_split_direction") == 0) {
+		func = dwindle_toggle_split_direction;
+	} else if (strcmp(func_name, "dwindle_split_horizontal") == 0) {
+		func = dwindle_split_horizontal;
+	} else if (strcmp(func_name, "dwindle_split_vertical") == 0) {
+		func = dwindle_split_vertical;
 	} else {
 		return NULL;
 	}
@@ -1115,7 +1318,7 @@ void run_exec_once() {
 	}
 }
 
-void parse_option(Config *config, char *key, char *value) {
+bool parse_option(Config *config, char *key, char *value) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
 	} else if (strcmp(key, "animations") == 0) {
@@ -1166,53 +1369,70 @@ void parse_option(Config *config, char *key, char *value) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_move, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_move: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_move: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_open") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_open, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_open: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_open: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_tag") == 0) {
 		int32_t num = parse_double_array(value, config->animation_curve_tag, 4);
 		if (num != 4) {
-			fprintf(stderr, "Error: Failed to parse animation_curve_tag: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_tag: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_close") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_close, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_close: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_close: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_focus") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_focus, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_focus: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_focus: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_opafadein") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadein, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_opafadein: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_opafadein: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "animation_curve_opafadeout") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadeout, 4);
 		if (num != 4) {
 			fprintf(stderr,
-					"Error: Failed to parse animation_curve_opafadeout: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to parse "
+					"animation_curve_opafadeout: %s\n",
 					value);
+			return false;
 		}
 	} else if (strcmp(key, "scroller_structs") == 0) {
 		config->scroller_structs = atoi(value);
@@ -1226,8 +1446,12 @@ void parse_option(Config *config, char *key, char *value) {
 		config->scroller_focus_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_center") == 0) {
 		config->scroller_prefer_center = atoi(value);
+	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
+		config->scroller_prefer_overspread = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
+	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0) {
+		config->edge_scroller_focus_allow_speed = atof(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
 	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
@@ -1278,6 +1502,12 @@ void parse_option(Config *config, char *key, char *value) {
 		config->xwayland_persistence = atoi(value);
 	} else if (strcmp(key, "syncobj_enable") == 0) {
 		config->syncobj_enable = atoi(value);
+	} else if (strcmp(key, "tag_carousel") == 0) {
+		config->tag_carousel = atoi(value);
+	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
+		config->drag_tile_refresh_interval = atof(value);
+	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
+		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
@@ -1294,6 +1524,8 @@ void parse_option(Config *config, char *key, char *value) {
 		config->enable_floating_snap = atoi(value);
 	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
+	} else if (strcmp(key, "drag_tile_small") == 0) {
+		config->drag_tile_small = atoi(value);
 	} else if (strcmp(key, "swipe_min_threshold") == 0) {
 		config->swipe_min_threshold = atoi(value);
 	} else if (strcmp(key, "focused_opacity") == 0) {
@@ -1301,25 +1533,25 @@ void parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "unfocused_opacity") == 0) {
 		config->unfocused_opacity = atof(value);
 	} else if (strcmp(key, "xkb_rules_rules") == 0) {
-		strncpy(xkb_rules_rules, value, sizeof(xkb_rules_rules) - 1);
-		xkb_rules_rules[sizeof(xkb_rules_rules) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_rules, value,
+				sizeof(config->xkb_rules_rules) - 1);
+		config->xkb_rules_rules[sizeof(config->xkb_rules_rules) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_model") == 0) {
-		strncpy(xkb_rules_model, value, sizeof(xkb_rules_model) - 1);
-		xkb_rules_model[sizeof(xkb_rules_model) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_model, value,
+				sizeof(config->xkb_rules_model) - 1);
+		config->xkb_rules_model[sizeof(config->xkb_rules_model) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_layout") == 0) {
-		strncpy(xkb_rules_layout, value, sizeof(xkb_rules_layout) - 1);
-		xkb_rules_layout[sizeof(xkb_rules_layout) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_layout, value,
+				sizeof(config->xkb_rules_layout) - 1);
+		config->xkb_rules_layout[sizeof(config->xkb_rules_layout) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_variant") == 0) {
-		strncpy(xkb_rules_variant, value, sizeof(xkb_rules_variant) - 1);
-		xkb_rules_variant[sizeof(xkb_rules_variant) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_variant, value,
+				sizeof(config->xkb_rules_variant) - 1);
+		config->xkb_rules_variant[sizeof(config->xkb_rules_variant) - 1] = '\0';
 	} else if (strcmp(key, "xkb_rules_options") == 0) {
-		strncpy(xkb_rules_options, value, sizeof(xkb_rules_options) - 1);
-		xkb_rules_options[sizeof(xkb_rules_options) - 1] =
-			'\0'; // 确保字符串以 null 结尾
+		strncpy(config->xkb_rules_options, value,
+				sizeof(config->xkb_rules_options) - 1);
+		config->xkb_rules_options[sizeof(config->xkb_rules_options) - 1] = '\0';
 	} else if (strcmp(key, "scroller_proportion_preset") == 0) {
 		// 1. 统计 value 中有多少个逗号，确定需要解析的浮点数个数
 		int32_t count = 0; // 初始化为 0
@@ -1333,8 +1565,9 @@ void parse_option(Config *config, char *key, char *value) {
 		config->scroller_proportion_preset =
 			(float *)malloc(float_count * sizeof(float));
 		if (!config->scroller_proportion_preset) {
-			fprintf(stderr, "Error: Memory allocation failed\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+							"allocation failed\n");
+			return false;
 		}
 
 		// 3. 解析 value 中的浮点数
@@ -1347,16 +1580,18 @@ void parse_option(Config *config, char *key, char *value) {
 		while (token != NULL && i < float_count) {
 			if (sscanf(token, "%f", &value_set) != 1) {
 				fprintf(stderr,
-						"Error: Invalid float value in "
+						"\033[1m\033[31m[ERROR]:\033[33m Invalid float "
+						"value in "
 						"scroller_proportion_preset: %s\n",
 						token);
 				free(value_copy);
 				free(config->scroller_proportion_preset);
 				config->scroller_proportion_preset = NULL;
-				return;
+				return false;
 			}
 
-			// Clamp the value between 0.0 and 1.0 (or your desired range)
+			// Clamp the value between 0.0 and 1.0 (or your desired
+			// range)
 			config->scroller_proportion_preset[i] =
 				CLAMP_FLOAT(value_set, 0.1f, 1.0f);
 
@@ -1367,13 +1602,14 @@ void parse_option(Config *config, char *key, char *value) {
 		// 4. 检查解析的浮点数数量是否匹配
 		if (i != float_count) {
 			fprintf(stderr,
-					"Error: Invalid scroller_proportion_preset format: %s\n",
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"scroller_proportion_preset format: %s\n",
 					value);
 			free(value_copy);
 			free(config->scroller_proportion_preset);  // 释放已分配的内存
 			config->scroller_proportion_preset = NULL; // 防止野指针
 			config->scroller_proportion_preset_count = 0;
-			return;
+			return false;
 		}
 		config->scroller_proportion_preset_count = float_count;
 
@@ -1392,8 +1628,9 @@ void parse_option(Config *config, char *key, char *value) {
 		config->circle_layout = (char **)malloc(string_count * sizeof(char *));
 		memset(config->circle_layout, 0, string_count * sizeof(char *));
 		if (!config->circle_layout) {
-			fprintf(stderr, "Error: Memory allocation failed\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Memory "
+							"allocation failed\n");
+			return false;
 		}
 
 		// 3. 解析 value 中的字符串
@@ -1408,7 +1645,9 @@ void parse_option(Config *config, char *key, char *value) {
 			config->circle_layout[i] = strdup(cleaned_token);
 			if (!config->circle_layout[i]) {
 				fprintf(stderr,
-						"Error: Memory allocation failed for string: %s\n",
+						"\033[1m\033[31m[ERROR]:\033[33m Memory allocation "
+						"failed for "
+						"string: %s\n",
 						token);
 				// 释放之前分配的内存
 				for (int32_t j = 0; j < i; j++) {
@@ -1418,7 +1657,7 @@ void parse_option(Config *config, char *key, char *value) {
 				free(value_copy);
 				config->circle_layout = NULL; // 防止野指针
 				config->circle_layout_count = 0;
-				return;
+				return false;
 			}
 			token = strtok(NULL, ",");
 			i++;
@@ -1426,7 +1665,10 @@ void parse_option(Config *config, char *key, char *value) {
 
 		// 4. 检查解析的字符串数量是否匹配
 		if (i != string_count) {
-			fprintf(stderr, "Error: Invalid circle_layout format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid circle_layout "
+					"format: %s\n",
+					value);
 			// 释放之前分配的内存
 			for (int32_t j = 0; j < i; j++) {
 				free(config->circle_layout[j]);
@@ -1435,7 +1677,7 @@ void parse_option(Config *config, char *key, char *value) {
 			free(value_copy);
 			config->circle_layout = NULL; // 防止野指针
 			config->circle_layout_count = 0;
-			return;
+			return false;
 		}
 		config->circle_layout_count = string_count;
 
@@ -1451,6 +1693,22 @@ void parse_option(Config *config, char *key, char *value) {
 		config->center_master_overspread = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
 		config->center_when_single_stack = atoi(value);
+	} else if (strcmp(key, "dwindle_vsplit") == 0) {
+		config->dwindle_vsplit = atoi(value);
+	} else if (strcmp(key, "dwindle_hsplit") == 0) {
+		config->dwindle_hsplit = atoi(value);
+	} else if (strcmp(key, "dwindle_preserve_split") == 0) {
+		config->dwindle_preserve_split = atoi(value);
+	} else if (strcmp(key, "dwindle_smart_split") == 0) {
+		config->dwindle_smart_split = atoi(value);
+	} else if (strcmp(key, "dwindle_smart_resize") == 0) {
+		config->dwindle_smart_resize = atoi(value);
+	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
+		config->dwindle_drop_simple_split = atoi(value);
+	} else if (strcmp(key, "dwindle_manual_split") == 0) {
+		config->dwindle_manual_split = atoi(value);
+	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
+		config->dwindle_split_ratio = atof(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
 		config->hotarea_size = atoi(value);
 	} else if (strcmp(key, "hotarea_corner") == 0) {
@@ -1459,12 +1717,16 @@ void parse_option(Config *config, char *key, char *value) {
 		config->enable_hotarea = atoi(value);
 	} else if (strcmp(key, "ov_tab_mode") == 0) {
 		config->ov_tab_mode = atoi(value);
+	} else if (strcmp(key, "ov_no_resize") == 0) {
+		config->ov_no_resize = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
 		config->overviewgappo = atoi(value);
 	} else if (strcmp(key, "cursor_hide_timeout") == 0) {
 		config->cursor_hide_timeout = atoi(value);
+	} else if (strcmp(key, "cursor_hide_on_keypress") == 0) {
+		config->cursor_hide_on_keypress = atoi(value);
 	} else if (strcmp(key, "axis_bind_apply_timeout") == 0) {
 		config->axis_bind_apply_timeout = atoi(value);
 	} else if (strcmp(key, "focus_on_activate") == 0) {
@@ -1503,16 +1765,160 @@ void parse_option(Config *config, char *key, char *value) {
 		config->cursor_size = atoi(value);
 	} else if (strcmp(key, "cursor_theme") == 0) {
 		config->cursor_theme = strdup(value);
+	} else if (strcmp(key, "tab_bar_decorate_font_desc") == 0) {
+		config->tabdata.font_desc = strdup(value);
+	} else if (strcmp(key, "tab_bar_decorate_fg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"tab_bar_decorate_fg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabdata.fg_color, color);
+		}
+	} else if (strcmp(key, "tab_bar_decorate_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"tab_bar_decorate_bg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabdata.bg_color, color);
+		}
+	} else if (strcmp(key, "tab_bar_decorate_focus_fg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"tab_bar_decorate_focus_fg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabdata.focus_fg_color, color);
+		}
+	} else if (strcmp(key, "tab_bar_decorate_focus_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"tab_bar_decorate_focus_bg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabdata.focus_bg_color, color);
+		}
+	} else if (strcmp(key, "tab_bar_decorate_border_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"tab_bar_decorate_border_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->tabdata.border_color, color);
+		}
+	} else if (strcmp(key, "tab_bar_decorate_border_width") == 0) {
+		config->tabdata.border_width = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "tab_bar_decorate_corner_radius") == 0) {
+		config->tabdata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "tab_bar_decorate_padding_x") == 0) {
+		config->tabdata.padding_x = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "tab_bar_decorate_padding_y") == 0) {
+		config->tabdata.padding_y = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_label_decorate_font_desc") == 0) {
+		config->jumplabeldata.font_desc = strdup(value);
+	} else if (strcmp(key, "jump_label_decorate_fg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"jump_label_decorate_fg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumplabeldata.fg_color, color);
+		}
+	} else if (strcmp(key, "jump_label_decorate_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"jump_label_decorate_bg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumplabeldata.bg_color, color);
+		}
+	} else if (strcmp(key, "jump_label_decorate_focus_fg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"jump_label_decorate_focus_fg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumplabeldata.focus_fg_color, color);
+		}
+	} else if (strcmp(key, "jump_label_decorate_focus_bg_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"jump_label_decorate_focus_bg_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumplabeldata.focus_bg_color, color);
+		}
+	} else if (strcmp(key, "jump_label_decorate_border_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"jump_label_decorate_border_color "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->jumplabeldata.border_color, color);
+		}
+	} else if (strcmp(key, "jump_label_decorate_border_width") == 0) {
+		config->jumplabeldata.border_width = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_label_decorate_corner_radius") == 0) {
+		config->jumplabeldata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_label_decorate_padding_x") == 0) {
+		config->jumplabeldata.padding_x = CLAMP_INT(atoi(value), 0, 100);
+	} else if (strcmp(key, "jump_label_decorate_padding_y") == 0) {
+		config->jumplabeldata.padding_y = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "disable_while_typing") == 0) {
 		config->disable_while_typing = atoi(value);
 	} else if (strcmp(key, "left_handed") == 0) {
 		config->left_handed = atoi(value);
 	} else if (strcmp(key, "middle_button_emulation") == 0) {
 		config->middle_button_emulation = atoi(value);
-	} else if (strcmp(key, "accel_profile") == 0) {
-		config->accel_profile = atoi(value);
-	} else if (strcmp(key, "accel_speed") == 0) {
-		config->accel_speed = atof(value);
+	} else if (strcmp(key, "mouse_accel_profile") == 0) {
+		config->mouse_accel_profile = atoi(value);
+	} else if (strcmp(key, "mouse_accel_speed") == 0) {
+		config->mouse_accel_speed = atof(value);
+	} else if (strcmp(key, "trackpad_accel_profile") == 0) {
+		config->trackpad_accel_profile = atoi(value);
+	} else if (strcmp(key, "trackpad_accel_speed") == 0) {
+		config->trackpad_accel_speed = atof(value);
 	} else if (strcmp(key, "scroll_method") == 0) {
 		config->scroll_method = atoi(value);
 	} else if (strcmp(key, "scroll_button") == 0) {
@@ -1525,6 +1931,12 @@ void parse_option(Config *config, char *key, char *value) {
 		config->button_map = atoi(value);
 	} else if (strcmp(key, "axis_scroll_factor") == 0) {
 		config->axis_scroll_factor = atof(value);
+	} else if (strcmp(key, "tablet_map_to_mon") == 0) {
+		if (config->tablet_map_to_mon)
+			free(config->tablet_map_to_mon);
+		config->tablet_map_to_mon = strdup(value);
+	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
+		config->trackpad_scroll_factor = atof(value);
 	} else if (strcmp(key, "gappih") == 0) {
 		config->gappih = atoi(value);
 	} else if (strcmp(key, "gappiv") == 0) {
@@ -1539,10 +1951,17 @@ void parse_option(Config *config, char *key, char *value) {
 		config->scratchpad_height_ratio = atof(value);
 	} else if (strcmp(key, "borderpx") == 0) {
 		config->borderpx = atoi(value);
+	} else if (strcmp(key, "tab_bar_height") == 0) {
+		config->tab_bar_height = atoi(value);
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid rootcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid rootcolor "
+					"format: "
+					"%s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->rootcolor, color);
 		}
@@ -1550,58 +1969,112 @@ void parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "shadowscolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid shadowscolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid shadowscolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->shadowscolor, color);
 		}
 	} else if (strcmp(key, "bordercolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid bordercolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bordercolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->bordercolor, color);
+		}
+	} else if (strcmp(key, "dropcolor") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid dropcolor "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->dropcolor, color);
+		}
+	} else if (strcmp(key, "splitcolor") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid splitcolor "
+					"format: %s\n",
+					value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->splitcolor, color);
 		}
 	} else if (strcmp(key, "focuscolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid focuscolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid focuscolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->focuscolor, color);
 		}
 	} else if (strcmp(key, "maximizescreencolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid maximizescreencolor format: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"maximizescreencolor "
+					"format: %s\n",
 					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->maximizescreencolor, color);
 		}
 	} else if (strcmp(key, "urgentcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid urgentcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid urgentcolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->urgentcolor, color);
 		}
 	} else if (strcmp(key, "scratchpadcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid scratchpadcolor format: %s\n",
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
+					"scratchpadcolor "
+					"format: %s\n",
 					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->scratchpadcolor, color);
 		}
 	} else if (strcmp(key, "globalcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid globalcolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid globalcolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->globalcolor, color);
 		}
 	} else if (strcmp(key, "overlaycolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
-			fprintf(stderr, "Error: Invalid overlaycolor format: %s\n", value);
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid overlaycolor "
+					"format: %s\n",
+					value);
+			return false;
 		} else {
 			convert_hex_to_rgba(config->overlaycolor, color);
 		}
@@ -1611,8 +2084,9 @@ void parse_option(Config *config, char *key, char *value) {
 											   sizeof(ConfigMonitorRule));
 		if (!config->monitor_rules) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for monitor rules\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for monitor rules\n");
+			return false;
 		}
 
 		ConfigMonitorRule *rule =
@@ -1621,6 +2095,9 @@ void parse_option(Config *config, char *key, char *value) {
 
 		// 设置默认值
 		rule->name = NULL;
+		rule->make = NULL;
+		rule->model = NULL;
+		rule->serial = NULL;
 		rule->rr = 0;
 		rule->scale = 1.0f;
 		rule->x = INT32_MAX;
@@ -1629,7 +2106,9 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->height = -1;
 		rule->refresh = 0.0f;
 		rule->vrr = 0;
+		rule->custom = 0;
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1643,6 +2122,12 @@ void parse_option(Config *config, char *key, char *value) {
 
 				if (strcmp(key, "name") == 0) {
 					rule->name = strdup(val);
+				} else if (strcmp(key, "make") == 0) {
+					rule->make = strdup(val);
+				} else if (strcmp(key, "model") == 0) {
+					rule->model = strdup(val);
+				} else if (strcmp(key, "serial") == 0) {
+					rule->serial = strdup(val);
 				} else if (strcmp(key, "rr") == 0) {
 					rule->rr = CLAMP_INT(atoi(val), 0, 7);
 				} else if (strcmp(key, "scale") == 0) {
@@ -1659,19 +2144,38 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "custom") == 0) {
+					rule->custom = CLAMP_INT(atoi(val), 0, 1);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"monitor rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
 		}
 
+		if (!rule->name && !rule->make && !rule->model && !rule->serial) {
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Monitor rule "
+							"must have at least one of the following "
+							"options: name, make, model, serial\n");
+			return false;
+		}
+
 		config->monitor_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "tagrule") == 0) {
 		config->tag_rules =
 			realloc(config->tag_rules,
 					(config->tag_rules_count + 1) * sizeof(ConfigTagRule));
 		if (!config->tag_rules) {
-			fprintf(stderr, "Error: Failed to allocate memory for tag rules\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for tag rules\n");
+			return false;
 		}
 
 		ConfigTagRule *rule = &config->tag_rules[config->tag_rules_count];
@@ -1681,11 +2185,19 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->id = 0;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
+		rule->monitor_make = NULL;
+		rule->monitor_model = NULL;
+		rule->monitor_serial = NULL;
 		rule->nmaster = 0;
 		rule->mfact = 0.0f;
 		rule->no_render_border = 0;
+		rule->open_as_floating = 0;
 		rule->no_hide = 0;
+		rule->scroller_default_proportion = 0.0f;
+		rule->scroller_default_proportion_single = 0.0f;
+		rule->scroller_ignore_proportion_single = -1;
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1703,28 +2215,56 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
 					rule->monitor_name = strdup(val);
+				} else if (strcmp(key, "monitor_make") == 0) {
+					rule->monitor_make = strdup(val);
+				} else if (strcmp(key, "monitor_model") == 0) {
+					rule->monitor_model = strdup(val);
+				} else if (strcmp(key, "monitor_serial") == 0) {
+					rule->monitor_serial = strdup(val);
 				} else if (strcmp(key, "no_render_border") == 0) {
 					rule->no_render_border = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "open_as_floating") == 0) {
+					rule->open_as_floating = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "no_hide") == 0) {
 					rule->no_hide = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "nmaster") == 0) {
 					rule->nmaster = CLAMP_INT(atoi(val), 1, 99);
 				} else if (strcmp(key, "mfact") == 0) {
 					rule->mfact = CLAMP_FLOAT(atof(val), 0.1f, 0.9f);
+				} else if (strcmp(key, "scroller_default_proportion") == 0) {
+					rule->scroller_default_proportion =
+						CLAMP_FLOAT(atof(val), 0.0f, 1.0f);
+				} else if (strcmp(key, "scroller_default_proportion_single") ==
+						   0) {
+					rule->scroller_default_proportion_single =
+						CLAMP_FLOAT(atof(val), 0.0f, 1.0f);
+				} else if (strcmp(key, "scroller_ignore_proportion_single") ==
+						   0) {
+					rule->scroller_ignore_proportion_single =
+						CLAMP_INT(atoi(val), 0, 1);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"tag rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
 		}
 
 		config->tag_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "layerrule") == 0) {
 		config->layer_rules =
 			realloc(config->layer_rules,
 					(config->layer_rules_count + 1) * sizeof(ConfigLayerRule));
 		if (!config->layer_rules) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for layer rules\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for layer rules\n");
+			return false;
 		}
 
 		ConfigLayerRule *rule = &config->layer_rules[config->layer_rules_count];
@@ -1738,6 +2278,7 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->noanim = 0;
 		rule->noshadow = 0;
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1761,6 +2302,13 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->noanim = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noshadow") == 0) {
 					rule->noshadow = CLAMP_INT(atoi(val), 0, 1);
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"layer rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
@@ -1772,14 +2320,16 @@ void parse_option(Config *config, char *key, char *value) {
 		}
 
 		config->layer_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "windowrule") == 0) {
 		config->window_rules =
 			realloc(config->window_rules,
 					(config->window_rules_count + 1) * sizeof(ConfigWinRule));
 		if (!config->window_rules) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for window rules\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for window rules\n");
+			return false;
 		}
 
 		ConfigWinRule *rule = &config->window_rules[config->window_rules_count];
@@ -1788,6 +2338,7 @@ void parse_option(Config *config, char *key, char *value) {
 		// int32_t rule value, relay to a client property
 		rule->isfloating = -1;
 		rule->isfullscreen = -1;
+		rule->isfakefullscreen = -1;
 		rule->isnoborder = -1;
 		rule->isnoshadow = -1;
 		rule->isnoradius = -1;
@@ -1802,9 +2353,11 @@ void parse_option(Config *config, char *key, char *value) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
+		rule->idleinhibit_when_focus = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
-		rule->force_maximize = -1;
+		rule->force_fakemaximize = -1;
+		rule->force_tiled_state = -1;
 		rule->force_tearing = -1;
 		rule->noswallow = -1;
 		rule->noblur = -1;
@@ -1835,6 +2388,7 @@ void parse_option(Config *config, char *key, char *value) {
 
 		rule->globalkeybinding = (KeyBinding){0};
 
+		bool parse_error = false;
 		char *token = strtok(value, ",");
 		while (token != NULL) {
 			char *colon = strchr(token, ':');
@@ -1873,9 +2427,9 @@ void parse_option(Config *config, char *key, char *value) {
 				} else if (strcmp(key, "no_force_center") == 0) {
 					rule->no_force_center = atoi(val);
 				} else if (strcmp(key, "width") == 0) {
-					rule->width = atoi(val);
+					rule->width = atof(val);
 				} else if (strcmp(key, "height") == 0) {
-					rule->height = atoi(val);
+					rule->height = atof(val);
 				} else if (strcmp(key, "isnoborder") == 0) {
 					rule->isnoborder = atoi(val);
 				} else if (strcmp(key, "isnoshadow") == 0) {
@@ -1910,12 +2464,16 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
+				} else if (strcmp(key, "idleinhibit_when_focus") == 0) {
+					rule->idleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {
 					rule->allow_csd = atoi(val);
-				} else if (strcmp(key, "force_maximize") == 0) {
-					rule->force_maximize = atoi(val);
+				} else if (strcmp(key, "force_fakemaximize") == 0) {
+					rule->force_fakemaximize = atoi(val);
+				} else if (strcmp(key, "force_tiled_state") == 0) {
+					rule->force_tiled_state = atoi(val);
 				} else if (strcmp(key, "force_tearing") == 0) {
 					rule->force_tearing = atoi(val);
 				} else if (strcmp(key, "noswallow") == 0) {
@@ -1926,6 +2484,8 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->scroller_proportion = atof(val);
 				} else if (strcmp(key, "isfullscreen") == 0) {
 					rule->isfullscreen = atoi(val);
+				} else if (strcmp(key, "isfakefullscreen") == 0) {
+					rule->isfakefullscreen = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
@@ -1934,17 +2494,37 @@ void parse_option(Config *config, char *key, char *value) {
 					rule->globalkeybinding.mod = parse_mod(mod_str);
 					rule->globalkeybinding.keysymcode =
 						parse_key(keysym_str, false);
+					if (rule->globalkeybinding.mod == UINT32_MAX) {
+						return false;
+					}
+					if (rule->globalkeybinding.keysymcode.type ==
+							KEY_TYPE_SYM &&
+						rule->globalkeybinding.keysymcode.keysym ==
+							XKB_KEY_NoSymbol) {
+						return false;
+					}
+				} else {
+					fprintf(stderr,
+							"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+							"window rule "
+							"option:\033[1m\033[31m %s\n",
+							key);
+					parse_error = true;
 				}
 			}
 			token = strtok(NULL, ",");
 		}
 		config->window_rules_count++;
+		return !parse_error;
 	} else if (strncmp(key, "env", 3) == 0) {
 
 		char env_type[256], env_value[256];
 		if (sscanf(value, "%255[^,],%255[^\n]", env_type, env_value) < 2) {
-			fprintf(stderr, "Error: Invalid bind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(env_type);
 		trim_whitespace(env_value);
@@ -1959,8 +2539,9 @@ void parse_option(Config *config, char *key, char *value) {
 			free(env->type);
 			free(env->value);
 			free(env);
-			fprintf(stderr, "Error: Failed to allocate memory for env\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"allocate memory for env\n");
+			return false;
 		}
 
 		config->env[config->env_count] = env;
@@ -1970,15 +2551,18 @@ void parse_option(Config *config, char *key, char *value) {
 		char **new_exec =
 			realloc(config->exec, (config->exec_count + 1) * sizeof(char *));
 		if (!new_exec) {
-			fprintf(stderr, "Error: Failed to allocate memory for exec\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec\n");
+			return false;
 		}
 		config->exec = new_exec;
 
 		config->exec[config->exec_count] = strdup(value);
 		if (!config->exec[config->exec_count]) {
-			fprintf(stderr, "Error: Failed to duplicate exec string\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Failed to "
+							"duplicate exec string\n");
+			return false;
 		}
 
 		config->exec_count++;
@@ -1988,15 +2572,19 @@ void parse_option(Config *config, char *key, char *value) {
 		char **new_exec_once = realloc(
 			config->exec_once, (config->exec_once_count + 1) * sizeof(char *));
 		if (!new_exec_once) {
-			fprintf(stderr, "Error: Failed to allocate memory for exec_once\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for exec_once\n");
+			return false;
 		}
 		config->exec_once = new_exec_once;
 
 		config->exec_once[config->exec_once_count] = strdup(value);
 		if (!config->exec_once[config->exec_once_count]) {
-			fprintf(stderr, "Error: Failed to duplicate exec_once string\n");
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to duplicate "
+					"exec_once string\n");
+			return false;
 		}
 
 		config->exec_once_count++;
@@ -2007,8 +2595,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
 		if (!config->key_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for key bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for key bindings\n");
+			return false;
 		}
 
 		KeyBinding *binding = &config->key_bindings[config->key_bindings_count];
@@ -2019,12 +2608,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, keysym_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid bind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid bind format: "
+					"\033[1m\033[31m%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(mod_str);
 		trim_whitespace(keysym_str);
@@ -2051,13 +2644,22 @@ void parse_option(Config *config, char *key, char *value) {
 		binding->keysymcode =
 			parse_key(keysym_str, binding->keysymcode.type == KEY_TYPE_SYM);
 		binding->mod = parse_mod(mod_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
+		binding->arg.tc = NULL;
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX ||
+			(binding->keysymcode.type == KEY_TYPE_SYM &&
+			 binding->keysymcode.keysym == XKB_KEY_NoSymbol)) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2070,7 +2672,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in bind: %s\n", func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in bind: "
+						"\033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->key_bindings_count++;
 		}
@@ -2081,8 +2689,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->mouse_bindings_count + 1) * sizeof(MouseBinding));
 		if (!config->mouse_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for mouse bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for mouse bindings\n");
+			return false;
 		}
 
 		MouseBinding *binding =
@@ -2094,12 +2703,17 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, button_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid mousebind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid mousebind "
+					"format: "
+					"%s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(mod_str);
 		trim_whitespace(button_str);
@@ -2112,13 +2726,32 @@ void parse_option(Config *config, char *key, char *value) {
 
 		binding->mod = parse_mod(mod_str);
 		binding->button = parse_button(button_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
+		binding->arg.tc = NULL;
+
+		// TODO: remove this in next version
+		if (binding->mod == 0 &&
+			(binding->button == BTN_LEFT || binding->button == BTN_RIGHT)) {
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m \033[31m%s\033[33m can't "
+					"bind to \033[31m%s\033[33m mod key\n",
+					button_str, mod_str);
+			return false;
+		}
+
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX ||
+			binding->button == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2131,8 +2764,14 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in mousebind: %s\n",
-					func_name);
+
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"mousebind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->mouse_bindings_count++;
 		}
@@ -2142,8 +2781,9 @@ void parse_option(Config *config, char *key, char *value) {
 					(config->axis_bindings_count + 1) * sizeof(AxisBinding));
 		if (!config->axis_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for axis bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for axis bindings\n");
+			return false;
 		}
 
 		AxisBinding *binding =
@@ -2155,12 +2795,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^\n]",
 				   mod_str, dir_str, func_name, arg_value, arg_value2,
 				   arg_value3, arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid axisbind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid axisbind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 
 		trim_whitespace(mod_str);
@@ -2177,11 +2821,12 @@ void parse_option(Config *config, char *key, char *value) {
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
+		binding->arg.tc = NULL;
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
 
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2194,8 +2839,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in axisbind: %s\n",
-					func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"axisbind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->axis_bindings_count++;
 		}
@@ -2206,8 +2856,9 @@ void parse_option(Config *config, char *key, char *value) {
 											  sizeof(SwitchBinding));
 		if (!config->switch_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for switch bindings\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for switch bindings\n");
+			return false;
 		}
 
 		SwitchBinding *binding =
@@ -2219,12 +2870,16 @@ void parse_option(Config *config, char *key, char *value) {
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^\n]",
 				   fold_str, func_name, arg_value, arg_value2, arg_value3,
 				   arg_value4, arg_value5) < 3) {
-			fprintf(stderr, "Error: Invalid switchbind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid switchbind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 		trim_whitespace(fold_str);
 		trim_whitespace(func_name);
@@ -2252,8 +2907,13 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in switchbind: %s\n",
+
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Unknown dispatch in "
+					"switchbind: "
+					"\033[1m\033[31m%s\n",
 					func_name);
+			return false;
 		} else {
 			config->switch_bindings_count++;
 		}
@@ -2264,8 +2924,9 @@ void parse_option(Config *config, char *key, char *value) {
 			(config->gesture_bindings_count + 1) * sizeof(GestureBinding));
 		if (!config->gesture_bindings) {
 			fprintf(stderr,
-					"Error: Failed to allocate memory for axis gesturebind\n");
-			return;
+					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+					"memory for axis gesturebind\n");
+			return false;
 		}
 
 		GestureBinding *binding =
@@ -2277,12 +2938,16 @@ void parse_option(Config *config, char *key, char *value) {
 							arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 							arg_value5[256] = "0\0";
 		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255["
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
 				   "^,],%255[^,],%255[^\n]",
 				   mod_str, motion_str, fingers_count_str, func_name, arg_value,
 				   arg_value2, arg_value3, arg_value4, arg_value5) < 4) {
-			fprintf(stderr, "Error: Invalid gesturebind format: %s\n", value);
-			return;
+			fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Invalid gesturebind "
+					"format: %s\n",
+					value);
+			return false;
 		}
 
 		trim_whitespace(mod_str);
@@ -2298,14 +2963,21 @@ void parse_option(Config *config, char *key, char *value) {
 		binding->mod = parse_mod(mod_str);
 		binding->motion = parse_direction(motion_str);
 		binding->fingers_count = atoi(fingers_count_str);
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
 		binding->arg.v = NULL;
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
+		binding->arg.tc = NULL;
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);
 
-		if (!binding->func) {
+		if (!binding->func || binding->mod == UINT32_MAX) {
 			if (binding->arg.v) {
 				free(binding->arg.v);
 				binding->arg.v = NULL;
@@ -2318,34 +2990,49 @@ void parse_option(Config *config, char *key, char *value) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
-			fprintf(stderr, "Error: Unknown function in axisbind: %s\n",
-					func_name);
+			if (!binding->func)
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown "
+						"dispatch in "
+						"axisbind: \033[1m\033[31m%s\n",
+						func_name);
+			return false;
 		} else {
 			config->gesture_bindings_count++;
 		}
 
+	} else if (strncmp(key, "source-optional", 15) == 0) {
+		parse_config_file(config, value, false);
 	} else if (strncmp(key, "source", 6) == 0) {
-		parse_config_file(config, value);
+		parse_config_file(config, value, true);
 	} else {
-		fprintf(stderr, "Error: Unknown key: %s\n", key);
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Unknown keyword: "
+				"\033[1m\033[31m%s\n",
+				key);
+		return false;
 	}
+
+	return true;
 }
 
-void parse_config_line(Config *config, const char *line) {
+bool parse_config_line(Config *config, const char *line) {
 	char key[256], value[256];
 	if (sscanf(line, "%255[^=]=%255[^\n]", key, value) != 2) {
-		// fprintf(stderr, "Error: Invalid line format: %s\n", line);
-		return;
+		fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Invalid line format: %s",
+				line);
+		return false;
 	}
 
 	// Then trim each part separately
 	trim_whitespace(key);
 	trim_whitespace(value);
 
-	parse_option(config, key, value);
+	return parse_option(config, key, value);
 }
 
-void parse_config_file(Config *config, const char *file_path) {
+bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	FILE *file;
 	char full_path[1024];
 
@@ -2361,8 +3048,10 @@ void parse_config_file(Config *config, const char *file_path) {
 		} else {
 			const char *home = getenv("HOME");
 			if (!home) {
-				fprintf(stderr, "Error: HOME environment variable not set.\n");
-				return;
+				fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m HOME environment "
+						"variable not set.\n");
+				return false;
 			}
 			snprintf(full_path, sizeof(full_path), "%s/.config/mango/%s", home,
 					 file_path + 1);
@@ -2375,8 +3064,9 @@ void parse_config_file(Config *config, const char *file_path) {
 
 		const char *home = getenv("HOME");
 		if (!home) {
-			fprintf(stderr, "Error: HOME environment variable not set.\n");
-			return;
+			fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m HOME environment "
+							"variable not set.\n");
+			return false;
 		}
 		snprintf(full_path, sizeof(full_path), "%s%s", home, file_path + 1);
 		file = fopen(full_path, "r");
@@ -2387,19 +3077,39 @@ void parse_config_file(Config *config, const char *file_path) {
 	}
 
 	if (!file) {
-		perror("Error opening file");
-		return;
+		if (must_exist) {
+			fprintf(stderr,
+					"\033[1;31m\033[1;33m[ERROR]:\033[0m Failed to open "
+					"config file: %s\n",
+					file_path);
+			return false;
+		} else {
+			return true;
+		}
 	}
 
 	char line[512];
+	bool parse_correct = true;
+	bool parse_line_correct = true;
+	uint32_t line_count = 0;
 	while (fgets(line, sizeof(line), file)) {
+		line_count++;
 		if (line[0] == '#' || line[0] == '\n') {
 			continue;
 		}
-		parse_config_line(config, line);
+		parse_line_correct = parse_config_line(config, line);
+		if (!parse_line_correct) {
+			parse_correct = false;
+			fprintf(stderr,
+					"\033[1;31m╰─\033[1;33m[Index]\033[0m "
+					"\033[1;36m%s\033[0m:\033[1;35m%d\033[0m\n"
+					"   \033[1;36m╰─\033[0;33m%s\033[0m\n\n",
+					file_path, line_count, line);
+		}
 	}
 
 	fclose(file);
+	return parse_correct;
 }
 
 void free_circle_layout(Config *config) {
@@ -2594,6 +3304,12 @@ void free_config(void) {
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)
 				free((void *)config.tag_rules[i].monitor_name);
+			if (config.tag_rules[i].monitor_make)
+				free((void *)config.tag_rules[i].monitor_make);
+			if (config.tag_rules[i].monitor_model)
+				free((void *)config.tag_rules[i].monitor_model);
+			if (config.tag_rules[i].monitor_serial)
+				free((void *)config.tag_rules[i].monitor_serial);
 		}
 		free(config.tag_rules);
 		config.tag_rules = NULL;
@@ -2605,6 +3321,12 @@ void free_config(void) {
 		for (int32_t i = 0; i < config.monitor_rules_count; i++) {
 			if (config.monitor_rules[i].name)
 				free((void *)config.monitor_rules[i].name);
+			if (config.monitor_rules[i].make)
+				free((void *)config.monitor_rules[i].make);
+			if (config.monitor_rules[i].model)
+				free((void *)config.monitor_rules[i].model);
+			if (config.monitor_rules[i].serial)
+				free((void *)config.monitor_rules[i].serial);
 		}
 		free(config.monitor_rules);
 		config.monitor_rules = NULL;
@@ -2674,6 +3396,21 @@ void free_config(void) {
 		config.cursor_theme = NULL;
 	}
 
+	if (config.jumplabeldata.font_desc) {
+		free((void *)config.jumplabeldata.font_desc);
+		config.jumplabeldata.font_desc = NULL;
+	}
+
+	if (config.tabdata.font_desc) {
+		free((void *)config.tabdata.font_desc);
+		config.tabdata.font_desc = NULL;
+	}
+
+	if (config.tablet_map_to_mon) {
+		free(config.tablet_map_to_mon);
+		config.tablet_map_to_mon = NULL;
+	}
+
 	// 释放 circle_layout
 	free_circle_layout(&config);
 
@@ -2685,351 +3422,463 @@ void free_config(void) {
 }
 
 void override_config(void) {
-	// 动画启用
-	animations = CLAMP_INT(config.animations, 0, 1);
-	layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
-
-	// 标签动画方向
-	tag_animation_direction = CLAMP_INT(config.tag_animation_direction, 0, 1);
-
-	// 动画淡入淡出设置
-	animation_fade_in = CLAMP_INT(config.animation_fade_in, 0, 1);
-	animation_fade_out = CLAMP_INT(config.animation_fade_out, 0, 1);
-	zoom_initial_ratio = CLAMP_FLOAT(config.zoom_initial_ratio, 0.1f, 1.0f);
-	zoom_end_ratio = CLAMP_FLOAT(config.zoom_end_ratio, 0.1f, 1.0f);
-	fadein_begin_opacity = CLAMP_FLOAT(config.fadein_begin_opacity, 0.0f, 1.0f);
-	fadeout_begin_opacity =
+	config.animations = CLAMP_INT(config.animations, 0, 1);
+	config.layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
+	config.tag_animation_direction =
+		CLAMP_INT(config.tag_animation_direction, 0, 1);
+	config.animation_fade_in = CLAMP_INT(config.animation_fade_in, 0, 1);
+	config.animation_fade_out = CLAMP_INT(config.animation_fade_out, 0, 1);
+	config.zoom_initial_ratio =
+		CLAMP_FLOAT(config.zoom_initial_ratio, 0.1f, 1.0f);
+	config.zoom_end_ratio = CLAMP_FLOAT(config.zoom_end_ratio, 0.1f, 1.0f);
+	config.fadein_begin_opacity =
+		CLAMP_FLOAT(config.fadein_begin_opacity, 0.0f, 1.0f);
+	config.fadeout_begin_opacity =
 		CLAMP_FLOAT(config.fadeout_begin_opacity, 0.0f, 1.0f);
-
-	// 打开关闭动画类型
-	animation_type_open = config.animation_type_open;
-	animation_type_close = config.animation_type_close;
-
-	// layer打开关闭动画类型
-	layer_animation_type_open = config.layer_animation_type_open;
-	layer_animation_type_close = config.layer_animation_type_close;
-
-	// 动画时间限制在合理范围(1-50000ms)
-	animation_duration_move =
+	config.animation_duration_move =
 		CLAMP_INT(config.animation_duration_move, 1, 50000);
-	animation_duration_open =
+	config.animation_duration_open =
 		CLAMP_INT(config.animation_duration_open, 1, 50000);
-	animation_duration_tag = CLAMP_INT(config.animation_duration_tag, 1, 50000);
-	animation_duration_close =
+	config.animation_duration_tag =
+		CLAMP_INT(config.animation_duration_tag, 1, 50000);
+	config.animation_duration_close =
 		CLAMP_INT(config.animation_duration_close, 1, 50000);
-	animation_duration_focus =
+	config.animation_duration_focus =
 		CLAMP_INT(config.animation_duration_focus, 1, 50000);
-
-	// 滚动布局设置
-	scroller_default_proportion =
+	config.scroller_default_proportion =
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
-	scroller_default_proportion_single =
+	config.scroller_default_proportion_single =
 		CLAMP_FLOAT(config.scroller_default_proportion_single, 0.1f, 1.0f);
-	scroller_ignore_proportion_single =
+	config.scroller_ignore_proportion_single =
 		CLAMP_INT(config.scroller_ignore_proportion_single, 0, 1);
-	scroller_focus_center = CLAMP_INT(config.scroller_focus_center, 0, 1);
-	scroller_prefer_center = CLAMP_INT(config.scroller_prefer_center, 0, 1);
-	edge_scroller_pointer_focus =
+	config.scroller_focus_center =
+		CLAMP_INT(config.scroller_focus_center, 0, 1);
+	config.scroller_prefer_center =
+		CLAMP_INT(config.scroller_prefer_center, 0, 1);
+	config.scroller_prefer_overspread =
+		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
+	config.edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
-	scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
-
-	// 主从布局设置
-	default_mfact = CLAMP_FLOAT(config.default_mfact, 0.1f, 0.9f);
-	default_nmaster = CLAMP_INT(config.default_nmaster, 1, 1000);
-	center_master_overspread = CLAMP_INT(config.center_master_overspread, 0, 1);
-	center_when_single_stack = CLAMP_INT(config.center_when_single_stack, 0, 1);
-	new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
-
-	// 概述模式设置
-	hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
-	hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
-	enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
-	ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
-	overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
-	overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
-
-	// 杂项设置
-	xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
-	syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
-	allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
-	allow_shortcuts_inhibit = CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
-	allow_lock_transparent = CLAMP_INT(config.allow_lock_transparent, 0, 1);
-	axis_bind_apply_timeout =
+	config.edge_scroller_focus_allow_speed =
+		CLAMP_FLOAT(config.edge_scroller_focus_allow_speed, 0.0f, 1000.0f);
+	config.scroller_structs = CLAMP_INT(config.scroller_structs, 0, 1000);
+	config.default_mfact = CLAMP_FLOAT(config.default_mfact, 0.1f, 0.9f);
+	config.default_nmaster = CLAMP_INT(config.default_nmaster, 1, 1000);
+	config.center_master_overspread =
+		CLAMP_INT(config.center_master_overspread, 0, 1);
+	config.center_when_single_stack =
+		CLAMP_INT(config.center_when_single_stack, 0, 1);
+	config.new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
+	config.dwindle_vsplit = CLAMP_INT(config.dwindle_vsplit, 0, 2);
+	config.dwindle_hsplit = CLAMP_INT(config.dwindle_hsplit, 0, 2);
+	config.dwindle_preserve_split =
+		CLAMP_INT(config.dwindle_preserve_split, 0, 1);
+	config.dwindle_smart_split = CLAMP_INT(config.dwindle_smart_split, 0, 1);
+	config.dwindle_smart_resize = CLAMP_INT(config.dwindle_smart_resize, 0, 1);
+	config.dwindle_drop_simple_split =
+		CLAMP_INT(config.dwindle_drop_simple_split, 0, 1);
+	config.dwindle_manual_split = CLAMP_INT(config.dwindle_manual_split, 0, 1);
+	config.dwindle_split_ratio =
+		CLAMP_FLOAT(config.dwindle_split_ratio, 0.05f, 0.95f);
+	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
+	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
+	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
+	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
+	config.ov_no_resize = CLAMP_INT(config.ov_no_resize, 0, 1);
+	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
+	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
+	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
+	config.syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
+	config.drag_tile_refresh_interval =
+		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
+	config.drag_floating_refresh_interval =
+		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
+	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
+	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
+	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
+	config.allow_shortcuts_inhibit =
+		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
+	config.allow_lock_transparent =
+		CLAMP_INT(config.allow_lock_transparent, 0, 1);
+	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
-	focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
-	idleinhibit_ignore_visible =
+	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
+	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
-	sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
-	warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
-	drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
-	drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
-	focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
-	exchange_cross_monitor = CLAMP_INT(config.exchange_cross_monitor, 0, 1);
-	scratchpad_cross_monitor = CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
-	focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
-	view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
-	enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
-	snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
-	cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
-	no_border_when_single = CLAMP_INT(config.no_border_when_single, 0, 1);
-	no_radius_when_single = CLAMP_INT(config.no_radius_when_single, 0, 1);
-	cursor_hide_timeout =
-		CLAMP_INT(config.cursor_hide_timeout, 0, 36000); // 0-10小时
-	drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
-	single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
-
-	// 键盘设置
-	repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
-	repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);
-	numlockon = CLAMP_INT(config.numlockon, 0, 1);
-
-	// 触控板设置
-	disable_trackpad = CLAMP_INT(config.disable_trackpad, 0, 1);
-	tap_to_click = CLAMP_INT(config.tap_to_click, 0, 1);
-	tap_and_drag = CLAMP_INT(config.tap_and_drag, 0, 1);
-	drag_lock = CLAMP_INT(config.drag_lock, 0, 1);
-	trackpad_natural_scrolling =
+	config.sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
+	config.warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
+	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
+	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
+	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
+	config.exchange_cross_monitor =
+		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
+	config.scratchpad_cross_monitor =
+		CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
+	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
+	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
+	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
+	config.snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
+	config.cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
+	config.no_border_when_single =
+		CLAMP_INT(config.no_border_when_single, 0, 1);
+	config.no_radius_when_single =
+		CLAMP_INT(config.no_radius_when_single, 0, 1);
+	config.cursor_hide_timeout =
+		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
+	config.cursor_hide_on_keypress =
+		CLAMP_INT(config.cursor_hide_on_keypress, 0, 1);
+	config.single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
+	config.repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
+	config.repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);
+	config.numlockon = CLAMP_INT(config.numlockon, 0, 1);
+	config.disable_trackpad = CLAMP_INT(config.disable_trackpad, 0, 1);
+	config.tap_to_click = CLAMP_INT(config.tap_to_click, 0, 1);
+	config.tap_and_drag = CLAMP_INT(config.tap_and_drag, 0, 1);
+	config.drag_lock = CLAMP_INT(config.drag_lock, 0, 1);
+	config.trackpad_natural_scrolling =
 		CLAMP_INT(config.trackpad_natural_scrolling, 0, 1);
-	disable_while_typing = CLAMP_INT(config.disable_while_typing, 0, 1);
-	left_handed = CLAMP_INT(config.left_handed, 0, 1);
-	middle_button_emulation = CLAMP_INT(config.middle_button_emulation, 0, 1);
-	swipe_min_threshold = CLAMP_INT(config.swipe_min_threshold, 1, 1000);
-
-	// 鼠标设置
-	mouse_natural_scrolling = CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
-	accel_profile = CLAMP_INT(config.accel_profile, 0, 2);
-	accel_speed = CLAMP_FLOAT(config.accel_speed, -1.0f, 1.0f);
-	scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
-	scroll_button = CLAMP_INT(config.scroll_button, 272, 276);
-	click_method = CLAMP_INT(config.click_method, 0, 2);
-	send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);
-	button_map = CLAMP_INT(config.button_map, 0, 1);
-	axis_scroll_factor = CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
-
-	// 外观设置
-	gappih = CLAMP_INT(config.gappih, 0, 1000);
-	gappiv = CLAMP_INT(config.gappiv, 0, 1000);
-	gappoh = CLAMP_INT(config.gappoh, 0, 1000);
-	gappov = CLAMP_INT(config.gappov, 0, 1000);
-	scratchpad_width_ratio =
+	config.disable_while_typing = CLAMP_INT(config.disable_while_typing, 0, 1);
+	config.left_handed = CLAMP_INT(config.left_handed, 0, 1);
+	config.middle_button_emulation =
+		CLAMP_INT(config.middle_button_emulation, 0, 1);
+	config.swipe_min_threshold = CLAMP_INT(config.swipe_min_threshold, 1, 1000);
+	config.mouse_natural_scrolling =
+		CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
+	config.mouse_accel_profile = CLAMP_INT(config.mouse_accel_profile, 0, 2);
+	config.mouse_accel_speed =
+		CLAMP_FLOAT(config.mouse_accel_speed, -1.0f, 1.0f);
+	config.trackpad_accel_profile =
+		CLAMP_INT(config.trackpad_accel_profile, 0, 2);
+	config.trackpad_accel_speed =
+		CLAMP_FLOAT(config.trackpad_accel_speed, -1.0f, 1.0f);
+	config.scroll_method = CLAMP_INT(config.scroll_method, 0, 4);
+	config.scroll_button = CLAMP_INT(config.scroll_button, 272, 279);
+	config.click_method = CLAMP_INT(config.click_method, 0, 2);
+	config.send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);
+	config.button_map = CLAMP_INT(config.button_map, 0, 1);
+	config.axis_scroll_factor =
+		CLAMP_FLOAT(config.axis_scroll_factor, 0.1f, 10.0f);
+	config.trackpad_scroll_factor =
+		CLAMP_FLOAT(config.trackpad_scroll_factor, 0.1f, 10.0f);
+	config.gappih = CLAMP_INT(config.gappih, 0, 1000);
+	config.gappiv = CLAMP_INT(config.gappiv, 0, 1000);
+	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
+	config.gappov = CLAMP_INT(config.gappov, 0, 1000);
+	config.scratchpad_width_ratio =
 		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
-	scratchpad_height_ratio =
+	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
-	borderpx = CLAMP_INT(config.borderpx, 0, 200);
-	smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
+	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
+	config.tab_bar_height = CLAMP_INT(config.tab_bar_height, 0, 500);
+	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
+	config.blur = CLAMP_INT(config.blur, 0, 1);
+	config.blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
+	config.blur_optimized = CLAMP_INT(config.blur_optimized, 0, 1);
+	config.border_radius = CLAMP_INT(config.border_radius, 0, 100);
+	config.blur_params.num_passes =
+		CLAMP_INT(config.blur_params.num_passes, 0, 10);
+	config.blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
+	config.blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
+	config.blur_params.brightness =
+		CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
+	config.blur_params.contrast =
+		CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
+	config.blur_params.saturation =
+		CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
+	config.shadows = CLAMP_INT(config.shadows, 0, 1);
+	config.shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
+	config.layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
+	config.shadows_size = CLAMP_INT(config.shadows_size, 0, 100);
+	config.shadows_blur = CLAMP_INT(config.shadows_blur, 0, 100);
+	config.shadows_position_x =
+		CLAMP_INT(config.shadows_position_x, -1000, 1000);
+	config.shadows_position_y =
+		CLAMP_INT(config.shadows_position_y, -1000, 1000);
+	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
+	config.unfocused_opacity =
+		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
 
-	blur = CLAMP_INT(config.blur, 0, 1);
-	blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
-	blur_optimized = CLAMP_INT(config.blur_optimized, 0, 1);
-	border_radius = CLAMP_INT(config.border_radius, 0, 100);
-	blur_params.num_passes = CLAMP_INT(config.blur_params.num_passes, 0, 10);
-	blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
-	blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
-	blur_params.brightness = CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
-	blur_params.contrast = CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
-	blur_params.saturation = CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
-	shadows = CLAMP_INT(config.shadows, 0, 1);
-	shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
-	layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
-	shadows_size = CLAMP_INT(config.shadows_size, 0, 100);
-	shadows_blur = CLAMP_INT(config.shadows_blur, 0, 100);
-	shadows_position_x = CLAMP_INT(config.shadows_position_x, -1000, 1000);
-	shadows_position_y = CLAMP_INT(config.shadows_position_y, -1000, 1000);
-	focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
-	unfocused_opacity = CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
-	memcpy(shadowscolor, config.shadowscolor, sizeof(shadowscolor));
+	config.tabdata.border_width =
+		CLAMP_INT(config.tabdata.border_width, 0, 100);
+	config.tabdata.corner_radius =
+		CLAMP_INT(config.tabdata.corner_radius, 0, 100);
+	config.tabdata.padding_x = CLAMP_INT(config.tabdata.padding_x, 0, 100);
+	config.tabdata.padding_y = CLAMP_INT(config.tabdata.padding_y, 0, 100);
 
-	// 复制颜色数组
-	memcpy(rootcolor, config.rootcolor, sizeof(rootcolor));
-	memcpy(bordercolor, config.bordercolor, sizeof(bordercolor));
-	memcpy(focuscolor, config.focuscolor, sizeof(focuscolor));
-	memcpy(maximizescreencolor, config.maximizescreencolor,
-		   sizeof(maximizescreencolor));
-	memcpy(urgentcolor, config.urgentcolor, sizeof(urgentcolor));
-	memcpy(scratchpadcolor, config.scratchpadcolor, sizeof(scratchpadcolor));
-	memcpy(globalcolor, config.globalcolor, sizeof(globalcolor));
-	memcpy(overlaycolor, config.overlaycolor, sizeof(overlaycolor));
-
-	// 复制动画曲线
-	memcpy(animation_curve_move, config.animation_curve_move,
-		   sizeof(animation_curve_move));
-	memcpy(animation_curve_open, config.animation_curve_open,
-		   sizeof(animation_curve_open));
-	memcpy(animation_curve_tag, config.animation_curve_tag,
-		   sizeof(animation_curve_tag));
-	memcpy(animation_curve_close, config.animation_curve_close,
-		   sizeof(animation_curve_close));
-	memcpy(animation_curve_focus, config.animation_curve_focus,
-		   sizeof(animation_curve_focus));
-	memcpy(animation_curve_opafadein, config.animation_curve_opafadein,
-		   sizeof(animation_curve_opafadein));
-	memcpy(animation_curve_opafadeout, config.animation_curve_opafadeout,
-		   sizeof(animation_curve_opafadeout));
+	config.jumplabeldata.border_width =
+		CLAMP_INT(config.jumplabeldata.border_width, 0, 100);
+	config.jumplabeldata.corner_radius =
+		CLAMP_INT(config.jumplabeldata.corner_radius, 0, 100);
+	config.jumplabeldata.padding_x =
+		CLAMP_INT(config.jumplabeldata.padding_x, 0, 100);
+	config.jumplabeldata.padding_y =
+		CLAMP_INT(config.jumplabeldata.padding_y, 0, 100);
 }
 
 void set_value_default() {
-	/* animaion */
-	config.animations = animations;					// 是否启用动画
-	config.layer_animations = layer_animations;		// 是否启用layer动画
-	config.animation_fade_in = animation_fade_in;	// Enable animation fade in
-	config.animation_fade_out = animation_fade_out; // Enable animation fade out
-	config.tag_animation_direction = tag_animation_direction; // 标签动画方向
-	config.zoom_initial_ratio = zoom_initial_ratio; // 动画起始窗口比例
-	config.zoom_end_ratio = zoom_end_ratio;			// 动画结束窗口比例
-	config.fadein_begin_opacity =
-		fadein_begin_opacity; // Begin opac window ratio for animations
-	config.fadeout_begin_opacity = fadeout_begin_opacity;
-	config.animation_duration_move =
-		animation_duration_move; // Animation move speed
-	config.animation_duration_open =
-		animation_duration_open; // Animation open speed
-	config.animation_duration_tag =
-		animation_duration_tag; // Animation tag speed
-	config.animation_duration_close =
-		animation_duration_close; // Animation tag speed
-	config.animation_duration_focus =
-		animation_duration_focus; // Animation focus opacity speed
+	config.animations = 1;
+	config.layer_animations = 0;
+	config.animation_fade_in = 1;
+	config.animation_fade_out = 1;
+	config.tag_animation_direction = HORIZONTAL;
+	config.zoom_initial_ratio = 0.4f;
+	config.zoom_end_ratio = 0.8f;
+	config.fadein_begin_opacity = 0.5f;
+	config.fadeout_begin_opacity = 0.5f;
+	config.animation_duration_move = 500;
+	config.animation_duration_open = 400;
+	config.animation_duration_tag = 300;
+	config.animation_duration_close = 300;
+	config.animation_duration_focus = 0;
 
-	/* appearance */
-	config.axis_bind_apply_timeout =
-		axis_bind_apply_timeout; // 滚轮绑定动作的触发的时间间隔
-	config.focus_on_activate =
-		focus_on_activate;				  // 收到窗口激活请求是否自动跳转聚焦
-	config.new_is_master = new_is_master; // 新窗口是否插在头部
-	config.default_mfact = default_mfact; // master 窗口比例
-	config.default_nmaster = default_nmaster; // 默认master数量
-	config.center_master_overspread =
-		center_master_overspread; // 中心master时是否铺满
-	config.center_when_single_stack =
-		center_when_single_stack; // 单个stack时是否居中
+	config.axis_bind_apply_timeout = 100;
+	config.focus_on_activate = 1;
+	config.new_is_master = 1;
+	config.default_mfact = 0.55f;
+	config.default_nmaster = 1;
+	config.center_master_overspread = 0;
+	config.center_when_single_stack = 1;
 
-	config.numlockon = numlockon; // 是否打开右边小键盘
+	config.dwindle_vsplit = 1;
+	config.dwindle_hsplit = 1;
+	config.dwindle_preserve_split = 0;
+	config.dwindle_smart_split = 0;
+	config.dwindle_smart_resize = 0;
+	config.dwindle_drop_simple_split = 1;
+	config.dwindle_manual_split = 0;
+	config.dwindle_split_ratio = 0.5f;
 
-	config.ov_tab_mode = ov_tab_mode;	// alt tab切换模式
-	config.hotarea_size = hotarea_size; // 热区大小,10x10
-	config.hotarea_corner = hotarea_corner;
-	config.enable_hotarea = enable_hotarea; // 是否启用鼠标热区
-	config.smartgaps =
-		smartgaps; /* 1 means no outer gap when there is only one window */
-	config.sloppyfocus = sloppyfocus; /* focus follows mouse */
-	config.gappih = gappih;			  /* horiz inner gap between windows */
-	config.gappiv = gappiv;			  /* vert inner gap between windows */
-	config.gappoh =
-		gappoh; /* horiz outer gap between windows and screen edge */
-	config.gappov = gappov; /* vert outer gap between windows and screen edge */
-	config.scratchpad_width_ratio = scratchpad_width_ratio;
-	config.scratchpad_height_ratio = scratchpad_height_ratio;
+	config.log_level = WLR_ERROR;
+	config.numlockon = 0;
+	config.capslock = 0;
+	config.ov_tab_mode = 1;
+	config.ov_no_resize = 1;
+	config.hotarea_size = 10;
+	config.hotarea_corner = BOTTOM_LEFT;
+	config.enable_hotarea = 0;
+	config.smartgaps = 0;
+	config.sloppyfocus = 1;
+	config.gappih = 5;
+	config.gappiv = 5;
+	config.gappoh = 10;
+	config.gappov = 10;
+	config.scratchpad_width_ratio = 0.8f;
+	config.scratchpad_height_ratio = 0.9f;
 
-	config.scroller_structs = scroller_structs;
-	config.scroller_default_proportion = scroller_default_proportion;
-	config.scroller_default_proportion_single =
-		scroller_default_proportion_single;
-	config.scroller_ignore_proportion_single =
-		scroller_ignore_proportion_single;
-	config.scroller_focus_center = scroller_focus_center;
-	config.scroller_prefer_center = scroller_prefer_center;
-	config.edge_scroller_pointer_focus = edge_scroller_pointer_focus;
-	config.focus_cross_monitor = focus_cross_monitor;
-	config.exchange_cross_monitor = exchange_cross_monitor;
-	config.scratchpad_cross_monitor = scratchpad_cross_monitor;
-	config.focus_cross_tag = focus_cross_tag;
-	config.axis_scroll_factor = axis_scroll_factor;
-	config.view_current_to_back = view_current_to_back;
-	config.single_scratchpad = single_scratchpad;
-	config.xwayland_persistence = xwayland_persistence;
-	config.syncobj_enable = syncobj_enable;
-	config.allow_tearing = allow_tearing;
-	config.allow_shortcuts_inhibit = allow_shortcuts_inhibit;
-	config.allow_lock_transparent = allow_lock_transparent;
-	config.no_border_when_single = no_border_when_single;
-	config.no_radius_when_single = no_radius_when_single;
-	config.snap_distance = snap_distance;
-	config.drag_tile_to_tile = drag_tile_to_tile;
-	config.enable_floating_snap = enable_floating_snap;
-	config.swipe_min_threshold = swipe_min_threshold;
+	config.scroller_structs = 20;
+	config.scroller_default_proportion = 0.9f;
+	config.scroller_default_proportion_single = 1.0f;
+	config.scroller_ignore_proportion_single = 1;
+	config.scroller_focus_center = 0;
+	config.scroller_prefer_center = 0;
+	config.scroller_prefer_overspread = 1;
+	config.edge_scroller_pointer_focus = 1;
+	config.edge_scroller_focus_allow_speed = 0.0f;
+	config.focus_cross_monitor = 0;
+	config.exchange_cross_monitor = 0;
+	config.scratchpad_cross_monitor = 0;
+	config.focus_cross_tag = 0;
+	config.axis_scroll_factor = 1.0;
+	config.trackpad_scroll_factor = 1.0;
+	config.view_current_to_back = 0;
+	config.single_scratchpad = 1;
+	config.xwayland_persistence = 1;
+	config.syncobj_enable = 0;
+	config.tag_carousel = 0;
+	config.drag_tile_refresh_interval = 8.0f;
+	config.drag_floating_refresh_interval = 8.0f;
+	config.allow_tearing = TEARING_DISABLED;
+	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
+	config.allow_lock_transparent = 0;
+	config.no_border_when_single = 0;
+	config.no_radius_when_single = 0;
+	config.snap_distance = 30;
+	config.drag_tile_to_tile = 0;
+	config.drag_tile_small = 1;
+	config.enable_floating_snap = 0;
+	config.swipe_min_threshold = 1;
 
-	config.idleinhibit_ignore_visible =
-		idleinhibit_ignore_visible; /* 1 means idle inhibitors will
-									  disable idle tracking even if it's
-									  surface isn't visible
-									*/
+	config.idleinhibit_ignore_visible = 0;
 
-	config.borderpx = borderpx;
-	config.overviewgappi = overviewgappi; /* overview时 窗口与边缘 缝隙大小 */
-	config.overviewgappo = overviewgappo; /* overview时 窗口与窗口 缝隙大小 */
-	config.cursor_hide_timeout = cursor_hide_timeout;
+	config.borderpx = 4;
+	config.tab_bar_height = 50;
+	config.overviewgappi = 5;
+	config.overviewgappo = 30;
+	config.cursor_hide_timeout = 0;
+	config.cursor_hide_on_keypress = 0;
 
-	config.warpcursor = warpcursor; /* Warp cursor to focused client */
-	config.drag_corner = drag_corner;
-	config.drag_warp_cursor = drag_warp_cursor;
+	config.warpcursor = 1;
+	config.drag_corner = 3;
+	config.drag_warp_cursor = 1;
 
-	config.repeat_rate = repeat_rate;
-	config.repeat_delay = repeat_delay;
+	config.repeat_rate = 25;
+	config.repeat_delay = 600;
 
-	/* Trackpad */
-	config.disable_trackpad = disable_trackpad;
-	config.tap_to_click = tap_to_click;
-	config.tap_and_drag = tap_and_drag;
-	config.drag_lock = drag_lock;
-	config.mouse_natural_scrolling = mouse_natural_scrolling;
-	config.cursor_size = cursor_size;
-	config.trackpad_natural_scrolling = trackpad_natural_scrolling;
-	config.disable_while_typing = disable_while_typing;
-	config.left_handed = left_handed;
-	config.middle_button_emulation = middle_button_emulation;
-	config.accel_profile = accel_profile;
-	config.accel_speed = accel_speed;
-	config.scroll_method = scroll_method;
-	config.scroll_button = scroll_button;
-	config.click_method = click_method;
-	config.send_events_mode = send_events_mode;
-	config.button_map = button_map;
+	config.disable_trackpad = 0;
+	config.tap_to_click = 1;
+	config.tap_and_drag = 1;
+	config.drag_lock = 1;
+	config.mouse_natural_scrolling = 0;
+	config.cursor_size = 24;
+	config.trackpad_natural_scrolling = 0;
+	config.disable_while_typing = 1;
+	config.left_handed = 0;
+	config.middle_button_emulation = 0;
+	config.mouse_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.mouse_accel_speed = 0.0;
+	config.trackpad_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.trackpad_accel_speed = 0.0;
+	config.scroll_method = LIBINPUT_CONFIG_SCROLL_2FG;
+	config.scroll_button = 274;
+	config.click_method = LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
+	config.send_events_mode = LIBINPUT_CONFIG_SEND_EVENTS_ENABLED;
+	config.button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 
-	config.blur = blur;
-	config.blur_layer = blur_layer;
-	config.blur_optimized = blur_optimized;
-	config.border_radius = border_radius;
-	config.blur_params.num_passes = blur_params_num_passes;
-	config.blur_params.radius = blur_params_radius;
-	config.blur_params.noise = blur_params_noise;
-	config.blur_params.brightness = blur_params_brightness;
-	config.blur_params.contrast = blur_params_contrast;
-	config.blur_params.saturation = blur_params_saturation;
-	config.shadows = shadows;
-	config.shadow_only_floating = shadow_only_floating;
-	config.layer_shadows = layer_shadows;
-	config.shadows_size = shadows_size;
-	config.shadows_blur = shadows_blur;
-	config.shadows_position_x = shadows_position_x;
-	config.shadows_position_y = shadows_position_y;
-	config.focused_opacity = focused_opacity;
-	config.unfocused_opacity = unfocused_opacity;
-	memcpy(config.shadowscolor, shadowscolor, sizeof(shadowscolor));
+	config.blur = 0;
+	config.blur_layer = 0;
+	config.blur_optimized = 1;
+	config.border_radius = 0;
+	config.border_radius_location_default = CORNER_LOCATION_ALL;
+	config.blur_params.num_passes = 1;
+	config.blur_params.radius = 5;
+	config.blur_params.noise = 0.02f;
+	config.blur_params.brightness = 0.9f;
+	config.blur_params.contrast = 0.9f;
+	config.blur_params.saturation = 1.2f;
+	config.shadows = 0;
+	config.shadow_only_floating = 1;
+	config.layer_shadows = 0;
+	config.shadows_size = 10;
+	config.shadows_blur = 15.0f;
+	config.shadows_position_x = 0;
+	config.shadows_position_y = 0;
+	config.focused_opacity = 1.0f;
+	config.unfocused_opacity = 1.0f;
 
-	memcpy(config.animation_curve_move, animation_curve_move,
-		   sizeof(animation_curve_move));
-	memcpy(config.animation_curve_open, animation_curve_open,
-		   sizeof(animation_curve_open));
-	memcpy(config.animation_curve_tag, animation_curve_tag,
-		   sizeof(animation_curve_tag));
-	memcpy(config.animation_curve_close, animation_curve_close,
-		   sizeof(animation_curve_close));
-	memcpy(config.animation_curve_focus, animation_curve_focus,
-		   sizeof(animation_curve_focus));
-	memcpy(config.animation_curve_opafadein, animation_curve_opafadein,
-		   sizeof(animation_curve_opafadein));
-	memcpy(config.animation_curve_opafadeout, animation_curve_opafadeout,
-		   sizeof(animation_curve_opafadeout));
+	config.shadowscolor[0] = 0.0f;
+	config.shadowscolor[1] = 0.0f;
+	config.shadowscolor[2] = 0.0f;
+	config.shadowscolor[3] = 1.0f;
 
-	memcpy(config.rootcolor, rootcolor, sizeof(rootcolor));
-	memcpy(config.bordercolor, bordercolor, sizeof(bordercolor));
-	memcpy(config.focuscolor, focuscolor, sizeof(focuscolor));
-	memcpy(config.maximizescreencolor, maximizescreencolor,
-		   sizeof(maximizescreencolor));
-	memcpy(config.urgentcolor, urgentcolor, sizeof(urgentcolor));
-	memcpy(config.scratchpadcolor, scratchpadcolor, sizeof(scratchpadcolor));
-	memcpy(config.globalcolor, globalcolor, sizeof(globalcolor));
-	memcpy(config.overlaycolor, overlaycolor, sizeof(overlaycolor));
+	config.animation_curve_move[0] = 0.46;
+	config.animation_curve_move[1] = 1.0;
+	config.animation_curve_move[2] = 0.29;
+	config.animation_curve_move[3] = 0.99;
+	config.animation_curve_open[0] = 0.46;
+	config.animation_curve_open[1] = 1.0;
+	config.animation_curve_open[2] = 0.29;
+	config.animation_curve_open[3] = 0.99;
+	config.animation_curve_tag[0] = 0.46;
+	config.animation_curve_tag[1] = 1.0;
+	config.animation_curve_tag[2] = 0.29;
+	config.animation_curve_tag[3] = 0.99;
+	config.animation_curve_close[0] = 0.46;
+	config.animation_curve_close[1] = 1.0;
+	config.animation_curve_close[2] = 0.29;
+	config.animation_curve_close[3] = 0.99;
+	config.animation_curve_focus[0] = 0.46;
+	config.animation_curve_focus[1] = 1.0;
+	config.animation_curve_focus[2] = 0.29;
+	config.animation_curve_focus[3] = 0.99;
+	config.animation_curve_opafadein[0] = 0.46;
+	config.animation_curve_opafadein[1] = 1.0;
+	config.animation_curve_opafadein[2] = 0.29;
+	config.animation_curve_opafadein[3] = 0.99;
+	config.animation_curve_opafadeout[0] = 0.5;
+	config.animation_curve_opafadeout[1] = 0.5;
+	config.animation_curve_opafadeout[2] = 0.5;
+	config.animation_curve_opafadeout[3] = 0.5;
+
+	config.tabdata.fg_color[0] = 0xc4 / 255.0f;
+	config.tabdata.fg_color[1] = 0x93 / 255.0f;
+	config.tabdata.fg_color[2] = 0x9d / 255.0f;
+	config.tabdata.fg_color[3] = 1.0f;
+	config.tabdata.bg_color[0] = 0x32 / 255.0f;
+	config.tabdata.bg_color[1] = 0x32 / 255.0f;
+	config.tabdata.bg_color[2] = 0x32 / 255.0f;
+	config.tabdata.bg_color[3] = 1.0f;
+	config.tabdata.focus_fg_color[0] = 0xed / 255.0f;
+	config.tabdata.focus_fg_color[1] = 0xa6 / 255.0f;
+	config.tabdata.focus_fg_color[2] = 0xb4 / 255.0f;
+	config.tabdata.focus_fg_color[3] = 1.0f;
+	config.tabdata.focus_bg_color[0] = 0x4e / 255.0f;
+	config.tabdata.focus_bg_color[1] = 0x45 / 255.0f;
+	config.tabdata.focus_bg_color[2] = 0x3c / 255.0f;
+	config.tabdata.focus_bg_color[3] = 1.0f;
+	config.tabdata.border_color[0] = 0x8b / 255.0f;
+	config.tabdata.border_color[1] = 0xaa / 255.0f;
+	config.tabdata.border_color[2] = 0x9b / 255.0f;
+	config.tabdata.border_color[3] = 1.0f;
+	config.tabdata.border_width = 4;
+	config.tabdata.corner_radius = 5;
+	config.tabdata.padding_x = 0;
+	config.tabdata.padding_y = 0;
+
+	config.jumplabeldata.fg_color[0] = 0xc4 / 255.0f;
+	config.jumplabeldata.fg_color[1] = 0x93 / 255.0f;
+	config.jumplabeldata.fg_color[2] = 0x9d / 255.0f;
+	config.jumplabeldata.fg_color[3] = 1.0f;
+	config.jumplabeldata.bg_color[0] = 0x32 / 255.0f;
+	config.jumplabeldata.bg_color[1] = 0x32 / 255.0f;
+	config.jumplabeldata.bg_color[2] = 0x32 / 255.0f;
+	config.jumplabeldata.bg_color[3] = 1.0f;
+	config.jumplabeldata.focus_fg_color[0] = 0xed / 255.0f;
+	config.jumplabeldata.focus_fg_color[1] = 0xa6 / 255.0f;
+	config.jumplabeldata.focus_fg_color[2] = 0xb4 / 255.0f;
+	config.jumplabeldata.focus_fg_color[3] = 1.0f;
+	config.jumplabeldata.focus_bg_color[0] = 0x4e / 255.0f;
+	config.jumplabeldata.focus_bg_color[1] = 0x45 / 255.0f;
+	config.jumplabeldata.focus_bg_color[2] = 0x3c / 255.0f;
+	config.jumplabeldata.focus_bg_color[3] = 1.0f;
+	config.jumplabeldata.border_color[0] = 0x8b / 255.0f;
+	config.jumplabeldata.border_color[1] = 0xaa / 255.0f;
+	config.jumplabeldata.border_color[2] = 0x9b / 255.0f;
+	config.jumplabeldata.border_color[3] = 1.0f;
+	config.jumplabeldata.border_width = 4;
+	config.jumplabeldata.corner_radius = 5;
+	config.jumplabeldata.padding_x = 10;
+	config.jumplabeldata.padding_y = 10;
+
+	config.rootcolor[0] = 0x32 / 255.0f;
+	config.rootcolor[1] = 0x32 / 255.0f;
+	config.rootcolor[2] = 0x32 / 255.0f;
+	config.rootcolor[3] = 1.0f;
+	config.bordercolor[0] = 0x44 / 255.0f;
+	config.bordercolor[1] = 0x44 / 255.0f;
+	config.bordercolor[2] = 0x44 / 255.0f;
+	config.bordercolor[3] = 1.0f;
+	config.dropcolor[0] = 0xd5 / 255.0f;
+	config.dropcolor[1] = 0x89 / 255.0f;
+	config.dropcolor[2] = 0x9d / 255.0f;
+	config.dropcolor[3] = 0.5f;
+	config.splitcolor[0] = 0xeb / 255.0f;
+	config.splitcolor[1] = 0x44 / 255.0f;
+	config.splitcolor[2] = 0x1e / 255.0f;
+	config.splitcolor[3] = 1.0f;
+	config.focuscolor[0] = 0xc6 / 255.0f;
+	config.focuscolor[1] = 0x6b / 255.0f;
+	config.focuscolor[2] = 0x25 / 255.0f;
+	config.focuscolor[3] = 1.0f;
+	config.maximizescreencolor[0] = 0x89 / 255.0f;
+	config.maximizescreencolor[1] = 0xaa / 255.0f;
+	config.maximizescreencolor[2] = 0x61 / 255.0f;
+	config.maximizescreencolor[3] = 1.0f;
+	config.urgentcolor[0] = 0xad / 255.0f;
+	config.urgentcolor[1] = 0x40 / 255.0f;
+	config.urgentcolor[2] = 0x1f / 255.0f;
+	config.urgentcolor[3] = 1.0f;
+	config.scratchpadcolor[0] = 0x51 / 255.0f;
+	config.scratchpadcolor[1] = 0x6c / 255.0f;
+	config.scratchpadcolor[2] = 0x93 / 255.0f;
+	config.scratchpadcolor[3] = 1.0f;
+	config.globalcolor[0] = 0xb1 / 255.0f;
+	config.globalcolor[1] = 0x53 / 255.0f;
+	config.globalcolor[2] = 0xa7 / 255.0f;
+	config.globalcolor[3] = 1.0f;
+	config.overlaycolor[0] = 0x14 / 255.0f;
+	config.overlaycolor[1] = 0xa5 / 255.0f;
+	config.overlaycolor[2] = 0x7c / 255.0f;
+	config.overlaycolor[3] = 1.0f;
 }
 
 void set_default_key_bindings(Config *config) {
@@ -3059,19 +3908,20 @@ void set_default_key_bindings(Config *config) {
 	config->key_bindings_count += default_key_bindings_count;
 }
 
-void parse_config(void) {
+bool parse_config(void) {
 
 	char filename[1024];
 
 	free_config();
 
-	// 重置config结构体，确保所有指针初始化为NULL
 	memset(&config, 0, sizeof(config));
-	memset(&xkb_rules_rules, 0, sizeof(xkb_rules_rules));
-	memset(&xkb_rules_model, 0, sizeof(xkb_rules_model));
-	memset(&xkb_rules_layout, 0, sizeof(xkb_rules_layout));
-	memset(&xkb_rules_variant, 0, sizeof(xkb_rules_variant));
-	memset(&xkb_rules_options, 0, sizeof(xkb_rules_options));
+
+	// 重新将xkb_rules指针指向静态数组
+	config.xkb_rules.layout = config.xkb_rules_layout;
+	config.xkb_rules.variant = config.xkb_rules_variant;
+	config.xkb_rules.options = config.xkb_rules_options;
+	config.xkb_rules.rules = config.xkb_rules_rules;
+	config.xkb_rules.model = config.xkb_rules_model;
 
 	// 初始化动态数组的指针为NULL，避免野指针
 	config.window_rules = NULL;
@@ -3101,6 +3951,9 @@ void parse_config(void) {
 	config.tag_rules = NULL;
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
+	config.jumplabeldata.font_desc = NULL;
+	config.tabdata.font_desc = NULL;
+	config.tablet_map_to_mon = NULL;
 	strcpy(config.keymode, "default");
 
 	create_config_keymap();
@@ -3112,7 +3965,7 @@ void parse_config(void) {
 		const char *homedir = getenv("HOME");
 		if (!homedir) {
 			// 如果获取失败，则无法继续
-			return;
+			return false;
 		}
 		// 构建日志文件路径
 		snprintf(filename, sizeof(filename), "%s/.config/mango/config.conf",
@@ -3126,14 +3979,16 @@ void parse_config(void) {
 		}
 	}
 
+	bool parse_correct = true;
 	set_value_default();
-	parse_config_file(&config, filename);
+	parse_correct = parse_config_file(&config, filename, true);
 	set_default_key_bindings(&config);
 	override_config();
+	return parse_correct;
 }
 
 void reset_blur_params(void) {
-	if (blur) {
+	if (config.blur) {
 		Monitor *m = NULL;
 		wl_list_for_each(m, &mons, link) {
 			if (m->blur != NULL) {
@@ -3143,9 +3998,9 @@ void reset_blur_params(void) {
 			wlr_scene_node_reparent(&m->blur->node, layers[LyrBlur]);
 			wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 			wlr_scene_set_blur_data(
-				scene, blur_params.num_passes, blur_params.radius,
-				blur_params.noise, blur_params.brightness, blur_params.contrast,
-				blur_params.saturation);
+				scene, config.blur_params.num_passes, config.blur_params.radius,
+				config.blur_params.noise, config.blur_params.brightness,
+				config.blur_params.contrast, config.blur_params.saturation);
 		}
 	} else {
 		Monitor *m = NULL;
@@ -3162,63 +4017,59 @@ void reset_blur_params(void) {
 void reapply_monitor_rules(void) {
 	ConfigMonitorRule *mr;
 	Monitor *m = NULL;
-	int32_t ji, vrr;
+	int32_t ji, vrr, custom;
 	int32_t mx, my;
 	struct wlr_output_state state;
-	struct wlr_output_mode *internal_mode = NULL;
-	wlr_output_state_init(&state);
 
 	wl_list_for_each(m, &mons, link) {
-		if (!m->wlr_output->enabled) {
+		if (!m->wlr_output->enabled)
 			continue;
-		}
+
+		wlr_output_state_init(&state);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
 				break;
 
 			mr = &config.monitor_rules[ji];
-			if (regex_match(mr->name, m->wlr_output->name)) {
 
+			if (monitor_matches_rule(m, mr)) {
 				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
+				custom = mr->custom >= 0 ? mr->custom : 0;
 
-				if (mr->width > 0 && mr->height > 0 && mr->refresh > 0) {
-					internal_mode = get_nearest_output_mode(
-						m->wlr_output, mr->width, mr->height, mr->refresh);
-					if (internal_mode) {
-						wlr_output_state_set_mode(&state, internal_mode);
-					} else if (wlr_output_is_headless(m->wlr_output)) {
-						wlr_output_state_set_custom_mode(
-							&state, mr->width, mr->height,
-							(int32_t)roundf(mr->refresh * 1000));
-					}
-				}
-
-				if (vrr) {
-					enable_adaptive_sync(m, &state);
-				} else {
-					wlr_output_state_set_adaptive_sync_enabled(&state, false);
-				}
-
-				wlr_output_state_set_scale(&state, mr->scale);
-				wlr_output_state_set_transform(&state, mr->rr);
+				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
+				wlr_output_commit_state(m->wlr_output, &state);
+				break;
 			}
 		}
 
-		wlr_output_commit_state(m->wlr_output, &state);
 		wlr_output_state_finish(&state);
-		updatemons(NULL, NULL);
+	}
+	updatemons(NULL, NULL);
+}
+
+void set_xcursor_env() {
+	if (config.cursor_size > 0) {
+		char size_str[16];
+		snprintf(size_str, sizeof(size_str), "%d", config.cursor_size);
+		setenv("XCURSOR_SIZE", size_str, 1);
+	} else {
+		setenv("XCURSOR_SIZE", "24", 1);
+	}
+
+	if (config.cursor_theme) {
+		setenv("XCURSOR_THEME", config.cursor_theme, 1);
 	}
 }
 
 void reapply_cursor_style(void) {
-	if (hide_source) {
-		wl_event_source_timer_update(hide_source, 0);
-		wl_event_source_remove(hide_source);
-		hide_source = NULL;
+	if (hide_cursor_source) {
+		wl_event_source_timer_update(hide_cursor_source, 0);
+		wl_event_source_remove(hide_cursor_source);
+		hide_cursor_source = NULL;
 	}
 
 	wlr_cursor_unset_image(cursor);
@@ -3230,7 +4081,10 @@ void reapply_cursor_style(void) {
 		cursor_mgr = NULL;
 	}
 
-	cursor_mgr = wlr_xcursor_manager_create(config.cursor_theme, cursor_size);
+	set_xcursor_env();
+
+	cursor_mgr =
+		wlr_xcursor_manager_create(config.cursor_theme, config.cursor_size);
 
 	Monitor *m = NULL;
 	wl_list_for_each(m, &mons, link) {
@@ -3239,24 +4093,37 @@ void reapply_cursor_style(void) {
 
 	wlr_cursor_set_xcursor(cursor, cursor_mgr, "left_ptr");
 
-	hide_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
-										  hidecursor, cursor);
+	hide_cursor_source = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
+												 hidecursor, cursor);
 	if (cursor_hidden) {
 		wlr_cursor_unset_image(cursor);
 	} else {
-		wl_event_source_timer_update(hide_source, cursor_hide_timeout * 1000);
+		wl_event_source_timer_update(hide_cursor_source,
+									 config.cursor_hide_timeout * 1000);
 	}
 }
 
-void reapply_border(void) {
+void reapply_rootbg(void) {
+	wlr_scene_rect_set_color(root_bg, config.rootcolor);
+}
+
+void reapply_property(void) {
 	Client *c = NULL;
 
 	// reset border width when config change
 	wl_list_for_each(c, &clients, link) {
 		if (c && !c->iskilling) {
 			if (!c->isnoborder && !c->isfullscreen) {
-				c->bw = borderpx;
+				c->bw = config.borderpx;
 			}
+
+			mango_jump_label_node_apply_config(c->jump_label_node,
+											   &config.jumplabeldata);
+			mango_tab_bar_node_apply_config(c->tab_bar_node, &config.tabdata);
+
+			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
+			wlr_scene_rect_set_color(c->splitindicator[0], config.splitcolor);
+			wlr_scene_rect_set_color(c->splitindicator[1], config.splitcolor);
 		}
 	}
 }
@@ -3268,7 +4135,7 @@ void reapply_keyboard(void) {
 			continue;
 		}
 		wlr_keyboard_set_repeat_info((struct wlr_keyboard *)id->device_data,
-									 repeat_rate, repeat_delay);
+									 config.repeat_rate, config.repeat_delay);
 	}
 }
 
@@ -3297,12 +4164,12 @@ void reapply_master(void) {
 			if (!m->wlr_output->enabled) {
 				continue;
 			}
-			m->pertag->nmasters[i] = default_nmaster;
-			m->pertag->mfacts[i] = default_mfact;
-			m->gappih = gappih;
-			m->gappiv = gappiv;
-			m->gappoh = gappoh;
-			m->gappov = gappov;
+			m->pertag->nmasters[i] = config.default_nmaster;
+			m->pertag->mfacts[i] = config.default_mfact;
+			m->gappih = config.gappih;
+			m->gappiv = config.gappiv;
+			m->gappoh = config.gappoh;
+			m->gappov = config.gappov;
 		}
 	}
 }
@@ -3311,19 +4178,53 @@ void parse_tagrule(Monitor *m) {
 	int32_t i, jk;
 	ConfigTagRule tr;
 	Client *c = NULL;
+	bool match_rule = false;
 
 	for (i = 0; i <= LENGTH(tags); i++) {
-		m->pertag->nmasters[i] = default_nmaster;
-		m->pertag->mfacts[i] = default_mfact;
+		m->pertag->nmasters[i] = config.default_nmaster;
+		m->pertag->mfacts[i] = config.default_mfact;
+		m->pertag->scroller_default_proportion[i] =
+			config.scroller_default_proportion;
+		m->pertag->scroller_default_proportion_single[i] =
+			config.scroller_default_proportion_single;
+		m->pertag->scroller_ignore_proportion_single[i] =
+			config.scroller_ignore_proportion_single;
 	}
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 
 		tr = config.tag_rules[i];
 
-		if (config.tag_rules_count > 0 &&
-			(!tr.monitor_name ||
-			 regex_match(tr.monitor_name, m->wlr_output->name))) {
+		match_rule = true;
+
+		if (tr.monitor_name != NULL) {
+			if (!regex_match(tr.monitor_name, m->wlr_output->name)) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_make != NULL) {
+			if (m->wlr_output->make == NULL ||
+				strcmp(tr.monitor_make, m->wlr_output->make) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_model != NULL) {
+			if (m->wlr_output->model == NULL ||
+				strcmp(tr.monitor_model, m->wlr_output->model) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (tr.monitor_serial != NULL) {
+			if (m->wlr_output->serial == NULL ||
+				strcmp(tr.monitor_serial, m->wlr_output->serial) != 0) {
+				match_rule = false;
+			}
+		}
+
+		if (config.tag_rules_count > 0 && match_rule) {
 
 			for (jk = 0; jk < LENGTH(layouts); jk++) {
 				if (tr.layout_name &&
@@ -3340,6 +4241,17 @@ void parse_tagrule(Monitor *m) {
 				m->pertag->mfacts[tr.id] = tr.mfact;
 			if (tr.no_render_border >= 0)
 				m->pertag->no_render_border[tr.id] = tr.no_render_border;
+			if (tr.open_as_floating >= 0)
+				m->pertag->open_as_floating[tr.id] = tr.open_as_floating;
+			if (tr.scroller_default_proportion > 0.0f)
+				m->pertag->scroller_default_proportion[tr.id] =
+					tr.scroller_default_proportion;
+			if (tr.scroller_default_proportion_single > 0.0f)
+				m->pertag->scroller_default_proportion_single[tr.id] =
+					tr.scroller_default_proportion_single;
+			if (tr.scroller_ignore_proportion_single >= 0)
+				m->pertag->scroller_ignore_proportion_single[tr.id] =
+					tr.scroller_ignore_proportion_single;
 		}
 	}
 
@@ -3372,7 +4284,8 @@ void reset_option(void) {
 	run_exec();
 
 	reapply_cursor_style();
-	reapply_border();
+	reapply_property();
+	reapply_rootbg();
 	reapply_keyboard();
 	reapply_pointer();
 	reapply_master();
@@ -3386,6 +4299,6 @@ void reset_option(void) {
 int32_t reload_config(const Arg *arg) {
 	parse_config();
 	reset_option();
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 	return 1;
 }

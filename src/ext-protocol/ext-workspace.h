@@ -17,6 +17,10 @@ struct workspace {
 struct wlr_ext_workspace_manager_v1 *ext_manager;
 struct wl_list workspaces;
 
+static void handle_ext_commit(struct wl_listener *listener, void *data);
+static struct wl_listener ext_manager_commit_listener = {.notify =
+															 handle_ext_commit};
+
 void goto_workspace(struct workspace *target) {
 	uint32_t tag;
 	tag = 1 << (target->tag - 1);
@@ -184,10 +188,10 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 	int32_t i;
 
 	if (m->isoverview) {
+		add_workspace_by_tag(0, m);
 		for (i = 1; i <= LENGTH(tags); i++) {
 			remove_workspace_by_tag(i, m);
 		}
-		add_workspace_by_tag(0, m);
 	} else {
 		remove_workspace_by_tag(0, m);
 		for (i = 1; i <= LENGTH(tags); i++) {
@@ -203,7 +207,5 @@ void workspaces_init() {
 
 	wl_list_init(&workspaces);
 
-	static struct wl_listener commit_listener;
-	commit_listener.notify = handle_ext_commit;
-	wl_signal_add(&ext_manager->events.commit, &commit_listener);
+	wl_signal_add(&ext_manager->events.commit, &ext_manager_commit_listener);
 }
