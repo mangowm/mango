@@ -4547,6 +4547,11 @@ void init_client_properties(Client *c) {
 		   sizeof(c->opacity_animation.current_border_color));
 	c->opacity_animation.initial_opacity = c->unfocused_opacity;
 	c->opacity_animation.current_opacity = c->unfocused_opacity;
+	c->animation.tagining = false;
+	c->animation.running = false;
+	c->animation.overining = false;
+	c->animation.tagouting = false;
+	c->animation.tagouted = false;
 }
 
 void // old fix to 0.5
