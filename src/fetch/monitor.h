@@ -96,3 +96,12 @@ Monitor *xytomon(double x, double y) {
 	struct wlr_output *o = wlr_output_layout_output_at(output_layout, x, y);
 	return o ? o->data : NULL;
 }
+
+Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly) {
+	double closest_x, closest_y;
+	wlr_output_layout_closest_point(output_layout, NULL, lx, ly, &closest_x,
+									&closest_y);
+
+	return output_from_wlr_output(
+		wlr_output_layout_output_at(output_layout, closest_x, closest_y));
+}
