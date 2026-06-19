@@ -12,7 +12,8 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 struct fx_corner_radii set_client_corner_location(Client *c) {
 	struct fx_corner_radii current_corner_location =
 		corner_radii_all(config.border_radius);
-	struct wlr_box target_geom = config.animations ? c->animation.current : c->geom;
+	struct wlr_box target_geom =
+		config.animations ? c->animation.current : c->geom;
 	if (target_geom.x + config.border_radius <= c->mon->m.x) {
 		current_corner_location.top_left = 0;	 // 清除左标志位
 		current_corner_location.bottom_left = 0; // 清除左标志位
@@ -240,7 +241,6 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 		return;
 
 	wlr_scene_buffer_set_corner_radii(buffer, buffer_data->corner_location);
-
 }
 
 void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
@@ -288,7 +288,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c == grabc)
 		data.should_scale = false;
 
-	if (c->isfullscreen || (no_radius_when_single && c->mon &&
+	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)) {
 		data.corner_location = corner_radii_none();
 	}
@@ -420,10 +420,21 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 }
 
 void client_draw_blur(Client *c, struct wlr_box clip_box, struct ivec2 offset) {
-	if (blur && !c->noblur) {
-		wlr_scene_node_set_position(&c->blur->node, offset.x, offset.y);
-		wlr_scene_blur_set_size(c->blur, clip_box.width - c->bw,
-								clip_box.height - c->bw);
+
+	if (c->isfullscreen) {
+		if (c->blur->node.enabled) {
+			wlr_scene_node_set_enabled(&c->blur->node, false);
+		}
+		return;
+	} else {
+		if (config.blur && !c->noblur) {
+			wlr_scene_node_set_enabled(&c->blur->node, true);
+			wlr_scene_node_set_position(&c->blur->node, offset.x, offset.y);
+			wlr_scene_blur_set_size(c->blur, clip_box.width - c->bw,
+									clip_box.height - c->bw);
+		} else {
+			wlr_scene_node_set_enabled(&c->blur->node, false);
+		}
 	}
 }
 
@@ -538,7 +549,8 @@ void apply_border(Client *c) {
 
 	if (c->isfullscreen) {
 		if (c->border->node.enabled) {
-			wlr_scene_node_set_position(&c->scene_surface->node, 0, 0);
+			wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
+			wlr_scene_node_set_enabled(&c->splitindicator[1]->node, false);
 			wlr_scene_node_set_enabled(&c->border->node, false);
 		}
 		return;
@@ -552,7 +564,7 @@ void apply_border(Client *c) {
 	apply_split_border(c, hit_no_border);
 
 	struct fx_corner_radii current_corner_location =
-		c->isfullscreen || (no_radius_when_single && c->mon &&
+		c->isfullscreen || (config.no_radius_when_single && c->mon &&
 							c->mon->visible_tiling_clients == 1)
 			? corner_radii_none()
 			: set_client_corner_location(c);
@@ -1320,7 +1332,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		return;
 
 	struct wlr_box *bbox;
-	struct wlr_box clip;
+	struct wlr_box clip_box;
 
 	if (!c->mon)
 		return;
@@ -1411,12 +1423,16 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 			c->geom;
 		wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
 
-		client_draw_shadow(c);
-		apply_shield(c, clip);
+		struct ivec2 offset = clip_to_hide(c, &clip_box);
+
 		apply_border(c);
-		client_get_clip(c, &clip);
-		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
-		if (blur && !c->noblur)
+		client_draw_shadow(c);
+		apply_shield(c, clip_box);
+		client_draw_blur(c, clip_box, offset);
+
+		client_get_clip(c, &clip_box);
+		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+		if (config.blur && !c->noblur)
 			wlr_scene_blur_set_size(c->blur,
 									c->animation.current.width - 2 * c->bw,
 									c->animation.current.height - 2 * c->bw);
@@ -1549,14 +1565,14 @@ bool client_apply_focus_opacity(Client *c) {
 			   sizeof(c->opacity_animation.current_border_color));
 		c->opacity_animation.current_opacity = target_opacity;
 		client_set_opacity(c, target_opacity);
-		if (blur && !c->noblur && !blur_optimized) {
+		if (config.blur && !c->noblur && !config.blur_optimized) {
 			wlr_scene_blur_set_strength(
-				c->blur, MIN(percent * (1.0 - fadein_begin_opacity) +
-								 fadein_begin_opacity,
+				c->blur, MIN(percent * (1.0 - config.fadein_begin_opacity) +
+								 config.fadein_begin_opacity,
 							 1.0));
 			wlr_scene_blur_set_alpha(
-				c->blur, MIN(percent * (1.0 - fadein_begin_opacity) +
-								 fadein_begin_opacity,
+				c->blur, MIN(percent * (1.0 - config.fadein_begin_opacity) +
+								 config.fadein_begin_opacity,
 							 1.0));
 		}
 		client_set_border_color(c, c->opacity_animation.target_border_color);

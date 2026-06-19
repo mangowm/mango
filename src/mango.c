@@ -2744,19 +2744,6 @@ static void iter_layer_scene_buffers(struct wlr_scene_buffer *buffer,
 }
 
 void layer_flush_blur_background(LayerSurface *l) {
-	if (!blur)
-		return;
-
-	// 如果背景层发生变化,标记优化的模糊背景缓存需要更新
-	if (l->layer_surface->current.layer ==
-		ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
-		if (l->mon) {
-			wlr_scene_optimized_blur_mark_dirty(l->mon->blur);
-		}
-	}
-}
-
-void layer_flush_blur_background(LayerSurface *l) {
 	if (!config.blur)
 		return;
 
@@ -2813,8 +2800,9 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	if (layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 		layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
 		if (layer_surface->current.exclusive_zone == 0) {
-			l->shadow = wlr_scene_shadow_create(l->scene, 0, 0, border_radius,
-												shadows_blur, shadowscolor);
+			l->shadow = wlr_scene_shadow_create(
+				l->scene, 0, 0, config.border_radius, config.shadows_blur,
+				config.shadowscolor);
 			wlr_scene_node_lower_to_bottom(&l->shadow->node);
 			wlr_scene_node_set_enabled(&l->shadow->node, true);
 		}
@@ -4459,14 +4447,11 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 		return;
 
 	if (config.blur && c && !c->noblur) {
-		wlr_scene_node_set_enabled(&c->blur->node, true);
-		if (blur_optimized) {
+		if (config.blur_optimized) {
 			wlr_scene_blur_set_should_only_blur_bottom_layer(c->blur, true);
 		} else {
 			wlr_scene_blur_set_should_only_blur_bottom_layer(c->blur, false);
 		}
-	} else {
-		wlr_scene_node_set_enabled(&c->blur->node, false);
 	}
 }
 
@@ -4656,7 +4641,8 @@ mapnotify(struct wl_listener *listener, void *data) {
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
 	wlr_scene_node_set_position(&c->border->node, 0, 0);
-	wlr_scene_rect_set_corner_radii(c->border, corner_radii_all(config.border_radius));
+	wlr_scene_rect_set_corner_radii(c->border,
+									corner_radii_all(config.border_radius));
 	wlr_scene_node_set_enabled(&c->border->node, true);
 
 	c->shadow =
