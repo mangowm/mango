@@ -6650,6 +6650,11 @@ void touchdown(struct wl_listener *listener, void *data) {
 	t->start_x = lx;
 	t->start_y = ly;
 
+	Monitor *oldmon = selmon;
+	selmon = xytomon(lx, ly);
+	if (oldmon != selmon)
+		printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
+
 	/* Find the client under the pointer and send the event along. */
 	xytonode(lx, ly, &surface, &c, NULL, NULL, &sx, &sy);
 	t->start_surface_x = sx;
