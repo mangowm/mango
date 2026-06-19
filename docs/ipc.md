@@ -24,6 +24,7 @@ description: Control mangowm programmatically using mmsg.
 | Command | Description |
 | :--- | :--- |
 | `get version` | Returns the current version of the compositor. |
+| `get cursorpos` | Returns the global pointer position (`x`, `y`) and the monitor under it. |
 | `get keymode` | Returns the current active keyboard mode (e.g., normal, insert). |
 | `get keyboardlayout` | Returns the active XKB layout (abbreviated). |
 | `get monitor <name>` | Returns full JSON details for a specific monitor. |
@@ -41,6 +42,7 @@ description: Control mangowm programmatically using mmsg.
 mmsg get monitor eDP-1
 mmsg get all-clients
 mmsg get all-monitors
+mmsg get cursorpos
 ```
 
 ### WATCH (Event Subscription)
