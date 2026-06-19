@@ -77,6 +77,28 @@ void get_layout_abbr(char *abbr, const char *full_name) {
 	}
 }
 
+Client *xytoclient(double x, double y) {
+	Client *c = NULL, *tmp = NULL;
+	wl_list_for_each_safe(c, tmp, &clients, link) {
+		if (VISIBLEON(c, c->mon) && c->animation.current.x <= x &&
+			c->animation.current.y <= y &&
+			c->animation.current.x + c->animation.current.width >= x &&
+			c->animation.current.y + c->animation.current.height >= y) {
+			return c;
+		}
+	}
+	return NULL;
+}
+
+static bool layer_ignores_focus(LayerSurface *l) {
+	if (!l || !l->layer_surface)
+		return true;
+	struct wlr_surface *s = l->layer_surface->surface;
+	return !pixman_region32_not_empty(&s->input_region) ||
+		   l->layer_surface->current.keyboard_interactive ==
+			   ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
+}
+
 void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 			  LayerSurface **pl, double *nx, double *ny) {
 	struct wlr_scene_node *node, *pnode;
@@ -84,6 +106,7 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 	Client *c = NULL;
 	LayerSurface *l = NULL;
 	int32_t layer;
+	Client *ovc = NULL;
 
 	for (layer = NUM_LAYERS - 1; !surface && layer >= 0; layer--) {
 
@@ -96,10 +119,16 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		if (!node->enabled)
 			continue;
 
-		if (node->type == WLR_SCENE_NODE_BUFFER)
-			surface = wlr_scene_surface_try_from_buffer(
-						  wlr_scene_buffer_from_node(node))
-						  ->surface;
+		if (node->type == WLR_SCENE_NODE_BUFFER) {
+			struct wlr_scene_surface *scene_surface =
+				wlr_scene_surface_try_from_buffer(
+					wlr_scene_buffer_from_node(node));
+			if (scene_surface) {
+				surface = scene_surface->surface;
+			} else {
+				continue;
+			}
+		}
 
 		/*  start from the topmost layer,
 			find a sureface that can be focused by pointer,
@@ -111,8 +140,8 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 			for (pnode = node; pnode && !c; pnode = &pnode->parent->node)
 				c = pnode->data;
 			if (c && c->type == LayerShell) {
+				l = (LayerSurface *)c;
 				c = NULL;
-				l = pnode->data;
 			}
 		}
 
@@ -130,4 +159,27 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		*pc = c;
 	if (pl)
 		*pl = l;
+
+	if (selmon && selmon->isoverview && config.ov_no_resize) {
+		ovc = xytoclient(x, y);
+
+		bool is_below = false;
+		if (l && l->layer_surface) {
+			is_below = (l->layer_surface->current.layer ==
+							ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND ||
+						l->layer_surface->current.layer ==
+							ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM);
+		}
+
+		if (ovc && (!l || layer_ignores_focus(l) || is_below)) {
+			if (pc)
+				*pc = ovc;
+
+			if (psurface)
+				*psurface = ovc ? client_surface(ovc) : NULL;
+
+			if (pl && ovc)
+				*pl = NULL;
+		}
+	}
 }

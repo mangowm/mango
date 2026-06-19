@@ -43,6 +43,14 @@
         };
         packages = {
           inherit mango;
+          hm-options-json = pkgs.callPackage (import ./nix/generate-options.nix self) {
+            module = ./nix/hm-modules.nix;
+            optionPrefix = "wayland.windowManager.mango.";
+          };
+          nixos-options-json = pkgs.callPackage (import ./nix/generate-options.nix self) {
+            module = ./nix/nixos-modules.nix;
+            optionPrefix = "programs.mango.";
+          };
         };
         devShells.default = mango.overrideAttrs shellOverride;
         formatter = pkgs.alejandra;
