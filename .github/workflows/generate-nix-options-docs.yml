@@ -1,0 +1,63 @@
+name: Generate Nix Options Docs
+
+on:
+  push:
+    paths:
+      - 'nix/**-modules.nix'
+      - 'nix/generate-options.nix'
+      - 'flake.nix'
+      - '.github/scripts/generate-nix-options-docs.py'
+  pull_request:
+    paths:
+      - 'nix/**-modules.nix'
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build Options JSON
+        run: |
+          nix build .#nixos-options-json --out-link result-nixos
+          nix build .#hm-options-json --out-link result-hm
+
+      - name: Render to CommonMark
+        run: |
+          echo '{}' > /tmp/manpage-urls.json
+          nix run nixpkgs#nixos-render-docs -- options commonmark \
+            --manpage-urls /tmp/manpage-urls.json \
+            --revision nightly \
+            result-nixos/share/doc/nixos/options.json \
+            /tmp/nixos-raw.md
+          nix run nixpkgs#nixos-render-docs -- options commonmark \
+            --manpage-urls /tmp/manpage-urls.json \
+            --revision nightly \
+            result-hm/share/doc/nixos/options.json \
+            /tmp/hm-raw.md
+
+      - name: Format to Markdown
+        run: |
+          python3 ./.github/scripts/generate-nix-options-docs.py \
+            /tmp/nixos-raw.md \
+            /tmp/hm-raw.md \
+            'docs/nix-options.md'
+
+      - name: Auto-commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: auto-generate Nix module options"
+          file_pattern: 'docs/nix-options.md'
+          branch: ${{ github.head_ref }}

@@ -16,7 +16,7 @@ jobs:
           days-before-issue-stale: -1
           # 手动标记后，14 天后关闭
           days-before-issue-close: 7
-          # 使用的标签（必须和你手动添加的标签一致）
+          # 使用的标签
           stale-issue-label: "stale"
           # 自动关闭时自动加上的标签
           close-issue-label: "automatic-closing"

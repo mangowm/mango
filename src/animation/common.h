@@ -2,21 +2,21 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 	struct dvec2 point;
 	double *animation_curve;
 	if (type == MOVE) {
-		animation_curve = animation_curve_move;
+		animation_curve = config.animation_curve_move;
 	} else if (type == OPEN) {
-		animation_curve = animation_curve_open;
+		animation_curve = config.animation_curve_open;
 	} else if (type == TAG) {
-		animation_curve = animation_curve_tag;
+		animation_curve = config.animation_curve_tag;
 	} else if (type == CLOSE) {
-		animation_curve = animation_curve_close;
+		animation_curve = config.animation_curve_close;
 	} else if (type == FOCUS) {
-		animation_curve = animation_curve_focus;
+		animation_curve = config.animation_curve_focus;
 	} else if (type == OPAFADEIN) {
-		animation_curve = animation_curve_opafadein;
+		animation_curve = config.animation_curve_opafadein;
 	} else if (type == OPAFADEOUT) {
-		animation_curve = animation_curve_opafadeout;
+		animation_curve = config.animation_curve_opafadeout;
 	} else {
-		animation_curve = animation_curve_move;
+		animation_curve = config.animation_curve_move;
 	}
 
 	point.x = 3 * t * (1 - t) * (1 - t) * animation_curve[0] +
@@ -26,6 +26,12 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 			  3 * t * t * (1 - t) * animation_curve[3] + t * t * t;
 
 	return point;
+}
+
+void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data) {
+	SnapshotMetadata *meta = wl_container_of(listener, meta, destroy);
+	wl_list_remove(&meta->destroy.link); // 安全移除监听器
+	free(meta);
 }
 
 void init_baked_points(void) {
@@ -154,12 +160,43 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 		struct wlr_scene_buffer *scene_buffer =
 			wlr_scene_buffer_from_node(node);
 
-		struct wlr_scene_buffer *snapshot_buffer =
-			wlr_scene_buffer_create(snapshot_tree, NULL);
-		if (snapshot_buffer == NULL) {
+		//  创建中间包装树节点
+		struct wlr_scene_tree *wrapper = wlr_scene_tree_create(snapshot_tree);
+		if (wrapper == NULL) {
 			return false;
 		}
-		snapshot_node = &snapshot_buffer->node;
+		snapshot_node = &wrapper->node; // 坐标位移应用在外层包装盒上
+
+		// 收集表面状态并保存为元数据
+		SnapshotMetadata *meta = calloc(1, sizeof(SnapshotMetadata));
+		if (meta == NULL) {
+			wlr_scene_node_destroy(&wrapper->node);
+			return false;
+		}
+		meta->orig_width = scene_buffer->dst_width;
+		meta->orig_height = scene_buffer->dst_height;
+
+		struct wlr_scene_surface *scene_surface =
+			wlr_scene_surface_try_from_buffer(scene_buffer);
+		if (scene_surface != NULL) {
+			meta->is_subsurface =
+				!!wlr_subsurface_try_from_wlr_surface(scene_surface->surface);
+		}
+
+		// 绑定销毁回调监听，随包装节点销毁而释放内存
+		meta->destroy.notify = handle_snapshot_meta_destroy;
+		wl_signal_add(&wrapper->node.events.destroy, &meta->destroy);
+		wrapper->node.data = meta;
+
+		// 将真正的 buffer 挂靠在 wrapper 下面（相对坐标0,0）
+		struct wlr_scene_buffer *snapshot_buffer =
+			wlr_scene_buffer_create(wrapper, NULL);
+		if (snapshot_buffer == NULL) {
+			wlr_scene_node_destroy(&wrapper->node);
+			return false;
+		}
+
+		// 保留原生的 data 指针（如 Client*），防止事件派发/焦点获取失效
 		snapshot_buffer->node.data = scene_buffer->node.data;
 
 		wlr_scene_buffer_set_dest_size(snapshot_buffer, scene_buffer->dst_width,
@@ -179,16 +216,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 										   scene_buffer->corner_radius,
 										   scene_buffer->corners);
 
-		// wlr_scene_buffer_set_backdrop_blur_optimized(
-		// 	snapshot_buffer, scene_buffer->backdrop_blur_optimized);
-		// wlr_scene_buffer_set_backdrop_blur_ignore_transparent(
-		// 	snapshot_buffer, scene_buffer->backdrop_blur_ignore_transparent);
 		wlr_scene_buffer_set_backdrop_blur(snapshot_buffer, false);
 
-		snapshot_buffer->node.data = scene_buffer->node.data;
-
-		struct wlr_scene_surface *scene_surface =
-			wlr_scene_surface_try_from_buffer(scene_buffer);
 		if (scene_surface != NULL && scene_surface->surface->buffer != NULL) {
 			wlr_scene_buffer_set_buffer(snapshot_buffer,
 										&scene_surface->surface->buffer->base);
