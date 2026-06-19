@@ -1747,9 +1747,10 @@ void applyrules(Client *c) {
 	// the hit size
 	if (!c->iscustompos &&
 		(!client_is_x11(c) || (c->geom.x == 0 && c->geom.y == 0))) {
+		struct wlr_box pending_center_geom = c->iscustomsize ? c->float_geom : c->geom;
 		c->float_geom = c->geom =
-			setclient_coordinate_center(c, mon, c->geom, 0, 0);
-	} else {
+			setclient_coordinate_center(c, mon, pending_center_geom, 0, 0);
+	} else if(!c->iscustomsize) {
 		c->float_geom = c->geom;
 	}
 
