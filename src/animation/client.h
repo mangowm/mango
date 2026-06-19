@@ -1337,7 +1337,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		return;
 
 	struct wlr_box *bbox;
-	struct wlr_box clip_box;
+	struct wlr_box clip;
 
 	if (!c->mon)
 		return;
@@ -1428,14 +1428,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 			c->geom;
 		wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
 
-		struct ivec2 offset = clip_to_hide(c, &clip_box);
-
 		apply_border(c);
-		client_get_clip(c, &clip_box);
-		apply_shield(c, clip_box);
+		client_get_clip(c, &clip);
+		apply_shield(c, clip);
 		client_draw_shadow(c);
-		client_draw_blur(c, clip_box, offset);
-		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
 		if (config.blur && !c->noblur)
 			wlr_scene_blur_set_size(c->blur,
 									c->animation.current.width - 2 * c->bw,
