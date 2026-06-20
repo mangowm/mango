@@ -25,13 +25,6 @@ Return compositor version.
 Return the global pointer position (\fBx\fR, \fBy\fR) and the monitor under it
 (\fBnull\fR if over no output).
 .TP
-\fBget option \fIname\fR
-Return the current value of a scalar config option. Numbers are returned as
-numbers, colors as \fB0xRRGGBBAA\fR strings, bezier curves as 4-element arrays.
-Values round-trip through \fBdispatch setoption,\fIname\fB,\fIvalue\fR, except
-the comma-list options \fBcircle_layout\fR and \fBscroller_proportion_preset\fR
-(readable as arrays, but written via the config file).
-.TP
 \fBget keymode\fR
 Return current keymode.
 .TP
