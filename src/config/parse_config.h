@@ -333,7 +333,7 @@ typedef struct {
 	uint32_t gappoh;
 	uint32_t gappov;
 	uint32_t borderpx;
-	uint32_t tab_bar_height;
+	uint32_t group_bar_height;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float rootcolor[4];
@@ -1011,9 +1011,17 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "groupfocus") == 0) {
+		func = groupfocus;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "groupjoin") == 0) {
+		func = groupjoin;
+		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "groupleave") == 0) {
+		func = groupleave;
 	} else if (strcmp(func_name, "focusid") == 0) {
 		func = focusid;
 	} else if (strcmp(func_name, "incnmaster") == 0) {
@@ -1766,75 +1774,75 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->cursor_size = atoi(value);
 	} else if (strcmp(key, "cursor_theme") == 0) {
 		config->cursor_theme = strdup(value);
-	} else if (strcmp(key, "tab_bar_decorate_font_desc") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_font_desc") == 0) {
 		config->tabdata.font_desc = strdup(value);
-	} else if (strcmp(key, "tab_bar_decorate_fg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_fg_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			fprintf(stderr,
 					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"tab_bar_decorate_fg_color "
+					"group_bar_decorate_fg_color "
 					"format: %s\n",
 					value);
 			return false;
 		} else {
 			convert_hex_to_rgba(config->tabdata.fg_color, color);
 		}
-	} else if (strcmp(key, "tab_bar_decorate_bg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_bg_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			fprintf(stderr,
 					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"tab_bar_decorate_bg_color "
+					"group_bar_decorate_bg_color "
 					"format: %s\n",
 					value);
 			return false;
 		} else {
 			convert_hex_to_rgba(config->tabdata.bg_color, color);
 		}
-	} else if (strcmp(key, "tab_bar_decorate_focus_fg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_focus_fg_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			fprintf(stderr,
 					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"tab_bar_decorate_focus_fg_color "
+					"group_bar_decorate_focus_fg_color "
 					"format: %s\n",
 					value);
 			return false;
 		} else {
 			convert_hex_to_rgba(config->tabdata.focus_fg_color, color);
 		}
-	} else if (strcmp(key, "tab_bar_decorate_focus_bg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_focus_bg_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			fprintf(stderr,
 					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"tab_bar_decorate_focus_bg_color "
+					"group_bar_decorate_focus_bg_color "
 					"format: %s\n",
 					value);
 			return false;
 		} else {
 			convert_hex_to_rgba(config->tabdata.focus_bg_color, color);
 		}
-	} else if (strcmp(key, "tab_bar_decorate_border_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_border_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			fprintf(stderr,
 					"\033[1m\033[31m[ERROR]:\033[33m Invalid "
-					"tab_bar_decorate_border_color "
+					"group_bar_decorate_border_color "
 					"format: %s\n",
 					value);
 			return false;
 		} else {
 			convert_hex_to_rgba(config->tabdata.border_color, color);
 		}
-	} else if (strcmp(key, "tab_bar_decorate_border_width") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_border_width") == 0) {
 		config->tabdata.border_width = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "tab_bar_decorate_corner_radius") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_corner_radius") == 0) {
 		config->tabdata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "tab_bar_decorate_padding_x") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_padding_x") == 0) {
 		config->tabdata.padding_x = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "tab_bar_decorate_padding_y") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_padding_y") == 0) {
 		config->tabdata.padding_y = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "jump_label_decorate_font_desc") == 0) {
 		config->jumplabeldata.font_desc = strdup(value);
@@ -1952,8 +1960,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->scratchpad_height_ratio = atof(value);
 	} else if (strcmp(key, "borderpx") == 0) {
 		config->borderpx = atoi(value);
-	} else if (strcmp(key, "tab_bar_height") == 0) {
-		config->tab_bar_height = atoi(value);
+	} else if (strcmp(key, "group_bar_height") == 0) {
+		config->group_bar_height = atoi(value);
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -3573,7 +3581,7 @@ void override_config(void) {
 	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
-	config.tab_bar_height = CLAMP_INT(config.tab_bar_height, 0, 500);
+	config.group_bar_height = CLAMP_INT(config.group_bar_height, 0, 500);
 	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
 	config.blur = CLAMP_INT(config.blur, 0, 1);
 	config.blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
@@ -3705,7 +3713,7 @@ void set_value_default() {
 	config.idleinhibit_ignore_visible = 0;
 
 	config.borderpx = 4;
-	config.tab_bar_height = 50;
+	config.group_bar_height = 50;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
 	config.cursor_hide_timeout = 0;
@@ -4122,7 +4130,7 @@ void reapply_property(void) {
 
 			mango_jump_label_node_apply_config(c->jump_label_node,
 											   &config.jumplabeldata);
-			mango_tab_bar_node_apply_config(c->tab_bar_node, &config.tabdata);
+			mango_group_bar_apply_config(c->group_bar, &config.tabdata);
 
 			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
 			wlr_scene_rect_set_color(c->splitindicator[0], config.splitcolor);

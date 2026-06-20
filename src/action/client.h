@@ -57,7 +57,18 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!ISFAKETILED(c))
 		return;
 
-	if (!c->isfullscreen && !c->ismaximizescreen) {
+	if (c->isfullscreen && c->group_bar) {
+		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
+	}
+
+	if (!c->mon->isoverview && c->group_bar && !c->isfullscreen &&
+		(c->group_next || c->group_prev)) {
+		geo.y = geo.y + config.group_bar_height;
+		geo.height -= config.group_bar_height;
+	}
+
+	if ((!c->isfullscreen && !c->ismaximizescreen) ||
+		is_scroller_layout(c->mon)) {
 		resize(c, geo, interact);
 	}
 }
@@ -104,19 +115,144 @@ void client_add_jump_label_node(Client *c) {
 	wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, false);
 }
 
-void client_add_tab_bar_node(Client *c) {
+void client_add_group_bar(Client *c) {
 
-	if (config.tab_bar_height <= 0) {
+	if (config.group_bar_height <= 0) {
 		return;
 	}
 
-	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
-	mangonodedata->node_data = c;
-	mangonodedata->type = MANGO_TITLE_NODE;
+	uint32_t layer = c->isoverlay						? LyrOverlay
+					 : c->isfloating || c->isfullscreen ? LyrTop
+					 : c->ismaximizescreen				? LyrMaximize
+														: LyrTile;
 
-	c->tab_bar_node = mango_tab_bar_node_create(
-		mangonodedata, layers[LyrDecorate], config.tabdata, 0, 0);
-	wlr_scene_node_lower_to_bottom(&c->tab_bar_node->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
-	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), 1.0);
+	c->group_bar = mango_group_bar_create(c, GroupBar, layers[layer],
+										  config.tabdata, 0, 0);
+	wlr_scene_node_lower_to_bottom(&c->group_bar->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
+	mango_group_bar_update(c->group_bar, client_get_title(c), 1.0);
+}
+
+void client_focus_group_member(Client *c) {
+	if (!c->group_prev && !c->group_next)
+		return;
+
+	if (c->isgroupfocusing)
+		return;
+
+	if (c->mon->isoverview)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur_focusing = NULL;
+	while (head) {
+		if (head->isgroupfocusing) {
+			cur_focusing = head;
+			break;
+		}
+		head = head->group_next;
+	}
+
+	if (cur_focusing) {
+		cur_focusing->isgroupfocusing = false;
+		c->mon = cur_focusing->mon;
+		client_replace(c, cur_focusing, true);
+		mango_group_bar_set_focus(cur_focusing->group_bar, false);
+	}
+
+	c->isgroupfocusing = true;
+	mango_group_bar_set_focus(c->group_bar, true);
+
+	client_reparent_group(c);
+
+	focusclient(c, 1);
+
+	arrange(c->mon, false, false);
+}
+
+void client_check_tab_node_visible(Client *c) {
+
+	if (!c || c->iskilling)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		if (!c->mon->isoverview && cur->group_bar &&
+			(cur->group_next || cur->group_prev) && VISIBLEON(c, c->mon) &&
+			ISNORMAL(c) && !c->isfullscreen &&
+			(!is_monocle_layout(c->mon) || c == c->mon->sel)) {
+			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
+									   true);
+		} else {
+			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
+									   false);
+		}
+		cur = cur->group_next;
+	}
+}
+
+void client_raise_group(Client *c) {
+	if (!c || !c->mon)
+		return;
+
+	if (!c->group_prev && !c->group_next)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		if (cur->group_bar) {
+			wlr_scene_node_raise_to_top(&cur->group_bar->scene_buffer->node);
+			wlr_scene_node_raise_to_top(&cur->scene->node);
+		}
+		cur = cur->group_next;
+	}
+}
+
+void client_reparent_group(Client *c) {
+	if (!c || !c->group_bar)
+		return;
+
+	if (!c->group_prev && !c->group_next)
+		return;
+
+	int32_t layer = c->isoverlay					   ? LyrOverlay
+					: c->isfloating || c->isfullscreen ? LyrTop
+					: c->ismaximizescreen			   ? LyrMaximize
+													   : LyrTile;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		if (cur->group_bar) {
+			wlr_scene_node_reparent(&cur->group_bar->scene_buffer->node,
+									layers[layer]);
+			wlr_scene_node_reparent(&cur->scene->node, layers[layer]);
+		}
+		cur = cur->group_next;
+	}
+}
+
+void client_handle_decorate_click(MangoGroupBar *gb) {
+
+	if (!gb)
+		return;
+
+	if (gb->node_data) {
+		Client *c = gb->node_data;
+		client_focus_group_member(c);
+	}
 }

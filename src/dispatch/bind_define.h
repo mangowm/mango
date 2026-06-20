@@ -156,6 +156,86 @@ int32_t focusdir(const Arg *arg) {
 	return 0;
 }
 
+int32_t groupjoin(const Arg *arg) {
+
+	if (!selmon)
+		return 0;
+
+	Client *need_join_client = arg->tc ? arg->tc : selmon->sel;
+	if (!need_join_client)
+		return 0;
+
+	if (need_join_client->group_next || need_join_client->group_prev) {
+		return 0;
+	}
+
+	Client *need_replace_client = NULL;
+	need_replace_client = direction_select(arg);
+
+	if (!need_replace_client ||
+		need_replace_client->mon != need_join_client->mon)
+		return 0;
+
+	if (!need_join_client->group_next && !need_join_client->group_prev) {
+
+		if (!need_replace_client->group_prev &&
+			!need_replace_client->group_next) {
+			need_replace_client->isgroupfocusing = true;
+		}
+
+		need_join_client->group_next = need_replace_client;
+		if (need_replace_client->group_prev) {
+			need_replace_client->group_prev->group_next = need_join_client;
+		}
+		need_join_client->group_prev = need_replace_client->group_prev;
+		need_replace_client->group_prev = need_join_client;
+
+		client_focus_group_member(need_join_client);
+		arrange(need_join_client->mon, false, false);
+		return 0;
+	}
+
+	return 0;
+}
+
+int32_t groupleave(const Arg *arg) {
+
+	if (!selmon)
+		return 0;
+	Client *tc = arg->tc ? arg->tc : selmon->sel;
+	if (!tc || !tc->isgroupfocusing)
+		return 0;
+	if (!tc->group_next && !tc->group_prev) {
+		return 0;
+	}
+	Client *rc = tc->group_next ? tc->group_next : tc->group_prev;
+
+	client_focus_group_member(rc);
+
+	if (tc->group_prev) {
+		tc->group_prev->group_next = tc->group_next;
+	}
+
+	if (tc->group_next) {
+		tc->group_next->group_prev = tc->group_prev;
+	}
+
+	tc->group_prev = NULL;
+	tc->group_next = NULL;
+	tc->isgroupfocusing = false;
+
+	wl_list_insert(&rc->link, &tc->link);
+	wl_list_insert(&rc->flink, &tc->flink);
+
+	if (!rc->group_prev && !rc->group_next) {
+		rc->isgroupfocusing = false;
+	}
+
+	arrange(tc->mon, false, false);
+
+	return 0;
+}
+
 int32_t focuslast(const Arg *arg) {
 	Client *c = NULL;
 	Client *tc = NULL;
@@ -258,6 +338,31 @@ int32_t focusstack(const Arg *arg) {
 	focusclient(tc, 1);
 	if (config.warpcursor)
 		warp_cursor(tc);
+	return 0;
+}
+
+int32_t groupfocus(const Arg *arg) {
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	if (!c)
+		return 0;
+
+	if (!c->group_prev && !c->group_next) {
+		return 0;
+	}
+
+	Client *tc = NULL;
+
+	if (arg->i == NEXT) {
+		tc = c->group_next;
+	} else {
+		tc = c->group_prev;
+	}
+
+	if (!tc)
+		return 0;
+
+	client_focus_group_member(tc);
+	arrange(tc->mon, false, false);
 	return 0;
 }
 
@@ -366,7 +471,7 @@ int32_t moveresize(const Arg *arg) {
 
 	if (cursor_mode != CurNormal && cursor_mode != CurPressed)
 		return 0;
-	xytonode(cursor->x, cursor->y, NULL, &grabc, NULL, NULL, NULL);
+	xytonode(cursor->x, cursor->y, NULL, &grabc, NULL, NULL, NULL, NULL);
 	if (!grabc || client_is_unmanaged(grabc) || grabc->isfullscreen ||
 		grabc->ismaximizescreen) {
 		grabc = NULL;
@@ -1436,6 +1541,8 @@ int32_t toggleoverlay(const Arg *arg) {
 		wlr_scene_node_reparent(&c->scene->node,
 								layers[c->isfloating ? LyrTop : LyrTile]);
 	}
+
+	client_reparent_group(c);
 	setborder_color(c);
 	return 0;
 }
