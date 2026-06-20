@@ -59,10 +59,9 @@ static const struct wlr_buffer_impl text_buffer_impl = {
 	.end_data_ptr_access = text_buffer_end_data_ptr_access,
 };
 
-struct mango_jump_label_node *
-mango_jump_label_node_create(struct wlr_scene_tree *parent,
-							 DecorateDrawData data) {
-	struct mango_jump_label_node *node = calloc(1, sizeof(*node));
+MangoJumpLabel *mango_jump_label_node_create(struct wlr_scene_tree *parent,
+											 DecorateDrawData data) {
+	MangoJumpLabel *node = calloc(1, sizeof(*node));
 	if (!node)
 		return NULL;
 
@@ -104,7 +103,7 @@ mango_jump_label_node_create(struct wlr_scene_tree *parent,
 	return node;
 }
 
-void mango_jump_label_node_destroy(struct mango_jump_label_node *node) {
+void mango_jump_label_node_destroy(MangoJumpLabel *node) {
 	if (!node)
 		return;
 
@@ -136,8 +135,8 @@ void mango_jump_label_node_destroy(struct mango_jump_label_node *node) {
 	free(node);
 }
 
-void mango_jump_label_node_set_background(struct mango_jump_label_node *node,
-										  float r, float g, float b, float a) {
+void mango_jump_label_node_set_background(MangoJumpLabel *node, float r,
+										  float g, float b, float a) {
 	if (!node)
 		return;
 	node->bg_color[0] = r;
@@ -146,9 +145,9 @@ void mango_jump_label_node_set_background(struct mango_jump_label_node *node,
 	node->bg_color[3] = a;
 }
 
-void mango_jump_label_node_set_border(struct mango_jump_label_node *node,
-									  float r, float g, float b, float a,
-									  int32_t width, int32_t radius) {
+void mango_jump_label_node_set_border(MangoJumpLabel *node, float r, float g,
+									  float b, float a, int32_t width,
+									  int32_t radius) {
 	if (!node)
 		return;
 	node->border_color[0] = r;
@@ -159,17 +158,16 @@ void mango_jump_label_node_set_border(struct mango_jump_label_node *node,
 	node->corner_radius = radius;
 }
 
-void mango_jump_label_node_set_padding(struct mango_jump_label_node *node,
-									   int32_t pad_x, int32_t pad_y) {
+void mango_jump_label_node_set_padding(MangoJumpLabel *node, int32_t pad_x,
+									   int32_t pad_y) {
 	if (!node)
 		return;
 	node->padding_x = pad_x >= 0 ? pad_x : 0;
 	node->padding_y = pad_y >= 0 ? pad_y : 0;
 }
 
-static void get_text_pixel_size(struct mango_jump_label_node *node,
-								const char *text, float scale, int32_t *out_w,
-								int32_t *out_h) {
+static void get_text_pixel_size(MangoJumpLabel *node, const char *text,
+								float scale, int32_t *out_w, int32_t *out_h) {
 	if (node->measure_scale != scale) {
 		pango_cairo_context_set_resolution(node->measure_context, 96.0 * scale);
 		node->measure_scale = scale;
@@ -193,8 +191,8 @@ static void draw_rounded_rect(cairo_t *cr, double x, double y, double w,
 	cairo_close_path(cr);
 }
 
-void mango_jump_label_node_update(struct mango_jump_label_node *node,
-								  const char *text, float scale) {
+void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
+								  float scale) {
 	if (!node || !text)
 		return;
 	if (scale <= 0.0f)
@@ -407,8 +405,7 @@ void mango_jump_label_node_update(struct mango_jump_label_node *node,
 								   node->logical_height);
 }
 
-void mango_jump_label_node_set_focus(struct mango_jump_label_node *node,
-									 bool focused) {
+void mango_jump_label_node_set_focus(MangoJumpLabel *node, bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
@@ -419,55 +416,61 @@ void mango_jump_label_node_set_focus(struct mango_jump_label_node *node,
 	}
 }
 
-struct mango_tab_bar_node *
-mango_tab_bar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
-						  DecorateDrawData data, int32_t width,
-						  int32_t height) {
-	struct mango_tab_bar_node *node = calloc(1, sizeof(*node));
-	if (!node)
+MangoGroupBar *mango_group_bar_create(void *cdata, uint32_t type,
+									  struct wlr_scene_tree *parent,
+									  DecorateDrawData data, int32_t width,
+									  int32_t height) {
+	MangoGroupBar *mangobar = calloc(1, sizeof(*mangobar));
+	if (!mangobar)
 		return NULL;
 
-	node->scene_buffer = wlr_scene_buffer_create(parent, NULL);
-	if (!node->scene_buffer) {
-		free(node);
+	mangobar->scene_buffer = wlr_scene_buffer_create(parent, NULL);
+	if (!mangobar->scene_buffer) {
+		free(mangobar);
 		return NULL;
 	}
 
-	memcpy(node->fg_color, data.fg_color, sizeof(node->fg_color));
-	memcpy(node->bg_color, data.bg_color, sizeof(node->bg_color));
-	memcpy(node->focus_fg_color, data.focus_fg_color,
-		   sizeof(node->focus_fg_color));
-	memcpy(node->focus_bg_color, data.focus_bg_color,
-		   sizeof(node->focus_bg_color));
-	memcpy(node->border_color, data.border_color, sizeof(node->border_color));
-	node->border_width = data.border_width;
-	node->corner_radius = data.corner_radius;
-	node->padding_x = data.padding_x;
-	node->padding_y = data.padding_y;
-	node->font_desc =
+	memcpy(mangobar->fg_color, data.fg_color, sizeof(mangobar->fg_color));
+	memcpy(mangobar->bg_color, data.bg_color, sizeof(mangobar->bg_color));
+	memcpy(mangobar->focus_fg_color, data.focus_fg_color,
+		   sizeof(mangobar->focus_fg_color));
+	memcpy(mangobar->focus_bg_color, data.focus_bg_color,
+		   sizeof(mangobar->focus_bg_color));
+	memcpy(mangobar->border_color, data.border_color,
+		   sizeof(mangobar->border_color));
+	mangobar->border_width = data.border_width;
+	mangobar->corner_radius = data.corner_radius;
+	mangobar->padding_x = data.padding_x;
+	mangobar->padding_y = data.padding_y;
+	mangobar->font_desc =
 		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 16");
 
-	node->target_width = width;
-	node->target_height = height;
-	node->focused = false;
-	node->cached_focused = false;
+	mangobar->target_width = width;
+	mangobar->target_height = height;
+	mangobar->focused = false;
+	mangobar->cached_focused = false;
 
-	node->measure_surface =
+	mangobar->measure_surface =
 		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
-	node->measure_cr = cairo_create(node->measure_surface);
-	node->measure_context = pango_cairo_create_context(node->measure_cr);
-	node->measure_layout = pango_layout_new(node->measure_context);
-	node->measure_scale = 1.0f;
+	mangobar->measure_cr = cairo_create(mangobar->measure_surface);
+	mangobar->measure_context =
+		pango_cairo_create_context(mangobar->measure_cr);
+	mangobar->measure_layout = pango_layout_new(mangobar->measure_context);
+	mangobar->measure_scale = 1.0f;
 
-	node->cached_scale = -1.0f;
-	node->last_text = NULL;
-	node->last_scale = 0.0f;
-	node->scene_buffer->node.data = mango_node_data;
+	mangobar->cached_scale = -1.0f;
+	mangobar->last_text = NULL;
+	mangobar->last_scale = 0.0f;
 
-	return node;
+	mangobar->type = type;
+	mangobar->node_data = cdata;
+
+	mangobar->scene_buffer->node.data = mangobar;
+
+	return mangobar;
 }
 
-void mango_tab_bar_node_destroy(struct mango_tab_bar_node *node) {
+void mango_group_bar_destroy(MangoGroupBar *node) {
 	if (!node)
 		return;
 
@@ -492,19 +495,15 @@ void mango_tab_bar_node_destroy(struct mango_tab_bar_node *node) {
 	if (node->measure_cr)
 		cairo_destroy(node->measure_cr);
 
-	void *data = node->scene_buffer->node.data;
-	wlr_scene_node_destroy(&node->scene_buffer->node);
-
 	g_free(node->font_desc);
 	g_free(node->cached_text);
 	g_free(node->cached_font_desc);
 	g_free(node->last_text);
-	free(data);
 	free(node);
 }
 
-void mango_tab_bar_node_set_size(struct mango_tab_bar_node *node, int32_t width,
-								 int32_t height) {
+void mango_group_bar_set_size(MangoGroupBar *node, int32_t width,
+							  int32_t height) {
 	if (!node)
 		return;
 
@@ -522,11 +521,11 @@ void mango_tab_bar_node_set_size(struct mango_tab_bar_node *node, int32_t width,
 	const char *redraw_text = node->last_text ? node->last_text : "";
 	float redraw_scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
 
-	mango_tab_bar_node_update(node, redraw_text, redraw_scale);
+	mango_group_bar_update(node, redraw_text, redraw_scale);
 }
 
-void mango_tab_bar_node_update(struct mango_tab_bar_node *node,
-							   const char *text, float scale) {
+void mango_group_bar_update(MangoGroupBar *node, const char *text,
+							float scale) {
 	if (!node || !text)
 		return;
 	if (scale <= 0.0f)
@@ -765,19 +764,18 @@ void mango_tab_bar_node_update(struct mango_tab_bar_node *node,
 								   node->logical_height);
 }
 
-void mango_tab_bar_node_set_focus(struct mango_tab_bar_node *node,
-								  bool focused) {
+void mango_group_bar_set_focus(MangoGroupBar *node, bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_tab_bar_node_update(node, node->last_text, scale);
+		mango_group_bar_update(node, node->last_text, scale);
 	}
 }
 
-void mango_tab_bar_node_set_colors(struct mango_tab_bar_node *node,
-								   const float fg[4], const float bg[4]) {
+void mango_group_bar_set_colors(MangoGroupBar *node, const float fg[4],
+								const float bg[4]) {
 	if (!node)
 		return;
 
@@ -786,11 +784,11 @@ void mango_tab_bar_node_set_colors(struct mango_tab_bar_node *node,
 
 	if (!node->focused && node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_tab_bar_node_update(node, node->last_text, scale);
+		mango_group_bar_update(node, node->last_text, scale);
 	}
 }
 
-void mango_jump_label_node_apply_config(struct mango_jump_label_node *node,
+void mango_jump_label_node_apply_config(MangoJumpLabel *node,
 										const DecorateDrawData *data) {
 	if (!node || !data)
 		return;
@@ -817,8 +815,8 @@ void mango_jump_label_node_apply_config(struct mango_jump_label_node *node,
 	}
 }
 
-void mango_tab_bar_node_apply_config(struct mango_tab_bar_node *node,
-									 const DecorateDrawData *data) {
+void mango_group_bar_apply_config(MangoGroupBar *node,
+								  const DecorateDrawData *data) {
 	if (!node || !data)
 		return;
 
@@ -840,6 +838,6 @@ void mango_tab_bar_node_apply_config(struct mango_tab_bar_node *node,
 
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
-		mango_tab_bar_node_update(node, node->last_text, scale);
+		mango_group_bar_update(node, node->last_text, scale);
 	}
 }

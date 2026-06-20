@@ -188,18 +188,11 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 			if (!findfloating && c->isfloating)
 				continue;
-			if (c->is_monocle_hide)
-				continue;
 			if (c->isunglobal)
 				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
 				continue;
 			if (!(c->tags & c->mon->tagset[c->mon->seltags]))
-				continue;
-
-			if (step == 0 && ((!tc->mon->isoverview &&
-							   !client_is_in_same_stack(tc, c, NULL)) ||
-							  c->mon != tc->mon))
 				continue;
 
 			int32_t c_l = c->geom.x;
@@ -257,17 +250,24 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			if (!match_dir)
 				continue;
 
+			if (step == 0) {
+				if (c->mon != tc->mon)
+					continue;
+				if (!tc->mon->isoverview &&
+					!client_is_in_same_stack(tc, c, NULL))
+					continue;
+				if (orth_dist != 0)
+					continue;
+			}
+
 			int64_t penalty = 0;
 			if (main_dist < 0) {
-				penalty = 10000000000LL; // 主方向重叠（反方向）的极大惩罚
+				penalty = 10000000000LL;
 				main_dist = -main_dist;
 			}
 
-			// 正交方向无重叠惩罚，优先选择在同一行/列的窗口
 			int64_t no_overlap_penalty = 0;
 			if (orth_dist > 0) {
-				// LEFT/RIGHT 时 orth_dist 是垂直间距，>0 表示垂直无重叠
-				// UP/DOWN  时 orth_dist 是水平间距，>0 表示水平无重叠
 				no_overlap_penalty = 10000000LL;
 			}
 
@@ -442,7 +442,7 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		return sc;
 
 	wl_list_for_each(tc, &fstack, flink) {
-		if (tc->iskilling || tc->isunglobal || tc->is_monocle_hide)
+		if (tc->iskilling || tc->isunglobal)
 			continue;
 		if (!VISIBLEON(tc, sc->mon))
 			continue;
