@@ -1011,8 +1011,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "groupfocus") == 0) {
+		func = groupfocus;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
+		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "groupjoin") == 0) {
+		func = groupjoin;
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "focusid") == 0) {
 		func = focusid;

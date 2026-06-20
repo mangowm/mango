@@ -57,7 +57,18 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!ISFAKETILED(c))
 		return;
 
-	if (!c->isfullscreen && !c->ismaximizescreen) {
+	if (c->isfullscreen && c->tab_bar_node) {
+		wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
+	}
+
+	if (!c->mon->isoverview && c->tab_bar_node && !c->isfullscreen &&
+		(c->group_next || c->group_prev)) {
+		geo.y = geo.y + config.tab_bar_height;
+		geo.height -= config.tab_bar_height;
+	}
+
+	if ((!c->isfullscreen && !c->ismaximizescreen) ||
+		is_scroller_layout(c->mon)) {
 		resize(c, geo, interact);
 	}
 }
@@ -119,4 +130,64 @@ void client_add_tab_bar_node(Client *c) {
 	wlr_scene_node_lower_to_bottom(&c->tab_bar_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
 	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), 1.0);
+}
+
+void client_focus_group_member(Client *c) {
+	if (!c->group_prev && !c->group_next)
+		return;
+
+	if (c->isgroupfocusing)
+		return;
+
+	if (c->mon->isoverview)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur_focusing = NULL;
+	while (head) {
+		if (head->isgroupfocusing) {
+			cur_focusing = head;
+			break;
+		}
+		head = head->group_next;
+	}
+
+	if (cur_focusing) {
+		cur_focusing->isgroupfocusing = false;
+		client_replace(c, cur_focusing, true);
+		mango_tab_bar_node_set_focus(cur_focusing->tab_bar_node, false);
+	}
+
+	c->isgroupfocusing = true;
+	mango_tab_bar_node_set_focus(c->tab_bar_node, true);
+	focusclient(c, 1);
+
+	arrange(c->mon, false, false);
+}
+
+void client_set_tab_node_visible(Client *c) {
+
+	if (!c || c->iskilling)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		if (!c->mon->isoverview && cur->tab_bar_node &&
+			(cur->group_next || cur->group_prev) && VISIBLEON(c, c->mon) &&
+			ISSCROLLTILED(c) && !c->isfullscreen) {
+			wlr_scene_node_set_enabled(&cur->tab_bar_node->scene_buffer->node,
+									   true);
+		} else {
+			wlr_scene_node_set_enabled(&cur->tab_bar_node->scene_buffer->node,
+									   false);
+		}
+		cur = cur->group_next;
+	}
 }

@@ -37,21 +37,6 @@ void set_size_per(Monitor *m, Client *c) {
 	}
 }
 
-void monocle_set_focus(Client *c, bool focused) {
-
-	if (!c || !c->mon)
-		return;
-
-	c->is_monocle_hide = !focused;
-	mango_tab_bar_node_set_focus(c->tab_bar_node, focused);
-	wlr_scene_node_set_enabled(&c->scene->node, focused);
-
-	if (!focused) {
-		c->animation.current = c->animainit_geom = c->animation.initial =
-			c->pending = c->current = c->geom;
-	}
-}
-
 void resize_tile_master_horizontal(Client *grabc, bool isdrag, int32_t offsetx,
 								   int32_t offsety, uint32_t time,
 								   int32_t type) {
@@ -1145,16 +1130,6 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 
 		if (m->is_jump_mode && !c->jump_label_node) {
 			client_add_jump_label_node(c);
-		}
-
-		if (m->pertag->ltidxs[m->pertag->curtag]->id == MONOCLE &&
-			!c->tab_bar_node) {
-			client_add_tab_bar_node(c);
-		}
-
-		if (c->tab_bar_node && c->mon == m) {
-			wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node,
-									   false);
 		}
 
 		if (c->mon == m && (c->isglobal || c->isunglobal)) {

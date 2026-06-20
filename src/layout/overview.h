@@ -1,4 +1,3 @@
-
 typedef struct {
 	float x, y, w, h;
 } OvPlacedRect;
@@ -232,16 +231,20 @@ void overview_scale(Monitor *m) {
 		float base_x = m->w.x + target_gappo + dx;
 		float base_y = m->w.y + target_gappo + dy;
 
+		// 收集所有客户端的目标几何，最后统一调用 client_tile_resize
+		struct wlr_box overview_boxes[n]; // C99 VLA，n > 0 时有效
 		for (int k = 0; k < n; k++) {
-			Client *cl = items[k].c;
-			struct wlr_box geom;
-			geom.x = (int)(base_x + placed[k].x + 0.5f);
-			geom.y = (int)(base_y + placed[k].y + 0.5f);
 			float w = items[k].orig_w * best_s;
 			float h = items[k].orig_h * best_s;
-			geom.width = (int)(geom.x + w + 0.5f) - geom.x;
-			geom.height = (int)(geom.y + h + 0.5f) - geom.y;
-			resize(cl, geom, 0);
+			int ix = (int)(base_x + placed[k].x + 0.5f);
+			int iy = (int)(base_y + placed[k].y + 0.5f);
+			int iw = (int)(ix + w + 0.5f) - ix;
+			int ih = (int)(iy + h + 0.5f) - iy;
+			overview_boxes[k] = (struct wlr_box){ix, iy, iw, ih};
+		}
+
+		for (int k = 0; k < n; k++) {
+			client_tile_resize(items[k].c, overview_boxes[k], 0);
 		}
 	}
 
@@ -280,74 +283,69 @@ void overview_resize(Monitor *m) {
 		return;
 	}
 
+	// 临时存储每个客户端的目标几何
+	struct wlr_box boxes[n]; // C99 VLA
+
 	if (n == 1) {
 		int32_t cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
 		int32_t ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
-		c_arr[0]->geom.x = m->w.x + (m->w.width - cw) / 2;
-		c_arr[0]->geom.y = m->w.y + (m->w.height - ch) / 2;
-		c_arr[0]->geom.width = cw;
-		c_arr[0]->geom.height = ch;
-		resize(c_arr[0], c_arr[0]->geom, 0);
-		free(c_arr);
-		return;
-	}
-
-	if (n == 2) {
+		boxes[0].x = m->w.x + (m->w.width - cw) / 2;
+		boxes[0].y = m->w.y + (m->w.height - ch) / 2;
+		boxes[0].width = cw;
+		boxes[0].height = ch;
+	} else if (n == 2) {
 		int32_t cw = (m->w.width - 2 * target_gappo - target_gappi) / 2;
 		int32_t ch = (m->w.height - 2 * target_gappo) * 0.65f;
 
-		c_arr[0]->geom.x = m->w.x + target_gappo;
-		c_arr[0]->geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-		c_arr[0]->geom.width = cw;
-		c_arr[0]->geom.height = ch;
-		resize(c_arr[0], c_arr[0]->geom, 0);
+		boxes[0].x = m->w.x + target_gappo;
+		boxes[0].y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
+		boxes[0].width = cw;
+		boxes[0].height = ch;
 
-		c_arr[1]->geom.x = m->w.x + cw + target_gappo + target_gappi;
-		c_arr[1]->geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-		c_arr[1]->geom.width = cw;
-		c_arr[1]->geom.height = ch;
-		resize(c_arr[1], c_arr[1]->geom, 0);
+		boxes[1].x = m->w.x + cw + target_gappo + target_gappi;
+		boxes[1].y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
+		boxes[1].width = cw;
+		boxes[1].height = ch;
+	} else {
+		int32_t cols = 1;
+		while (cols * cols < n)
+			cols++;
+		int32_t rows = (n + cols - 1) / cols;
 
-		free(c_arr);
-		return;
-	}
+		int32_t ch =
+			(m->w.height - 2 * target_gappo - (rows - 1) * target_gappi) / rows;
+		int32_t cw =
+			(m->w.width - 2 * target_gappo - (cols - 1) * target_gappi) / cols;
 
-	int32_t cols = 1;
-	while (cols * cols < n) {
-		cols++;
-	}
-	int32_t rows = (n + cols - 1) / cols;
+		if (ch < 1)
+			ch = 1;
+		if (cw < 1)
+			cw = 1;
 
-	int32_t ch =
-		(m->w.height - 2 * target_gappo - (rows - 1) * target_gappi) / rows;
-	int32_t cw =
-		(m->w.width - 2 * target_gappo - (cols - 1) * target_gappi) / cols;
-
-	if (ch < 1)
-		ch = 1;
-	if (cw < 1)
-		cw = 1;
-
-	int32_t overcols = n % cols;
-	int32_t dx = 0;
-	if (overcols) {
-		dx = (m->w.width - overcols * cw - (overcols - 1) * target_gappi) / 2 -
-			 target_gappo;
-	}
-
-	for (int i = 0; i < n; i++) {
-		int32_t cx = m->w.x + (i % cols) * (cw + target_gappi);
-		int32_t cy = m->w.y + (i / cols) * (ch + target_gappi);
-
-		if (overcols && i >= n - overcols) {
-			cx += dx;
+		int32_t overcols = n % cols;
+		int32_t dx = 0;
+		if (overcols) {
+			dx = (m->w.width - overcols * cw - (overcols - 1) * target_gappi) /
+					 2 -
+				 target_gappo;
 		}
 
-		c_arr[i]->geom.x = cx + target_gappo;
-		c_arr[i]->geom.y = cy + target_gappo;
-		c_arr[i]->geom.width = cw;
-		c_arr[i]->geom.height = ch;
-		resize(c_arr[i], c_arr[i]->geom, 0);
+		for (int i = 0; i < n; i++) {
+			int32_t cx = m->w.x + (i % cols) * (cw + target_gappi);
+			int32_t cy = m->w.y + (i / cols) * (ch + target_gappi);
+			if (overcols && i >= n - overcols)
+				cx += dx;
+
+			boxes[i].x = cx + target_gappo;
+			boxes[i].y = cy + target_gappo;
+			boxes[i].width = cw;
+			boxes[i].height = ch;
+		}
+	}
+
+	// 统一应用所有几何变更，使用 client_tile_resize
+	for (int k = 0; k < n; k++) {
+		client_tile_resize(c_arr[k], boxes[k], 0);
 	}
 
 	free(c_arr);
@@ -365,9 +363,7 @@ void create_jump_hints(Monitor *m) {
 			char c_char = jump_labels[label_idx];
 			c->jump_char = c_char;
 
-			// 把字符变成字符串
 			char label_text[2] = {c_char, '\0'};
-
 			mango_jump_label_node_update(c->jump_label_node, label_text, 1.0f);
 			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
 									   true);
@@ -385,12 +381,10 @@ void create_jump_hints(Monitor *m) {
 void begin_jump_mode(Monitor *m) { m->is_jump_mode = 1; }
 
 void finish_jump_mode(Monitor *m) {
-	Client *c = NULL;
-
-	if (!m->is_jump_mode) {
+	if (!m->is_jump_mode)
 		return;
-	}
 
+	Client *c;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m)) {
 			if (c->jump_label_node->scene_buffer->node.enabled) {
@@ -400,12 +394,10 @@ void finish_jump_mode(Monitor *m) {
 			}
 		}
 	}
-
 	m->is_jump_mode = 0;
 }
 
 void overview(Monitor *m) {
-
 	if (config.ov_no_resize) {
 		overview_scale(m);
 	} else {

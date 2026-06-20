@@ -36,7 +36,6 @@ scroller_node_create(struct TagScrollerState *st, Client *c) {
 	return n;
 }
 
-/* 从 tag 状态中移除一个节点并释放 */
 static void scroller_node_remove(struct TagScrollerState *st,
 								 struct ScrollerStackNode *target) {
 	if (!st || !target)
@@ -223,7 +222,7 @@ void arrange_stack_node(struct ScrollerStackNode *head, struct wlr_box geometry,
 									  .y = current_y,
 									  .width = geometry.width,
 									  .height = client_height};
-		resize(iter->client, client_geom, 0);
+		client_tile_resize(iter->client, client_geom, 0);
 		remain_proportion -= iter->stack_proportion;
 		remain_client_height -= client_height;
 		current_y += client_height + gappiv;
@@ -272,7 +271,7 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 									  .x = current_x,
 									  .height = geometry.height,
 									  .width = client_width};
-		resize(iter->client, client_geom, 0);
+		client_tile_resize(iter->client, client_geom, 0);
 		remain_proportion -= iter->stack_proportion;
 		remain_client_width -= client_width;
 		current_x += client_width + gappih;
@@ -508,6 +507,7 @@ void scroller(Monitor *m) {
 
 void vertical_scroller(Monitor *m) {
 	uint32_t tag = m->pertag->curtag;
+	int32_t bar_height = 0;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
 	float scroller_default_proportion_single =
@@ -696,7 +696,12 @@ void vertical_scroller(Monitor *m) {
 		arrange_stack_vertical_node(heads[focus_index], target_geom,
 									cur_gappih);
 	} else {
-		target_geom.y = root_client->geom.y;
+		bar_height = !root_client->isfullscreen && (root_client->group_prev ||
+													root_client->group_next)
+						 ? config.tab_bar_height
+						 : 0;
+
+		target_geom.y = root_client->geom.y - bar_height;
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		arrange_stack_vertical_node(heads[focus_index], target_geom,
@@ -709,8 +714,15 @@ void vertical_scroller(Monitor *m) {
 		up_geom.width = m->w.width - 2 * cur_gappoh;
 		up_geom.height = max_client_height * cur->scroller_proportion;
 		vertical_scroll_adjust_fullandmax(cur->client, &up_geom);
+
+		bar_height = !heads[focus_index - i + 1]->client->isfullscreen &&
+							 (heads[focus_index - i + 1]->client->group_prev ||
+							  heads[focus_index - i + 1]->client->group_next)
+						 ? config.tab_bar_height
+						 : 0;
+
 		up_geom.y = heads[focus_index - i + 1]->client->geom.y - cur_gappiv -
-					up_geom.height;
+					up_geom.height - bar_height;
 		arrange_stack_vertical_node(cur, up_geom, cur_gappih);
 	}
 
@@ -902,7 +914,6 @@ static void update_scroller_state(Monitor *m) {
 			break;
 	}
 
-	/* 移除不再可见的节点 */
 	struct ScrollerStackNode *n = st->all_first;
 	while (n) {
 		bool found = false;

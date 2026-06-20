@@ -261,7 +261,7 @@ static void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay,
 				!node->client->ismaximizescreen) {
 				struct wlr_box box = {ax, ay, MANGO_MAX(1, aw),
 									  MANGO_MAX(1, ah)};
-				resize(node->client, box, 0);
+				client_tile_resize(node->client, box, 0);
 			}
 		}
 		return;

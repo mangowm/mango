@@ -403,6 +403,79 @@ void client_draw_shadow(Client *c) {
 	wlr_scene_shadow_set_clipped_region(c->shadow, clipped_region);
 }
 
+void client_draw_title(Client *c) {
+
+	if (!c || !c->tab_bar_node)
+		return;
+
+	if (!c->group_next && !c->group_prev && c->tab_bar_node &&
+		c->tab_bar_node->scene_buffer->node.enabled) {
+		wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
+		return;
+	}
+
+	if (!c->group_next && !c->group_prev)
+		return;
+
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	int count = 0;
+	Client *cur = head;
+	while (cur) {
+		count++;
+		cur = cur->group_next;
+	}
+
+	int32_t tab_x = c->animation.current.x;
+	int32_t tab_y = c->animation.current.y - config.tab_bar_height;
+	int32_t tw = c->animation.current.width;
+	int32_t th = config.tab_bar_height;
+
+	int32_t left_over = c->mon->m.x - tab_x;
+	int32_t right_over = tab_x + tw - c->mon->m.x - c->mon->m.width;
+	int32_t top_over = c->mon->m.y - tab_y;
+	int32_t bottom_over =
+		tab_y + config.tab_bar_height - c->mon->m.y - c->mon->m.height;
+
+	if (top_over > 0)
+		th = config.tab_bar_height - top_over;
+	if (bottom_over > 0)
+		th = th - bottom_over;
+	if (right_over > 0)
+		tw = tw - right_over;
+	if (left_over > 0) {
+		tab_x = c->mon->m.x;
+		tw = tw - left_over;
+	}
+
+	if (tw <= 0 || th <= 0) {
+		cur = head;
+		while (cur) {
+			if (cur->tab_bar_node)
+				wlr_scene_node_set_enabled(
+					&cur->tab_bar_node->scene_buffer->node, false);
+			cur = cur->group_next;
+		}
+		return;
+	} else {
+		client_set_tab_node_visible(c);
+	}
+
+	int32_t bar_w = tw / count;
+	int32_t rem = tw % count;
+	int32_t x = tab_x;
+	cur = head;
+
+	for (int i = 0; i < count && cur; i++) {
+		int32_t w = bar_w + (i < rem ? 1 : 0);
+		global_draw_tab_bar(cur, x, tab_y, w, th);
+		x += w;
+		cur = cur->group_next;
+	}
+}
+
 void apply_shield(Client *c, struct wlr_box clip_box) {
 
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
@@ -453,7 +526,6 @@ void global_draw_tab_bar(Client *c, int32_t x, int32_t y, int32_t width,
 	}
 
 	wlr_scene_node_set_position(&c->tab_bar_node->scene_buffer->node, x, y);
-	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, true);
 	mango_tab_bar_node_set_size(c->tab_bar_node, width, height);
 }
 
@@ -711,10 +783,8 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 		(ISSCROLLTILED(c) || c->animation.tagouting || c->animation.tagining)) {
 		c->is_clip_to_hide = true;
 		wlr_scene_node_set_enabled(&c->scene->node, false);
-	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon) &&
-			   (!c->is_monocle_hide || !is_monocle_layout(c->mon))) {
+	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon)) {
 		c->is_clip_to_hide = false;
-		c->is_monocle_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 	}
 
@@ -938,6 +1008,7 @@ void client_apply_clip(Client *c, float factor) {
 
 		apply_border(c);
 		client_draw_shadow(c);
+		client_draw_title(c);
 		client_draw_blur(c, clip_box, offset);
 		apply_shield(c, clip_box);
 
@@ -981,6 +1052,7 @@ void client_apply_clip(Client *c, float factor) {
 	// 应用窗口装饰
 	apply_border(c);
 	client_draw_shadow(c);
+	client_draw_title(c);
 	apply_shield(c, clip_box);
 	client_draw_blur(c, clip_box, offset);
 
@@ -1432,6 +1504,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		client_get_clip(c, &clip);
 		apply_shield(c, clip);
 		client_draw_shadow(c);
+		client_draw_title(c);
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
 		if (config.blur && !c->noblur)
 			wlr_scene_blur_set_size(c->blur,
