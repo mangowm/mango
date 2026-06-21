@@ -2603,6 +2603,8 @@ void cleanuplisteners(void) {
 }
 
 void cleanup(void) {
+	allow_frame_scheduling = false;
+
 	ipc_cleanup();
 	cleanuplisteners();
 #ifdef XWAYLAND
