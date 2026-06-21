@@ -2592,6 +2592,7 @@ void cleanuplisteners(void) {
 	wl_list_remove(&new_foreign_toplevel_capture_request.link);
 	wl_list_remove(&tearing_new_object.link);
 	wl_list_remove(&keyboard_shortcuts_inhibit_new_inhibitor.link);
+	wl_list_remove(&ext_image_copy_capture_mgr_new_session.link);
 	if (drm_lease_manager) {
 		wl_list_remove(&drm_lease_request.link);
 	}
