@@ -168,6 +168,9 @@ int32_t groupjoin(const Arg *arg) {
 	if (!need_join_client || !need_join_client->mon)
 		return 0;
 
+	if (need_join_client->mon->isoverview)
+		return 0;
+
 	Client *need_replace_client = NULL;
 	need_replace_client = direction_select(arg);
 
@@ -216,11 +219,15 @@ int32_t groupleave(const Arg *arg) {
 	if (!selmon)
 		return 0;
 	Client *tc = arg->tc ? arg->tc : selmon->sel;
-	if (!tc || !tc->isgroupfocusing)
+	if (!tc || !tc->mon || !tc->isgroupfocusing)
 		return 0;
 	if (!tc->group_next && !tc->group_prev) {
 		return 0;
 	}
+
+	if (tc->mon->isoverview)
+		return 0;
+
 	Client *rc = tc->group_next ? tc->group_next : tc->group_prev;
 
 	client_focus_group_member(rc);
@@ -356,12 +363,15 @@ int32_t focusstack(const Arg *arg) {
 
 int32_t groupfocus(const Arg *arg) {
 	Client *c = arg->tc ? arg->tc : selmon->sel;
-	if (!c)
+	if (!c || !c->mon)
 		return 0;
 
 	if (!c->group_prev && !c->group_next) {
 		return 0;
 	}
+
+	if (c->mon->isoverview)
+		return 0;
 
 	Client *tc = NULL;
 
