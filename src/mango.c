@@ -2761,8 +2761,10 @@ void closemon(Monitor *m) {
 				}
 
 				c->mon = NULL;
+				client_set_group_mon(c, NULL);
 			} else {
 				client_change_mon(c, selmon);
+				client_set_group_mon(c, selmon);
 			}
 			// record the oldmonname which is used to restore
 			if (c->oldmonname[0] == '\0') {
