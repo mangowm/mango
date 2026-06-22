@@ -252,11 +252,13 @@ void scene_buffer_apply_overview_effect(struct wlr_scene_buffer *buffer,
 	bool is_subsurface = false;
 
 	struct wlr_scene_tree *parent_tree = buffer->node.parent;
-	if (parent_tree->node.data != NULL) {
-		SnapshotMetadata *meta = (SnapshotMetadata *)parent_tree->node.data;
+	SnapshotMetadata *meta = (SnapshotMetadata *)parent_tree->node.data;
+	if (parent_tree->node.data != NULL && meta->type == Snapshot) {
 		surface_width = meta->orig_width;
 		surface_height = meta->orig_height;
 		is_subsurface = meta->is_subsurface;
+	} else {
+		return;
 	}
 
 	surface_height = surface_height * buffer_data->height_scale;
@@ -1228,7 +1230,7 @@ void client_animation_next_tick(Client *c) {
 			c->animation.current = c->geom;
 		}
 
-		xytonode(cursor->x, cursor->y, NULL, &pointer_c, NULL, &sx, &sy);
+		xytonode(cursor->x, cursor->y, NULL, &pointer_c, NULL, NULL, &sx, &sy);
 
 		surface =
 			pointer_c && pointer_c == c ? client_surface(pointer_c) : NULL;

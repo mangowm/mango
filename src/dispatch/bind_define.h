@@ -471,7 +471,7 @@ int32_t moveresize(const Arg *arg) {
 
 	if (cursor_mode != CurNormal && cursor_mode != CurPressed)
 		return 0;
-	xytonode(cursor->x, cursor->y, NULL, &grabc, NULL, NULL, NULL);
+	xytonode(cursor->x, cursor->y, NULL, &grabc, NULL, NULL, NULL, NULL);
 	if (!grabc || client_is_unmanaged(grabc) || grabc->isfullscreen ||
 		grabc->ismaximizescreen) {
 		grabc = NULL;

@@ -121,12 +121,17 @@ void client_add_tab_bar_node(Client *c) {
 		return;
 	}
 
-	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
-	mangonodedata->node_data = c;
-	mangonodedata->type = MANGO_TITLE_NODE;
+	MangoCustomDecorate *MangoCustomDecorate =
+		ecalloc(1, sizeof(MangoCustomDecorate));
+	MangoCustomDecorate->node_data = c;
+	MangoCustomDecorate->node_type = MANGO_TITLE_NODE;
+	MangoCustomDecorate->type = CustomDecorate;
+	uint32_t layer = c->isfloating || c->isfullscreen ? LyrTop
+					 : c->ismaximizescreen			  ? LyrMaximize
+													  : LyrTile;
 
 	c->tab_bar_node = mango_tab_bar_node_create(
-		mangonodedata, layers[LyrDecorate], config.tabdata, 0, 0);
+		MangoCustomDecorate, layers[layer], config.tabdata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->tab_bar_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
 	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), 1.0);
@@ -224,10 +229,9 @@ void client_reparent_group(Client *c) {
 	if (!c->group_prev && !c->group_next)
 		return;
 
-	int32_t bar_layer = c->isfloating ? LyrDecorateTop : LyrDecorate;
-	int32_t client_layer = c->isfloating || c->isfullscreen ? LyrTop
-						   : c->ismaximizescreen			? LyrMaximize
-															: LyrTile;
+	int32_t layer = c->isfloating || c->isfullscreen ? LyrTop
+					: c->ismaximizescreen			 ? LyrMaximize
+													 : LyrTile;
 
 	Client *head = c;
 	while (head->group_prev)
@@ -237,28 +241,20 @@ void client_reparent_group(Client *c) {
 	while (cur) {
 		if (cur->tab_bar_node) {
 			wlr_scene_node_reparent(&cur->tab_bar_node->scene_buffer->node,
-									layers[bar_layer]);
-			wlr_scene_node_reparent(&cur->scene->node, layers[client_layer]);
+									layers[layer]);
+			wlr_scene_node_reparent(&cur->scene->node, layers[layer]);
 		}
 		cur = cur->group_next;
 	}
 }
 
-void client_handle_decorate_click(int32_t x, int32_t y) {
-	struct wlr_scene_node *node =
-		wlr_scene_node_at(&layers[LyrDecorateTop]->node, x, y, NULL, NULL);
+void client_handle_decorate_click(MangoCustomDecorate *md) {
 
-	if (!node || !node->data) {
-		node = wlr_scene_node_at(&layers[LyrDecorate]->node, x, y, NULL, NULL);
-	}
-
-	if (!node || !node->data) {
+	if (!md)
 		return;
-	}
 
-	MangoNodeData *mangonodedata = (MangoNodeData *)node->data;
-	if (mangonodedata->type == MANGO_TITLE_NODE) {
-		Client *c = mangonodedata->node_data;
+	if (md->node_type == MANGO_TITLE_NODE) {
+		Client *c = md->node_data;
 		client_focus_group_member(c);
 	}
 }

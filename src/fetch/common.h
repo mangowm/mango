@@ -100,11 +100,13 @@ static bool layer_ignores_focus(LayerSurface *l) {
 }
 
 void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
-			  LayerSurface **pl, double *nx, double *ny) {
+			  LayerSurface **pl, MangoCustomDecorate **pd, double *nx,
+			  double *ny) {
 	struct wlr_scene_node *node, *pnode;
 	struct wlr_surface *surface = NULL;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
+	MangoCustomDecorate *mangocustomdecorate = NULL;
 	int32_t layer;
 	Client *ovc = NULL;
 
@@ -125,8 +127,6 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 					wlr_scene_buffer_from_node(node));
 			if (scene_surface) {
 				surface = scene_surface->surface;
-			} else {
-				continue;
 			}
 		}
 
@@ -141,6 +141,9 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 				c = pnode->data;
 			if (c && c->type == LayerShell) {
 				l = (LayerSurface *)c;
+				c = NULL;
+			} else if (c && c->type == CustomDecorate) {
+				mangocustomdecorate = (MangoCustomDecorate *)c;
 				c = NULL;
 			}
 		}
@@ -159,6 +162,8 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		*pc = c;
 	if (pl)
 		*pl = l;
+	if (pd)
+		*pd = mangocustomdecorate;
 
 	if (selmon && selmon->isoverview && config.ov_no_resize) {
 		ovc = xytoclient(x, y);

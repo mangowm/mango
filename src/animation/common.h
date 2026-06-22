@@ -175,6 +175,7 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 		}
 		meta->orig_width = scene_buffer->dst_width;
 		meta->orig_height = scene_buffer->dst_height;
+		meta->type = Snapshot;
 
 		struct wlr_scene_surface *scene_surface =
 			wlr_scene_surface_try_from_buffer(scene_buffer);

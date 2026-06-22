@@ -165,17 +165,15 @@ enum { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT };
 
 enum { VERTICAL, HORIZONTAL };
 enum { SWIPE_UP, SWIPE_DOWN, SWIPE_LEFT, SWIPE_RIGHT };
-enum { CurNormal, CurPressed, CurMove, CurResize }; /* cursor */
-enum { XDGShell, LayerShell, X11 };					/* client types */
-enum { AxisUp, AxisDown, AxisLeft, AxisRight };		// 滚轮滚动的方向
+enum { CurNormal, CurPressed, CurMove, CurResize };			  /* cursor */
+enum { XDGShell, LayerShell, X11, CustomDecorate, Snapshot }; /* client types */
+enum { AxisUp, AxisDown, AxisLeft, AxisRight };				  // 滚轮滚动的方向
 enum {
 	LyrBg,
 	LyrBlur,
 	LyrBottom,
 	LyrTile,
-	LyrDecorate,
 	LyrMaximize,
-	LyrDecorateTop,
 	LyrTop,
 	LyrFadeOut,
 	LyrOverlay,
@@ -184,7 +182,7 @@ enum {
 	NUM_LAYERS
 }; /* scene layers */
 
-enum mango_node_type { MANGO_TITLE_NODE, MANGO_jump_label_node };
+enum mango_node_type { MANGO_TITLE_NODE, MANGO_JUMP_NODE };
 
 #ifdef XWAYLAND
 enum {
@@ -253,9 +251,10 @@ typedef struct {
 } Arg;
 
 typedef struct {
-	enum mango_node_type type;
+	uint32_t type;
+	enum mango_node_type node_type;
 	void *node_data;
-} MangoNodeData;
+} MangoCustomDecorate;
 
 typedef struct {
 	uint32_t mod;
@@ -652,6 +651,7 @@ struct TagScrollerState {
 };
 
 typedef struct {
+	uint32_t type;
 	int32_t orig_width;
 	int32_t orig_height;
 	bool is_subsurface;
@@ -805,7 +805,8 @@ static Monitor *get_monitor_nearest_to(int32_t x, int32_t y);
 static void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 												  void *data);
 static void xytonode(double x, double y, struct wlr_surface **psurface,
-					 Client **pc, LayerSurface **pl, double *nx, double *ny);
+					 Client **pc, LayerSurface **pl, MangoCustomDecorate **pd,
+					 double *nx, double *ny);
 static void clear_fullscreen_flag(Client *c);
 static pid_t getparentprocess(pid_t p);
 static int32_t isdescprocess(pid_t p, pid_t c);
@@ -2435,6 +2436,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 	uint32_t hard_mods, mods;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
+	MangoCustomDecorate *md = NULL;
 	struct wlr_surface *surface;
 	Client *tmpc = NULL;
 	int32_t ji;
@@ -2456,7 +2458,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		if (locked)
 			break;
 
-		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, NULL, NULL);
+		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, &md, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene->node.enabled &&
 				(!client_is_unmanaged(c) || client_wants_focus(c)))
@@ -2487,7 +2489,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		}
 
 		// handle click on tile node
-		client_handle_decorate_click(cursor->x, cursor->y);
+		client_handle_decorate_click(md);
 
 		// 当鼠标焦点在layer上的时候，不检测虚拟键盘的mod状态，
 		// 避免layer虚拟键盘锁死mod按键状态
@@ -4951,7 +4953,7 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 	}
 
 	/* Find the client under the pointer and send the event along. */
-	xytonode(cursor->x, cursor->y, &surface, &c, NULL, &sx, &sy);
+	xytonode(cursor->x, cursor->y, &surface, &c, NULL, NULL, &sx, &sy);
 
 	if (cursor_mode == CurPressed && !seat->drag &&
 		surface != seat->pointer_state.focused_surface &&
