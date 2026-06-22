@@ -118,5 +118,5 @@ void client_add_tab_bar_node(Client *c) {
 		mangonodedata, layers[LyrDecorate], config.tabdata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->tab_bar_node->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->tab_bar_node->scene_buffer->node, false);
-	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), 1.0);
+	mango_tab_bar_node_update(c->tab_bar_node, client_get_title(c), c->mon ? c->mon->wlr_output->scale : 1.0f);
 }

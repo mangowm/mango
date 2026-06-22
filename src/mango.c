@@ -6736,7 +6736,7 @@ void updatetitle(struct wl_listener *listener, void *data) {
 
 	const char *title;
 	title = client_get_title(c);
-	mango_tab_bar_node_update(c->tab_bar_node, title, 1.0);
+	mango_tab_bar_node_update(c->tab_bar_node, title, c->mon ? c->mon->wlr_output->scale : 1.0f);
 	if (title && c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
 	if (c == focustop(c->mon))
