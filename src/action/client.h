@@ -175,7 +175,7 @@ void client_focus_group_member(Client *c) {
 
 void client_check_tab_node_visible(Client *c) {
 
-	if (!c || c->iskilling)
+	if (!c || c->iskilling || !c->mon)
 		return;
 
 	Client *head = c;
