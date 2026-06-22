@@ -13,8 +13,8 @@ struct fx_corner_radii set_client_corner_location(Client *c) {
 	struct fx_corner_radii current_corner_location =
 		corner_radii_all(config.border_radius);
 
-	if (c == grabc ||
-		(!ISTILED(c) && !c->animation.tagining && !c->animation.tagouting)) {
+	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
+					   !c->animation.tagouting)) {
 		return current_corner_location;
 	}
 
@@ -376,8 +376,8 @@ void client_draw_shadow(Client *c) {
 
 	int32_t right_offset, bottom_offset, left_offset, top_offset;
 
-	if (c == grabc ||
-		(!ISTILED(c) && !c->animation.tagining && !c->animation.tagouting)) {
+	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
+					   !c->animation.tagouting)) {
 		right_offset = 0;
 		bottom_offset = 0;
 		left_offset = 0;
@@ -448,8 +448,8 @@ void client_draw_title(Client *c) {
 	int32_t bottom_over =
 		tab_y + config.group_bar_height - c->mon->m.y - c->mon->m.height;
 
-	if (c != grabc &&
-		(ISSCROLLTILED(c) || c->animation.tagining || c->animation.tagouting)) {
+	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
+					   !c->animation.tagouting)) {
 		if (top_over > 0) {
 			tab_y = c->mon->m.y;
 			th = config.group_bar_height - top_over;
@@ -496,6 +496,14 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
 		return;
+	}
+
+	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
+					   !c->animation.tagouting)) {
+		clip_box.x = 0;
+		clip_box.y = 0;
+		clip_box.width = c->animation.current.width - 2 * (int32_t)c->bw;
+		clip_box.height = c->animation.current.height - 2 * (int32_t)c->bw;
 	}
 
 	if (active_capture_count > 0 && c->shield_when_capture) {
@@ -681,8 +689,8 @@ void apply_border(Client *c) {
 
 	int32_t right_offset, bottom_offset, left_offset, top_offset;
 
-	if (c == grabc ||
-		(!ISTILED(c) && !c->animation.tagining && !c->animation.tagouting)) {
+	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
+					   !c->animation.tagouting)) {
 		right_offset = 0;
 		bottom_offset = 0;
 		left_offset = 0;
