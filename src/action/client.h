@@ -140,9 +140,6 @@ void client_focus_group_member(Client *c) {
 	if (c->isgroupfocusing)
 		return;
 
-	if (c->mon->isoverview)
-		return;
-
 	Client *head = c;
 	while (head->group_prev)
 		head = head->group_prev;
@@ -156,12 +153,16 @@ void client_focus_group_member(Client *c) {
 		head = head->group_next;
 	}
 
-	if (cur_focusing) {
-		cur_focusing->isgroupfocusing = false;
-		c->mon = cur_focusing->mon;
-		client_replace(c, cur_focusing, true);
-		mango_group_bar_set_focus(cur_focusing->group_bar, false);
-	}
+	if (!cur_focusing || !cur_focusing->mon)
+		return;
+
+	if (cur_focusing && cur_focusing->mon->isoverview)
+		return;
+
+	cur_focusing->isgroupfocusing = false;
+	c->mon = cur_focusing->mon;
+	client_replace(c, cur_focusing, true);
+	mango_group_bar_set_focus(cur_focusing->group_bar, false);
 
 	c->isgroupfocusing = true;
 	mango_group_bar_set_focus(c->group_bar, true);
@@ -254,5 +255,17 @@ void client_handle_decorate_click(MangoGroupBar *gb) {
 	if (gb->node_data) {
 		Client *c = gb->node_data;
 		client_focus_group_member(c);
+	}
+}
+
+void client_set_group_mon(Client *c, Monitor *m) {
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		cur->mon = m;
+		cur = cur->group_next;
 	}
 }

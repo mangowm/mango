@@ -161,38 +161,50 @@ int32_t groupjoin(const Arg *arg) {
 	if (!selmon)
 		return 0;
 
-	Client *need_join_client = arg->tc ? arg->tc : selmon->sel;
-	if (!need_join_client)
-		return 0;
+	Monitor *oldmon = NULL;
 
-	if (need_join_client->group_next || need_join_client->group_prev) {
+	Client *need_join_client = arg->tc ? arg->tc : selmon->sel;
+	if (!need_join_client || !need_join_client->mon)
 		return 0;
-	}
 
 	Client *need_replace_client = NULL;
 	need_replace_client = direction_select(arg);
 
-	if (!need_replace_client ||
-		need_replace_client->mon != need_join_client->mon)
+	if (!need_replace_client || !need_replace_client->mon)
 		return 0;
 
-	if (!need_join_client->group_next && !need_join_client->group_prev) {
-
-		if (!need_replace_client->group_prev &&
-			!need_replace_client->group_next) {
-			need_replace_client->isgroupfocusing = true;
-		}
-
-		need_join_client->group_next = need_replace_client;
-		if (need_replace_client->group_prev) {
-			need_replace_client->group_prev->group_next = need_join_client;
-		}
-		need_join_client->group_prev = need_replace_client->group_prev;
-		need_replace_client->group_prev = need_join_client;
-
-		client_focus_group_member(need_join_client);
-		arrange(need_join_client->mon, false, false);
+	if (need_join_client == need_replace_client)
 		return 0;
+
+	if (need_join_client->group_next || need_join_client->group_prev) {
+		groupleave(&(Arg){.tc = need_join_client});
+	}
+
+	if (need_join_client->mon != need_replace_client->mon) {
+		oldmon = need_join_client->mon;
+		need_join_client->mon = need_replace_client->mon;
+	}
+
+	if (!need_replace_client->group_prev && !need_replace_client->group_next) {
+		need_replace_client->isgroupfocusing = true;
+	}
+
+	need_join_client->group_next = need_replace_client;
+
+	if (need_replace_client->group_prev) {
+		need_replace_client->group_prev->group_next = need_join_client;
+	}
+
+	need_join_client->group_prev = need_replace_client->group_prev;
+
+	need_replace_client->group_prev = need_join_client;
+
+	client_focus_group_member(need_join_client);
+	arrange(need_join_client->mon, false, false);
+
+	// oldmon可能已经死掉了
+	if (oldmon) {
+		arrange(oldmon, false, false);
 	}
 
 	return 0;
