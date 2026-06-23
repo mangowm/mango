@@ -114,6 +114,13 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
 | `zoom` | - | Swap focused window with Master. |
 
+### Group
+| Command | Param | Description |
+| :--- | :--- | :--- |
+| `groupjoin` | `left/right/up/down`  | Join group by direction. |
+| `groupfocus` | `prev/next`  | Focus group member by direction. |
+| `groupleave` | -  | Leave group. |
+
 ### Tags & Monitors
 
 | Command | Param | Description |
