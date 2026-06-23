@@ -5130,6 +5130,7 @@ void rendermon(struct wl_listener *listener, void *data) {
 	bool frame_allow_tearing = false;
 	struct timespec now;
 	bool need_more_frames = false;
+	bool need_blur_dirty = false;  // dirty the blur buffer
 
 	if (session && !session->active) {
 		return;
@@ -5145,20 +5146,24 @@ void rendermon(struct wl_listener *listener, void *data) {
 		layer_list = &m->layers[i];
 		wl_list_for_each_safe(l, tmpl, layer_list, link) {
 			need_more_frames = layer_draw_frame(l) || need_more_frames;
+			if (l->animation.running) need_blur_dirty = true;
 		}
 	}
 
 	wl_list_for_each_safe(c, tmp, &fadeout_clients, fadeout_link) {
 		need_more_frames = client_draw_fadeout_frame(c) || need_more_frames;
+		if (l->animation.running) need_blur_dirty = true;
 	}
 
 	wl_list_for_each_safe(l, tmpl, &fadeout_layers, fadeout_link) {
 		need_more_frames = layer_draw_fadeout_frame(l) || need_more_frames;
+		if (l->animation.running) need_blur_dirty = true;
 	}
 
 	// 绘制客户端
 	wl_list_for_each(c, &clients, link) {
 		need_more_frames = client_draw_frame(c) || need_more_frames;
+		if (l->animation.running) need_blur_dirty = true;
 		if (!config.animations && !grabc && c->configure_serial &&
 			client_is_rendered_on_mon(c, m)) {
 			monitor_check_skip_frame_timeout(m);
@@ -5168,6 +5173,10 @@ void rendermon(struct wl_listener *listener, void *data) {
 
 	if (m->skiping_frame) {
 		monitor_stop_skip_frame_timer(m);
+	}
+
+	if (config.blur && m->blur && (need_blur_dirty || need_more_frames)) {
+		wlr_scene_optimized_blur_mark_dirty(m->blur);
 	}
 
 	// 只有在需要帧时才构建和提交状态
