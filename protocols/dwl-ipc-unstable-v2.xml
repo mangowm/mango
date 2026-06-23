@@ -19,7 +19,7 @@ I would probably just submit raphi's patchset but I don't think that would be po
       reset.
   </description>
 
-  <interface name="zdwl_ipc_manager_v2" version="2">
+  <interface name="zdwl_ipc_manager_v2" version="3">
     <description summary="manage dwl state">
       This interface is exposed as a global in wl_registry.
 
@@ -60,7 +60,7 @@ I would probably just submit raphi's patchset but I don't think that would be po
     </event>
   </interface>
 
-  <interface name="zdwl_ipc_output_v2" version="2">
+  <interface name="zdwl_ipc_output_v2" version="3">
     <description summary="control dwl output">
       Observe and control a dwl output.
 
@@ -126,6 +126,17 @@ I would probably just submit raphi's patchset but I don't think that would be po
         Indicates the appid has changed.
       </description>
       <arg name="appid" type="string" summary="The new appid."/>
+    </event>
+
+    <event name="client" since="3">
+        <description summary="Reports a client and its tag mask.">
+            Reports a single managed client on this output, with its appid, title,
+            and tag bitmask. Fired once per client per state-update batch, after
+            all tag events and before frame.
+        </description>
+           <arg name="appid" type="string" summary="The client's appid."/>
+           <arg name="title" type="string" summary="The client's title."/>
+           <arg name="tagmask" type="uint" summary="Bitmask of tags this client occupies."/>
     </event>
 
     <event name="layout_symbol" since="1">

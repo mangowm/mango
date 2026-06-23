@@ -212,6 +212,21 @@ void dwl_ipc_output_printstatus_to(DwlIpcOutput *ipc_output) {
 	}
 
 	zdwl_ipc_output_v2_send_frame(ipc_output->resource);
+
+  //recently added
+  if (wl_resource_get_version(ipc_output->resource) >= ZDWL_IPC_OUTPUT_V2_CLIENT_SINCE_VERSION) {
+        const char *c_appid, *c_title;
+        wl_list_for_each(c, &clients, link) {
+            if (c->mon != monitor)
+                continue;
+            c_appid = client_get_appid(c);
+            c_title = client_get_title(c);
+            zdwl_ipc_output_v2_send_client(ipc_output->resource,
+                c_appid ? c_appid : broken,
+                c_title ? c_title : broken,
+                c->tags);
+        }
+   }
 }
 
 void dwl_ipc_output_set_client_tags(struct wl_client *client,
