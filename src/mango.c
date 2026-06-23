@@ -1332,6 +1332,9 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 	}
 
 	if (w->overview_scene_surface) {
+		wlr_scene_node_reparent(&w->shield->node, w->overview_scene_surface);
+		wlr_scene_node_raise_to_top(&w->shield->node);
+
 		wlr_scene_node_destroy(&w->scene_surface->node);
 		w->scene_surface = w->overview_scene_surface;
 		w->overview_scene_surface = NULL;
@@ -6381,6 +6384,9 @@ void overview_backup_surface(Client *c) {
 		wlr_scene_tree_snapshot(&c->scene_surface->node, c->scene);
 	wlr_scene_node_set_enabled(&c->overview_scene_surface->node, false);
 	wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+
+	wlr_scene_node_reparent(&c->shield->node, c->scene_surface);
+	wlr_scene_node_raise_to_top(&c->shield->node);
 }
 
 // 普通视图切换到overview时保存窗口的旧状态
