@@ -78,6 +78,7 @@ typedef struct {
 	int32_t ignore_minimize;
 	int32_t isnosizehint;
 	int32_t idleinhibit_when_focus;
+	int32_t vrr_only_fullscreen;
 	char *monitor;
 	int32_t offsetx;
 	int32_t offsety;
@@ -2280,6 +2281,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->ignore_minimize = -1;
 		rule->isnosizehint = -1;
 		rule->idleinhibit_when_focus = -1;
+		rule->vrr_only_fullscreen = -1;
 		rule->isterm = -1;
 		rule->allow_csd = -1;
 		rule->force_fakemaximize = -1;
@@ -2389,6 +2391,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->isnosizehint = atoi(val);
 				} else if (strcmp(key, "idleinhibit_when_focus") == 0) {
 					rule->idleinhibit_when_focus = atoi(val);
+				} else if (strcmp(key, "vrr_only_fullscreen") == 0) {
+					rule->vrr_only_fullscreen = atoi(val);
 				} else if (strcmp(key, "isterm") == 0) {
 					rule->isterm = atoi(val);
 				} else if (strcmp(key, "allow_csd") == 0) {

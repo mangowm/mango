@@ -375,7 +375,8 @@ struct Client {
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, isnosizehint,
-		ignore_maximize, ignore_minimize, idleinhibit_when_focus;
+		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
+		vrr_only_fullscreen;
 	int32_t ismaximizescreen;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
@@ -583,6 +584,8 @@ struct Monitor {
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
+	bool vrr_global_enable;
+	bool is_vrr_opening;
 };
 
 typedef struct {
@@ -1642,6 +1645,7 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, ignore_minimize);
 	APPLY_INT_PROP(c, r, isnosizehint);
 	APPLY_INT_PROP(c, r, idleinhibit_when_focus);
+	APPLY_INT_PROP(c, r, vrr_only_fullscreen);
 	APPLY_INT_PROP(c, r, isunglobal);
 	APPLY_INT_PROP(c, r, allow_shortcuts_inhibit);
 
@@ -3271,15 +3275,22 @@ struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
 }
 
 void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
+
 	wlr_output_state_set_adaptive_sync_enabled(state, true);
 	if (!wlr_output_test_state(m->wlr_output, state)) {
 		wlr_output_state_set_adaptive_sync_enabled(state, false);
 		wlr_log(WLR_DEBUG, "failed to enable adaptive sync for output %s",
 				m->wlr_output->name);
 	} else {
+		m->is_vrr_opening = true;
 		wlr_log(WLR_INFO, "adaptive sync enabled for output %s",
 				m->wlr_output->name);
 	}
+}
+
+void disable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
+	wlr_output_state_set_adaptive_sync_enabled(state, false);
+	m->is_vrr_opening = false;
 }
 
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
@@ -3302,6 +3313,8 @@ bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state, int vrr, int custom) {
 	bool mode_set = false;
+	m->vrr_global_enable = vrr;
+
 	if (rule->width > 0 && rule->height > 0 && rule->refresh > 0) {
 		struct wlr_output_mode *internal_mode = get_nearest_output_mode(
 			m->wlr_output, rule->width, rule->height, rule->refresh);
@@ -3318,7 +3331,7 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	if (vrr) {
 		enable_adaptive_sync(m, state);
 	} else {
-		wlr_output_state_set_adaptive_sync_enabled(state, false);
+		disable_adaptive_sync(m, state);
 	}
 	wlr_output_state_set_scale(state, rule->scale);
 	wlr_output_state_set_transform(state, rule->rr);
@@ -3357,6 +3370,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->resizing_count_pending = 0;
 	m->resizing_count_current = 0;
 	m->carousel_anim_dir = 0;
+	m->vrr_global_enable = false;
+	m->is_vrr_opening = false;
 
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
@@ -4488,6 +4503,7 @@ void init_client_properties(Client *c) {
 	c->force_tearing = 0;
 	c->allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	c->idleinhibit_when_focus = 0;
+	c->vrr_only_fullscreen = 0;
 	c->scroller_proportion_single = 0.0f;
 	c->float_geom.width = 0;
 	c->float_geom.height = 0;
@@ -5009,8 +5025,12 @@ outputmgrapplyortest(struct wlr_output_configuration_v1 *config, int32_t test) {
 
 		wlr_output_state_set_transform(&state, config_head->state.transform);
 		wlr_output_state_set_scale(&state, config_head->state.scale);
-		wlr_output_state_set_adaptive_sync_enabled(
-			&state, config_head->state.adaptive_sync_enabled);
+
+		if (config_head->state.adaptive_sync_enabled) {
+			enable_adaptive_sync(m, &state);
+		} else {
+			disable_adaptive_sync(m, &state);
+		}
 
 	apply_or_test:
 		ok &= test ? wlr_output_test_state(wlr_output, &state)
@@ -6493,6 +6513,20 @@ int32_t hidecursor(void *data) {
 void check_keep_idle_inhibit(Client *c) {
 	if (c && c->idleinhibit_when_focus && keep_idle_inhibit_source) {
 		wl_event_source_timer_update(keep_idle_inhibit_source, 1000);
+	}
+
+	if (c && c->mon && c->vrr_only_fullscreen && c->isfullscreen &&
+		!c->mon->is_vrr_opening) {
+		struct wlr_output_state state = {0};
+		enable_adaptive_sync(c->mon, &state);
+	} else if (c && c->mon && (!c->vrr_only_fullscreen || !c->isfullscreen)) {
+		if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
+			struct wlr_output_state state = {0};
+			enable_adaptive_sync(c->mon, &state);
+		} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
+			struct wlr_output_state state = {0};
+			disable_adaptive_sync(c->mon, &state);
+		}
 	}
 }
 

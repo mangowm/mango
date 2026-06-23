@@ -35,6 +35,9 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
 | `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
+| `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
+
 
 ### Geometry & Position
 
