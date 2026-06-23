@@ -734,6 +734,7 @@ static void motionrelative(struct wl_listener *listener, void *data);
 static void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
 static void add_foreign_topleve(Client *c);
 static void exchange_two_client(Client *c1, Client *c2);
+static void move_two_client(Client *c, Client *target, int32_t dir);
 static void outputmgrapply(struct wl_listener *listener, void *data);
 static void outputmgrapplyortest(struct wlr_output_configuration_v1 *config,
 								 int32_t test);
@@ -897,7 +898,7 @@ static void client_pending_minimized_state(Client *c, int32_t isminimized);
 static void scroller_insert_stack(Client *c, Client *target_client,
 								  bool insert_before);
 static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-								float ratio, int32_t dir);
+								float ratio, int32_t dir, bool lock);
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy);
 static void dwindle_resize_client(Monitor *m, Client *c);
@@ -5267,6 +5268,30 @@ void exchange_two_client(Client *c1, Client *c2) {
 	}
 
 	finish_exchange_arrange_and_focus(c1, c2, m1, m2);
+}
+
+static void move_two_client(Client *c, Client *target, int32_t dir) {
+	if (c == NULL || target == NULL || c == target ||
+		(!config.exchange_cross_monitor && c->mon != target->mon)) {
+		return;
+	}
+
+	Monitor *m = c->mon;
+	const Layout *layout = m->pertag->ltidxs[m->pertag->curtag];
+
+	if (layout->id == SCROLLER) {
+		exchange_two_scroller_clients(c, target);
+		return;
+	}
+
+	wl_list_remove(&c->link);
+	if (dir == UP || dir == LEFT) {
+		wl_list_insert(target->link.prev, &c->link);
+	} else {
+		wl_list_insert(&target->link, &c->link);
+	}
+
+	arrange(m, false, false);
 }
 
 void set_activation_env() {

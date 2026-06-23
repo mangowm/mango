@@ -111,6 +111,33 @@ int32_t exchange_client(const Arg *arg) {
 	return 0;
 }
 
+int32_t move_client(const Arg *arg) {
+	if (!selmon)
+		return 0;
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	if (!c || c->isfloating)
+		return 0;
+
+	if ((c->isfullscreen || c->ismaximizescreen) && !is_scroller_layout(c->mon))
+		return 0;
+
+	Client *tc = direction_select(arg);
+	tc = get_focused_stack_client(tc, arg->tc);
+
+	if (!tc)
+		return 0;
+
+	if (c->mon && c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == DWINDLE) {
+		uint32_t tag = c->mon->pertag->curtag;
+		dwindle_move_client(&c->mon->pertag->dwindle_root[tag], c, tc,
+							config.dwindle_split_ratio, arg->i, false);
+		arrange(c->mon, false, false);
+	} else {
+		move_two_client(c, tc, arg->i);
+	}
+	return 0;
+}
+
 int32_t exchange_stack_client(const Arg *arg) {
 	if (!selmon)
 		return 0;
