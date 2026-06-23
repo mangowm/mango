@@ -1061,6 +1061,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
 		(*arg).i = parse_force(arg_value);
+	} else if (strcmp(func_name, "smartkillclient") == 0) {
+		func = smartkillclient;
 	} else if (strcmp(func_name, "centerwin") == 0) {
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
