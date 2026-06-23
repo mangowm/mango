@@ -946,6 +946,7 @@ static void global_draw_group_bar(Client *c, int32_t x, int32_t y,
 
 static void client_reparent_group(Client *c);
 static void client_change_mon(Client *c, Monitor *m);
+static void check_vrr_enable(Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -3908,6 +3909,7 @@ void focusclient(Client *c, int32_t lift) {
 		c->isfocusing = true;
 
 		check_keep_idle_inhibit(c);
+		check_vrr_enable(c);
 
 		if (last_focus_client && !last_focus_client->iskilling &&
 			last_focus_client != c) {
@@ -5726,6 +5728,7 @@ void setfullscreen(Client *c, int32_t fullscreen,
 	}
 
 	client_reparent_group(c);
+	check_vrr_enable(c);
 
 	if (rearrange)
 		arrange(c->mon, false, false);
@@ -6514,19 +6517,27 @@ void check_keep_idle_inhibit(Client *c) {
 	if (c && c->idleinhibit_when_focus && keep_idle_inhibit_source) {
 		wl_event_source_timer_update(keep_idle_inhibit_source, 1000);
 	}
+}
 
-	if (c && c->mon && c->vrr_only_fullscreen && c->isfullscreen &&
-		!c->mon->is_vrr_opening) {
-		struct wlr_output_state state = {0};
+void check_vrr_enable(Client *c) {
+
+	if (!c || !c->mon)
+		return;
+
+	struct wlr_output_state state = {0};
+
+	if (c->vrr_only_fullscreen && c->isfullscreen && !c->mon->is_vrr_opening) {
 		enable_adaptive_sync(c->mon, &state);
-	} else if (c && c->mon && (!c->vrr_only_fullscreen || !c->isfullscreen)) {
-		if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
-			struct wlr_output_state state = {0};
-			enable_adaptive_sync(c->mon, &state);
-		} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
-			struct wlr_output_state state = {0};
-			disable_adaptive_sync(c->mon, &state);
-		}
+		wlr_output_commit_state(c->mon->wlr_output, &state);
+		return;
+	}
+
+	if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
+		enable_adaptive_sync(c->mon, &state);
+		wlr_output_commit_state(c->mon->wlr_output, &state);
+	} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
+		disable_adaptive_sync(c->mon, &state);
+		wlr_output_commit_state(c->mon->wlr_output, &state);
 	}
 }
 
