@@ -7019,7 +7019,8 @@ void updatetitle(struct wl_listener *listener, void *data) {
 
 	const char *title;
 	title = client_get_title(c);
-	mango_group_bar_update(c->group_bar, title, 1.0);
+	mango_group_bar_update(c->group_bar, title,
+						   c->mon ? c->mon->wlr_output->scale : 1.0f);
 	if (title && c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
 	if (title && c->ext_foreign_toplevel) {
