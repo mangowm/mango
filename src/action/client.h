@@ -179,7 +179,7 @@ void client_focus_group_member(Client *c) {
 
 void client_check_tab_node_visible(Client *c) {
 
-	if (!c || c->iskilling || !c->mon)
+	if (!c || !c->mon)
 		return;
 
 	Client *head = c;
@@ -206,9 +206,6 @@ void client_raise_group(Client *c) {
 	if (!c || !c->mon)
 		return;
 
-	if (!c->group_prev && !c->group_next)
-		return;
-
 	Client *head = c;
 	while (head->group_prev)
 		head = head->group_prev;
@@ -217,17 +214,14 @@ void client_raise_group(Client *c) {
 	while (cur) {
 		if (cur->group_bar) {
 			wlr_scene_node_raise_to_top(&cur->group_bar->scene_buffer->node);
-			wlr_scene_node_raise_to_top(&cur->scene->node);
 		}
+		wlr_scene_node_raise_to_top(&cur->scene->node);
 		cur = cur->group_next;
 	}
 }
 
 void client_reparent_group(Client *c) {
-	if (!c || !c->group_bar)
-		return;
-
-	if (!c->group_prev && !c->group_next)
+	if (!c || !c->mon)
 		return;
 
 	int32_t layer = c->isoverlay					   ? LyrOverlay
@@ -244,8 +238,8 @@ void client_reparent_group(Client *c) {
 		if (cur->group_bar) {
 			wlr_scene_node_reparent(&cur->group_bar->scene_buffer->node,
 									layers[layer]);
-			wlr_scene_node_reparent(&cur->scene->node, layers[layer]);
 		}
+		wlr_scene_node_reparent(&cur->scene->node, layers[layer]);
 		cur = cur->group_next;
 	}
 }
@@ -268,7 +262,7 @@ void client_set_group_mon(Client *c, Monitor *m) {
 
 	Client *cur = head;
 	while (cur) {
-		cur->mon = m;
+		client_change_mon(cur, m);
 		cur = cur->group_next;
 	}
 }

@@ -1555,16 +1555,6 @@ int32_t toggleoverlay(const Arg *arg) {
 
 	c->isoverlay ^= 1;
 
-	if (c->isoverlay) {
-		wlr_scene_node_reparent(&c->scene->node, layers[LyrOverlay]);
-		wlr_scene_node_raise_to_top(&c->scene->node);
-	} else if (client_should_overtop(c) && c->isfloating) {
-		wlr_scene_node_reparent(&c->scene->node, layers[LyrTop]);
-	} else {
-		wlr_scene_node_reparent(&c->scene->node,
-								layers[c->isfloating ? LyrTop : LyrTile]);
-	}
-
 	client_reparent_group(c);
 	setborder_color(c);
 	return 0;
