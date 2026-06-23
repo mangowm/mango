@@ -22,6 +22,11 @@ enum { NUM_TYPE_MINUS, NUM_TYPE_PLUS, NUM_TYPE_DEFAULT };
 
 enum { KEY_TYPE_CODE, KEY_TYPE_SYM };
 
+enum render_bit_depth {
+	MANGO_RENDER_BIT_DEPTH_DEFAULT = 0,
+	MANGO_RENDER_BIT_DEPTH_8,
+	MANGO_RENDER_BIT_DEPTH_10,
+};
 typedef struct {
 	uint32_t keycode1;
 	uint32_t keycode2;
@@ -112,6 +117,7 @@ typedef struct {
 	float refresh;				 // Refresh rate
 	int32_t vrr;				 // variable refresh rate
 	int32_t custom;				 // enable custom mode
+	int32_t hdr;				 // enable hdr mode
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -391,6 +397,8 @@ typedef struct {
 	struct xkb_keymap *keymap;
 	DecorateDrawData jumplabeldata;
 	DecorateDrawData tabdata;
+
+	int32_t hdr_depth;
 } Config;
 
 typedef int32_t (*FuncType)(const Arg *);
@@ -1464,6 +1472,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
+	} else if (strcmp(key, "hdr_depth") == 0) {
+		config->hdr_depth = atoi(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
 		config->allow_shortcuts_inhibit = atoi(value);
 	} else if (strcmp(key, "allow_lock_transparent") == 0) {
@@ -2047,6 +2057,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->height = -1;
 		rule->refresh = 0.0f;
 		rule->vrr = 0;
+		rule->hdr = 0;
 		rule->custom = 0;
 
 		bool parse_error = false;
@@ -2085,6 +2096,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->refresh = CLAMP_FLOAT(atof(val), 0.001f, 1000.0f);
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "hdr") == 0) {
+					rule->hdr = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "custom") == 0) {
 					rule->custom = CLAMP_INT(atoi(val), 0, 1);
 				} else {
@@ -3421,6 +3434,7 @@ void override_config(void) {
 	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
 	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
+	config.hdr_depth = CLAMP_INT(config.hdr_depth, 0, 2);
 	config.allow_shortcuts_inhibit =
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	config.allow_lock_transparent =
@@ -3588,6 +3602,7 @@ void set_value_default() {
 	config.drag_tile_refresh_interval = 8.0f;
 	config.drag_floating_refresh_interval = 8.0f;
 	config.allow_tearing = TEARING_DISABLED;
+	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_DEFAULT;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	config.allow_lock_transparent = 0;
 	config.no_border_when_single = 0;
@@ -3868,13 +3883,12 @@ void reapply_monitor_rules(void) {
 	Monitor *m = NULL;
 	int32_t ji, vrr, custom;
 	int32_t mx, my;
-	struct wlr_output_state state;
 
 	wl_list_for_each(m, &mons, link) {
 		if (!m->wlr_output->enabled)
 			continue;
 
-		wlr_output_state_init(&state);
+		wlr_output_state_init(&m->pending);
 
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
@@ -3887,16 +3901,31 @@ void reapply_monitor_rules(void) {
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
 				custom = mr->custom >= 0 ? mr->custom : 0;
+				m->hdr_enable = mr->hdr >= 0 ? mr->hdr : 0;
 
-				(void)apply_rule_to_state(m, mr, &state, vrr, custom);
+				(void)apply_rule_to_state(m, mr, &m->pending, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
-				wlr_output_commit_state(m->wlr_output, &state);
 				break;
 			}
 		}
 
-		wlr_output_state_finish(&state);
+		wlr_output_state_set_enabled(&m->pending, true);
+
+		if (m->hdr_enable) {
+			output_state_setup_hdr(m, false);
+			bool success = wlr_output_commit_state(m->wlr_output, &m->pending);
+			if (!success) { // 多尝试一次
+				output_state_setup_hdr(m, true);
+			}
+		} else {
+			wlr_output_commit_state(m->wlr_output, &m->pending);
+		}
+
+		wlr_output_state_finish(&m->pending);
+		wlr_output_effective_resolution(m->wlr_output, &m->m.width,
+										&m->m.height);
 	}
+
 	updatemons(NULL, NULL);
 }
 
