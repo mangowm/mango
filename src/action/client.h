@@ -130,7 +130,10 @@ void client_add_group_bar(Client *c) {
 										  config.tabdata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->group_bar->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
-	mango_group_bar_update(c->group_bar, client_get_title(c), 1.0);
+	mango_group_bar_update(c->group_bar, client_get_title(c),
+						   c->mon	? c->mon->wlr_output->scale
+						   : selmon ? selmon->wlr_output->scale
+									: 1.0f);
 }
 
 void client_focus_group_member(Client *c) {

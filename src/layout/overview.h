@@ -364,7 +364,8 @@ void create_jump_hints(Monitor *m) {
 			c->jump_char = c_char;
 
 			char label_text[2] = {c_char, '\0'};
-			mango_jump_label_node_update(c->jump_label_node, label_text, 1.0f);
+			mango_jump_label_node_update(c->jump_label_node, label_text,
+										 m->wlr_output->scale);
 			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
 									   true);
 			wlr_scene_node_raise_to_top(
