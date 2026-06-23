@@ -290,18 +290,37 @@ void center_tile(Monitor *m) {
 	int32_t should_overspread =
 		config.center_master_overspread && (n <= nmasters);
 
+	int32_t left_num = 0;
+	int32_t right_num = 0;
+	for (int j = 0; j < stack_num; j++) {
+		if ((j % 2) ^ (n % 2 == 0)) {
+			right_num++;
+		} else {
+			left_num++;
+		}
+	}
+
 	int32_t master_surplus_height =
-		(m->w.height - 2 * cur_gappov - cur_gappiv * ie * (master_num - 1));
+		(m->w.height - 2 * cur_gappov -
+		 cur_gappiv * ie * (master_num > 0 ? master_num - 1 : 0));
 	float master_surplus_ratio = 1.0;
+	int32_t init_master_surplus = master_surplus_height;
 
 	int32_t slave_left_surplus_height =
-		(m->w.height - 2 * cur_gappov - cur_gappiv * ie * (stack_num / 2 - 1));
+		(m->w.height - 2 * cur_gappov -
+		 cur_gappiv * ie * (left_num > 0 ? left_num - 1 : 0));
 	float slave_left_surplus_ratio = 1.0;
+	int32_t init_slave_left_surplus = slave_left_surplus_height;
 
 	int32_t slave_right_surplus_height =
 		(m->w.height - 2 * cur_gappov -
-		 cur_gappiv * ie * ((stack_num + 1) / 2 - 1));
+		 cur_gappiv * ie * (right_num > 0 ? right_num - 1 : 0));
 	float slave_right_surplus_ratio = 1.0;
+	int32_t init_slave_right_surplus = slave_right_surplus_height;
+
+	int32_t init_single_stack_surplus =
+		(m->w.height - 2 * cur_gappov -
+		 cur_gappiv * ie * (stack_num > 0 ? stack_num - 1 : 0));
 
 	if (n > nmasters || !should_overspread) {
 		// 计算主区域宽度（居中模式）
@@ -349,6 +368,8 @@ void center_tile(Monitor *m) {
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
+				if (r == 1)
+					h = m->w.height - my - cur_gappov;
 				master_surplus_height = master_surplus_height - h;
 				master_surplus_ratio =
 					master_surplus_ratio - c->master_inner_per;
@@ -357,8 +378,12 @@ void center_tile(Monitor *m) {
 				h = (m->w.height - my - cur_gappov -
 					 cur_gappiv * ie * (r - 1)) /
 					r;
-				c->master_inner_per = h / (m->w.height - my - cur_gappov -
-										   cur_gappiv * ie * (r - 1));
+				if (r == 1)
+					h = m->w.height - my - cur_gappov;
+				c->master_inner_per =
+					init_master_surplus > 0
+						? ((float)h / (float)init_master_surplus)
+						: 0;
 				c->master_mfact_per = mfact;
 			}
 
@@ -377,16 +402,20 @@ void center_tile(Monitor *m) {
 				// 单个堆叠窗口
 				r = n - i;
 				if (c->stack_inner_per > 0.0f) {
-					h = (m->w.height - 2 * cur_gappov -
-						 cur_gappiv * ie * (stack_num - 1)) *
-						c->stack_inner_per;
+					h = init_single_stack_surplus * c->stack_inner_per;
+					if (r == 1)
+						h = m->w.height - ety - cur_gappov;
 					c->master_mfact_per = mfact;
 				} else {
 					h = (m->w.height - ety - cur_gappov -
 						 cur_gappiv * ie * (r - 1)) /
 						r;
-					c->stack_inner_per = h / (m->w.height - ety - cur_gappov -
-											  cur_gappiv * ie * (r - 1));
+					if (r == 1)
+						h = m->w.height - ety - cur_gappov;
+					c->stack_inner_per =
+						init_single_stack_surplus > 0
+							? ((float)h / (float)init_single_stack_surplus)
+							: 0;
 					c->master_mfact_per = mfact;
 				}
 
@@ -403,7 +432,7 @@ void center_tile(Monitor *m) {
 													.width = tw,
 													.height = h},
 								   0);
-				ety += h + cur_gappiv * ie; // 使用理论高度累加
+				ety += h + cur_gappiv * ie;
 			} else {
 				// 多个堆叠窗口：交替放在左右两侧
 				r = (n - i + 1) / 2;
@@ -413,6 +442,8 @@ void center_tile(Monitor *m) {
 					if (c->stack_inner_per > 0.0f) {
 						h = slave_right_surplus_height * c->stack_inner_per /
 							slave_right_surplus_ratio;
+						if (r == 1)
+							h = m->w.height - ety - cur_gappov;
 						slave_right_surplus_height =
 							slave_right_surplus_height - h;
 						slave_right_surplus_ratio =
@@ -422,9 +453,12 @@ void center_tile(Monitor *m) {
 						h = (m->w.height - ety - cur_gappov -
 							 cur_gappiv * ie * (r - 1)) /
 							r;
+						if (r == 1)
+							h = m->w.height - ety - cur_gappov;
 						c->stack_inner_per =
-							h / (m->w.height - ety - cur_gappov -
-								 cur_gappiv * ie * (r - 1));
+							init_slave_right_surplus > 0
+								? ((float)h / (float)init_slave_right_surplus)
+								: 0;
 						c->master_mfact_per = mfact;
 					}
 
@@ -436,12 +470,14 @@ void center_tile(Monitor *m) {
 														.width = tw,
 														.height = h},
 									   0);
-					ety += h + cur_gappiv * ie; // 使用理论高度累加
+					ety += h + cur_gappiv * ie;
 				} else {
 					// 左侧堆叠窗口
 					if (c->stack_inner_per > 0.0f) {
 						h = slave_left_surplus_height * c->stack_inner_per /
 							slave_left_surplus_ratio;
+						if (r == 1)
+							h = m->w.height - oty - cur_gappov;
 						slave_left_surplus_height =
 							slave_left_surplus_height - h;
 						slave_left_surplus_ratio =
@@ -451,9 +487,12 @@ void center_tile(Monitor *m) {
 						h = (m->w.height - oty - cur_gappov -
 							 cur_gappiv * ie * (r - 1)) /
 							r;
+						if (r == 1)
+							h = m->w.height - oty - cur_gappov;
 						c->stack_inner_per =
-							h / (m->w.height - oty - cur_gappov -
-								 cur_gappiv * ie * (r - 1));
+							init_slave_left_surplus > 0
+								? ((float)h / (float)init_slave_left_surplus)
+								: 0;
 						c->master_mfact_per = mfact;
 					}
 
@@ -464,7 +503,7 @@ void center_tile(Monitor *m) {
 														.width = tw,
 														.height = h},
 									   0);
-					oty += h + cur_gappiv * ie; // 使用理论高度累加
+					oty += h + cur_gappiv * ie;
 				}
 			}
 		}
