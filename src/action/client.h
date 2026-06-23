@@ -266,3 +266,8 @@ void client_set_group_mon(Client *c, Monitor *m) {
 		cur = cur->group_next;
 	}
 }
+
+void handle_client_focus_change(Client *c) {
+	check_keep_idle_inhibit(c);
+	check_vrr_enable(c);
+}

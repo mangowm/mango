@@ -598,6 +598,7 @@ struct Monitor {
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
 	bool is_vrr_opening;
+	bool hdr_enable;
 };
 
 typedef struct {
@@ -952,6 +953,9 @@ static void global_draw_group_bar(Client *c, int32_t x, int32_t y,
 static void client_reparent_group(Client *c);
 static void client_change_mon(Client *c, Monitor *m);
 static void check_vrr_enable(Client *c);
+static void output_state_setup_hdr(Monitor *m, bool silent);
+static void output_enable_hdr(Monitor *m, struct wlr_output_state *os,
+							  bool enabled, bool silent);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -3428,7 +3432,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	const ConfigMonitorRule *r;
 	uint32_t i;
 	int32_t ji, vrr, custom;
-	struct wlr_output_state state;
 	Monitor *m = NULL;
 	bool custom_monitor_mode = false;
 
@@ -3456,6 +3459,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->vrr_global_enable = false;
 	m->is_vrr_opening = false;
 
+	m->hdr_enable = false;
+
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
 
@@ -3476,9 +3481,9 @@ void createmon(struct wl_listener *listener, void *data) {
 	float scale = 1;
 	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
 
-	wlr_output_state_init(&state);
-	wlr_output_state_set_scale(&state, scale);
-	wlr_output_state_set_transform(&state, rr);
+	wlr_output_state_init(&m->pending);
+	wlr_output_state_set_scale(&m->pending, scale);
+	wlr_output_state_set_transform(&m->pending, rr);
 
 	for (ji = 0; ji < config.monitor_rules_count; ji++) {
 		if (config.monitor_rules_count < 1)
@@ -3493,8 +3498,9 @@ void createmon(struct wl_listener *listener, void *data) {
 			custom = r->custom >= 0 ? r->custom : 0;
 			scale = r->scale;
 			rr = r->rr;
+			m->hdr_enable = r->hdr;
 
-			if (apply_rule_to_state(m, r, &state, vrr, custom)) {
+			if (apply_rule_to_state(m, r, &m->pending, vrr, custom)) {
 				custom_monitor_mode = true;
 			}
 			break; // 只应用第一个匹配规则
@@ -3502,7 +3508,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	}
 
 	if (!custom_monitor_mode)
-		wlr_output_state_set_mode(&state,
+		wlr_output_state_set_mode(&m->pending,
 								  wlr_output_preferred_mode(wlr_output));
 
 	/* Set up event listeners */
@@ -3511,9 +3517,16 @@ void createmon(struct wl_listener *listener, void *data) {
 	LISTEN(&wlr_output->events.request_state, &m->request_state,
 		   requestmonstate);
 
-	wlr_output_state_set_enabled(&state, 1);
-	wlr_output_commit_state(wlr_output, &state);
-	wlr_output_state_finish(&state);
+	wlr_output_state_set_enabled(&m->pending, 1);
+
+	if (m->hdr_enable) {
+		output_state_setup_hdr(m, false);
+	}
+
+	wlr_output_commit_state(wlr_output, &m->pending);
+	wlr_output_state_finish(&m->pending);
+
+	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	wl_list_insert(&mons, &m->link);
 
@@ -3996,8 +4009,7 @@ void focusclient(Client *c, int32_t lift) {
 		selmon->sel = c;
 		c->isfocusing = true;
 
-		check_keep_idle_inhibit(c);
-		check_vrr_enable(c);
+		handle_client_focus_change(c);
 
 		if (last_focus_client && !last_focus_client->iskilling &&
 			last_focus_client != c) {

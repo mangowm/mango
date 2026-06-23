@@ -30,6 +30,7 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 | `y` | integer | 0-99999 | Y position |
 | `scale` | float | 0.01-100.0 | Monitor scale |
 | `vrr` | integer | 0, 1 | Enable variable refresh rate |
+| `hdr` | integer | 0, 1 | Enable hdr support |
 | `rr` | integer | 0-7 | Monitor transform |
 | `custom` | integer | 0, 1 | Enable custom mode (not supported on all displays — may cause black screen) |
 
