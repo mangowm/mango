@@ -182,6 +182,10 @@ static void get_text_pixel_size(MangoJumpLabel *node, const char *text,
 
 static void draw_rounded_rect(cairo_t *cr, double x, double y, double w,
 							  double h, double r) {
+	// 宽高非正时不绘制任何东西
+	if (w <= 0.0 || h <= 0.0)
+		return;
+
 	double degrees = G_PI / 180.0;
 	cairo_new_sub_path(cr);
 	cairo_arc(cr, x + w - r, y + r, r, -90 * degrees, 0 * degrees);
@@ -198,7 +202,7 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 	if (scale <= 0.0f)
 		scale = 1.0f;
 
-	/* 脏检查，加入 focused 状态 */
+	// 脏检查
 	if (node->cached_scale == scale && node->cached_font_desc &&
 		strcmp(node->cached_font_desc, node->font_desc) == 0 &&
 		node->cached_text && strcmp(node->cached_text, text) == 0 &&
@@ -220,7 +224,7 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 		return;
 	}
 
-	/* 更新缓存 */
+	// 更新缓存
 	g_free(node->cached_text);
 	node->cached_text = g_strdup(text);
 	g_free(node->cached_font_desc);
@@ -264,6 +268,7 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 	int32_t box_logical_w = logical_text_w + 2 * node->padding_x;
 	int32_t box_logical_h = logical_text_h + 2 * node->padding_y;
 
+	// 物理像素尺寸包含边框,避免边框越界
 	int32_t required_pixel_w =
 		(int32_t)((box_logical_w + 2 * node->border_width) * scale + 0.5f);
 	int32_t required_pixel_h =
@@ -316,13 +321,15 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 		radius = bg_w / 2.0;
 	if (radius > bg_h / 2.0)
 		radius = bg_h / 2.0;
+	if (radius < 0.0)
+		radius = 0.0;
 
 	const float *active_bg =
 		node->focused ? node->focus_bg_color : node->bg_color;
 	const float *active_fg =
 		node->focused ? node->focus_fg_color : node->fg_color;
 
-	bool draw_bg = (active_bg[3] > 0.0f); // 使用 active_bg
+	bool draw_bg = (active_bg[3] > 0.0f) && (bg_w > 0.0 && bg_h > 0.0);
 	bool draw_border =
 		(node->border_width > 0) && (node->border_color[3] > 0.0f);
 
@@ -338,25 +345,28 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 		}
 	}
 
-	cairo_save(cr);
-	double text_x = (node->border_width + node->padding_x) * scale;
-	double text_y = (node->border_width + node->padding_y) * scale;
-	cairo_translate(cr, text_x, text_y);
+	// 文本绘制仅在背景区域有有效空间时进行
+	if (bg_w > 0.0 && bg_h > 0.0) {
+		cairo_save(cr);
+		double text_x = (node->border_width + node->padding_x) * scale;
+		double text_y = (node->border_width + node->padding_y) * scale;
+		cairo_translate(cr, text_x, text_y);
 
-	PangoContext *ctx = pango_cairo_create_context(cr);
-	pango_cairo_context_set_resolution(ctx, 96.0 * scale);
-	PangoLayout *layout = pango_layout_new(ctx);
-	PangoFontDescription *desc = get_cached_font_desc(node->font_desc);
-	pango_layout_set_font_description(layout, desc);
-	pango_layout_set_text(layout, text, -1);
+		PangoContext *ctx = pango_cairo_create_context(cr);
+		pango_cairo_context_set_resolution(ctx, 96.0 * scale);
+		PangoLayout *layout = pango_layout_new(ctx);
+		PangoFontDescription *desc = get_cached_font_desc(node->font_desc);
+		pango_layout_set_font_description(layout, desc);
+		pango_layout_set_text(layout, text, -1);
 
-	cairo_set_source_rgba(cr, active_fg[0], active_fg[1], active_fg[2],
-						  active_fg[3]);
-	pango_cairo_show_layout(cr, layout);
+		cairo_set_source_rgba(cr, active_fg[0], active_fg[1], active_fg[2],
+							  active_fg[3]);
+		pango_cairo_show_layout(cr, layout);
 
-	g_object_unref(layout);
-	g_object_unref(ctx);
-	cairo_restore(cr);
+		g_object_unref(layout);
+		g_object_unref(ctx);
+		cairo_restore(cr);
+	}
 
 	if (draw_border) {
 		cairo_set_source_rgba(cr, node->border_color[0], node->border_color[1],
@@ -369,15 +379,35 @@ void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 		double bw = bg_w + border;
 		double bh = bg_h + border;
 
-		if (radius > 0.0) {
-			double outer_radius = radius + half_lw;
-			if (outer_radius < 0.0)
-				outer_radius = 0.0;
-			draw_rounded_rect(cr, bx, by, bw, bh, outer_radius);
-		} else {
-			cairo_rectangle(cr, bx, by, bw, bh);
+		// 确保边框矩形不越界且宽高为正
+		if (bx < 0.0) {
+			bw += bx; // bx 为负，bw 缩小
+			bx = 0.0;
 		}
-		cairo_stroke(cr);
+		if (by < 0.0) {
+			bh += by;
+			by = 0.0;
+		}
+		if (bx + bw > (double)node->surface_pixel_w)
+			bw = (double)node->surface_pixel_w - bx;
+		if (by + bh > (double)node->surface_pixel_h)
+			bh = (double)node->surface_pixel_h - by;
+		if (bw < 0.0)
+			bw = 0.0;
+		if (bh < 0.0)
+			bh = 0.0;
+
+		if (bw > 0.0 && bh > 0.0) {
+			if (radius > 0.0) {
+				double outer_radius = radius + half_lw;
+				if (outer_radius < 0.0)
+					outer_radius = 0.0;
+				draw_rounded_rect(cr, bx, by, bw, bh, outer_radius);
+			} else {
+				cairo_rectangle(cr, bx, by, bw, bh);
+			}
+			cairo_stroke(cr);
+		}
 	}
 
 	cairo_surface_flush(node->surface);
@@ -409,7 +439,6 @@ void mango_jump_label_node_set_focus(MangoJumpLabel *node, bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
-	// 使用缓存的文本和缩放触发重绘（如果无文本则不重绘）
 	if (node->cached_text && node->cached_scale > 0.0f) {
 		mango_jump_label_node_update(node, node->cached_text,
 									 node->cached_scale);
@@ -537,7 +566,7 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 	node->last_text = safe_text; // 所有权转移
 	node->last_scale = scale;
 
-	// 脏检查加入 focused
+	// 脏检查
 	if (node->cached_scale == scale && node->cached_font_desc &&
 		strcmp(node->cached_font_desc, node->font_desc) == 0 &&
 		node->cached_text && strcmp(node->cached_text, safe_text) == 0 &&
@@ -607,8 +636,18 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 	if (box_logical_h < 0)
 		box_logical_h = 0;
 
+	// surface 物理尺寸包含边框，避免边框绘制越界
 	int32_t required_pixel_w = (int32_t)(node->target_width * scale + 0.5f);
 	int32_t required_pixel_h = (int32_t)(node->target_height * scale + 0.5f);
+	// 如果边框会伸出 target 区域，则扩展 surface 尺寸以完全容纳
+	double border_phys = node->border_width * scale;
+	if (border_phys > 0.0) {
+		// 边框描边会向外延伸 half line width，所以需要额外空间
+		int extra_w = (int32_t)ceil(border_phys * 0.5);
+		int extra_h = (int32_t)ceil(border_phys * 0.5);
+		required_pixel_w += extra_w;
+		required_pixel_h += extra_h;
+	}
 	if (required_pixel_w < 1)
 		required_pixel_w = 1;
 	if (required_pixel_h < 1)
@@ -640,7 +679,6 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 	cairo_paint(cr);
 	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
-	double border_phys = node->border_width * scale;
 	double bg_x = border_phys;
 	double bg_y = border_phys;
 	double bg_w = box_logical_w * scale;
@@ -656,13 +694,15 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 		radius = bg_w / 2.0;
 	if (radius > bg_h / 2.0)
 		radius = bg_h / 2.0;
+	if (radius < 0.0)
+		radius = 0.0;
 
 	const float *active_bg =
 		node->focused ? node->focus_bg_color : node->bg_color;
 	const float *active_fg =
 		node->focused ? node->focus_fg_color : node->fg_color;
 
-	bool draw_bg = (active_bg[3] > 0.0f);
+	bool draw_bg = (active_bg[3] > 0.0f) && (bg_w > 0.0 && bg_h > 0.0);
 	bool draw_border =
 		(node->border_width > 0) && (node->border_color[3] > 0.0f);
 
@@ -678,43 +718,46 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 		}
 	}
 
-	int32_t text_area_logical_w = box_logical_w - 2 * node->padding_x;
-	int32_t text_area_logical_h = box_logical_h - 2 * node->padding_y;
-	if (text_area_logical_w > 0 && text_area_logical_h > 0) {
-		cairo_save(cr);
+	// 仅在背景区域有空间时进行
+	if (bg_w > 0.0 && bg_h > 0.0) {
+		int32_t text_area_logical_w = box_logical_w - 2 * node->padding_x;
+		int32_t text_area_logical_h = box_logical_h - 2 * node->padding_y;
+		if (text_area_logical_w > 0 && text_area_logical_h > 0) {
+			cairo_save(cr);
 
-		double text_x = (node->border_width + node->padding_x) * scale;
-		double text_y = (node->border_width + node->padding_y) * scale;
-		double text_area_w = text_area_logical_w * scale;
-		double text_area_h = text_area_logical_h * scale;
+			double text_x = (node->border_width + node->padding_x) * scale;
+			double text_y = (node->border_width + node->padding_y) * scale;
+			double text_area_w = text_area_logical_w * scale;
+			double text_area_h = text_area_logical_h * scale;
 
-		PangoContext *ctx = pango_cairo_create_context(cr);
-		pango_cairo_context_set_resolution(ctx, 96.0 * scale);
-		PangoLayout *layout = pango_layout_new(ctx);
-		PangoFontDescription *desc = get_cached_font_desc(node->font_desc);
-		pango_layout_set_font_description(layout, desc);
-		pango_layout_set_text(layout, safe_text, -1);
+			PangoContext *ctx = pango_cairo_create_context(cr);
+			pango_cairo_context_set_resolution(ctx, 96.0 * scale);
+			PangoLayout *layout = pango_layout_new(ctx);
+			PangoFontDescription *desc = get_cached_font_desc(node->font_desc);
+			pango_layout_set_font_description(layout, desc);
+			pango_layout_set_text(layout, safe_text, -1);
 
-		pango_layout_set_wrap(layout, PANGO_WRAP_NONE);
-		pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
-		pango_layout_set_alignment(layout, PANGO_ALIGN_CENTER);
-		pango_layout_set_width(layout, (int)(text_area_w * PANGO_SCALE));
+			pango_layout_set_wrap(layout, PANGO_WRAP_NONE);
+			pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
+			pango_layout_set_alignment(layout, PANGO_ALIGN_CENTER);
+			pango_layout_set_width(layout, (int)(text_area_w * PANGO_SCALE));
 
-		int text_pixel_w, text_pixel_h;
-		pango_layout_get_pixel_size(layout, &text_pixel_w, &text_pixel_h);
-		double y_offset = (text_area_h - text_pixel_h) / 2.0;
-		if (y_offset < 0)
-			y_offset = 0;
+			int text_pixel_w, text_pixel_h;
+			pango_layout_get_pixel_size(layout, &text_pixel_w, &text_pixel_h);
+			double y_offset = (text_area_h - text_pixel_h) / 2.0;
+			if (y_offset < 0)
+				y_offset = 0;
 
-		cairo_translate(cr, text_x, text_y + y_offset);
+			cairo_translate(cr, text_x, text_y + y_offset);
 
-		cairo_set_source_rgba(cr, active_fg[0], active_fg[1], active_fg[2],
-							  active_fg[3]);
-		pango_cairo_show_layout(cr, layout);
+			cairo_set_source_rgba(cr, active_fg[0], active_fg[1], active_fg[2],
+								  active_fg[3]);
+			pango_cairo_show_layout(cr, layout);
 
-		g_object_unref(layout);
-		g_object_unref(ctx);
-		cairo_restore(cr);
+			g_object_unref(layout);
+			g_object_unref(ctx);
+			cairo_restore(cr);
+		}
 	}
 
 	if (draw_border) {
@@ -728,15 +771,35 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 		double bw = bg_w + border_phys;
 		double bh = bg_h + border_phys;
 
-		if (radius > 0.0) {
-			double outer_radius = radius + half_lw;
-			if (outer_radius < 0.0)
-				outer_radius = 0.0;
-			draw_rounded_rect(cr, bx, by, bw, bh, outer_radius);
-		} else {
-			cairo_rectangle(cr, bx, by, bw, bh);
+		// 确保边框矩形不越界且宽高为正
+		if (bx < 0.0) {
+			bw += bx;
+			bx = 0.0;
 		}
-		cairo_stroke(cr);
+		if (by < 0.0) {
+			bh += by;
+			by = 0.0;
+		}
+		if (bx + bw > (double)node->surface_pixel_w)
+			bw = (double)node->surface_pixel_w - bx;
+		if (by + bh > (double)node->surface_pixel_h)
+			bh = (double)node->surface_pixel_h - by;
+		if (bw < 0.0)
+			bw = 0.0;
+		if (bh < 0.0)
+			bh = 0.0;
+
+		if (bw > 0.0 && bh > 0.0) {
+			if (radius > 0.0) {
+				double outer_radius = radius + half_lw;
+				if (outer_radius < 0.0)
+					outer_radius = 0.0;
+				draw_rounded_rect(cr, bx, by, bw, bh, outer_radius);
+			} else {
+				cairo_rectangle(cr, bx, by, bw, bh);
+			}
+			cairo_stroke(cr);
+		}
 	}
 
 	cairo_surface_flush(node->surface);
