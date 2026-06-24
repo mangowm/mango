@@ -1340,6 +1340,7 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 	}
 
 	if (w->overview_scene_surface) {
+
 		wlr_scene_node_reparent(&w->shield->node, w->overview_scene_surface);
 		wlr_scene_node_raise_to_top(&w->shield->node);
 
@@ -6467,6 +6468,8 @@ void overview_restore(Client *c, const Arg *arg) {
 	c->is_restoring_from_ov = (arg->ui & c->tags & TAGMASK) == 0 ? true : false;
 
 	if (c->overview_scene_surface) {
+		wlr_scene_node_reparent(&c->shield->node, c->overview_scene_surface);
+		wlr_scene_node_raise_to_top(&c->shield->node);
 		wlr_scene_node_destroy(&c->scene_surface->node);
 		c->scene_surface = c->overview_scene_surface;
 		c->overview_scene_surface = NULL;
