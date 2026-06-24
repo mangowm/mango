@@ -375,13 +375,16 @@ void apply_shield(Client *c, struct wlr_box clip_box) {
 	}
 
 	if (active_capture_count > 0 && c->shield_when_capture) {
+		int32_t shield_x = clip_box.x + (int32_t)c->bw;
+		int32_t shield_y = clip_box.y + (int32_t)c->bw;
 		wlr_scene_node_raise_to_top(&c->shield->node);
-		wlr_scene_node_set_position(&c->shield->node, clip_box.x, clip_box.y);
+		wlr_scene_node_set_position(&c->shield->node, shield_x, shield_y);
 		wlr_scene_rect_set_size(c->shield, clip_box.width, clip_box.height);
 		wlr_scene_node_set_enabled(&c->shield->node, true);
 	} else {
 		if (c->shield->node.enabled) {
 			wlr_scene_node_lower_to_bottom(&c->shield->node);
+			wlr_scene_node_set_position(&c->shield->node, 0, 0);
 			wlr_scene_rect_set_size(c->shield, c->animation.current.width,
 									c->animation.current.height);
 			wlr_scene_node_set_enabled(&c->shield->node, false);
