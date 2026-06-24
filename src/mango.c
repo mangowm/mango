@@ -102,6 +102,7 @@
 #define MANGO_MAX(A, B) ((A) > (B) ? (A) : (B))
 #define MANGO_MIN(A, B) ((A) < (B) ? (A) : (B))
 #define GEZERO(A) ((A) >= 0 ? (A) : 0)
+#define KB_LAYOUT_ABBR_SIZE 32
 #define CLEANMASK(mask) (mask & ~WLR_MODIFIER_CAPS)
 #define INSIDEMON(A)                                                           \
 	(A->geom.x >= A->mon->m.x && A->geom.y >= A->mon->m.y &&                   \
