@@ -3922,7 +3922,8 @@ void focusclient(Client *c, int32_t lift) {
 		selmon->sel = c;
 		c->isfocusing = true;
 
-		handle_client_focus_change(c);
+		check_keep_idle_inhibit(c);
+		check_vrr_enable(c);
 
 		if (last_focus_client && !last_focus_client->iskilling &&
 			last_focus_client != c) {
@@ -4004,6 +4005,7 @@ void focusclient(Client *c, int32_t lift) {
 		// clear text input focus state
 		dwl_im_relay_set_focus(dwl_input_method_relay, NULL);
 		wlr_seat_keyboard_notify_clear_focus(seat);
+		check_vrr_enable(c);
 		if (active_constraint) {
 			cursorconstrain(NULL);
 		}
@@ -6531,12 +6533,24 @@ void check_keep_idle_inhibit(Client *c) {
 
 void check_vrr_enable(Client *c) {
 
-	if (!c || !c->mon)
+	struct wlr_output_state state = {0};
+	Monitor *m = c && c->mon ? c->mon : selmon;
+
+	if (!m)
 		return;
 
-	struct wlr_output_state state = {0};
+	if (!c && m && !m->iscleanuping && m->is_vrr_opening &&
+		!m->vrr_global_enable) {
+		disable_adaptive_sync(m, &state);
+		wlr_output_commit_state(m->wlr_output, &state);
+		return;
+	}
 
-	if (c->vrr_only_fullscreen && c->isfullscreen && !c->mon->is_vrr_opening) {
+	if (!c)
+		return;
+
+	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
+		!c->mon->is_vrr_opening) {
 		enable_adaptive_sync(c->mon, &state);
 		wlr_output_commit_state(c->mon->wlr_output, &state);
 		return;
