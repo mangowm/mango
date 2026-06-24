@@ -100,9 +100,9 @@ static void handle_ext_commit(struct wl_listener *listener, void *data) {
 }
 
 static const char *get_name_from_tag(uint32_t tag) {
-	static const char *names[] = {"overview", "1", "2", "3", "4",
-								  "5",		  "6", "7", "8", "9"};
-	return (tag < sizeof(names) / sizeof(names[0])) ? names[tag] : NULL;
+	if (tag == 0)
+		return "overview";
+	return get_tag_name((int)tag);
 }
 
 void destroy_workspace(struct workspace *workspace) {
