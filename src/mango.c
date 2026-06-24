@@ -4509,9 +4509,11 @@ void init_client_properties(Client *c) {
 	c->stack_proportion = 0.0f;
 	memset(c->oldmonname, 0, sizeof(c->oldmonname));
 	memcpy(c->opacity_animation.initial_border_color, config.bordercolor,
-		   sizeof(c->opacity_animation.initial_border_color));
+		   sizeof(config.bordercolor) < sizeof(c->opacity_animation.initial_border_color)
+		   ? sizeof(config.bordercolor) : sizeof(c->opacity_animation.initial_border_color));
 	memcpy(c->opacity_animation.current_border_color, config.bordercolor,
-		   sizeof(c->opacity_animation.current_border_color));
+		   sizeof(config.bordercolor) < sizeof(c->opacity_animation.current_border_color)
+		   ? sizeof(config.bordercolor) : sizeof(c->opacity_animation.current_border_color));
 	c->opacity_animation.initial_opacity = c->unfocused_opacity;
 	c->opacity_animation.current_opacity = c->unfocused_opacity;
 }
