@@ -13,6 +13,24 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `allow_shortcuts_inhibit` | `1` | Allow shortcuts to be inhibited by clients. |
 | `vrr` | - | Set via [monitor rule](/docs/configuration/monitors#monitor-rules). |
 
+## Nvidia GPUs
+
+Nvidia GPUs may require some extra tinkering, the following is recommended for the official drivers:
+
+```ini
+# set environment variables for nvidia cards
+env=LIBVA_DRIVER_NAME,nvidia
+env=GBM_BACKEND,nvidia-drm
+env=__GLX_VENDOR_LIBRARY_NAME,nvidia
+env=__GL_VRR_ALLOWED,1
+env=WLR_DRM_NO_ATOMIC,1
+
+# enable syncobj
+syncobj_enable=1
+
+```
+
+
 ## Focus & Input
 
 | Setting | Default | Description |
