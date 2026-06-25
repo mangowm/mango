@@ -264,6 +264,9 @@ typedef struct {
 	int32_t dwindle_manual_split;
 	float dwindle_split_ratio;
 
+	/* monocle layoput */
+	int32_t monocle_new_in_group;
+
 	int32_t hotarea_size;
 	int32_t hotarea_corner;
 	int32_t enable_hotarea;
@@ -1729,6 +1732,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		config->dwindle_manual_split = atoi(value);
 	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
 		config->dwindle_split_ratio = atof(value);
+	} else if (strcmp(key, "monocle_new_in_group") == 0) {
+		config->monocle_new_in_group = atoi(value);
 	} else if (strcmp(key, "hotarea_size") == 0) {
 		config->hotarea_size = atoi(value);
 	} else if (strcmp(key, "hotarea_corner") == 0) {
@@ -3509,6 +3514,8 @@ void override_config(void) {
 	config.dwindle_manual_split = CLAMP_INT(config.dwindle_manual_split, 0, 1);
 	config.dwindle_split_ratio =
 		CLAMP_FLOAT(config.dwindle_split_ratio, 0.05f, 0.95f);
+	config.monocle_new_in_group = CLAMP_INT(config.monocle_new_in_group, 0, 1);
+
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
@@ -3677,6 +3684,8 @@ void set_value_default() {
 	config.dwindle_drop_simple_split = 1;
 	config.dwindle_manual_split = 0;
 	config.dwindle_split_ratio = 0.5f;
+
+	config.monocle_new_in_group = 0;
 
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;

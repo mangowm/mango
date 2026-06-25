@@ -961,6 +961,8 @@ static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 									  struct wlr_output_state *state);
 static bool mango_output_commit(Monitor *m);
 static bool check_tearing_frame_allow(Monitor *m);
+static Client *client_get_group_head(Client *c);
+static Client *client_get_group_tail(Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -1889,6 +1891,11 @@ void applyrules(Client *c) {
 			wl_list_init(&c->flink);
 		}
 		wl_list_insert(fstack.prev, &c->flink);
+	}
+
+	if (config.monocle_new_in_group && mon && ISTILED(c) &&
+		is_monocle_layout(mon)) {
+		group_join_client(c, focustiletop(mon));
 	}
 
 	setmon(c, mon, newtags, should_init_get_focus);

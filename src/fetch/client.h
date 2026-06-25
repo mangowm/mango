@@ -320,6 +320,17 @@ Client *focustop(Monitor *m) {
 	return NULL;
 }
 
+Client *focustiletop(Monitor *m) {
+	Client *c = NULL;
+	wl_list_for_each(c, &fstack, flink) {
+		if (c->iskilling || c->isunglobal || !ISSCROLLTILED(c))
+			continue;
+		if (VISIBLEON(c, m))
+			return c;
+	}
+	return NULL;
+}
+
 Client *get_next_stack_client(Client *c, bool reverse) {
 	if (!c || !c->mon)
 		return NULL;
@@ -454,4 +465,30 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		}
 	}
 	return sc;
+}
+
+Client *client_get_group_head(Client *c) {
+	if (!c || !c->mon)
+		return NULL;
+
+	Client *head = c;
+
+	while (head->group_prev) {
+		head = head->group_prev;
+	}
+
+	return head;
+}
+
+Client *client_get_group_tail(Client *c) {
+	if (!c || !c->mon)
+		return NULL;
+
+	Client *tail = c;
+
+	while (tail->group_next) {
+		tail = tail->group_next;
+	}
+
+	return tail;
 }

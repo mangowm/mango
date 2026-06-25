@@ -117,6 +117,18 @@ dwindle_drop_simple_split=1
 
 ---
 
+## Monocle Layout
+
+The Monocle layout is similar to the Center Tile layout, but it places windows in a single column instead of a row.
+
+### Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `monocle_new_in_group` | `0` | New windows are auto grouped in the focused window. |
+
+---
+
 ## Switching Layouts
 | Setting | Default | Description |
 | :--- | :--- | :--- |

@@ -156,28 +156,20 @@ int32_t focusdir(const Arg *arg) {
 	return 0;
 }
 
-int32_t groupjoin(const Arg *arg) {
-
-	if (!selmon)
-		return 0;
+void group_join_client(Client *need_join_client, Client *need_replace_client) {
 
 	Monitor *oldmon = NULL;
-
-	Client *need_join_client = arg->tc ? arg->tc : selmon->sel;
-	if (!need_join_client || !need_join_client->mon)
-		return 0;
-
-	if (need_join_client->mon->isoverview)
-		return 0;
-
-	Client *need_replace_client = NULL;
-	need_replace_client = direction_select(arg);
-
 	if (!need_replace_client || !need_replace_client->mon)
-		return 0;
+		return;
 
 	if (need_join_client == need_replace_client)
-		return 0;
+		return;
+
+	if (!need_join_client)
+		return;
+
+	if (need_join_client->mon && need_join_client->mon->isoverview)
+		return;
 
 	if (need_join_client->group_next || need_join_client->group_prev) {
 		groupleave(&(Arg){.tc = need_join_client});
@@ -209,7 +201,19 @@ int32_t groupjoin(const Arg *arg) {
 	if (oldmon) {
 		arrange(oldmon, false, false);
 	}
+}
 
+int32_t groupjoin(const Arg *arg) {
+
+	if (!selmon)
+		return 0;
+
+	Client *need_join_client = arg->tc ? arg->tc : selmon->sel;
+
+	Client *need_replace_client = NULL;
+	need_replace_client = direction_select(arg);
+
+	group_join_client(need_join_client, need_replace_client);
 	return 0;
 }
 
@@ -345,16 +349,57 @@ int32_t focusstack(const Arg *arg) {
 
 	if (!sel)
 		return 0;
+
 	if (arg->i == NEXT) {
 		tc = get_next_stack_client(sel, false);
 	} else {
 		tc = get_next_stack_client(sel, true);
 	}
 
+	if (!sel->mon->isoverview) {
+		if (!sel->group_next && !sel->group_prev) {
+			if (arg->i == NEXT) {
+				tc = client_get_group_head(tc);
+				if (tc)
+					client_focus_group_member(tc);
+			} else {
+				tc = client_get_group_tail(tc);
+				if (tc)
+					client_focus_group_member(tc);
+			}
+		} else {
+			if (arg->i == NEXT) {
+				if (sel->group_next) {
+					tc = sel->group_next;
+				} else if (!tc) {
+					tc = client_get_group_head(sel);
+				} else {
+					tc = client_get_group_head(tc);
+				}
+				if (tc) {
+					client_focus_group_member(tc);
+				}
+			}
+			if (arg->i == PREV) {
+				if (sel->group_prev) {
+					tc = sel->group_prev;
+				} else if (!tc) {
+					tc = client_get_group_tail(sel);
+				} else {
+					tc = client_get_group_tail(tc);
+				}
+				if (tc) {
+					client_focus_group_member(tc);
+				}
+			}
+		}
+	}
+
 	if (!tc)
 		return 0;
 
 	focusclient(tc, 1);
+
 	if (config.warpcursor)
 		warp_cursor(tc);
 	return 0;

@@ -137,6 +137,9 @@ void client_add_group_bar(Client *c) {
 }
 
 void client_focus_group_member(Client *c) {
+	if (!c)
+		return;
+
 	if (!c->group_prev && !c->group_next)
 		return;
 
@@ -191,7 +194,8 @@ void client_check_tab_node_visible(Client *c) {
 		if (!c->mon->isoverview && cur->group_bar &&
 			(cur->group_next || cur->group_prev) && VISIBLEON(c, c->mon) &&
 			ISNORMAL(c) && !c->isfullscreen &&
-			(!is_monocle_layout(c->mon) || c == c->mon->sel)) {
+			(!is_monocle_layout(c->mon) || config.monocle_new_in_group ||
+			 c == c->mon->sel)) {
 			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
 									   true);
 		} else {
