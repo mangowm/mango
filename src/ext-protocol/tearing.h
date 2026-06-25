@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <wlr/types/wlr_tearing_control_v1.h>
 
 struct tearing_controller {
@@ -64,6 +65,9 @@ bool check_tearing_frame_allow(Monitor *m) {
 		return false;
 	}
 
+	if (!selmon)
+		return false;
+
 	Client *c = selmon->sel;
 
 	/* tearing is only allowed for the output with the active client */
@@ -93,51 +97,4 @@ bool check_tearing_frame_allow(Monitor *m) {
 
 	/* honor tearing as requested by action */
 	return c->force_tearing == STATE_ENABLED;
-}
-
-bool custom_wlr_scene_output_commit(struct wlr_scene_output *scene_output,
-									struct wlr_output_state *state) {
-	struct wlr_output *wlr_output = scene_output->output;
-	Monitor *m = wlr_output->data;
-
-	if (!wlr_scene_output_needs_frame(scene_output))
-		return true;
-
-	// 构建状态，将场景的 Buffer 附着到 state 上
-	if (!wlr_scene_output_build_state(scene_output, state, NULL))
-		return false;
-
-	// 测试是否支持撕裂
-	if (!wlr_output_test_state(wlr_output, state)) {
-		// 如果 DRM 拒绝（例如当前输出/驱动不支持撕裂），降级关闭撕裂
-		state->tearing_page_flip = false;
-	}
-
-	// 提交状态
-	bool committed = wlr_output_commit_state(wlr_output, state);
-	if (!committed && state->tearing_page_flip) {
-		// 重试一次
-		state->tearing_page_flip = false;
-		committed = wlr_output_commit_state(wlr_output, state);
-	}
-
-	if (committed) {
-		if (state == &m->pending) {
-			wlr_output_state_finish(&m->pending);
-			wlr_output_state_init(&m->pending);
-		}
-	}
-	return committed;
-}
-
-void apply_tear_state(Monitor *m) {
-	if (!wlr_scene_output_needs_frame(m->scene_output))
-		return;
-
-	wlr_output_state_init(&m->pending);
-	m->pending.tearing_page_flip = true;
-	if (!custom_wlr_scene_output_commit(m->scene_output, &m->pending)) {
-		wlr_log(WLR_ERROR, "Failed to commit output %s",
-				m->scene_output->output->name);
-	}
 }

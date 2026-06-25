@@ -948,9 +948,14 @@ static void global_draw_group_bar(Client *c, int32_t x, int32_t y,
 static void client_reparent_group(Client *c);
 static void client_change_mon(Client *c, Monitor *m);
 static void check_vrr_enable(Client *c);
-static void output_state_setup_hdr(Monitor *m, bool silent);
+static void output_state_setup_hdr(Monitor *m, bool silent,
+								   struct wlr_output_state *state);
 static void output_enable_hdr(Monitor *m, struct wlr_output_state *os,
 							  bool enabled, bool silent);
+static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
+									  struct wlr_output_state *state);
+static bool mango_output_commit(Monitor *m);
+static bool check_tearing_frame_allow(Monitor *m);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -1159,6 +1164,7 @@ static struct wl_event_source *sync_keymap;
 #endif
 
 #include "action/client.h"
+#include "action/monitor.h"
 #include "animation/client.h"
 #include "animation/common.h"
 #include "animation/layer.h"
@@ -3439,13 +3445,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_set_enabled(&m->pending, 1);
 
 	if (m->hdr_enable) {
-		output_state_setup_hdr(m, false);
+		output_state_setup_hdr(m, false, &m->pending);
 	}
-
-	wlr_output_commit_state(wlr_output, &m->pending);
-	wlr_output_state_finish(&m->pending);
-
-	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	wl_list_insert(&mons, &m->link);
 
@@ -3493,6 +3494,9 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_output_layout_add_auto(output_layout, wlr_output);
 	else
 		wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
+
+	mango_scene_output_commit(m->scene_output, &m->pending);
+	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	m->ext_group = wlr_ext_workspace_group_handle_v1_create(
 		ext_manager, EXT_WORKSPACE_ENABLE_CAPS);
@@ -4055,6 +4059,7 @@ void requestmonstate(struct wl_listener *listener, void *data) {
 	const struct wlr_output_event_request_state *event = data;
 
 	if (event->state->committed == WLR_OUTPUT_STATE_MODE) {
+
 		switch (event->state->mode_type) {
 		case WLR_OUTPUT_STATE_MODE_FIXED:
 			wlr_output_state_set_mode(&m->pending, event->state->mode);
@@ -5168,15 +5173,13 @@ void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 
 void powermgrsetmode(struct wl_listener *listener, void *data) {
 	struct wlr_output_power_v1_set_mode_event *event = data;
-	struct wlr_output_state state = {0};
 	Monitor *m = event->output->data;
 
 	if (!m)
 		return;
 
-	wlr_output_state_set_enabled(&state, event->mode);
-	wlr_output_commit_state(m->wlr_output, &state);
-
+	wlr_output_state_set_enabled(&m->pending, event->mode);
+	mango_output_commit(m);
 	m->asleep = !event->mode;
 	updatemons(NULL, NULL);
 }
@@ -5233,7 +5236,6 @@ void rendermon(struct wl_listener *listener, void *data) {
 	LayerSurface *l = NULL, *tmpl = NULL;
 	int32_t i;
 	struct wl_list *layer_list;
-	bool frame_allow_tearing = false;
 	struct timespec now;
 	bool need_more_frames = false;
 
@@ -5243,8 +5245,6 @@ void rendermon(struct wl_listener *listener, void *data) {
 
 	if (!m->wlr_output->enabled || !allow_frame_scheduling)
 		return;
-
-	frame_allow_tearing = check_tearing_frame_allow(m);
 
 	// 绘制层和淡出效果
 	for (i = 0; i < LENGTH(m->layers); i++) {
@@ -5276,12 +5276,7 @@ void rendermon(struct wl_listener *listener, void *data) {
 		monitor_stop_skip_frame_timer(m);
 	}
 
-	// 只有在需要帧时才构建和提交状态
-	if (config.allow_tearing && frame_allow_tearing) {
-		apply_tear_state(m);
-	} else {
-		wlr_scene_output_commit(m->scene_output, NULL);
-	}
+	mango_scene_output_commit(m->scene_output, &m->pending);
 
 skip:
 	// 发送帧完成通知
@@ -6533,7 +6528,6 @@ void check_keep_idle_inhibit(Client *c) {
 
 void check_vrr_enable(Client *c) {
 
-	struct wlr_output_state state = {0};
 	Monitor *m = c && c->mon ? c->mon : selmon;
 
 	if (!m)
@@ -6541,8 +6535,8 @@ void check_vrr_enable(Client *c) {
 
 	if (!c && m && !m->iscleanuping && m->is_vrr_opening &&
 		!m->vrr_global_enable) {
-		disable_adaptive_sync(m, &state);
-		wlr_output_commit_state(m->wlr_output, &state);
+		disable_adaptive_sync(m, &m->pending);
+		mango_output_commit(m);
 		return;
 	}
 
@@ -6551,17 +6545,17 @@ void check_vrr_enable(Client *c) {
 
 	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
 		!c->mon->is_vrr_opening) {
-		enable_adaptive_sync(c->mon, &state);
-		wlr_output_commit_state(c->mon->wlr_output, &state);
+		enable_adaptive_sync(c->mon, &m->pending);
+		mango_output_commit(m);
 		return;
 	}
 
 	if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
-		enable_adaptive_sync(c->mon, &state);
-		wlr_output_commit_state(c->mon->wlr_output, &state);
+		enable_adaptive_sync(c->mon, &m->pending);
+		mango_output_commit(m);
 	} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
-		disable_adaptive_sync(c->mon, &state);
-		wlr_output_commit_state(c->mon->wlr_output, &state);
+		disable_adaptive_sync(c->mon, &m->pending);
+		mango_output_commit(m);
 	}
 }
 

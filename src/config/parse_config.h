@@ -3888,8 +3888,6 @@ void reapply_monitor_rules(void) {
 		if (!m->wlr_output->enabled)
 			continue;
 
-		wlr_output_state_init(&m->pending);
-
 		for (ji = 0; ji < config.monitor_rules_count; ji++) {
 			if (config.monitor_rules_count < 1)
 				break;
@@ -3912,16 +3910,14 @@ void reapply_monitor_rules(void) {
 		wlr_output_state_set_enabled(&m->pending, true);
 
 		if (m->hdr_enable) {
-			output_state_setup_hdr(m, false);
-			bool success = wlr_output_commit_state(m->wlr_output, &m->pending);
-			if (!success) { // 多尝试一次
-				output_state_setup_hdr(m, true);
-			}
-		} else {
-			wlr_output_commit_state(m->wlr_output, &m->pending);
+			output_state_setup_hdr(m, false, &m->pending);
 		}
 
-		wlr_output_state_finish(&m->pending);
+		if (!(mango_scene_output_commit(m->scene_output, &m->pending))) {
+			if (m->hdr_enable) {
+				output_state_setup_hdr(m, true, &m->pending);
+			}
+		}
 		wlr_output_effective_resolution(m->wlr_output, &m->m.width,
 										&m->m.height);
 	}

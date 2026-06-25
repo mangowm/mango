@@ -16,10 +16,11 @@ static uint32_t output_formats_10bit[] = {
 };
 
 static bool output_set_render_format(Monitor *m, uint32_t candidates[],
-									 size_t count) {
+									 size_t count,
+									 struct wlr_output_state *state) {
 	for (size_t i = 0; i < count; i++) {
-		wlr_output_state_set_render_format(&m->pending, candidates[i]);
-		if (wlr_output_test_state(m->wlr_output, &m->pending))
+		wlr_output_state_set_render_format(state, candidates[i]);
+		if (wlr_output_test_state(m->wlr_output, state))
 			return true;
 	}
 	return false;
@@ -83,7 +84,8 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 	wlr_output_state_set_image_description(os, &desc);
 }
 
-void output_state_setup_hdr(Monitor *m, bool silent) {
+void output_state_setup_hdr(Monitor *m, bool silent,
+							struct wlr_output_state *state) {
 	uint32_t render_format = m->wlr_output->render_format;
 	const char *unsupported_reason = NULL;
 	bool hdr_supported =
@@ -106,23 +108,24 @@ void output_state_setup_hdr(Monitor *m, bool silent) {
 		hdr_succeeded = true; // 上次已经成功设置10位，直接复用
 	} else if (depth == MANGO_RENDER_BIT_DEPTH_10) {
 		hdr_succeeded = output_set_render_format(
-			m, output_formats_10bit, ARRAY_SIZE(output_formats_10bit));
+			m, output_formats_10bit, ARRAY_SIZE(output_formats_10bit), state);
 		if (!hdr_succeeded) {
 			if (!silent)
 				wlr_log(WLR_INFO,
 						"No 10 bit color formats supported, HDR disabled.");
 			if (!output_set_render_format(m, output_formats_8bit,
-										  ARRAY_SIZE(output_formats_8bit)))
+										  ARRAY_SIZE(output_formats_8bit),
+										  state))
 				if (!silent)
 					wlr_log(WLR_ERROR, "No 8 bit color formats either!");
 		}
 	} else {
 		// 明确要求8位或自动降级
 		if (!output_set_render_format(m, output_formats_8bit,
-									  ARRAY_SIZE(output_formats_8bit)))
+									  ARRAY_SIZE(output_formats_8bit), state))
 			if (!silent)
 				wlr_log(WLR_ERROR, "No 8 bit color formats supported!");
 	}
 
-	output_enable_hdr(m, &m->pending, hdr_succeeded, silent);
+	output_enable_hdr(m, state, hdr_succeeded, silent);
 }
