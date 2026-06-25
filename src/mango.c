@@ -3448,6 +3448,11 @@ void createmon(struct wl_listener *listener, void *data) {
 		output_state_setup_hdr(m, false, &m->pending);
 	}
 
+	// 虚拟显示器在加入显示器链前必须先配置，否则会崩溃
+	if (wlr_output_is_headless(m->wlr_output)) {
+		mango_output_commit(m);
+	}
+
 	wl_list_insert(&mons, &m->link);
 
 	m->pertag = calloc(1, sizeof(Pertag));
@@ -3495,7 +3500,11 @@ void createmon(struct wl_listener *listener, void *data) {
 	else
 		wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
 
-	mango_scene_output_commit(m->scene_output, &m->pending);
+	// 无头显示器不不要支持hdr
+	if (!wlr_output_is_headless(m->wlr_output)) {
+		mango_scene_output_commit(m->scene_output, &m->pending);
+	}
+
 	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	m->ext_group = wlr_ext_workspace_group_handle_v1_create(
