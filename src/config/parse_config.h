@@ -3718,7 +3718,7 @@ void set_value_default() {
 	config.drag_tile_refresh_interval = 8.0f;
 	config.drag_floating_refresh_interval = 8.0f;
 	config.allow_tearing = TEARING_DISABLED;
-	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_DEFAULT;
+	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_10;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	config.allow_lock_transparent = 0;
 	config.no_border_when_single = 0;

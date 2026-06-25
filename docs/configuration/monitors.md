@@ -106,7 +106,7 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 ## HDR
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `hdr_hdr_depth` | `0`/`1`/`2` | Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
+| `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
 
 - you should enable HDR in monitorrule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
 - you must set `env=WLR_RENDERER,vulkan` before mango starts.
