@@ -5408,8 +5408,6 @@ cleanup:
 void // 17
 run(char *startup_cmd) {
 
-	set_env();
-
 	/* Add a Unix socket to the Wayland display. */
 	const char *socket = wl_display_add_socket_auto(dpy);
 	if (!socket)
@@ -6006,6 +6004,8 @@ void setup(void) {
 		config.log_level = WLR_DEBUG;
 	}
 	init_baked_points();
+
+	set_env();
 
 	int32_t drm_fd, i;
 	int32_t sig[] = {SIGCHLD, SIGINT,
