@@ -15,7 +15,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 
 ## Nvidia GPUs
 
-Nvidia GPUs may require some extra tinkering, the following is recommended:
+Nvidia GPUs may require some extra tinkering, the following is recommended for the official drivers:
 
 ```ini
 # set environment variables for nvidia cards
