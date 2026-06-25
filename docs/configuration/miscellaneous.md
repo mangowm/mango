@@ -11,8 +11,6 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `syncobj_enable` | `0` | Enable `drm_syncobj` timeline support (helps with gaming stutter/lag). **Requires restart.** |
 | `allow_lock_transparent` | `0` | Allow the lock screen to be transparent. |
 | `allow_shortcuts_inhibit` | `1` | Allow shortcuts to be inhibited by clients. |
-| `vrr` | - | Set via [monitor rule](/docs/configuration/monitors#monitor-rules). |
-| `hdr_hdr_depth` | `0`/`1`/`2` | Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
 
 ## Focus & Input
 

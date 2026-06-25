@@ -103,6 +103,21 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 | :--- | :--- | :--- |
 | `allow_tearing` | `0` | Global tearing control: `0` (Disable), `1` (Enable), `2` (Fullscreen only). |
 
+## HDR
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `hdr_hdr_depth` | `0`/`1`/`2` | Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
+
+- you should enable HDR in monitorrule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
+- you must set `env=WLR_RENDERER,vulkan` before mango starts.
+
+#### for example(must relogin once after setting):
+```conf
+env=WLR_RENDERER,vulkan
+monitorrule=name:eDP-1,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0,scale:1,vrr:0,rr:0:hdr:1
+```
+
+
 ### Configuration
 
 **Enable Globally:**
@@ -131,16 +146,9 @@ windowrule=force_tearing:1,title:vkcube
 
 > **Warning:** Some graphics cards require setting the `WLR_DRM_NO_ATOMIC` environment variable before mango starts to successfully enable tearing.
 
-Add this to `/etc/environment` and reboot:
-
-```bash
-WLR_DRM_NO_ATOMIC=1
+Add this to config and relogin mango:
 ```
-
-Or run mango with the environment variable:
-
-```bash
-WLR_DRM_NO_ATOMIC=1 mango
+env=WLR_DRM_NO_ATOMIC,1
 ```
 
 ---
@@ -157,7 +165,7 @@ WLR_DRM_DEVICES=/dev/dri/card1 mango
 WLR_DRM_DEVICES=/dev/dri/card0:/dev/dri/card1 mango
 ```
 
-Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash apps like `kitty` that use syncobj. Set `WLR_DRM_NO_ATOMIC=1` in `/etc/environment` and reboot to resolve this.
+Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash apps like `kitty` that use syncobj. Set `env=WLR_DRM_NO_ATOMIC,1` in `config.conf` and relogin to resolve this.
 
 ---
 
