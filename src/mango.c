@@ -339,6 +339,8 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	struct mango_jump_label_node *jump_label_node;
 	struct mango_tab_bar_node *tab_bar_node;
+	struct wlr_scene_rect *titlebar_bg;
+	struct wlr_scene_rect *titlebar_close;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -984,6 +986,7 @@ static int32_t rzcorner;
 static int32_t grabcx, grabcy;						   /* client-relative */
 static int32_t drag_begin_cursorx, drag_begin_cursory; /* client-relative */
 static bool start_drag_window = false;
+static Client *hovered_client = NULL;
 static int32_t last_apply_drap_time = 0;
 
 static struct wlr_output_layout *output_layout;
@@ -2411,6 +2414,36 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		mods = mods | hard_mods;
 
+		if (config.enable_titlebars && event->button == BTN_LEFT && c &&
+			!c->isfullscreen && !client_is_unmanaged(c)) {
+			int32_t tb_height = (int32_t)config.titlebar_height;
+			if (cursor->y >= c->geom.y && cursor->y < c->geom.y + tb_height) {
+				int32_t tb_margin = (int32_t)config.titlebar_button_margin;
+				int32_t tb_btn_size = (int32_t)config.titlebar_button_size;
+				int32_t close_x =
+					c->geom.x + c->geom.width - tb_margin - tb_btn_size;
+				int32_t close_y = c->geom.y + tb_margin;
+				if (cursor->x >= close_x && cursor->x < close_x + tb_btn_size &&
+					cursor->y >= close_y &&
+					cursor->y < close_y + tb_height - 2 * tb_margin) {
+					pending_kill_client(c);
+					return true;
+				}
+				grabc = c;
+				if (grabc->isfloating == 0) {
+					grabc->drag_to_tile = true;
+					exit_scroller_stack(grabc);
+					setfloating(grabc, 1);
+					grabc->drag_tile_float_backup_geom = grabc->float_geom;
+					grabc->old_stack_inner_per = 0.0f;
+					grabc->old_master_inner_per = 0.0f;
+					set_size_per(grabc->mon, grabc);
+				}
+				start_drag_window = true;
+				return true;
+			}
+		}
+
 		for (ji = 0; ji < config.mouse_bindings_count; ji++) {
 			if (config.mouse_bindings_count < 1)
 				break;
@@ -2461,6 +2494,10 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 			}
 			return true;
 		} else {
+			if (start_drag_window && grabc) {
+				grabc = NULL;
+				start_drag_window = false;
+			}
 			cursor_mode = CurNormal;
 		}
 		break;
@@ -3800,6 +3837,8 @@ destroynotify(struct wl_listener *listener, void *data) {
 		wl_list_remove(&c->map.link);
 		wl_list_remove(&c->unmap.link);
 	}
+	if (c == hovered_client)
+		hovered_client = NULL;
 	free(c);
 }
 
@@ -4607,6 +4646,18 @@ mapnotify(struct wl_listener *listener, void *data) {
 	wlr_scene_node_lower_to_bottom(&c->shadow->node);
 	wlr_scene_node_set_enabled(&c->shadow->node, true);
 
+	c->titlebar_bg = wlr_scene_rect_create(c->scene, 0, 0, config.title_color);
+	wlr_scene_node_raise_to_top(&c->titlebar_bg->node);
+	wlr_scene_node_set_enabled(&c->titlebar_bg->node, config.enable_titlebars);
+
+	c->titlebar_close =
+		wlr_scene_rect_create(c->scene, 0, 0, config.title_close_color);
+	wlr_scene_node_raise_to_top(&c->titlebar_close->node);
+	wlr_scene_node_set_enabled(&c->titlebar_close->node,
+							   config.enable_titlebars);
+
+	wlr_scene_node_raise_to_top(&c->border->node);
+
 	if (config.new_is_master && selmon && !is_scroller_layout(selmon))
 		// tile at the top
 		wl_list_insert(&clients, &c->link); // 新窗口是master,头部入栈
@@ -4841,6 +4892,31 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		surface = seat->pointer_state.focused_surface;
 		sx = cursor->x - (l ? l->scene->node.x : w->geom.x);
 		sy = cursor->y - (l ? l->scene->node.y : w->geom.y);
+	}
+
+	/* Update titlebar close button hover */
+	if (hovered_client && hovered_client != c) {
+		update_titlebar_hover(hovered_client);
+	}
+	if (config.enable_titlebars) {
+		hovered_client = c;
+		if (c)
+			update_titlebar_hover(c);
+	}
+
+	/* Initiate titlebar drag on first motion */
+	if (cursor_mode == CurPressed && start_drag_window && grabc) {
+		if (grabc->drag_to_tile && config.drag_tile_small) {
+			grabc->geom.x = cursor->x - 150;
+			grabc->geom.y = cursor->y - 150;
+			grabc->geom.width = 300;
+			grabc->geom.height = 300;
+			resize(grabc, grabc->geom, 1);
+		}
+		grabcx = cursor->x - grabc->geom.x;
+		grabcy = cursor->y - grabc->geom.y;
+		cursor_mode = CurMove;
+		wlr_cursor_set_xcursor(cursor, cursor_mgr, "grab");
 	}
 
 	/* Update drag icon's position */
@@ -5234,6 +5310,12 @@ void setborder_color(Client *c) {
 	memcpy(c->opacity_animation.target_border_color, border_color,
 		   sizeof(c->opacity_animation.target_border_color));
 	client_set_border_color(c, border_color);
+
+	if (c->titlebar_bg) {
+		float *title_color = (c == selmon->sel) ? config.title_color
+												: config.title_unfocused_color;
+		wlr_scene_rect_set_color(c->titlebar_bg, title_color);
+	}
 }
 
 void exchange_two_client(Client *c1, Client *c2) {
@@ -6487,6 +6569,9 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	if (config.animations && !c->is_clip_to_hide && !c->isminimized &&
 		(!c->mon || VISIBLEON(c, c->mon)))
 		init_fadeout_client(c);
+
+	if (c == hovered_client)
+		hovered_client = NULL;
 
 	// If the client is in a stack, remove it from the stack
 
