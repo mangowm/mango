@@ -27,6 +27,8 @@
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
+#include <wlr/types/wlr_color_management_v1.h>
+#include <wlr/types/wlr_color_representation_v1.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
@@ -6069,6 +6071,48 @@ void setup(void) {
 	/* Create a renderer with the default implementation */
 	if (!(drw = wlr_renderer_autocreate(backend)))
 		die("couldn't recreate renderer");
+
+	if (drw->features.input_color_transform) {
+		const enum wp_color_manager_v1_render_intent render_intents[] = {
+			WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL,
+		};
+		size_t transfer_functions_len = 0;
+		enum wp_color_manager_v1_transfer_function *transfer_functions =
+			wlr_color_manager_v1_transfer_function_list_from_renderer(
+				drw, &transfer_functions_len);
+
+		size_t primaries_len = 0;
+		enum wp_color_manager_v1_primaries *primaries =
+			wlr_color_manager_v1_primaries_list_from_renderer(drw,
+															  &primaries_len);
+
+		struct wlr_color_manager_v1 *cm = wlr_color_manager_v1_create(
+			dpy, 2,
+			&(struct wlr_color_manager_v1_options){
+				.features =
+					{
+						.parametric = true,
+						.set_mastering_display_primaries = true,
+					},
+				.render_intents = render_intents,
+				.render_intents_len = ARRAY_SIZE(render_intents),
+				.transfer_functions = transfer_functions,
+				.transfer_functions_len = transfer_functions_len,
+				.primaries = primaries,
+				.primaries_len = primaries_len,
+			});
+
+		free(transfer_functions);
+		free(primaries);
+
+		if (cm) {
+			wlr_scene_set_color_manager_v1(scene, cm);
+		} else {
+			wlr_log(WLR_ERROR, "unable to create color manager");
+		}
+	}
+
+	wlr_color_representation_manager_v1_create_with_renderer(dpy, 1, drw);
 
 	wl_signal_add(&drw->events.lost, &gpu_reset);
 
