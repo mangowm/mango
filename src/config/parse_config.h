@@ -407,7 +407,7 @@ Config config;
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
-						 struct wlr_output_state *state, int vrr, int custom);
+						 struct wlr_output_state *state);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 
 // Helper function to trim whitespace from start and end of a string
@@ -3896,7 +3896,7 @@ bool parse_config(void) {
 void reapply_monitor_rules(void) {
 	ConfigMonitorRule *mr;
 	Monitor *m = NULL;
-	int32_t ji, vrr, custom;
+	int32_t ji;
 	int32_t mx, my;
 
 	wl_list_for_each(m, &mons, link) {
@@ -3912,12 +3912,9 @@ void reapply_monitor_rules(void) {
 			if (monitor_matches_rule(m, mr)) {
 				mx = mr->x == INT32_MAX ? m->m.x : mr->x;
 				my = mr->y == INT32_MAX ? m->m.y : mr->y;
-				vrr = mr->vrr >= 0 ? mr->vrr : 0;
-				custom = mr->custom >= 0 ? mr->custom : 0;
-				m->hdr_enable = mr->hdr >= 0 ? mr->hdr : 0;
-				m->prefer_disable = mr->disable >= 0 ? mr->disable : 0;
 
-				(void)apply_rule_to_state(m, mr, &m->pending, vrr, custom);
+				apply_rule_to_state(m, mr, &m->pending);
+
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
 				break;
 			}

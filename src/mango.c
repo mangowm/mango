@@ -3327,9 +3327,11 @@ bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
 
 /* 将规则中的显示参数应用到 wlr_output_state 中，返回是否设置了自定义模式 */
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
-						 struct wlr_output_state *state, int vrr, int custom) {
+						 struct wlr_output_state *state) {
 	bool mode_set = false;
-	m->vrr_global_enable = vrr;
+	m->vrr_global_enable = rule->vrr >= 0 ? rule->vrr : 0;
+	m->hdr_enable = rule->hdr >= 0 ? rule->hdr : 0;
+	m->prefer_disable = rule->disable >= 0 ? rule->disable : 0;
 
 	if (rule->width > 0 && rule->height > 0 && rule->refresh > 0) {
 		struct wlr_output_mode *internal_mode = get_nearest_output_mode(
@@ -3337,14 +3339,14 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 		if (internal_mode) {
 			wlr_output_state_set_mode(state, internal_mode);
 			mode_set = true;
-		} else if (custom || wlr_output_is_headless(m->wlr_output)) {
+		} else if (rule->custom || wlr_output_is_headless(m->wlr_output)) {
 			wlr_output_state_set_custom_mode(
 				state, rule->width, rule->height,
 				(int32_t)roundf(rule->refresh * 1000));
 			mode_set = true;
 		}
 	}
-	if (vrr) {
+	if (m->vrr_global_enable) {
 		enable_adaptive_sync(m, state);
 	} else {
 		disable_adaptive_sync(m, state);
@@ -3360,7 +3362,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	struct wlr_output *wlr_output = data;
 	const ConfigMonitorRule *r;
 	uint32_t i;
-	int32_t ji, vrr, custom;
+	int32_t ji;
 	Monitor *m = NULL;
 	bool custom_monitor_mode = false;
 
@@ -3424,14 +3426,8 @@ void createmon(struct wl_listener *listener, void *data) {
 		if (monitor_matches_rule(m, r)) {
 			m->m.x = r->x == INT32_MAX ? INT32_MAX : r->x;
 			m->m.y = r->y == INT32_MAX ? INT32_MAX : r->y;
-			vrr = r->vrr >= 0 ? r->vrr : 0;
-			custom = r->custom >= 0 ? r->custom : 0;
-			scale = r->scale;
-			rr = r->rr;
-			m->hdr_enable = r->hdr;
-			m->prefer_disable = r->disable >= 0 ? r->disable : 0;
 
-			if (apply_rule_to_state(m, r, &m->pending, vrr, custom)) {
+			if (apply_rule_to_state(m, r, &m->pending)) {
 				custom_monitor_mode = true;
 			}
 			break; // 只应用第一个匹配规则
