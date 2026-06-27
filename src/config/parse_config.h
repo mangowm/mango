@@ -396,7 +396,7 @@ typedef struct {
 	struct xkb_context *ctx;
 	struct xkb_keymap *keymap;
 	DecorateDrawData jumplabeldata;
-	DecorateDrawData tabdata;
+	DecorateDrawData groupbardata;
 
 	int32_t hdr_depth;
 } Config;
@@ -1728,7 +1728,7 @@ bool parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "cursor_theme") == 0) {
 		config->cursor_theme = strdup(value);
 	} else if (strcmp(key, "group_bar_decorate_font_desc") == 0) {
-		config->tabdata.font_desc = strdup(value);
+		config->groupbardata.font_desc = strdup(value);
 	} else if (strcmp(key, "group_bar_decorate_fg_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -1739,7 +1739,7 @@ bool parse_option(Config *config, char *key, char *value) {
 					value);
 			return false;
 		} else {
-			convert_hex_to_rgba(config->tabdata.fg_color, color);
+			convert_hex_to_rgba(config->groupbardata.fg_color, color);
 		}
 	} else if (strcmp(key, "group_bar_decorate_bg_color") == 0) {
 		int64_t color = parse_color(value);
@@ -1751,7 +1751,7 @@ bool parse_option(Config *config, char *key, char *value) {
 					value);
 			return false;
 		} else {
-			convert_hex_to_rgba(config->tabdata.bg_color, color);
+			convert_hex_to_rgba(config->groupbardata.bg_color, color);
 		}
 	} else if (strcmp(key, "group_bar_decorate_focus_fg_color") == 0) {
 		int64_t color = parse_color(value);
@@ -1763,7 +1763,7 @@ bool parse_option(Config *config, char *key, char *value) {
 					value);
 			return false;
 		} else {
-			convert_hex_to_rgba(config->tabdata.focus_fg_color, color);
+			convert_hex_to_rgba(config->groupbardata.focus_fg_color, color);
 		}
 	} else if (strcmp(key, "group_bar_decorate_focus_bg_color") == 0) {
 		int64_t color = parse_color(value);
@@ -1775,7 +1775,7 @@ bool parse_option(Config *config, char *key, char *value) {
 					value);
 			return false;
 		} else {
-			convert_hex_to_rgba(config->tabdata.focus_bg_color, color);
+			convert_hex_to_rgba(config->groupbardata.focus_bg_color, color);
 		}
 	} else if (strcmp(key, "group_bar_decorate_border_color") == 0) {
 		int64_t color = parse_color(value);
@@ -1787,16 +1787,16 @@ bool parse_option(Config *config, char *key, char *value) {
 					value);
 			return false;
 		} else {
-			convert_hex_to_rgba(config->tabdata.border_color, color);
+			convert_hex_to_rgba(config->groupbardata.border_color, color);
 		}
 	} else if (strcmp(key, "group_bar_decorate_border_width") == 0) {
-		config->tabdata.border_width = CLAMP_INT(atoi(value), 0, 100);
+		config->groupbardata.border_width = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "group_bar_decorate_corner_radius") == 0) {
-		config->tabdata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
+		config->groupbardata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "group_bar_decorate_padding_x") == 0) {
-		config->tabdata.padding_x = CLAMP_INT(atoi(value), 0, 100);
+		config->groupbardata.padding_x = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "group_bar_decorate_padding_y") == 0) {
-		config->tabdata.padding_y = CLAMP_INT(atoi(value), 0, 100);
+		config->groupbardata.padding_y = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "jump_label_decorate_font_desc") == 0) {
 		config->jumplabeldata.font_desc = strdup(value);
 	} else if (strcmp(key, "jump_label_decorate_fg_color") == 0) {
@@ -3339,9 +3339,9 @@ void free_config(void) {
 		config.jumplabeldata.font_desc = NULL;
 	}
 
-	if (config.tabdata.font_desc) {
-		free((void *)config.tabdata.font_desc);
-		config.tabdata.font_desc = NULL;
+	if (config.groupbardata.font_desc) {
+		free((void *)config.groupbardata.font_desc);
+		config.groupbardata.font_desc = NULL;
 	}
 
 	if (config.tablet_map_to_mon) {
@@ -3512,12 +3512,14 @@ void override_config(void) {
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
 
-	config.tabdata.border_width =
-		CLAMP_INT(config.tabdata.border_width, 0, 100);
-	config.tabdata.corner_radius =
-		CLAMP_INT(config.tabdata.corner_radius, 0, 100);
-	config.tabdata.padding_x = CLAMP_INT(config.tabdata.padding_x, 0, 100);
-	config.tabdata.padding_y = CLAMP_INT(config.tabdata.padding_y, 0, 100);
+	config.groupbardata.border_width =
+		CLAMP_INT(config.groupbardata.border_width, 0, 100);
+	config.groupbardata.corner_radius =
+		CLAMP_INT(config.groupbardata.corner_radius, 0, 100);
+	config.groupbardata.padding_x =
+		CLAMP_INT(config.groupbardata.padding_x, 0, 100);
+	config.groupbardata.padding_y =
+		CLAMP_INT(config.groupbardata.padding_y, 0, 100);
 
 	config.jumplabeldata.border_width =
 		CLAMP_INT(config.jumplabeldata.border_width, 0, 100);
@@ -3680,30 +3682,30 @@ void set_value_default() {
 	config.animation_curve_opafadeout[2] = 0.5;
 	config.animation_curve_opafadeout[3] = 0.5;
 
-	config.tabdata.fg_color[0] = 0xc4 / 255.0f;
-	config.tabdata.fg_color[1] = 0x93 / 255.0f;
-	config.tabdata.fg_color[2] = 0x9d / 255.0f;
-	config.tabdata.fg_color[3] = 1.0f;
-	config.tabdata.bg_color[0] = 0x32 / 255.0f;
-	config.tabdata.bg_color[1] = 0x32 / 255.0f;
-	config.tabdata.bg_color[2] = 0x32 / 255.0f;
-	config.tabdata.bg_color[3] = 1.0f;
-	config.tabdata.focus_fg_color[0] = 0xed / 255.0f;
-	config.tabdata.focus_fg_color[1] = 0xa6 / 255.0f;
-	config.tabdata.focus_fg_color[2] = 0xb4 / 255.0f;
-	config.tabdata.focus_fg_color[3] = 1.0f;
-	config.tabdata.focus_bg_color[0] = 0x4e / 255.0f;
-	config.tabdata.focus_bg_color[1] = 0x45 / 255.0f;
-	config.tabdata.focus_bg_color[2] = 0x3c / 255.0f;
-	config.tabdata.focus_bg_color[3] = 1.0f;
-	config.tabdata.border_color[0] = 0x8b / 255.0f;
-	config.tabdata.border_color[1] = 0xaa / 255.0f;
-	config.tabdata.border_color[2] = 0x9b / 255.0f;
-	config.tabdata.border_color[3] = 1.0f;
-	config.tabdata.border_width = 4;
-	config.tabdata.corner_radius = 5;
-	config.tabdata.padding_x = 0;
-	config.tabdata.padding_y = 0;
+	config.groupbardata.fg_color[0] = 0xc4 / 255.0f;
+	config.groupbardata.fg_color[1] = 0x93 / 255.0f;
+	config.groupbardata.fg_color[2] = 0x9d / 255.0f;
+	config.groupbardata.fg_color[3] = 1.0f;
+	config.groupbardata.bg_color[0] = 0x32 / 255.0f;
+	config.groupbardata.bg_color[1] = 0x32 / 255.0f;
+	config.groupbardata.bg_color[2] = 0x32 / 255.0f;
+	config.groupbardata.bg_color[3] = 1.0f;
+	config.groupbardata.focus_fg_color[0] = 0xed / 255.0f;
+	config.groupbardata.focus_fg_color[1] = 0xa6 / 255.0f;
+	config.groupbardata.focus_fg_color[2] = 0xb4 / 255.0f;
+	config.groupbardata.focus_fg_color[3] = 1.0f;
+	config.groupbardata.focus_bg_color[0] = 0x4e / 255.0f;
+	config.groupbardata.focus_bg_color[1] = 0x45 / 255.0f;
+	config.groupbardata.focus_bg_color[2] = 0x3c / 255.0f;
+	config.groupbardata.focus_bg_color[3] = 1.0f;
+	config.groupbardata.border_color[0] = 0x8b / 255.0f;
+	config.groupbardata.border_color[1] = 0xaa / 255.0f;
+	config.groupbardata.border_color[2] = 0x9b / 255.0f;
+	config.groupbardata.border_color[3] = 1.0f;
+	config.groupbardata.border_width = 4;
+	config.groupbardata.corner_radius = 5;
+	config.groupbardata.padding_x = 0;
+	config.groupbardata.padding_y = 0;
 
 	config.jumplabeldata.fg_color[0] = 0xc4 / 255.0f;
 	config.jumplabeldata.fg_color[1] = 0x93 / 255.0f;
@@ -3843,7 +3845,7 @@ bool parse_config(void) {
 	config.tag_rules_count = 0;
 	config.cursor_theme = NULL;
 	config.jumplabeldata.font_desc = NULL;
-	config.tabdata.font_desc = NULL;
+	config.groupbardata.font_desc = NULL;
 	config.tablet_map_to_mon = NULL;
 	strcpy(config.keymode, "default");
 
@@ -3990,14 +3992,7 @@ void reapply_property(void) {
 			if (!c->isnoborder && !c->isfullscreen) {
 				c->bw = config.borderpx;
 			}
-
-			mango_jump_label_node_apply_config(c->jump_label_node,
-											   &config.jumplabeldata);
-			mango_group_bar_apply_config(c->group_bar, &config.tabdata);
-
-			wlr_scene_rect_set_color(c->droparea, config.dropcolor);
-			wlr_scene_rect_set_color(c->splitindicator[0], config.splitcolor);
-			wlr_scene_rect_set_color(c->splitindicator[1], config.splitcolor);
+			client_set_group_config(c);
 		}
 	}
 }

@@ -958,6 +958,7 @@ static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 									  struct wlr_output_state *state);
 static bool mango_output_commit(Monitor *m);
 static bool check_tearing_frame_allow(Monitor *m);
+static void client_set_group_config(Client *c);
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"

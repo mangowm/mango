@@ -127,7 +127,7 @@ void client_add_group_bar(Client *c) {
 														: LyrTile;
 
 	c->group_bar = mango_group_bar_create(c, GroupBar, layers[layer],
-										  config.tabdata, 0, 0);
+										  config.groupbardata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->group_bar->scene_buffer->node);
 	wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
 	mango_group_bar_update(c->group_bar, client_get_title(c),
@@ -262,6 +262,23 @@ void client_set_group_mon(Client *c, Monitor *m) {
 	Client *cur = head;
 	while (cur) {
 		client_change_mon(cur, m);
+		cur = cur->group_next;
+	}
+}
+
+void client_set_group_config(Client *c) {
+	Client *head = c;
+	while (head->group_prev)
+		head = head->group_prev;
+
+	Client *cur = head;
+	while (cur) {
+		mango_jump_label_node_apply_config(cur->jump_label_node,
+										   &config.jumplabeldata);
+		wlr_scene_rect_set_color(cur->droparea, config.dropcolor);
+		wlr_scene_rect_set_color(cur->splitindicator[0], config.splitcolor);
+		wlr_scene_rect_set_color(cur->splitindicator[1], config.splitcolor);
+		mango_group_bar_apply_config(cur->group_bar, &config.groupbardata);
 		cur = cur->group_next;
 	}
 }
