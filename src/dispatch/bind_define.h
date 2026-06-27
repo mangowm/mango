@@ -1950,7 +1950,7 @@ int32_t disable_monitor(const Arg *arg) {
 		if (match_monitor_spec(arg->v, m)) {
 			wlr_output_state_set_enabled(&m->pending, false);
 			mango_output_commit(m);
-			m->asleep = 1;
+			m->only_dpms_off = 0;
 			updatemons(NULL, NULL);
 			break;
 		}
@@ -1964,7 +1964,7 @@ int32_t enable_monitor(const Arg *arg) {
 		if (match_monitor_spec(arg->v, m)) {
 			wlr_output_state_set_enabled(&m->pending, true);
 			mango_output_commit(m);
-			m->asleep = 0;
+			m->only_dpms_off = 0;
 			updatemons(NULL, NULL);
 			break;
 		}
@@ -1978,7 +1978,50 @@ int32_t toggle_monitor(const Arg *arg) {
 		if (match_monitor_spec(arg->v, m)) {
 			wlr_output_state_set_enabled(&m->pending, !m->wlr_output->enabled);
 			mango_output_commit(m);
-			m->asleep = !m->wlr_output->enabled;
+			m->only_dpms_off = 0;
+			updatemons(NULL, NULL);
+			break;
+		}
+	}
+	return 0;
+}
+
+int32_t dpms_off_monitor(const Arg *arg) {
+	Monitor *m = NULL;
+
+	wl_list_for_each(m, &mons, link) {
+		if (match_monitor_spec(arg->v, m)) {
+			wlr_output_state_set_enabled(&m->pending, false);
+			mango_output_commit(m);
+			m->only_dpms_off = 1;
+			updatemons(NULL, NULL);
+			break;
+		}
+	}
+	return 0;
+}
+
+int32_t dpms_on_monitor(const Arg *arg) {
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (match_monitor_spec(arg->v, m)) {
+			wlr_output_state_set_enabled(&m->pending, true);
+			mango_output_commit(m);
+			m->only_dpms_off = 0;
+			updatemons(NULL, NULL);
+			break;
+		}
+	}
+	return 0;
+}
+
+int32_t dpms_toggle_monitor(const Arg *arg) {
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (match_monitor_spec(arg->v, m)) {
+			wlr_output_state_set_enabled(&m->pending, !m->wlr_output->enabled);
+			mango_output_commit(m);
+			m->only_dpms_off = !m->wlr_output->enabled;
 			updatemons(NULL, NULL);
 			break;
 		}

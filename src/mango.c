@@ -577,7 +577,7 @@ struct Monitor {
 	int32_t isoverview;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
-	int32_t asleep;
+	int32_t only_dpms_off;
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
@@ -5049,7 +5049,7 @@ outputmgrapplyortest(struct wlr_output_configuration_v1 *config, int32_t test) {
 
 		/* Ensure displays previously disabled by
 		 * wlr-output-power-management-v1 are properly handled*/
-		m->asleep = 0;
+		m->only_dpms_off = 0;
 
 		wlr_output_state_init(&state);
 		wlr_output_state_set_enabled(&state, config_head->state.enabled);
@@ -5199,7 +5199,7 @@ void powermgrsetmode(struct wl_listener *listener, void *data) {
 
 	wlr_output_state_set_enabled(&m->pending, event->mode);
 	mango_output_commit(m);
-	m->asleep = !event->mode;
+	m->only_dpms_off = !event->mode;
 	updatemons(NULL, NULL);
 }
 
@@ -6856,7 +6856,7 @@ void updatemons(struct wl_listener *listener, void *data) {
 
 	/* First remove from the layout the disabled monitors */
 	wl_list_for_each(m, &mons, link) {
-		if (m->wlr_output->enabled || m->asleep)
+		if (m->wlr_output->enabled || m->only_dpms_off)
 			continue;
 		config_head = wlr_output_configuration_head_v1_create(output_config,
 															  m->wlr_output);
