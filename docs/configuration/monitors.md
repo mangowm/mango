@@ -33,6 +33,7 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 | `hdr` | integer | 0, 1 | Enable hdr support |
 | `rr` | integer | 0-7 | Monitor transform |
 | `custom` | integer | 0, 1 | Enable custom mode (not supported on all displays — may cause black screen) |
+| `disable` | integer | 0, 1 | Disable the monitor |
 
 ### Transform Values
 

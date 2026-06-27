@@ -118,6 +118,7 @@ typedef struct {
 	int32_t vrr;				 // variable refresh rate
 	int32_t custom;				 // enable custom mode
 	int32_t hdr;				 // enable hdr mode
+	int32_t disable;			 // prefer disable
 } ConfigMonitorRule;
 
 // 修改后的宏定义
@@ -2059,6 +2060,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->vrr = 0;
 		rule->hdr = 0;
 		rule->custom = 0;
+		rule->disable = 0;
 
 		bool parse_error = false;
 		char *token = strtok(value, ",");
@@ -2098,6 +2100,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "hdr") == 0) {
 					rule->hdr = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "disable") == 0) {
+					rule->disable = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "custom") == 0) {
 					rule->custom = CLAMP_INT(atoi(val), 0, 1);
 				} else {
@@ -3902,6 +3906,7 @@ void reapply_monitor_rules(void) {
 				vrr = mr->vrr >= 0 ? mr->vrr : 0;
 				custom = mr->custom >= 0 ? mr->custom : 0;
 				m->hdr_enable = mr->hdr >= 0 ? mr->hdr : 0;
+				m->prefer_disable = mr->disable >= 0 ? mr->disable : 0;
 
 				(void)apply_rule_to_state(m, mr, &m->pending, vrr, custom);
 				wlr_output_layout_add(output_layout, m->wlr_output, mx, my);
@@ -3909,7 +3914,11 @@ void reapply_monitor_rules(void) {
 			}
 		}
 
-		wlr_output_state_set_enabled(&m->pending, true);
+		if (m->prefer_disable) {
+			wlr_output_state_set_enabled(&m->pending, false);
+		} else {
+			wlr_output_state_set_enabled(&m->pending, true);
+		}
 
 		if (m->hdr_enable) {
 			output_state_setup_hdr(m, false, &m->pending);

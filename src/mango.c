@@ -589,6 +589,7 @@ struct Monitor {
 	bool vrr_global_enable;
 	bool is_vrr_opening;
 	bool hdr_enable;
+	bool prefer_disable;
 };
 
 typedef struct {
@@ -3388,6 +3389,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->is_vrr_opening = false;
 
 	m->hdr_enable = false;
+	m->prefer_disable = false;
 
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
@@ -3427,6 +3429,7 @@ void createmon(struct wl_listener *listener, void *data) {
 			scale = r->scale;
 			rr = r->rr;
 			m->hdr_enable = r->hdr;
+			m->prefer_disable = r->disable >= 0 ? r->disable : 0;
 
 			if (apply_rule_to_state(m, r, &m->pending, vrr, custom)) {
 				custom_monitor_mode = true;
@@ -3445,7 +3448,11 @@ void createmon(struct wl_listener *listener, void *data) {
 	LISTEN(&wlr_output->events.request_state, &m->request_state,
 		   requestmonstate);
 
-	wlr_output_state_set_enabled(&m->pending, 1);
+	if (m->prefer_disable) {
+		wlr_output_state_set_enabled(&m->pending, false);
+	} else {
+		wlr_output_state_set_enabled(&m->pending, true);
+	}
 
 	if (m->hdr_enable) {
 		output_state_setup_hdr(m, false, &m->pending);
