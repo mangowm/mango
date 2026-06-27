@@ -6852,14 +6852,19 @@ void updatemons(struct wl_listener *listener, void *data) {
 
 	/* First remove from the layout the disabled monitors */
 	wl_list_for_each(m, &mons, link) {
-		if (m->wlr_output->enabled || m->only_dpms_off)
+		if (m->wlr_output->enabled)
 			continue;
 		config_head = wlr_output_configuration_head_v1_create(output_config,
 															  m->wlr_output);
 		config_head->state.enabled = 0;
+
+		if (m->only_dpms_off) {
+			continue;
+		}
 		/* Remove this output from the layout to avoid cursor enter inside
 		 * it */
 		wlr_output_layout_remove(output_layout, m->wlr_output);
+
 		closemon(m);
 		m->m = m->w = (struct wlr_box){0};
 	}
