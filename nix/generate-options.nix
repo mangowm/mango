@@ -1,20 +1,18 @@
-self:
-{
+self: {
   pkgs,
   lib ? pkgs.lib,
   module,
   optionPrefix,
-}:
-let
+}: let
   # Absolute store path of the flake root, used to compute relative subpaths
   repoPath = toString self;
 
   eval = lib.evalModules {
     modules = [
-      (import module self)
-      { _module.check = false; }
+      (import module self.packages.${pkgs.stdenv.hostPlatform.system}.default)
+      {_module.check = false;}
     ];
-    specialArgs = { inherit pkgs; };
+    specialArgs = {inherit pkgs;};
   };
 
   # Relative path of the module file within the repo (e.g. "nix/hm-modules.nix")
@@ -28,15 +26,14 @@ let
 
   optionsDoc = pkgs.nixosOptionsDoc {
     options = eval.options;
-    transformOptions =
-      opt:
+    transformOptions = opt:
       opt
       // {
         visible = opt.visible && !opt.internal;
         # Strip the option prefix so docs show "enable" instead of "programs.mango.enable"
         name = lib.removePrefix optionPrefix opt.name;
-        declarations = [ moduleDeclaration ];
+        declarations = [moduleDeclaration];
       };
   };
 in
-optionsDoc.optionsJSON
+  optionsDoc.optionsJSON
