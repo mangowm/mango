@@ -2071,13 +2071,11 @@ int32_t scroller_apply_stack(Client *c, Client *target_client,
 
 		if (direction == LEFT || direction == UP) {
 			if (c != stack_head) {
-				wl_list_remove(&c->link);
-				wl_list_insert(stack_head->link.prev, &c->link);
+				wl_list_safe_reinsert_prev(&stack_head->link, &c->link);
 			}
 		} else if (direction == RIGHT || direction == DOWN) {
 			if (c != stack_tail) {
-				wl_list_remove(&c->link);
-				wl_list_insert(&stack_tail->link, &c->link);
+				wl_list_safe_reinsert_next(&stack_head->link, &c->link);
 			}
 		}
 		sync_scroller_state_to_clients(m, tag);

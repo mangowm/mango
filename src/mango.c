@@ -1284,8 +1284,7 @@ void show_scratchpad(Client *c) {
 	}
 
 	c->oldtags = c->mon->tagset[c->mon->seltags];
-	wl_list_remove(&c->link);					  // 从原来位置移除
-	wl_list_insert(clients.prev->next, &c->link); // 插入开头
+	wl_list_safe_reinsert_next(&clients, &c->link);
 	show_hide_client(c);
 	setborder_color(c);
 }
@@ -1368,11 +1367,9 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 		wlr_scene_node_set_enabled(&w->group_bar->scene_buffer->node, false);
 	}
 
-	wl_list_remove(&c->link);
-	wl_list_insert(&w->link, &c->link);
+	wl_list_safe_reinsert_next(&w->link, &c->link);
 
-	wl_list_remove(&c->flink);
-	wl_list_insert(&w->flink, &c->flink);
+	wl_list_safe_reinsert_prev(&w->flink, &c->flink);
 
 	w->is_logic_hide = true;
 	c->is_logic_hide = false;
@@ -1860,11 +1857,7 @@ void applyrules(Client *c) {
 		(!c->istagsilent || !newtags || newtags & mon->tagset[mon->seltags]);
 
 	if (!should_init_get_focus) {
-		if (c->flink.prev && c->flink.next && c->flink.prev != &c->flink) {
-			wl_list_remove(&c->flink);
-			wl_list_init(&c->flink);
-		}
-		wl_list_insert(fstack.prev, &c->flink);
+		wl_list_safe_reinsert_prev(&fstack, &c->flink);
 	}
 
 	setmon(c, mon, newtags, should_init_get_focus);
@@ -1900,11 +1893,7 @@ void applyrules(Client *c) {
 	}
 
 	if (c->isfloating && !c->iscustompos && !c->isnamedscratchpad) {
-		if (c->link.prev && c->link.next && c->link.prev != &c->link) {
-			wl_list_remove(&c->link);
-			wl_list_init(&c->link);
-		}
-		wl_list_insert(clients.prev, &c->link);
+		wl_list_safe_reinsert_prev(&clients, &c->link);
 		set_float_malposition(c);
 	}
 
@@ -2373,8 +2362,7 @@ void place_drag_tile_client(Client *c) {
 
 		if (closest->drop_direction == UNDIR) {
 			setfloating(c, 0);
-			wl_list_remove(&c->link);
-			wl_list_insert(closest->link.prev, &c->link);
+			wl_list_safe_reinsert_prev(&closest->link, &c->link);
 			arrange(closest->mon, false, false);
 			return;
 		}
@@ -2401,11 +2389,9 @@ void place_drag_tile_client(Client *c) {
 		}
 
 		if (closest->drop_direction == LEFT || closest->drop_direction == UP) {
-			wl_list_remove(&c->link);
-			wl_list_insert(closest->link.prev, &c->link);
+			wl_list_safe_reinsert_prev(&closest->link, &c->link);
 		} else {
-			wl_list_remove(&c->link);
-			wl_list_insert(&closest->link, &c->link);
+			wl_list_safe_reinsert_next(&closest->link, &c->link);
 		}
 	}
 
@@ -4538,6 +4524,13 @@ void init_client_properties(Client *c) {
 		   sizeof(c->opacity_animation.current_border_color));
 	c->opacity_animation.initial_opacity = c->unfocused_opacity;
 	c->opacity_animation.current_opacity = c->unfocused_opacity;
+	c->animation.tagining = false;
+	c->animation.running = false;
+	c->animation.overining = false;
+	c->animation.tagouting = false;
+	c->animation.tagouted = false;
+	wl_list_init(&c->link);
+	wl_list_init(&c->flink);
 }
 
 void // old fix to 0.5

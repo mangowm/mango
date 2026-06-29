@@ -785,16 +785,14 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		if (tnode->prev_in_stack)
 			tnode->prev_in_stack->next_in_stack = newnode;
 		tnode->prev_in_stack = newnode;
-		wl_list_remove(&c->link);
-		wl_list_insert(tnode->client->link.prev, &c->link);
+		wl_list_safe_reinsert_prev(&tnode->client->link, &c->link);
 	} else {
 		newnode->prev_in_stack = tnode;
 		newnode->next_in_stack = tnode->next_in_stack;
 		if (tnode->next_in_stack)
 			tnode->next_in_stack->prev_in_stack = newnode;
 		tnode->next_in_stack = newnode;
-		wl_list_remove(&c->link);
-		wl_list_insert(&tnode->client->link, &c->link);
+		wl_list_safe_reinsert_next(&tnode->client->link, &c->link);
 	}
 
 	/* 处理堆叠头部的全屏/最大化状态*/
@@ -833,13 +831,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 			return;
 		} else if (closest->drop_direction == UP) {
 			if (c != stack_head) {
-				wl_list_remove(&c->link);
-				wl_list_insert(stack_head->link.prev, &c->link);
+				wl_list_safe_reinsert_prev(&stack_head->link, &c->link);
 			}
 		} else if (closest->drop_direction == DOWN) {
 			if (c != stack_tail) {
-				wl_list_remove(&c->link);
-				wl_list_insert(&stack_tail->link, &c->link);
+				wl_list_safe_reinsert_next(&stack_head->link, &c->link);
 			}
 		}
 	} else {
@@ -853,13 +849,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 			return;
 		} else if (closest->drop_direction == LEFT) {
 			if (c != stack_head) {
-				wl_list_remove(&c->link);
-				wl_list_insert(stack_head->link.prev, &c->link);
+				wl_list_safe_reinsert_prev(&stack_head->link, &c->link);
 			}
 		} else if (closest->drop_direction == RIGHT) {
 			if (c != stack_tail) {
-				wl_list_remove(&c->link);
-				wl_list_insert(&stack_tail->link, &c->link);
+				wl_list_safe_reinsert_next(&stack_head->link, &c->link);
 			}
 		}
 	}
