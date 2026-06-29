@@ -817,7 +817,8 @@ static void clear_fullscreen_flag(Client *c);
 static pid_t getparentprocess(pid_t p);
 static int32_t isdescprocess(pid_t p, pid_t c);
 static Client *termforwin(Client *w);
-static void client_replace(Client *c, Client *w, bool isgroupaction);
+static void client_replace(Client *c, Client *w, bool is_group_change_member,
+						   bool is_swallow);
 
 static void warp_cursor_to_selmon(Monitor *m);
 uint32_t want_restore_fullscreen(Client *target_client);
@@ -1301,7 +1302,8 @@ void client_update_oldmonname_record(Client *c, Monitor *m) {
 	c->oldmonname[sizeof(c->oldmonname) - 1] = '\0';
 }
 
-void client_replace(Client *c, Client *w, bool isgroupaction) {
+void client_replace(Client *c, Client *w, bool is_group_change_member,
+					bool is_swallow) {
 	c->bw = w->bw;
 	c->isfloating = w->isfloating;
 	c->isurgent = w->isurgent;
@@ -1318,40 +1320,60 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->stack_proportion = w->stack_proportion;
+	c->is_logic_hide = w->is_logic_hide;
 
-	if (!isgroupaction) {
-
-		if (w->group_prev == c) {
-			c->group_next = w->group_next;
-			if (w->group_next) {
-				w->group_next->group_prev = c;
-			}
-		} else if (w->group_next == c) {
-			c->group_prev = w->group_prev;
-			if (w->group_prev) {
-				w->group_prev->group_next = c;
-			}
-		} else {
-			c->group_prev = w->group_prev;
-			c->group_next = w->group_next;
-			if (w->group_prev) {
-				w->group_prev->group_next = c;
-			}
-
-			if (w->group_next) {
-				w->group_next->group_prev = c;
-			}
+	if (is_swallow) {
+		c->group_prev = w->group_prev;
+		c->group_next = w->group_next;
+		if (w->group_prev) {
+			w->group_prev->group_next = c;
 		}
+		if (w->group_next) {
+			w->group_next->group_prev = c;
+		}
+		w->group_next = NULL;
+		w->group_prev = NULL;
 
-		if (!c->group_prev && !c->group_next) {
-			c->isgroupfocusing = false;
-		} else {
+		if (!w->is_logic_hide) {
 			c->isgroupfocusing = w->isgroupfocusing;
+		} else {
+			c->isgroupfocusing = false;
 		}
 
-		if (c->isgroupfocusing)
-			mango_group_bar_set_focus(c->group_bar, true);
+	} else {
+		if (!is_group_change_member) {
+			if (w->group_prev == c) {
+				c->group_next = w->group_next;
+				if (w->group_next) {
+					w->group_next->group_prev = c;
+				}
+			} else if (w->group_next == c) {
+				c->group_prev = w->group_prev;
+				if (w->group_prev) {
+					w->group_prev->group_next = c;
+				}
+			} else {
+				c->group_prev = w->group_prev;
+				c->group_next = w->group_next;
+				if (w->group_prev) {
+					w->group_prev->group_next = c;
+				}
+
+				if (w->group_next) {
+					w->group_next->group_prev = c;
+				}
+			}
+
+			if (!c->group_prev && !c->group_next) {
+				c->isgroupfocusing = false;
+			} else {
+				c->isgroupfocusing = w->isgroupfocusing;
+			}
+		}
 	}
+
+	w->is_logic_hide = true;
+	mango_group_bar_set_focus(c->group_bar, c->isgroupfocusing);
 
 	if (w->overview_scene_surface) {
 
@@ -1367,16 +1389,18 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 		overview_backup_surface(c);
 	}
 
-	if (w->group_bar && !isgroupaction) {
+	if (w->group_bar && !is_group_change_member) {
 		wlr_scene_node_set_enabled(&w->group_bar->scene_buffer->node, false);
 	}
 
 	wl_list_safe_reinsert_next(&w->link, &c->link);
-
 	wl_list_safe_reinsert_prev(&w->flink, &c->flink);
+	wlr_scene_node_set_enabled(&w->scene->node, false);
 
-	w->is_logic_hide = true;
-	c->is_logic_hide = false;
+	if (!c->is_logic_hide) {
+		wlr_scene_node_set_enabled(&c->scene->node, true);
+		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+	}
 
 	if (w->foreign_toplevel) {
 		wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
@@ -1384,10 +1408,6 @@ void client_replace(Client *c, Client *w, bool isgroupaction) {
 		wlr_foreign_toplevel_handle_v1_destroy(w->foreign_toplevel);
 		w->foreign_toplevel = NULL;
 	}
-
-	wlr_scene_node_set_enabled(&w->scene->node, false);
-	wlr_scene_node_set_enabled(&c->scene->node, true);
-	wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 
 	if (!c->foreign_toplevel && c->mon)
 		add_foreign_toplevel(c);
@@ -1845,7 +1865,7 @@ void applyrules(Client *c) {
 			c->swallowing = p;
 			p->swallowdby = c;
 
-			client_replace(c, p, false);
+			client_replace(c, p, false, true);
 
 			mon = p->mon;
 			newtags = p->tags;
@@ -6679,12 +6699,12 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 
 	if (c->swallowing) {
 		c->swallowing->mon = c->mon;
-		client_replace(c->swallowing, c, false);
+		client_replace(c->swallowing, c, false, true);
 	} else if ((c->group_next || c->group_prev) && c->isgroupfocusing) {
 		Client *group_replacement =
 			c->group_next ? c->group_next : c->group_prev;
 		group_replacement->mon = c->mon;
-		client_replace(group_replacement, c, false);
+		client_replace(group_replacement, c, false, false);
 	} else {
 		scroller_remove_client(c);
 		dwindle_remove_client(c);

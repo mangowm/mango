@@ -160,7 +160,7 @@ void client_focus_group_member(Client *c) {
 
 	cur_focusing->isgroupfocusing = false;
 	c->mon = cur_focusing->mon;
-	client_replace(c, cur_focusing, true);
+	client_replace(c, cur_focusing, true, false);
 	mango_group_bar_set_focus(cur_focusing->group_bar, false);
 
 	c->isgroupfocusing = true;
