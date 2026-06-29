@@ -524,6 +524,8 @@ void mango_group_bar_destroy(MangoGroupBar *node) {
 	if (node->measure_cr)
 		cairo_destroy(node->measure_cr);
 
+	wlr_scene_node_destroy(&node->scene_buffer->node);
+
 	g_free(node->font_desc);
 	g_free(node->cached_text);
 	g_free(node->cached_font_desc);
