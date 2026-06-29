@@ -184,11 +184,11 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			break;
 
 		wl_list_for_each(c, &clients, link) {
-			if (!c || c == tc)
+			if (!c || !c->mon || c == tc)
 				continue;
 			if (!findfloating && c->isfloating)
 				continue;
-			if (c->is_logic_hide)
+			if (!VISIBLEON(c, c->mon))
 				continue;
 			if (c->isunglobal)
 				continue;
@@ -444,7 +444,7 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		return sc;
 
 	wl_list_for_each(tc, &fstack, flink) {
-		if (tc->iskilling || tc->isunglobal || tc->is_logic_hide)
+		if (tc->iskilling || tc->isunglobal)
 			continue;
 		if (!VISIBLEON(tc, sc->mon))
 			continue;

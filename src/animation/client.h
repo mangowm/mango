@@ -661,8 +661,7 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box) {
 		(ISSCROLLTILED(c) || c->animation.tagouting || c->animation.tagining)) {
 		c->is_clip_to_hide = true;
 		wlr_scene_node_set_enabled(&c->scene->node, false);
-	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon) &&
-			   !c->is_logic_hide) {
+	} else if (c->is_clip_to_hide && VISIBLEON(c, c->mon)) {
 		c->is_clip_to_hide = false;
 		c->is_logic_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
