@@ -243,9 +243,7 @@ int32_t groupleave(const Arg *arg) {
 	tc->group_prev = NULL;
 	tc->group_next = NULL;
 	tc->isgroupfocusing = false;
-
-	wl_list_insert(&rc->link, &tc->link);
-	wl_list_insert(&rc->flink, &tc->flink);
+	tc->is_logic_hide = false;
 
 	if (!rc->group_prev && !rc->group_next) {
 		rc->isgroupfocusing = false;

@@ -188,6 +188,8 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 			if (!findfloating && c->isfloating)
 				continue;
+			if (c->is_logic_hide)
+				continue;
 			if (c->isunglobal)
 				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
@@ -442,7 +444,7 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		return sc;
 
 	wl_list_for_each(tc, &fstack, flink) {
-		if (tc->iskilling || tc->isunglobal)
+		if (tc->iskilling || tc->isunglobal || tc->is_logic_hide)
 			continue;
 		if (!VISIBLEON(tc, sc->mon))
 			continue;
