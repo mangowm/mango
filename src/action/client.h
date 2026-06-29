@@ -57,11 +57,7 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!ISFAKETILED(c))
 		return;
 
-	if (c->isfullscreen && c->group_bar) {
-		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
-	}
-
-	if (!c->mon->isoverview && c->group_bar && !c->isfullscreen &&
+	if (!c->mon->isoverview && !c->isfullscreen &&
 		(c->group_next || c->group_prev)) {
 		geo.y = geo.y + config.group_bar_height;
 		geo.height -= config.group_bar_height;
@@ -189,7 +185,7 @@ void client_check_tab_node_visible(Client *c) {
 	Client *cur = head;
 	while (cur) {
 		if (!c->mon->isoverview && cur->group_bar &&
-			(cur->group_next || cur->group_prev) && VISIBLEON(c, c->mon) &&
+			(cur->group_next || cur->group_prev) && TAGMATCH(c, c->mon) &&
 			ISNORMAL(c) && !c->isfullscreen) {
 			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
 									   true);

@@ -280,11 +280,14 @@ void client_draw_title(Client *c) {
 	if (!c || !c->group_bar)
 		return;
 
-	if (!c->group_next && !c->group_prev && c->group_bar &&
+	if (!c->group_next && !c->group_prev &&
 		c->group_bar->scene_buffer->node.enabled) {
 		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
 		return;
 	}
+
+	if (c->is_logic_hide)
+		return;
 
 	if (!c->group_next && !c->group_prev)
 		return;
@@ -396,10 +399,6 @@ void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 						   int32_t height) {
 	if (!c->group_bar)
 		return;
-
-	if (height <= 0) {
-		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
-	}
 
 	wlr_scene_node_set_position(&c->group_bar->scene_buffer->node, x, y);
 	mango_group_bar_set_size(c->group_bar, width, height);

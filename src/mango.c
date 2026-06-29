@@ -126,6 +126,10 @@
 	((C) && (M) && (C)->mon == (M) && !(C)->is_logic_hide &&                   \
 	 (((C)->tags & (M)->tagset[(M)->seltags] || (C)->isglobal ||               \
 	   (C)->isunglobal)))
+
+#define TAGMATCH(C, M)                                                         \
+	((C) && (M) && (C)->mon == (M) && (((C)->tags & (M)->tagset[(M)->seltags])))
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
 #define TAGMASK ((1 << LENGTH(tags)) - 1)
@@ -5606,7 +5610,7 @@ void reset_maximizescreen_size(Client *c) {
 	geom.width = c->mon->w.width - 2 * config.gappoh;
 	geom.height = c->mon->w.height - 2 * config.gappov;
 
-	if ((c->group_next || c->group_prev) && c->group_bar) {
+	if (c->group_next || c->group_prev) {
 		geom.height -= config.group_bar_height;
 		geom.y += config.group_bar_height;
 	}
@@ -5653,7 +5657,7 @@ void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 		maximizescreen_box.width = c->mon->w.width - 2 * config.gappoh;
 		maximizescreen_box.height = c->mon->w.height - 2 * config.gappov;
 
-		if ((c->group_next || c->group_prev) && c->group_bar) {
+		if (c->group_next || c->group_prev) {
 			maximizescreen_box.height -= config.group_bar_height;
 			maximizescreen_box.y += config.group_bar_height;
 		}
