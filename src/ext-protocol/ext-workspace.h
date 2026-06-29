@@ -155,6 +155,8 @@ void dwl_ext_workspace_printstatus(Monitor *m) {
 	wl_list_for_each(w, &workspaces, link) {
 		if (w && w->m == m) {
 
+			wlr_ext_workspace_handle_v1_set_name(w->ext_workspace,
+				get_name_from_tag(w->tag));
 			tag_status = get_tag_status(w->tag, m);
 			if (tag_status == 2) {
 				wlr_ext_workspace_handle_v1_set_hidden(w->ext_workspace, false);
