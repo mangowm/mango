@@ -100,9 +100,9 @@ static void handle_ext_commit(struct wl_listener *listener, void *data) {
 }
 
 static const char *get_name_from_tag(uint32_t tag) {
-	static const char *names[] = {"overview", "1", "2", "3", "4",
-								  "5",		  "6", "7", "8", "9"};
-	return (tag < sizeof(names) / sizeof(names[0])) ? names[tag] : NULL;
+	if (tag == 0)
+		return "overview";
+	return get_tag_name((int)tag);
 }
 
 void destroy_workspace(struct workspace *workspace) {
@@ -155,6 +155,8 @@ void dwl_ext_workspace_printstatus(Monitor *m) {
 	wl_list_for_each(w, &workspaces, link) {
 		if (w && w->m == m) {
 
+			wlr_ext_workspace_handle_v1_set_name(w->ext_workspace,
+				get_name_from_tag(w->tag));
 			tag_status = get_tag_status(w->tag, m);
 			if (tag_status == 2) {
 				wlr_ext_workspace_handle_v1_set_hidden(w->ext_workspace, false);

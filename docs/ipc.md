@@ -67,6 +67,17 @@ mmsg watch all-monitors
 mmsg watch all-tags
 ```
 
+### RENAME
+| Command | Description |
+| :--- | :--- |
+| `rename tag <index> <name>` | Renames a tag at runtime. Updates the in-memory config, the ext-workspace-v1 protocol name, and notifies all IPC watchers. The name may contain spaces. |
+
+*Example:*
+```bash
+mmsg rename tag 1 web
+mmsg rename tag 2 my projects
+```
+
 ### DISPATCH
 Allows sending commands to the compositor to alter its state.
 * `dispatch <func_name>,[args...] [client,<id>]`
