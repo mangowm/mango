@@ -426,7 +426,7 @@ struct Client {
 	int32_t force_fakemaximize;
 	int32_t force_tiled_state;
 	pid_t pid;
-	Client *swallowing, *swallowedby;
+	Client *swallowdby, *swallowing;
 	bool is_clip_to_hide;
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
@@ -1708,7 +1708,7 @@ void client_reset_mon_tags(Client *c, Monitor *mon, uint32_t newtags) {
 }
 
 void check_match_tag_floating_rule(Client *c, Monitor *mon) {
-	if (c->tags && !c->isfloating && mon && !c->swallowedby &&
+	if (c->tags && !c->isfloating && mon && !c->swallowing &&
 		mon->pertag->open_as_floating[get_tags_first_tag_num(c->tags)]) {
 		c->isfloating = 1;
 	}
@@ -1838,8 +1838,8 @@ void applyrules(Client *c) {
 		!c->surface.xdg->initial_commit) {
 		Client *p = termforwin(c);
 		if (p && !p->isminimized) {
-			c->swallowedby = p;
-			p->swallowing = c;
+			c->swallowing = p;
+			p->swallowdby = c;
 
 			client_replace(c, p, false);
 
@@ -4456,8 +4456,8 @@ void init_client_properties(Client *c) {
 	c->overview_ismaximizescreenbak = 0;
 	c->overview_isfloatingbak = 0;
 	c->pid = 0;
+	c->swallowdby = NULL;
 	c->swallowing = NULL;
-	c->swallowedby = NULL;
 	c->ismaster = 0;
 	c->old_ismaster = 0;
 	c->isleftstack = 0;
@@ -6667,9 +6667,9 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 
 	// If the client is in a stack, remove it from the stack
 
-	if (c->swallowedby) {
-		c->swallowedby->mon = c->mon;
-		client_replace(c->swallowedby, c, false);
+	if (c->swallowing) {
+		c->swallowing->mon = c->mon;
+		client_replace(c->swallowing, c, false);
 	} else if ((c->group_next || c->group_prev) && c->isgroupfocusing) {
 		Client *group_replacement =
 			c->group_next ? c->group_next : c->group_prev;
@@ -6702,9 +6702,9 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	}
 
 	if (c->mon && c->mon == selmon) {
-		if (next_node && !c->swallowedby) {
+		if (next_node && !c->swallowing) {
 			nextfocus = next_node->client;
-		} else if (prev_node && !c->swallowedby) {
+		} else if (prev_node && !c->swallowing) {
 			nextfocus = prev_node->client;
 		} else {
 			nextfocus = focustop(selmon);
@@ -6762,22 +6762,24 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->ext_foreign_toplevel = NULL;
 	}
 
-	if (c->swallowedby) {
-		setmaximizescreen(c->swallowedby, c->ismaximizescreen, true);
-		setfullscreen(c->swallowedby, c->isfullscreen, true);
-		c->swallowedby->swallowing = NULL;
-		c->swallowedby = NULL;
-	}
 
 	if (c->swallowing) {
-		c->swallowing->swallowedby = NULL;
+		setmaximizescreen(c->swallowing, c->ismaximizescreen, true);
+		setfullscreen(c->swallowing, c->isfullscreen, true);
+		c->swallowing->swallowdby = NULL;
 		c->swallowing = NULL;
+	}
+
+	if (c->swallowdby) {
+		c->swallowdby->swallowing = NULL;
+		c->swallowdby = NULL;
 	}
 
 	if (c->jump_label_node) {
 		mango_jump_label_node_destroy(c->jump_label_node);
 		c->jump_label_node = NULL;
 	}
+	
 	if (c->group_bar) {
 		mango_group_bar_destroy(c->group_bar);
 		c->group_bar = NULL;
@@ -7179,7 +7181,7 @@ void activatex11(struct wl_listener *listener, void *data) {
 	if (!c || c->iskilling || !c->foreign_toplevel || client_is_unmanaged(c))
 		return;
 
-	if (c && c->swallowing)
+	if (c && c->swallowdby)
 		return;
 
 	if (c->isminimized) {

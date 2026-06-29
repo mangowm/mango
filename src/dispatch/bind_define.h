@@ -2197,6 +2197,13 @@ int32_t focusid(const Arg *arg) {
 		return 0;
 
 	Client *c = arg->tc;
+
+	if (c->swallowdby)
+		return 0;
+
+	if (c->group_next || c->group_prev)
+		client_focus_group_member(c);
+
 	client_active(c);
 	return 0;
 }

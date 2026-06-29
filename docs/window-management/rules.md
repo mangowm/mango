@@ -141,7 +141,7 @@ windowrule=offsetx:20,offsety:-30,width:800,height:600,appid:alacritty
 # Send to specific tag and monitor
 windowrule=tags:9,monitor:HDMI-A-1,appid:discord
 
-# Terminal swallowing setup
+# Terminal swallowdby setup
 windowrule=isterm:1,appid:st
 windowrule=noswallow:1,appid:foot
 

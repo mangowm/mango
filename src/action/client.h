@@ -84,7 +84,7 @@ void client_active(Client *c) {
 		return;
 	}
 
-	if (c->swallowing || !c->mon)
+	if (c->swallowdby || !c->mon)
 		return;
 
 	if (c->isminimized) {

@@ -31,7 +31,7 @@ Client *termforwin(Client *w) {
 		return NULL;
 
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->isterm && !c->swallowing && c->pid &&
+		if (c->isterm && !c->swallowdby && c->pid &&
 			isdescprocess(c->pid, w->pid)) {
 			return c;
 		}
@@ -48,9 +48,9 @@ Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title) {
 			continue;
 		}
 
-		if (c->swallowedby) {
-			appid = client_get_appid(c->swallowedby);
-			title = client_get_title(c->swallowedby);
+		if (c->swallowing) {
+			appid = client_get_appid(c->swallowing);
+			title = client_get_title(c->swallowing);
 		} else {
 			appid = client_get_appid(c);
 			title = client_get_title(c);

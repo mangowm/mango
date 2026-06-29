@@ -1393,11 +1393,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->pending = c->geom;
 	}
 
-	if (c->swallowedby && c->animation.action == OPEN) {
-		c->animainit_geom = c->swallowedby->animation.current;
+	if (c->swallowing && c->animation.action == OPEN) {
+		c->animainit_geom = c->swallowing->animation.current;
 	}
 
-	if (c->swallowing) {
+	if (c->swallowdby) {
 		c->animainit_geom = c->geom;
 	}
 
