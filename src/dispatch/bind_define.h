@@ -2200,3 +2200,9 @@ int32_t focusid(const Arg *arg) {
 	client_active(c);
 	return 0;
 }
+
+int32_t load_config_file(const Arg *arg) {
+	snprintf(cli_config_path, sizeof(cli_config_path), "%s", arg->v);
+	reload_config(arg);
+	return 0;
+}

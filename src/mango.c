@@ -1068,7 +1068,7 @@ static struct wl_event_source *hide_cursor_source;
 static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
-static const char *cli_config_path = NULL;
+static char cli_config_path[1024] = {0};
 static int active_capture_count = 0;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
@@ -7383,7 +7383,7 @@ int32_t main(int32_t argc, char *argv[]) {
 			printf("mango " VERSION "\n");
 			return EXIT_SUCCESS;
 		} else if (c == 'c') {
-			cli_config_path = optarg;
+			snprintf(cli_config_path, sizeof(cli_config_path), "%s", optarg);
 		} else if (c == 'p') {
 			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
 		} else {

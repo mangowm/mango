@@ -1190,6 +1190,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "reload_config") == 0) {
 		func = reload_config;
+	} else if (strcmp(func_name, "load_config_file") == 0) {
+		func = load_config_file;
+		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "tag") == 0) {
 		func = tag;
 		(*arg).ui = 1 << (atoi(arg_value) - 1);
@@ -2994,7 +2997,7 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	if (file_path[0] == '.' && file_path[1] == '/') {
 		// Relative path
 
-		if (cli_config_path) {
+		if (cli_config_path[0]) {
 			char *config_path = strdup(cli_config_path);
 			char *config_dir = dirname(config_path);
 			snprintf(full_path, sizeof(full_path), "%s/%s", config_dir,
@@ -3868,7 +3871,7 @@ bool parse_config(void) {
 
 	create_config_keymap();
 
-	if (cli_config_path) {
+	if (cli_config_path[0]) {
 		snprintf(filename, sizeof(filename), "%s", cli_config_path);
 	} else {
 		// 获取当前用户家目录
