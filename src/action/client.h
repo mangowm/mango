@@ -278,3 +278,32 @@ void client_set_group_config(Client *c) {
 		cur = cur->group_next;
 	}
 }
+
+void client_group_detach(Client *c) {
+	if (c->group_prev)
+		c->group_prev->group_next = c->group_next;
+	if (c->group_next)
+		c->group_next->group_prev = c->group_prev;
+	c->group_prev = NULL;
+	c->group_next = NULL;
+	c->isgroupfocusing = false;
+}
+
+void client_group_replace(Client *old, Client *new) {
+	client_group_detach(new);
+
+	new->group_prev = old->group_prev;
+	new->group_next = old->group_next;
+	if (old->group_prev)
+		old->group_prev->group_next = new;
+	if (old->group_next)
+		old->group_next->group_prev = new;
+	old->group_prev = NULL;
+	old->group_next = NULL;
+
+	if (old->is_logic_hide || (!new->group_prev && !new->group_next)) {
+		new->isgroupfocusing = false;
+	} else {
+		new->isgroupfocusing = old->isgroupfocusing;
+	}
+}

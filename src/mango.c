@@ -1322,54 +1322,8 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->stack_proportion = w->stack_proportion;
 	c->is_logic_hide = w->is_logic_hide;
 
-	if (is_swallow) {
-		c->group_prev = w->group_prev;
-		c->group_next = w->group_next;
-		if (w->group_prev) {
-			w->group_prev->group_next = c;
-		}
-		if (w->group_next) {
-			w->group_next->group_prev = c;
-		}
-		w->group_next = NULL;
-		w->group_prev = NULL;
-
-		if (!w->is_logic_hide) {
-			c->isgroupfocusing = w->isgroupfocusing;
-		} else {
-			c->isgroupfocusing = false;
-		}
-
-	} else {
-		if (!is_group_change_member) {
-			if (w->group_prev == c) {
-				c->group_next = w->group_next;
-				if (w->group_next) {
-					w->group_next->group_prev = c;
-				}
-			} else if (w->group_next == c) {
-				c->group_prev = w->group_prev;
-				if (w->group_prev) {
-					w->group_prev->group_next = c;
-				}
-			} else {
-				c->group_prev = w->group_prev;
-				c->group_next = w->group_next;
-				if (w->group_prev) {
-					w->group_prev->group_next = c;
-				}
-
-				if (w->group_next) {
-					w->group_next->group_prev = c;
-				}
-			}
-
-			if (!c->group_prev && !c->group_next) {
-				c->isgroupfocusing = false;
-			} else {
-				c->isgroupfocusing = w->isgroupfocusing;
-			}
-		}
+	if (is_swallow || !is_group_change_member) {
+		client_group_replace(w, c);
 	}
 
 	w->is_logic_hide = true;
@@ -6766,16 +6720,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 			focusclient(focustop(selmon), 1);
 	} else {
 
-		if (c->group_next && !c->isgroupfocusing) {
-			c->group_next->group_prev = c->group_prev;
-		}
-
-		if (c->group_prev && !c->isgroupfocusing) {
-			c->group_prev->group_next = c->group_next;
-		}
-
-		c->group_next = NULL;
-		c->group_prev = NULL;
+		client_group_detach(c);
 
 		wl_list_remove(&c->link);
 		setmon(c, NULL, 0, true);

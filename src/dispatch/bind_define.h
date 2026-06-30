@@ -231,17 +231,8 @@ int32_t groupleave(const Arg *arg) {
 	Client *rc = tc->group_next ? tc->group_next : tc->group_prev;
 
 	client_focus_group_member(rc);
+	client_group_detach(tc);
 
-	if (tc->group_prev) {
-		tc->group_prev->group_next = tc->group_next;
-	}
-
-	if (tc->group_next) {
-		tc->group_next->group_prev = tc->group_prev;
-	}
-
-	tc->group_prev = NULL;
-	tc->group_next = NULL;
 	tc->isgroupfocusing = false;
 	tc->is_logic_hide = false;
 
