@@ -27,6 +27,7 @@ struct dwl_input_method_relay {
 };
 
 struct dwl_input_method_popup {
+	uint32_t type; // must at first in struct
 	struct wlr_input_popup_surface_v2 *popup_surface;
 	struct wlr_scene_tree *tree;
 	struct wlr_scene_tree *scene_surface;
@@ -404,6 +405,8 @@ static void handle_input_method_new_popup_surface(struct wl_listener *listener,
 	popup->tree = wlr_scene_tree_create(layers[LyrIMPopup]);
 	popup->scene_surface = wlr_scene_subsurface_tree_create(
 		popup->tree, popup->popup_surface->surface);
+
+	popup->type = XdgImPopup;
 	popup->scene_surface->node.data = popup;
 
 	wl_list_insert(&relay->popups, &popup->link);

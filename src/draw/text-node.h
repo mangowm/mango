@@ -26,8 +26,7 @@ struct mango_text_buffer {
 	struct wlr_buffer base;
 	cairo_surface_t *surface;
 };
-
-struct mango_jump_label_node {
+typedef struct {
 	struct wlr_scene_buffer *scene_buffer;
 	struct mango_text_buffer *buffer;
 	cairo_surface_t *surface;
@@ -70,13 +69,15 @@ struct mango_jump_label_node {
 
 	int32_t logical_width;
 	int32_t logical_height;
-};
+} MangoJumpLabel;
 
-struct mango_tab_bar_node {
+typedef struct {
+	uint32_t type; // must at first in struct
 	struct wlr_scene_buffer *scene_buffer;
 	struct mango_text_buffer *buffer;
 	cairo_surface_t *surface;
 	int surface_pixel_w, surface_pixel_h;
+	void *node_data; // 存储窗口指针
 
 	// 初始配置
 	float fg_color[4];
@@ -126,41 +127,38 @@ struct mango_tab_bar_node {
 
 	int32_t logical_width;
 	int32_t logical_height;
-};
+} MangoGroupBar;
 
 void mango_text_global_finish(void);
-struct mango_jump_label_node *
-mango_jump_label_node_create(struct wlr_scene_tree *parent,
-							 DecorateDrawData data);
-void mango_jump_label_node_destroy(struct mango_jump_label_node *node);
-void mango_jump_label_node_set_background(struct mango_jump_label_node *node,
-										  float r, float g, float b, float a);
-void mango_jump_label_node_set_border(struct mango_jump_label_node *node,
-									  float r, float g, float b, float a,
-									  int32_t width, int32_t radius);
-void mango_jump_label_node_set_padding(struct mango_jump_label_node *node,
-									   int32_t pad_x, int32_t pad_y);
-void mango_jump_label_node_update(struct mango_jump_label_node *node,
-								  const char *text, float scale);
+MangoJumpLabel *mango_jump_label_node_create(struct wlr_scene_tree *parent,
+											 DecorateDrawData data);
+void mango_jump_label_node_destroy(MangoJumpLabel *node);
+void mango_jump_label_node_set_background(MangoJumpLabel *node, float r,
+										  float g, float b, float a);
+void mango_jump_label_node_set_border(MangoJumpLabel *node, float r, float g,
+									  float b, float a, int32_t width,
+									  int32_t radius);
+void mango_jump_label_node_set_padding(MangoJumpLabel *node, int32_t pad_x,
+									   int32_t pad_y);
+void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
+								  float scale);
 
-struct mango_tab_bar_node *
-mango_tab_bar_node_create(void *mango_node_data, struct wlr_scene_tree *parent,
-						  DecorateDrawData data, int32_t width, int32_t height);
-void mango_tab_bar_node_destroy(struct mango_tab_bar_node *node);
-void mango_tab_bar_node_set_size(struct mango_tab_bar_node *node, int32_t width,
-								 int32_t height);
-void mango_tab_bar_node_update(struct mango_tab_bar_node *node,
-							   const char *text, float scale);
+MangoGroupBar *mango_group_bar_create(void *cdata, uint32_t type,
+									  struct wlr_scene_tree *parent,
+									  DecorateDrawData data, int32_t width,
+									  int32_t height);
+void mango_group_bar_destroy(MangoGroupBar *node);
+void mango_group_bar_set_size(MangoGroupBar *node, int32_t width,
+							  int32_t height);
+void mango_group_bar_update(MangoGroupBar *node, const char *text, float scale);
 
-void mango_jump_label_node_set_focus(struct mango_jump_label_node *node,
-									 bool focused);
-void mango_tab_bar_node_set_focus(struct mango_tab_bar_node *node,
-								  bool focused);
+void mango_jump_label_node_set_focus(MangoJumpLabel *node, bool focused);
+void mango_group_bar_set_focus(MangoGroupBar *node, bool focused);
 
-void mango_tab_bar_node_set_colors(struct mango_tab_bar_node *node,
-								   const float fg[4], const float bg[4]);
-void mango_jump_label_node_apply_config(struct mango_jump_label_node *node,
+void mango_group_bar_set_colors(MangoGroupBar *node, const float fg[4],
+								const float bg[4]);
+void mango_jump_label_node_apply_config(MangoJumpLabel *node,
 										const DecorateDrawData *data);
-void mango_tab_bar_node_apply_config(struct mango_tab_bar_node *node,
-									 const DecorateDrawData *data);
+void mango_group_bar_apply_config(MangoGroupBar *node,
+								  const DecorateDrawData *data);
 #endif // jump_label_node_H

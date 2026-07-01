@@ -100,23 +100,30 @@ static bool layer_ignores_focus(LayerSurface *l) {
 }
 
 void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
-			  LayerSurface **pl, double *nx, double *ny) {
-	struct wlr_scene_node *node, *pnode;
+			  LayerSurface **pl, MangoGroupBar **gb, double *nx, double *ny) {
+	struct wlr_scene_node *node = NULL, *pnode = NULL;
 	struct wlr_surface *surface = NULL;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
+	MangoGroupBar *mangogroupbar = NULL;
 	int32_t layer;
 	Client *ovc = NULL;
 
-	for (layer = NUM_LAYERS - 1; !surface && layer >= 0; layer--) {
+	if (psurface)
+		*psurface = NULL;
+	if (pc)
+		*pc = NULL;
+	if (pl)
+		*pl = NULL;
+	if (gb)
+		*gb = NULL;
 
+	for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
 		if (layer == LyrFadeOut)
 			continue;
 
-		if (!(node = wlr_scene_node_at(&layers[layer]->node, x, y, nx, ny)))
-			continue;
-
-		if (!node->enabled)
+		node = wlr_scene_node_at(&layers[layer]->node, x, y, nx, ny);
+		if (!node)
 			continue;
 
 		if (node->type == WLR_SCENE_NODE_BUFFER) {
@@ -125,32 +132,44 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 					wlr_scene_buffer_from_node(node));
 			if (scene_surface) {
 				surface = scene_surface->surface;
-			} else {
-				continue;
 			}
 		}
 
-		/*  start from the topmost layer,
-			find a sureface that can be focused by pointer,
-			impopup neither a client nor a layer surface.*/
 		if (layer == LyrIMPopup) {
 			c = NULL;
 			l = NULL;
 		} else {
-			for (pnode = node; pnode && !c; pnode = &pnode->parent->node)
-				c = pnode->data;
-			if (c && c->type == LayerShell) {
-				l = (LayerSurface *)c;
-				c = NULL;
+			void *data = NULL;
+			for (pnode = node; pnode; pnode = &pnode->parent->node) {
+				if (pnode->data) {
+					data = pnode->data;
+					break;
+				}
+			}
+
+			if (data) {
+				Client *temp_c = (Client *)data;
+				if (temp_c->type == LayerShell) {
+					l = (LayerSurface *)temp_c;
+				} else if (temp_c->type == GroupBar) {
+					mangogroupbar = (MangoGroupBar *)temp_c;
+				} else if (temp_c->type == XDGShell || temp_c->type == X11) {
+					c = temp_c;
+				}
 			}
 		}
 
 		if (node->type == WLR_SCENE_NODE_RECT) {
-			if (c) {
+			if (c && (c->type == XDGShell || c->type == X11)) {
 				surface = client_surface(c);
 			}
-			break;
+
+			if (l && l->type == LayerShell) {
+				surface = l->layer_surface->surface;
+			}
 		}
+
+		break;
 	}
 
 	if (psurface)
@@ -159,6 +178,8 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		*pc = c;
 	if (pl)
 		*pl = l;
+	if (gb)
+		*gb = mangogroupbar;
 
 	if (selmon && selmon->isoverview && config.ov_no_resize) {
 		ovc = xytoclient(x, y);
@@ -174,12 +195,12 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		if (ovc && (!l || layer_ignores_focus(l) || is_below)) {
 			if (pc)
 				*pc = ovc;
-
 			if (psurface)
 				*psurface = ovc ? client_surface(ovc) : NULL;
-
-			if (pl && ovc)
+			if (pl)
 				*pl = NULL;
+			if (gb)
+				*gb = NULL;
 		}
 	}
 }
