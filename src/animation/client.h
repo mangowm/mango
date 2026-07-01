@@ -275,7 +275,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 	}
 }
 
-void client_draw_title(Client *c) {
+void client_draw_groupbar(Client *c) {
 
 	if (!c || !c->group_bar)
 		return;
@@ -363,7 +363,7 @@ void client_draw_title(Client *c) {
 	}
 }
 
-void apply_shield(Client *c, struct wlr_box clip_box) {
+void client_draw_shield(Client *c, struct wlr_box clip_box) {
 
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
 		wlr_scene_node_set_enabled(&c->shield->node, false);
@@ -405,7 +405,7 @@ void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 	mango_group_bar_set_size(c->group_bar, width, height);
 }
 
-void apply_split_border(Client *c, bool hit_no_border) {
+void client_draw_split_border(Client *c, bool hit_no_border) {
 
 	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
 		return;
@@ -492,7 +492,7 @@ void apply_split_border(Client *c, bool hit_no_border) {
 								border_right_y);
 }
 
-void apply_border(Client *c) {
+void client_draw_border(Client *c) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
 
@@ -515,7 +515,7 @@ void apply_border(Client *c) {
 
 	bool hit_no_border = check_hit_no_border(c);
 
-	apply_split_border(c, hit_no_border);
+	client_draw_split_border(c, hit_no_border);
 
 	if (hit_no_border && config.smartgaps) {
 		c->bw = 0;
@@ -882,10 +882,10 @@ void client_apply_clip(Client *c, float factor) {
 
 		offset = clip_to_hide(c, &clip_box);
 
-		apply_border(c);
+		client_draw_border(c);
 
-		client_draw_title(c);
-		apply_shield(c, clip_box);
+		client_draw_groupbar(c);
+		client_draw_shield(c, clip_box);
 
 		if (clip_box.width <= 0 || clip_box.height <= 0) {
 			should_render_client_surface = false;
@@ -899,7 +899,7 @@ void client_apply_clip(Client *c, float factor) {
 			return;
 		}
 
-		apply_shield(c, clip_box);
+		client_draw_shield(c, clip_box);
 
 		if (!c->overview_scene_surface) {
 			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
@@ -934,10 +934,10 @@ void client_apply_clip(Client *c, float factor) {
 	offset = clip_to_hide(c, &clip_box);
 
 	// 应用窗口装饰
-	apply_border(c);
+	client_draw_border(c);
 
-	client_draw_title(c);
-	apply_shield(c, clip_box);
+	client_draw_groupbar(c);
+	client_draw_shield(c, clip_box);
 
 	// 如果窗口剪切区域已经剪切到0，则不渲染窗口表面
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
@@ -954,7 +954,7 @@ void client_apply_clip(Client *c, float factor) {
 	}
 
 	// 应用窗口表面剪切
-	apply_shield(c, clip_box);
+	client_draw_shield(c, clip_box);
 
 	if (!c->overview_scene_surface) {
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
@@ -1387,11 +1387,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 			c->geom;
 		wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
 
-		apply_border(c);
+		client_draw_border(c);
 		client_get_clip(c, &clip);
-		apply_shield(c, clip);
+		client_draw_shield(c, clip);
 
-		client_draw_title(c);
+		client_draw_groupbar(c);
 		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
 		return;
 	}
