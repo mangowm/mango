@@ -522,6 +522,7 @@ typedef struct {
 	Monitor *mon;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_tree *popups;
+	struct wlr_scene_rect *shield;
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_blur *blur;
 	struct wlr_scene_layer_surface_v1 *scene_layer;
@@ -542,6 +543,7 @@ typedef struct {
 	int32_t noshadow;
 	char *animation_type_open;
 	char *animation_type_close;
+	bool shield_when_capture;
 	bool need_output_flush;
 	bool being_unmapped;
 } LayerSurface;
@@ -2808,6 +2810,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 
 	l->noanim = 0;
 	l->dirty = false;
+	l->shield_when_capture = false;
 	l->noblur = 0;
 	l->shadow = NULL;
 	l->need_output_flush = true;
@@ -2820,6 +2823,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 						l->layer_surface->namespace)) {
 
 			r = &config.layer_rules[ji];
+			APPLY_INT_PROP(l, r, shield_when_capture);
 			APPLY_INT_PROP(l, r, noblur);
 			APPLY_INT_PROP(l, r, noanim);
 			APPLY_INT_PROP(l, r, noshadow);
@@ -2827,6 +2831,13 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 			APPLY_STRING_PROP(l, r, animation_type_close);
 		}
 	}
+
+	// 初始化屏蔽
+	l->shield =
+		wlr_scene_rect_create(l->scene, 0, 0, (float[4]){0, 0, 0, 0xff});
+	l->shield->node.data = l;
+	wlr_scene_node_lower_to_bottom(&l->shield->node);
+	wlr_scene_node_set_enabled(&l->shield->node, false);
 
 	// 初始化阴影
 	if (layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&

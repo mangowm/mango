@@ -151,6 +151,38 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 	}
 }
 
+void layer_draw_shield(LayerSurface *l) {
+	int32_t width, height;
+	wlr_log(WLR_ERROR,"0");
+
+	if (!l->mapped)
+		return;
+
+	wlr_log(WLR_ERROR,"1");
+	if (active_capture_count > 0 && l->shield_when_capture) {
+
+		wlr_log(WLR_ERROR,"2");
+		layer_actual_size(l, &width, &height);
+
+		if (width <= 0 || height <= 0) {
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+			return;
+		}
+		wlr_log(WLR_ERROR,"3");
+
+		wlr_scene_node_raise_to_top(&l->shield->node);
+		wlr_scene_node_set_position(&l->shield->node, 0, 0);
+		wlr_scene_rect_set_size(l->shield, width, height);
+		wlr_scene_node_set_enabled(&l->shield->node, true);
+	} else {
+		if (l->shield->node.enabled) {
+			wlr_scene_node_lower_to_bottom(&l->shield->node);
+			wlr_scene_node_set_position(&l->shield->node, 0, 0);
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+		}
+	}
+}
+
 void layer_draw_shadow(LayerSurface *l) {
 
 	if (!l->mapped || !l->shadow)
@@ -575,8 +607,10 @@ bool layer_draw_frame(LayerSurface *l) {
 	if (config.animations && config.layer_animations && l->animation.running &&
 		!l->noanim) {
 		layer_animation_next_tick(l);
+		layer_draw_shield(l);
 		layer_draw_shadow(l);
 	} else {
+		layer_draw_shield(l);
 		layer_draw_shadow(l);
 		l->need_output_flush = false;
 	}

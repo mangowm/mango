@@ -188,6 +188,7 @@ typedef struct {
 	char *layer_name; // 布局名称
 	char *animation_type_open;
 	char *animation_type_close;
+	int32_t shield_when_capture;
 	int32_t noblur;
 	int32_t noanim;
 	int32_t noshadow;
@@ -2310,6 +2311,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->layer_name = NULL;
 		rule->animation_type_open = NULL;
 		rule->animation_type_close = NULL;
+		rule->shield_when_capture = 0;
 		rule->noblur = 0;
 		rule->noanim = 0;
 		rule->noshadow = 0;
@@ -2332,6 +2334,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->animation_type_open = strdup(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
 					rule->animation_type_close = strdup(val);
+				} else if (strcmp(key, "shield_when_capture") == 0) {
+					rule->shield_when_capture = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noblur") == 0) {
 					rule->noblur = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noanim") == 0) {
