@@ -366,6 +366,7 @@ void client_draw_title(Client *c) {
 void apply_shield(Client *c, struct wlr_box clip_box) {
 
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
+		wlr_scene_node_set_enabled(&c->shield->node, false);
 		return;
 	}
 
@@ -887,6 +888,14 @@ void client_apply_clip(Client *c, float factor) {
 		apply_shield(c, clip_box);
 
 		if (clip_box.width <= 0 || clip_box.height <= 0) {
+			should_render_client_surface = false;
+			wlr_scene_node_set_enabled(&c->scene_surface->node, false);
+		} else {
+			should_render_client_surface = true;
+			wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+		}
+
+		if (!should_render_client_surface) {
 			return;
 		}
 

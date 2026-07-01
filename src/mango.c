@@ -1330,10 +1330,6 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	mango_group_bar_set_focus(c->group_bar, c->isgroupfocusing);
 
 	if (w->overview_scene_surface) {
-
-		wlr_scene_node_reparent(&w->shield->node, w->overview_scene_surface);
-		wlr_scene_node_raise_to_top(&w->shield->node);
-
 		wlr_scene_node_destroy(&w->scene_surface->node);
 		w->scene_surface = w->overview_scene_surface;
 		w->overview_scene_surface = NULL;
@@ -6737,7 +6733,6 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->ext_foreign_toplevel = NULL;
 	}
 
-
 	if (c->swallowing) {
 		setmaximizescreen(c->swallowing, c->ismaximizescreen, true);
 		setfullscreen(c->swallowing, c->isfullscreen, true);
@@ -6754,7 +6749,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		mango_jump_label_node_destroy(c->jump_label_node);
 		c->jump_label_node = NULL;
 	}
-	
+
 	if (c->group_bar) {
 		mango_group_bar_destroy(c->group_bar);
 		c->group_bar = NULL;
