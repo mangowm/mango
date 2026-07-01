@@ -160,8 +160,12 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 		}
 
 		if (node->type == WLR_SCENE_NODE_RECT) {
-			if (c) {
+			if (c && (c->type == XDGShell || c->type == X11)) {
 				surface = client_surface(c);
+			}
+
+			if (l && l->type == LayerShell) {
+				surface = l->layer_surface->surface;
 			}
 		}
 
