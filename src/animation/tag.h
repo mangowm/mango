@@ -45,10 +45,9 @@ void set_tagin_animation(Monitor *m, Client *c) {
 
 void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 
-	if (!ISTILED(c) || ((!c->is_clip_to_hide || !is_scroller_layout(c->mon)) &&
-						(!c->is_monocle_hide || !is_monocle_layout(c->mon)))) {
+	if (!ISTILED(c) || (!c->is_clip_to_hide || !is_scroller_layout(c->mon))) {
 		c->is_clip_to_hide = false;
-		c->is_monocle_hide = false;
+		c->is_logic_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 	}

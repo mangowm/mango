@@ -1,4 +1,4 @@
-#include "wlr_ext_workspace_v1.h"
+#include <wlr/types/wlr_ext_workspace_v1.h>
 
 #define EXT_WORKSPACE_ENABLE_CAPS                                              \
 	EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE |                  \

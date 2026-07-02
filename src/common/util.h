@@ -13,3 +13,5 @@ char *join_strings_with_suffix(char *arr[], const char *suffix,
 							   const char *sep);
 char *string_printf(const char *fmt, ...);
 void wl_list_swap(struct wl_list *l1, struct wl_list *l2);
+void wl_list_safe_reinsert_prev(struct wl_list *l1, struct wl_list *l2);
+void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2);
