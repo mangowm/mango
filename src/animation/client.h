@@ -370,17 +370,22 @@ void client_draw_shield(Client *c, struct wlr_box clip_box) {
 		return;
 	}
 
+	struct wlr_box surface_relative_geom;
+	client_get_clip(c, &surface_relative_geom);
+
 	if (c == grabc || (!ISSCROLLTILED(c) && !c->animation.tagining &&
 					   !c->animation.tagouting)) {
-		clip_box.x = 0;
-		clip_box.y = 0;
+		clip_box.x = surface_relative_geom.x;
+		clip_box.y = surface_relative_geom.y;
 		clip_box.width = c->animation.current.width - 2 * (int32_t)c->bw;
 		clip_box.height = c->animation.current.height - 2 * (int32_t)c->bw;
 	}
 
 	if (active_capture_count > 0 && c->shield_when_capture) {
-		int32_t shield_x = clip_box.x + (int32_t)c->bw;
-		int32_t shield_y = clip_box.y + (int32_t)c->bw;
+		int32_t shield_x =
+			clip_box.x - surface_relative_geom.x + (int32_t)c->bw;
+		int32_t shield_y =
+			clip_box.y - surface_relative_geom.y + (int32_t)c->bw;
 		wlr_scene_node_raise_to_top(&c->shield->node);
 		wlr_scene_node_set_position(&c->shield->node, shield_x, shield_y);
 		wlr_scene_rect_set_size(c->shield, clip_box.width, clip_box.height);
