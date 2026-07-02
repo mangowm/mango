@@ -240,7 +240,7 @@ layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 | `noblur` | integer | `0` / `1` | Disable blur |
 | `noanim` | integer | `0` / `1` | Disable layer animation |
 | `noshadow` | integer | `0` / `1` | Disable layer shadow |
-| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured |
+| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `noanim:1`) |
 
 > **Tip:** For animation types, see [Animations](/docs/visuals/animations#animation-types). For visual effects, see [Window Effects](/docs/visuals/effects).
 
