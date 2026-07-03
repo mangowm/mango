@@ -1309,6 +1309,12 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "sleep_toggle_monitor") == 0) {
 		func = sleep_toggle_monitor;
 		(*arg).v = strdup(arg_value);
+	} else if (strcmp(func_name, "disable_touchscreen") == 0) {
+		func = disable_touchscreen;
+	} else if (strcmp(func_name, "enable_touchscreen") == 0) {
+		func = enable_touchscreen;
+	} else if (strcmp(func_name, "toggle_touchscreen") == 0) {
+		func = toggle_touchscreen;
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;
 		(*arg).i = parse_direction(arg_value);

@@ -3837,11 +3837,24 @@ void createpointerconstraint(struct wl_listener *listener, void *data) {
 
 void createtouch(struct wlr_touch *wlr_touch) {
 	TouchGroup *touch = ecalloc(1, sizeof(TouchGroup));
+	struct libinput_device *device = NULL;
 
 	touch->touch = wlr_touch;
 	wl_list_init(&touch->touch_points);
 	wl_list_insert(&touch_groups, &touch->link);
 	wlr_touch->data = touch;
+
+	if (wlr_input_device_is_libinput(&wlr_touch->base) &&
+		(device = wlr_libinput_get_device_handle(&wlr_touch->base))) {
+		InputDevice *input_dev = calloc(1, sizeof(InputDevice));
+		input_dev->wlr_device = &wlr_touch->base;
+		input_dev->libinput_device = device;
+		input_dev->device_data = touch;
+		input_dev->destroy_listener.notify = destroyinputdevice;
+		wl_signal_add(&wlr_touch->base.events.destroy,
+					  &input_dev->destroy_listener);
+		wl_list_insert(&inputdevices, &input_dev->link);
+	}
 	wlr_cursor_attach_input_device(cursor, &wlr_touch->base);
 }
 
