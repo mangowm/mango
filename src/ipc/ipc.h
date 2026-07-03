@@ -143,6 +143,8 @@ static cJSON *build_client_json(Client *c) {
 
 	cJSON_AddNumberToObject(obj, "id", c->id);
 	cJSON_AddNumberToObject(obj, "pid", c->pid);
+	cJSON_AddStringToObject(obj, "foreign_toplevel_id",
+							c->ext_foreign_toplevel->identifier);
 	cJSON_AddStringToObject(obj, "title", client_get_title(c));
 	cJSON_AddStringToObject(obj, "appid", client_get_appid(c));
 	cJSON_AddStringToObject(obj, "monitor",
