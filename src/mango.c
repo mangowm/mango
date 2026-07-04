@@ -291,7 +291,7 @@ typedef struct {
 	InputDevice *input_dev;
 } Switch;
 
-struct dwl_animation {
+struct mango_animation {
 	bool should_animate;
 	bool running;
 	bool tagining;
@@ -307,7 +307,7 @@ struct dwl_animation {
 	int32_t action;
 };
 
-struct dwl_opacity_animation {
+struct mango_opacity_animation {
 	bool running;
 	float current_opacity;
 	float target_opacity;
@@ -423,8 +423,8 @@ struct Client {
 	float stack_proportion;
 	float old_stack_proportion;
 	bool need_output_flush;
-	struct dwl_animation animation;
-	struct dwl_opacity_animation opacity_animation;
+	struct mango_animation animation;
+	struct mango_opacity_animation opacity_animation;
 	int32_t isterm, noswallow;
 	int32_t allow_csd;
 	int32_t force_fakemaximize;
@@ -474,12 +474,6 @@ struct Client {
 };
 
 typedef struct {
-	struct wl_list link;
-	struct wl_resource *resource;
-	Monitor *mon;
-} DwlIpcOutput;
-
-typedef struct {
 	uint32_t mod;
 	xkb_keysym_t keysym;
 	int32_t (*func)(const Arg *);
@@ -527,7 +521,7 @@ typedef struct {
 	struct wl_listener unmap;
 	struct wl_listener surface_commit;
 
-	struct dwl_animation animation;
+	struct mango_animation animation;
 	bool dirty;
 	int32_t noanim;
 	char *animation_type_open;
@@ -2011,7 +2005,8 @@ void apply_window_snap(Client *c) {
 
 void focuslayer(LayerSurface *l) {
 	focusclient(NULL, 0);
-	dwl_im_relay_set_focus(dwl_input_method_relay, l->layer_surface->surface);
+	mango_im_relay_set_focus(mango_input_method_relay,
+							 l->layer_surface->surface);
 	client_notify_enter(l->layer_surface->surface, wlr_seat_get_keyboard(seat));
 }
 
@@ -2642,7 +2637,7 @@ void cleanup(void) {
 
 	destroykeyboardgroup(&kb_group->destroy, NULL);
 
-	dwl_im_relay_finish(dwl_input_method_relay);
+	mango_im_relay_finish(mango_input_method_relay);
 
 	/* If it's not destroyed manually it will cause a use-after-free of
 	 * wlr_seat. Destroy it until it's fixed in the wlroots side */
@@ -3982,7 +3977,7 @@ void focusclient(Client *c, int32_t lift) {
 			selmon->sel = NULL;
 
 		// clear text input focus state
-		dwl_im_relay_set_focus(dwl_input_method_relay, NULL);
+		mango_im_relay_set_focus(mango_input_method_relay, NULL);
 		wlr_seat_keyboard_notify_clear_focus(seat);
 		check_vrr_enable(c);
 		if (active_constraint) {
@@ -3997,7 +3992,7 @@ void focusclient(Client *c, int32_t lift) {
 	// set text input focus
 	// must before client_notify_enter,
 	// otherwise the position of text_input will be wrong.
-	dwl_im_relay_set_focus(dwl_input_method_relay, client_surface(c));
+	mango_im_relay_set_focus(mango_input_method_relay, client_surface(c));
 
 	/* Have a client, so focus its top-level wlr_surface */
 	client_notify_enter(client_surface(c), wlr_seat_get_keyboard(seat));
@@ -4361,7 +4356,7 @@ void keypress(struct wl_listener *listener, void *data) {
 	if (hit_global) {
 		return;
 	}
-	if (!dwl_im_keyboard_grab_forward_key(group, event)) {
+	if (!mango_im_keyboard_grab_forward_key(group, event)) {
 		wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
 		/* Pass unhandled keycodes along to the client. */
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
@@ -4374,7 +4369,7 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
 
-	if (!dwl_im_keyboard_grab_forward_modifiers(group)) {
+	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 
 		wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
 		/* Send modifiers to the client. */
@@ -5978,7 +5973,7 @@ void handle_print_status(struct wl_listener *listener, void *data) {
 			ipc_notify_last_surface_ws_name(m);
 		}
 
-		dwl_ext_workspace_printstatus(m);
+		mango_ext_workspace_printstatus(m);
 	}
 }
 
@@ -6327,7 +6322,7 @@ void setup(void) {
 	input_method_manager = wlr_input_method_manager_v2_create(dpy);
 	text_input_manager = wlr_text_input_manager_v3_create(dpy);
 
-	dwl_input_method_relay = dwl_im_relay_create();
+	mango_input_method_relay = mango_im_relay_create();
 
 	drm_lease_manager = wlr_drm_lease_v1_manager_create(dpy, backend);
 	if (drm_lease_manager) {
