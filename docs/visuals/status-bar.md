@@ -17,7 +17,12 @@ Add the following to your Waybar configuration:
 {
   "modules-left": [
     "ext/workspaces",
-    "dwl/window"
+    "mango/layout",
+    "mango/window"
+  ],
+  "modules-right": [
+    "mango/language",
+    "mango/keymode",
   ],
   "ext/workspaces": {
     "format": "{icon}",
@@ -26,13 +31,33 @@ Add the following to your Waybar configuration:
     "on-click-right": "deactivate",
     "sort-by-id": true
   },
-  "dwl/window": {
-    "format": "[{layout}] {title}"
-  }
+    "mango/keymode": {
+    	"format": "[{default}]",
+    	"format-default": " Default",
+        "format-test": " Test",
+    },
+    "mango/window": {
+      "format": "{}",
+      "icon": true,
+      "on-click":"bash ~/.config/mango/scripts/screenshot.sh",
+      "on-click-right":"bash ~/tool/shotTranslate.sh shot",
+	    "icon": false,
+	    "icon-size": 20
+    },
+    "mango/layout": {
+        "format": "{}",
+        // "format-S": "Scroller",
+        // "format-T": "Tile",
+    },
+    "mango/language": {
+    "format": "{short}",
+    "format-us": "󰌌 US",
+    "format-ru": "󰌌 RU"
+    },
 }
 ```
 
-## Styling
+## Styling Example
 
 You can style the tags using standard CSS in `style.css`.
 
@@ -40,27 +65,13 @@ You can style the tags using standard CSS in `style.css`.
 
 ```css
 #workspaces {
-  border-radius: 4px;
-  border-width: 2px;
-  border-style: solid;
   border-color: #c9b890;
-  margin-left: 4px;
-  padding-left: 10px;
-  padding-right: 6px;
   background: rgba(40, 40, 40, 0.76);
 }
 
 #workspaces button {
-  border: none;
   background: none;
-  box-shadow: inherit;
-  text-shadow: inherit;
   color: #ddca9e;
-  padding: 1px;
-  padding-left: 1px;
-  padding-right: 1px;
-  margin-right: 2px;
-  margin-left: 2px;
 }
 
 #workspaces button.hidden {
@@ -79,61 +90,39 @@ You can style the tags using standard CSS in `style.css`.
 #workspaces button.active {
   background-color: #ddca9e;
   color: #282828;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  padding-top: 1px;
-  padding-bottom: 0px;
-  border-radius: 3px;
 }
 
 #workspaces button.urgent {
   background-color: #ef5e5e;
   color: #282828;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  padding-top: 1px;
-  padding-bottom: 0px;
-  border-radius: 3px;
-}
-
-#tags {
-  background-color: transparent;
-}
-
-#tags button {
-  background-color: #fff;
-  color: #a585cd;
-}
-
-#tags button:not(.occupied):not(.focused) {
-  font-size: 0;
-  min-width: 0;
-  min-height: 0;
-  margin: -17px;
-  padding: 0;
-  color: transparent;
-  background-color: transparent;
-}
-
-#tags button.occupied {
-  background-color: #fff;
-  color: #cdc885;
-}
-
-#tags button.focused {
-  background-color: rgb(186, 142, 213);
-  color: #fff;
-}
-
-#tags button.urgent {
-  background: rgb(171, 101, 101);
-  color: #fff;
 }
 
 #window {
-  background-color: rgb(237, 196, 147);
-  color: rgb(63, 37, 5);
+  background-color: #CA9297;
+  color: #282828;
 }
+
+window#waybar.empty #window {
+    background: none;
+    margin: 0px;
+    padding: 0px;
+}
+
+#layout {
+  background-color: #CA9297;
+  color: #282828;
+}
+
+#language {
+  background-color: #CA9297;
+  color: #282828;
+}
+
+#keymode {
+  background-color: #CA9297;
+  color: #282828;
+}
+
 ```
 
 ## Complete Configuration Example

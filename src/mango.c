@@ -572,7 +572,6 @@ struct Monitor {
 	uint32_t resizing_count_pending;
 	uint32_t resizing_count_current;
 
-	struct wl_list dwl_ipc_outputs;
 	int32_t gappih; /* horizontal gap between windows */
 	int32_t gappiv; /* vertical gap between windows */
 	int32_t gappoh; /* horizontal outer gaps */
@@ -3359,8 +3358,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
 
-	wl_list_init(&m->dwl_ipc_outputs);
-
 	for (i = 0; i < LENGTH(m->layers); i++)
 		wl_list_init(&m->layers[i]);
 
@@ -5982,7 +5979,6 @@ void handle_print_status(struct wl_listener *listener, void *data) {
 		}
 
 		dwl_ext_workspace_printstatus(m);
-		dwl_ipc_output_printstatus(m);
 	}
 }
 
@@ -6340,9 +6336,6 @@ void setup(void) {
 		wlr_log(WLR_DEBUG, "Failed to create wlr_drm_lease_device_v1.");
 		wlr_log(WLR_INFO, "VR will not be available.");
 	}
-
-	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 2, NULL,
-					 dwl_ipc_manager_bind);
 
 	// 创建顶层管理句柄
 	foreign_toplevel_manager = wlr_foreign_toplevel_manager_v1_create(dpy);
