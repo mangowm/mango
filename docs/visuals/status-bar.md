@@ -7,8 +7,6 @@ description: Configure Waybar for mangowm.
 
 mangowm is compatible with Waybar's `ext/workspaces` module (Wayland standard) or the `dwl/tags` module. We recommend `ext/workspaces` for the best experience.
 
-> **Tip:** You can also use the `dwl/tags` module, but `ext/workspaces` provides better integration with mangowm's features. The `ext/workspaces` module requires **Waybar > 0.14.0**.
-
 ### `config.jsonc`
 
 Add the following to your Waybar configuration:
@@ -16,7 +14,7 @@ Add the following to your Waybar configuration:
 ```jsonc
 {
   "modules-left": [
-    "ext/workspaces",
+    "mango/workspaces",
     "mango/layout",
     "mango/window"
   ],
@@ -24,36 +22,30 @@ Add the following to your Waybar configuration:
     "mango/language",
     "mango/keymode",
   ],
-  "ext/workspaces": {
-    "format": "{icon}",
-    "ignore-hidden": true,
-    "on-click": "activate",
-    "on-click-right": "deactivate",
-    "sort-by-id": true
+  "mango/workspaces": {
+      "format": "{icon}",
+      "hide-empty": true,
+      "on-click": "activate",
+      "on-click-right": "toggle",
+      "overview-label": "OVERVIEW",
   },
-    "mango/keymode": {
-    	"format": "[{default}]",
-    	"format-default": " Default",
-        "format-test": " Test",
-    },
-    "mango/window": {
+  "mango/keymode": {
+  	"format": "{}",
+  	// "format-default": " Default",
+    // "format-test": " Test",
+  },
+  "mango/window": {
+    "format": "{}",
+	  "icon-size": 20
+  },
+  "mango/layout": {
       "format": "{}",
-      "icon": true,
-      "on-click":"bash ~/.config/mango/scripts/screenshot.sh",
-      "on-click-right":"bash ~/tool/shotTranslate.sh shot",
-	    "icon": false,
-	    "icon-size": 20
-    },
-    "mango/layout": {
-        "format": "{}",
-        // "format-S": "Scroller",
-        // "format-T": "Tile",
-    },
-    "mango/language": {
-    "format": "{short}",
-    "format-us": "󰌌 US",
-    "format-ru": "󰌌 RU"
-    },
+      // "format-S": "Scroller",
+      // "format-T": "Tile",
+  },
+  "mango/language": {
+  "format": "{short}",
+  },
 }
 ```
 
@@ -93,6 +85,11 @@ You can style the tags using standard CSS in `style.css`.
 }
 
 #workspaces button.urgent {
+  background-color: #ef5e5e;
+  color: #282828;
+}
+
+#workspaces button.overview {
   background-color: #ef5e5e;
   color: #282828;
 }
