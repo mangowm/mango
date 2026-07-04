@@ -1,0 +1,22 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - "-DWLR_USE_UNSTABLE"
+    - "-D_POSIX_C_SOURCE=200809L"
+    - -g
+    - "-DVERSION=\"0.14.4\""
+    - "-DSYSCONFDIR=\"/etc\""
+    - "-DXWAYLAND"
+
+Diagnostics:
+  UnusedIncludes: None
+  Suppress:
+    - unused-function
+    - unused-variable
+    - unused-parameter
+
+Hover:
+  ShowAKA: false
+
+Index:
+  Background: Build
