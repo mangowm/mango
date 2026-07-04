@@ -1765,7 +1765,7 @@ int32_t comboview(const Arg *arg) {
 		arrange(selmon, false, false);
 	} else {
 		tag_combo = true;
-		view(&(Arg){.ui = newtags}, false);
+		view(&(Arg){.ui = newtags}, true);
 	}
 
 	printstatus(IPC_WATCH_ARRANGGE);
