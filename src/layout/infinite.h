@@ -24,7 +24,6 @@ struct Infinite_layout_data {
 struct Infinite_node {
 	struct wl_list link;
 	Client *client;
-	// here maybe lx and ly
 };
 
 static struct Infinite_node *find_node(Client *c) {
@@ -33,19 +32,17 @@ static struct Infinite_node *find_node(Client *c) {
 		if (n->client == c)
 			return n;
 	};
-
 	return NULL;
 }
 
 static void init_infinite_layout_data(Monitor *m) {
 	infinite_data.center_x = m->w.x + m->w.width / 2;
 	infinite_data.center_y = m->w.y + m->w.height / 2;
-
 	wl_list_init(&infinite_data.nodes);
 }
 
-static bool check_colision(float nx, float ny, Client *self, int32_t gap,
-						   Monitor *m) {
+static Client *check_colision(float nx, float ny, Client *self, int32_t gap,
+							  Monitor *m) {
 	Client *other;
 	wl_list_for_each(other, &clients, link) {
 		if (other == self || !VISIBLEON(other, m) || !ISFAKETILED(other))
@@ -61,59 +58,200 @@ static bool check_colision(float nx, float ny, Client *self, int32_t gap,
 		int32_t bh = other->geom.height;
 		if (!(ax + aw + g2 <= bx - g2 || bx + bw + g2 <= ax - g2 ||
 			  ay + ah + g2 <= by - g2 || by + bh + g2 <= ay - g2))
-			return true;
+			return other;
 	}
-	return false;
+	return NULL;
+}
+
+static Client *check_colision_excluding(float nx, float ny, Client *self,
+										Client *exclude, int32_t gap,
+										Monitor *m) {
+	Client *other;
+	wl_list_for_each(other, &clients, link) {
+		if (other == self || other == exclude || !VISIBLEON(other, m) ||
+			!ISFAKETILED(other))
+			continue;
+		int32_t g2 = gap / 2;
+		int32_t ax = (int32_t)roundf(nx);
+		int32_t ay = (int32_t)roundf(ny);
+		int32_t aw = self->geom.width;
+		int32_t ah = self->geom.height;
+		int32_t bx = other->geom.x;
+		int32_t by = other->geom.y;
+		int32_t bw = other->geom.width;
+		int32_t bh = other->geom.height;
+		if (!(ax + aw + g2 <= bx - g2 || bx + bw + g2 <= ax - g2 ||
+			  ay + ah + g2 <= by - g2 || by + bh + g2 <= ay - g2))
+			return other;
+	}
+	return NULL;
 }
 
 static struct wlr_box calculate_position(Monitor *m, Client *c, int32_t gap) {
-	// Start from the window's current position
 	float px = c->geom.x;
 	float py = c->geom.y;
 
-	// If current position already overlaps, push outward (away from center)
-	// until clear
-	if (check_colision(px, py, c, gap, m)) {
-		float ox = px - infinite_data.center_x;
-		float oy = py - infinite_data.center_y;
-		float olen = sqrtf(ox * ox + oy * oy);
-		if (olen > 0.5f) {
-			ox /= olen;
-			oy /= olen;
-			for (int s = 0; s < 2000; s++) {
-				px += ox;
-				py += oy;
-				if (!check_colision(px, py, c, gap, m))
-					break;
+	// Resolve initial collisions: move self (or the collider) outward.
+	// A safety bound prevents an infinite loop when no escape exists.
+	int iter;
+	for (iter = 0; iter < 50; iter++) {
+		Client *other = check_colision(px, py, c, gap, m);
+		if (!other)
+			break;
+
+		// ---- outward direction for self ----
+		float sox = px - infinite_data.center_x;
+		float soy = py - infinite_data.center_y;
+		float s_len = hypotf(sox, soy);
+		if (s_len < 1.0f) {
+			sox = 1;
+			soy = 0;
+			s_len = 1;
+		}
+		sox /= s_len;
+		soy /= s_len;
+
+		float spx = px, spy = py;
+		int s;
+		bool s_ok = false;
+		for (s = 0; s < 2000; s++) {
+			spx += sox;
+			spy += soy;
+			if (!check_colision(spx, spy, c, gap, m)) {
+				s_ok = true;
+				break;
 			}
+		}
+
+		// ---- outward direction for the collider ----
+		float oox = other->geom.x - infinite_data.center_x;
+		float ooy = other->geom.y - infinite_data.center_y;
+		float o_len = hypotf(oox, ooy);
+		if (o_len < 1.0f) {
+			oox = 1;
+			ooy = 0;
+			o_len = 1;
+		}
+		oox /= o_len;
+		ooy /= o_len;
+
+		// Temporarily place c at (px, py) so escapes see the real overlap
+		int32_t scx = c->geom.x, scy = c->geom.y;
+		c->geom.x = (int32_t)roundf(px);
+		c->geom.y = (int32_t)roundf(py);
+
+		float opx = other->geom.x, opy = other->geom.y;
+		int o;
+		bool o_ok = false;
+		for (o = 0; o < 2000; o++) {
+			opx += oox;
+			opy += ooy;
+			if (!check_colision_excluding(opx, opy, other, other, gap, m)) {
+				o_ok = true;
+				break;
+			}
+		}
+		c->geom.x = scx;
+		c->geom.y = scy;
+
+		if (s_ok && (!o_ok || s <= o)) {
+			px = spx;
+			py = spy;
+		} else if (o_ok) {
+			other->geom.x = (int32_t)roundf(opx);
+			other->geom.y = (int32_t)roundf(opy);
+			client_tile_resize(other, other->geom, 0);
+		} else {
+			break;
 		}
 	}
 
-	// Now slide toward center
+	// Attract toward centre — slide pixel-by-pixel until a collision
+	// stops us.  When we hit another window the cheaper escape is chosen.
 	float dx = infinite_data.center_x - (px + c->geom.width / 2.0f);
 	float dy = infinite_data.center_y - (py + c->geom.height / 2.0f);
-	float len = sqrtf(dx * dx + dy * dy);
-	if (len < 1.0f) {
-		return (struct wlr_box){
-			.x = (int32_t)roundf(px),
-			.y = (int32_t)roundf(py),
-			.width = c->geom.width,
-			.height = c->geom.height,
-		};
-	}
+	float len = hypotf(dx, dy);
+	int safety;
+	if (len >= 1.0f) {
+		dx /= len;
+		dy /= len;
 
-	dx /= len;
-	dy /= len; // unit vector toward center
+		for (safety = 0; safety < 100000; safety++) {
+			float nx = px + dx;
+			float ny = py + dy;
+			Client *other = check_colision(nx, ny, c, gap, m);
+			if (!other) {
+				px = nx;
+				py = ny;
+				if (--len <= 0.0f)
+					break;
+				continue;
+			}
 
-	while (len > 0.0f) {
-		float nx = px + dx;
-		float ny = py + dy;
-		if (!check_colision(nx, ny, c, gap, m)) {
-			px = nx;
-			py = ny;
-			len -= 1.0f;
-		} else {
-			break;
+			float sox = px - infinite_data.center_x;
+			float soy = py - infinite_data.center_y;
+			float s_len = hypotf(sox, soy);
+			if (s_len < 1.0f) {
+				sox = 1;
+				soy = 0;
+				s_len = 1;
+			}
+			sox /= s_len;
+			soy /= s_len;
+
+			float spx = px, spy = py;
+			int s;
+			bool s_ok = false;
+			for (s = 0; s < 2000; s++) {
+				spx += sox;
+				spy += soy;
+				if (!check_colision(spx, spy, c, gap, m)) {
+					s_ok = true;
+					break;
+				}
+			}
+
+			float oox = other->geom.x - infinite_data.center_x;
+			float ooy = other->geom.y - infinite_data.center_y;
+			float o_len = hypotf(oox, ooy);
+			if (o_len < 1.0f) {
+				oox = 1;
+				ooy = 0;
+				o_len = 1;
+			}
+			oox /= o_len;
+			ooy /= o_len;
+
+			int32_t scx = c->geom.x, scy = c->geom.y;
+			c->geom.x = (int32_t)roundf(px);
+			c->geom.y = (int32_t)roundf(py);
+
+			float opx = other->geom.x, opy = other->geom.y;
+			int o;
+			bool o_ok = false;
+			for (o = 0; o < 2000; o++) {
+				opx += oox;
+				opy += ooy;
+				if (!check_colision_excluding(opx, opy, other, other, gap, m)) {
+					o_ok = true;
+					break;
+				}
+			}
+			c->geom.x = scx;
+			c->geom.y = scy;
+
+			if (s_ok && (!o_ok || s <= o)) {
+				px = spx;
+				py = spy;
+				break;
+			} else if (o_ok) {
+				other->geom.x = (int32_t)roundf(opx);
+				other->geom.y = (int32_t)roundf(opy);
+				client_tile_resize(other, other->geom, 0);
+				continue;
+			} else {
+				break;
+			}
 		}
 	}
 
@@ -127,9 +265,7 @@ static struct wlr_box calculate_position(Monitor *m, Client *c, int32_t gap) {
 
 static void set_initial_positon(Monitor *m, Client *c) {
 	int32_t gap = enablegaps ? m->gappiv : 0;
-
 	struct wlr_box pos = calculate_position(m, c, gap);
-
 	c->geom.x = pos.x;
 	c->geom.y = pos.y;
 }
@@ -140,14 +276,12 @@ static void move_canvas(Monitor *m, int32_t dx, int32_t dy) {
 		if (infinite_data.isRigid) {
 			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 				continue;
-		} else { // continue on base of isRigid
+		} else {
 			if (!VISIBLEON(c, m))
 				continue;
 		}
-
 		c->geom.x += dx;
-		c->geom.y += dy; // move the windows in the oposite direction of the
-						 // scroll in the canvas
+		c->geom.y += dy;
 		resize(c, c->geom, 0);
 	}
 }
@@ -167,11 +301,10 @@ void home_canvas(Monitor *m) {
 		if (infinite_data.isRigid) {
 			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 				continue;
-		} else { // continue on base of isRigid
+		} else {
 			if (!VISIBLEON(c, m))
 				continue;
 		}
-
 		cx += c->geom.x + c->geom.width / 2;
 		cy += c->geom.y + c->geom.height / 2;
 		i++;
@@ -228,7 +361,6 @@ void main_infinite(Monitor *m) {
 
 	init_infinite_layout_data(m);
 
-	// --- Map all the windows to infinite_node ---
 	wl_list_for_each(c, &clients, link) {
 		struct Infinite_node *node = find_node(c);
 		if (!node) {
@@ -236,7 +368,6 @@ void main_infinite(Monitor *m) {
 			node->client = c;
 			wl_list_insert(&infinite_data.nodes, &node->link);
 
-			// Scale new window geometry by user-configurable factor
 			float s = config.new_window_scale;
 			if (fabsf(s - 1.0f) > 0.001f) {
 				c->geom.width = (int32_t)roundf(c->geom.width * s);
@@ -255,8 +386,6 @@ void main_infinite(Monitor *m) {
 			return;
 
 		int32_t gap = enablegaps ? m->gappiv : 0;
-
-		// --- Gaps ---
 		if (config.smartgaps && n == 1) {
 			gap = 0;
 		}
@@ -265,17 +394,12 @@ void main_infinite(Monitor *m) {
 		wl_list_for_each(c, &clients, link) {
 			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 				continue;
-
-			if (c->geom.width == 0) {
+			if (c->geom.width == 0)
 				set_initial_positon(m, c);
-			}
-
 			i++;
 		}
 
-		// Build array of visible clients sorted by distance to center (closest
-		// first) so collision checks see already-placed windows' final
-		// positions
+		// Build array of visible clients sorted by distance to center
 		Client **order = calloc(i, sizeof(Client *));
 		int32_t idx = 0;
 		wl_list_for_each(c, &clients, link) {
@@ -302,7 +426,7 @@ void main_infinite(Monitor *m) {
 				}
 			}
 		}
-		// Poll until stable (no window moved) or max passes
+
 		bool moved;
 		int pass = 0;
 		do {
@@ -318,21 +442,17 @@ void main_infinite(Monitor *m) {
 		free(order);
 	} else {
 		wl_list_for_each(c, &clients, link) {
-			if (!VISIBLEON(c, m)) // even if the client is floating
+			if (!VISIBLEON(c, m))
 				continue;
-
-			resize(
-				c, c->geom,
-				0); // the geometry has been aplied at the start of the function
+			resize(c, c->geom, 0);
 		}
 	}
 
-	// --- free the nodes ---
 	struct Infinite_node *_n, *tmp;
 	wl_list_for_each_safe(_n, tmp, &infinite_data.nodes, link) {
 		bool alive = false;
 		wl_list_for_each(c, &clients, link) {
-			if (c == _n->client && VISIBLEON(c, m) /* && ISFAKETILED(c) */)
+			if (c == _n->client && VISIBLEON(c, m))
 				alive = true;
 		}
 		if (!alive) {
