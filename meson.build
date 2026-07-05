@@ -68,6 +68,7 @@ c_args = [
   '-g',
   '-Wno-unused-function',
   '-DWLR_USE_UNSTABLE',
+  '-D_GNU_SOURCE',
   '-D_POSIX_C_SOURCE=200809L',
   '-DVERSION="@0@"'.format(version_with_hash),
   '-DSYSCONFDIR="@0@"'.format('/etc'),

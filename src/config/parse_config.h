@@ -181,6 +181,15 @@ typedef struct {
 } ConfigLayerRule;
 
 typedef struct {
+	char *name;
+	char *xkb_rules;
+	char *xkb_model;
+	char *xkb_layout;
+	char *xkb_variant;
+	char *xkb_options;
+} ConfigKeyboardRule;
+
+typedef struct {
 	int32_t animations;
 	int32_t layer_animations;
 	char animation_type_open[10];
@@ -334,6 +343,9 @@ typedef struct {
 	ConfigLayerRule *layer_rules; // 动态数组
 	int32_t layer_rules_count;	  // 数量
 
+	ConfigKeyboardRule *keyboard_rules;
+	int32_t keyboard_rules_count;
+
 	ConfigWinRule *window_rules;
 	int32_t window_rules_count;
 
@@ -399,6 +411,18 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist);
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state, int vrr, int custom);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
+
+// Find matching keyboard rule by device name (substring match, case-insensitive)
+static inline ConfigKeyboardRule *find_keyboard_rule(Config *cfg, const char *device_name) {
+	if (!device_name || !cfg->keyboard_rules)
+		return NULL;
+	for (int32_t i = 0; i < cfg->keyboard_rules_count; i++) {
+		if (cfg->keyboard_rules[i].name &&
+			strcasestr(device_name, cfg->keyboard_rules[i].name))
+			return &cfg->keyboard_rules[i];
+	}
+	return NULL;
+}
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -2240,6 +2264,67 @@ bool parse_option(Config *config, char *key, char *value) {
 
 		config->layer_rules_count++;
 		return !parse_error;
+	} else if (strcmp(key, "keyboardrule") == 0) {
+		config->keyboard_rules =
+			realloc(config->keyboard_rules,
+				(config->keyboard_rules_count + 1) * sizeof(ConfigKeyboardRule));
+		if (!config->keyboard_rules) {
+			fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
+				"memory for keyboard rules\n");
+			return false;
+		}
+
+		ConfigKeyboardRule *rule = &config->keyboard_rules[config->keyboard_rules_count];
+		memset(rule, 0, sizeof(ConfigKeyboardRule));
+
+		char *saveptr;
+		char *param = strtok_r(value, ",", &saveptr);
+		bool parse_error = false;
+		while (param != NULL) {
+			trim_whitespace(param);
+			char *eq = strchr(param, ':');
+			if (eq != NULL) {
+				*eq = '\0';
+				char *sub_key = param;
+				char *sub_value = eq + 1;
+				trim_whitespace(sub_key);
+				trim_whitespace(sub_value);
+				if (strcmp(sub_key, "name") == 0) {
+					rule->name = strdup(sub_value);
+				} else if (strcmp(sub_key, "xkb_rules") == 0) {
+					rule->xkb_rules = strdup(sub_value);
+				} else if (strcmp(sub_key, "xkb_model") == 0) {
+					rule->xkb_model = strdup(sub_value);
+				} else if (strcmp(sub_key, "xkb_layout") == 0) {
+					rule->xkb_layout = strdup(sub_value);
+				} else if (strcmp(sub_key, "xkb_variant") == 0) {
+					rule->xkb_variant = strdup(sub_value);
+				} else if (strcmp(sub_key, "xkb_options") == 0) {
+					rule->xkb_options = strdup(sub_value);
+				} else {
+					fprintf(stderr,
+						"\033[1m\033[31m[ERROR]:\033[33m Unknown keyboardrule "
+						"parameter: %s\n", sub_key);
+				}
+				*eq = ':';
+			} else {
+				fprintf(stderr,
+					"\033[1m\033[31m[ERROR]:\033[33m Malformed keyboardrule "
+					"parameter: %s\n", param);
+				parse_error = true;
+			}
+			param = strtok_r(NULL, ",", &saveptr);
+		}
+
+		if (rule->name == NULL) {
+			fprintf(stderr,
+				"\033[1m\033[31m[ERROR]:\033[33m keyboardrule requires name\n");
+			parse_error = true;
+		}
+
+		config->keyboard_rules_count++;
+		return !parse_error;
 	} else if (strcmp(key, "windowrule") == 0) {
 		config->window_rules =
 			realloc(config->window_rules,
@@ -3259,6 +3344,27 @@ void free_config(void) {
 		free(config.layer_rules);
 		config.layer_rules = NULL;
 		config.layer_rules_count = 0;
+	}
+
+	// keyboard_rules
+	if (config.keyboard_rules) {
+		for (int32_t i = 0; i < config.keyboard_rules_count; i++) {
+			if (config.keyboard_rules[i].name)
+				free((void *)config.keyboard_rules[i].name);
+			if (config.keyboard_rules[i].xkb_rules)
+				free((void *)config.keyboard_rules[i].xkb_rules);
+			if (config.keyboard_rules[i].xkb_model)
+				free((void *)config.keyboard_rules[i].xkb_model);
+			if (config.keyboard_rules[i].xkb_layout)
+				free((void *)config.keyboard_rules[i].xkb_layout);
+			if (config.keyboard_rules[i].xkb_variant)
+				free((void *)config.keyboard_rules[i].xkb_variant);
+			if (config.keyboard_rules[i].xkb_options)
+				free((void *)config.keyboard_rules[i].xkb_options);
+		}
+		free(config.keyboard_rules);
+		config.keyboard_rules = NULL;
+		config.keyboard_rules_count = 0;
 	}
 
 	// 释放 env

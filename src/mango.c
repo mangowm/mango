@@ -274,6 +274,7 @@ typedef struct {
 	struct libinput_device *libinput_device;
 	struct wl_listener destroy_listener;
 	void *device_data;
+	bool has_custom_keymap;
 } InputDevice;
 
 typedef struct {
@@ -3043,6 +3044,7 @@ void createidleinhibitor(struct wl_listener *listener, void *data) {
 void createkeyboard(struct wlr_keyboard *keyboard) {
 
 	struct libinput_device *device = NULL;
+	bool has_custom = false;
 
 	if (wlr_input_device_is_libinput(&keyboard->base) &&
 		(device = wlr_libinput_get_device_handle(&keyboard->base))) {
@@ -3057,10 +3059,33 @@ void createkeyboard(struct wlr_keyboard *keyboard) {
 					  &input_dev->destroy_listener);
 
 		wl_list_insert(&inputdevices, &input_dev->link);
+
+		ConfigKeyboardRule *rule =
+			find_keyboard_rule(&config, libinput_device_get_name(device));
+		if (rule && (rule->xkb_layout || rule->xkb_variant || rule->xkb_options)) {
+			struct xkb_rule_names rules = {
+				.rules = rule->xkb_rules ? rule->xkb_rules : config.xkb_rules.rules,
+				.model = rule->xkb_model ? rule->xkb_model : config.xkb_rules.model,
+				.layout = rule->xkb_layout,
+				.variant = rule->xkb_variant,
+				.options = rule->xkb_options ? rule->xkb_options : config.xkb_rules.options,
+			};
+			struct xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+			struct xkb_keymap *custom_keymap =
+				xkb_keymap_new_from_names(ctx, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+			if (custom_keymap) {
+				wlr_keyboard_set_keymap(keyboard, custom_keymap);
+				xkb_keymap_unref(custom_keymap);
+				has_custom = true;
+				input_dev->has_custom_keymap = true;
+			}
+			xkb_context_unref(ctx);
+		}
 	}
 
-	/* Set the keymap to match the group keymap */
-	wlr_keyboard_set_keymap(keyboard, kb_group->wlr_group->keyboard.keymap);
+	if (!has_custom)
+		/* Set the keymap to match the group keymap */
+		wlr_keyboard_set_keymap(keyboard, kb_group->wlr_group->keyboard.keymap);
 
 	wlr_keyboard_notify_modifiers(keyboard, 0, 0, locked_mods, 0);
 
@@ -5724,6 +5749,8 @@ void reset_keyboard_layout(void) {
 		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD) {
 			continue;
 		}
+		if (id->has_custom_keymap)
+			continue;
 
 		struct wlr_keyboard *tkb = (struct wlr_keyboard *)id->device_data;
 
