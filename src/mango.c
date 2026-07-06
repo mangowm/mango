@@ -577,7 +577,7 @@ struct Monitor {
 	int32_t isoverview;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
-	int32_t only_dpms_off;
+	int32_t only_sleep;
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
@@ -5041,7 +5041,7 @@ outputmgrapplyortest(struct wlr_output_configuration_v1 *config, int32_t test) {
 
 		/* Ensure displays previously disabled by
 		 * wlr-output-power-management-v1 are properly handled*/
-		m->only_dpms_off = 0;
+		m->only_sleep = 0;
 
 		wlr_output_state_init(&state);
 		wlr_output_state_set_enabled(&state, config_head->state.enabled);
@@ -5191,7 +5191,7 @@ void powermgrsetmode(struct wl_listener *listener, void *data) {
 
 	wlr_output_state_set_enabled(&m->pending, event->mode);
 	mango_output_commit(m);
-	m->only_dpms_off = !event->mode;
+	m->only_sleep = !event->mode;
 	updatemons(NULL, NULL);
 }
 
@@ -6836,7 +6836,7 @@ void updatemons(struct wl_listener *listener, void *data) {
 															  m->wlr_output);
 		config_head->state.enabled = 0;
 
-		if (m->only_dpms_off) {
+		if (m->only_sleep) {
 			continue;
 		}
 		/* Remove this output from the layout to avoid cursor enter inside

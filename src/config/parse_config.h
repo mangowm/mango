@@ -1275,14 +1275,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "toggle_monitor") == 0) {
 		func = toggle_monitor;
 		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "dpms_off_monitor") == 0) {
-		func = dpms_off_monitor;
+	} else if (strcmp(func_name, "sleep_monitor") == 0) {
+		func = sleep_monitor;
 		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "dpms_on_monitor") == 0) {
-		func = dpms_on_monitor;
+	} else if (strcmp(func_name, "wakeup_monitor") == 0) {
+		func = wakeup_monitor;
 		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "dpms_toggle_monitor") == 0) {
-		func = dpms_toggle_monitor;
+	} else if (strcmp(func_name, "sleep_toggle_monitor") == 0) {
+		func = sleep_toggle_monitor;
 		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "scroller_stack") == 0) {
 		func = scroller_stack;

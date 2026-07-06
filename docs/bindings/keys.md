@@ -177,9 +177,9 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `setkeymode` | `mode` | Set keymode. |
 | `switch_keyboard_layout` | `[index]` | Switch keyboard layout. Optional index (0, 1, 2...) to switch to specific layout. |
 | `setoption` | `key,value` | Set config option temporarily. |
-| `dpms_off_monitor` | `monitor_spec` | Shutdown monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `dpms_on_monitor` | `monitor_spec` | Turn on monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `dpms_toggle_monitor` | `monitor_spec` | Toggle monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format).
+| `sleep_monitor` | `monitor_spec` | Shutdown monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `wakeup_monitor` | `monitor_spec` | Turn on monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `sleep_toggle_monitor` | `monitor_spec` | Toggle monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format).
 | `disable_monitor` | `monitor_spec` | remove monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `enable_monitor` | `monitor_spec` | add monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggle_monitor` | `monitor_spec` | Toggle monitor add/remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
