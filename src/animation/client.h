@@ -9,6 +9,11 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 	wlr_scene_rect_set_size(rect, GEZERO(width), GEZERO(height));
 }
 
+static void client_surface_set_enabled(Client *c, bool enabled) {
+	if (!c->fx.active && c->scene_surface)
+		wlr_scene_node_set_enabled(&c->scene_surface->node, enabled);
+}
+
 struct fx_corner_radii set_client_corner_location(Client *c) {
 	struct fx_corner_radii current_corner_location =
 		corner_radii_all(config.border_radius);
@@ -1053,6 +1058,7 @@ void client_apply_clip(Client *c, float factor) {
 		set_client_corner_location(c);
 
 	if (!config.animations && !c->overview_scene_surface) {
+		client_fx_settle(c);
 		c->animation.running = false;
 		c->need_output_flush = false;
 		c->animainit_geom = c->current = c->pending = c->animation.current =
@@ -1123,10 +1129,10 @@ void client_apply_clip(Client *c, float factor) {
 	// 如果窗口剪切区域已经剪切到0，则不渲染窗口表面
 	if (clip_box.width <= 0 || clip_box.height <= 0) {
 		should_render_client_surface = false;
-		wlr_scene_node_set_enabled(&c->scene_surface->node, false);
+		client_surface_set_enabled(c, false);
 	} else {
 		should_render_client_surface = true;
-		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+		client_surface_set_enabled(c, true);
 	}
 
 	// 不用在执行下面的窗口表面剪切和缩放等效果操作
@@ -1227,11 +1233,107 @@ void fadeout_client_animation_next_tick(Client *c) {
 			&c->scene->node, snap_scene_buffer_apply_effect, &buffer_data);
 	}
 
+	client_fx_tick(c, MANGO_MIN(animation_passed, 1.0), passed_time);
+
 	if (animation_passed >= 1.0) {
+		client_fx_settle(c);
 		wl_list_remove(&c->fadeout_link);
 		wlr_scene_node_destroy(&c->scene->node);
 		free(c);
 		c = NULL;
+	}
+}
+
+static void client_fx_settle(Client *c) {
+	if (!c || !c->fx.active)
+		return;
+	if (c->fx.scene_buffer)
+		wlr_scene_node_destroy(&c->fx.scene_buffer->node);
+	if (c->fx.src)
+		wlr_texture_destroy(c->fx.src);
+	if (c->fx.swap)
+		wlr_swapchain_destroy(c->fx.swap);
+	c->fx.scene_buffer = NULL;
+	c->fx.src = NULL;
+	c->fx.swap = NULL;
+	c->fx.shader = NULL;
+	c->fx.active = false;
+	if (c->fx.fadeout) {
+		if (c->scene)
+			wlr_scene_node_set_enabled(&c->scene->node, true);
+		return;
+	}
+	if (c->scene_surface && !c->is_clip_to_hide && !c->is_logic_hide)
+		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+}
+
+static bool client_fx_begin(Client *c, struct effect_shader *shader,
+							struct wlr_scene_node *flatten_root,
+							struct wlr_scene_tree *parent, int width,
+							int height, bool include_rects) {
+	struct wlr_buffer *flat =
+		effect_pass_flatten(flatten_root, width, height, include_rects);
+	if (!flat) {
+		wlr_log(WLR_ERROR,
+				"effect_pass: fx setup failed (effect_pass_flatten), "
+				"falling back to parametric animation");
+		return false;
+	}
+	struct wlr_texture *src = wlr_texture_from_buffer(drw, flat);
+	if (src && !effect_pass_texture_usable(src)) {
+		wlr_texture_destroy(src);
+		wlr_buffer_drop(flat);
+		wlr_log(WLR_ERROR,
+				"effect_pass: snapshot texture is not shader-compatible "
+				"(external-only import), falling back to parametric animation");
+		return false;
+	}
+	struct wlr_swapchain *swap =
+		src ? effect_pass_create_swapchain(width, height) : NULL;
+	struct wlr_scene_buffer *scene_buffer =
+		swap ? wlr_scene_buffer_create(parent, NULL) : NULL;
+	wlr_buffer_drop(flat);
+	if (!scene_buffer) {
+		if (src)
+			wlr_texture_destroy(src);
+		if (swap)
+			wlr_swapchain_destroy(swap);
+		wlr_log(WLR_ERROR,
+				"effect_pass: fx setup failed (%s), falling back to "
+				"parametric animation",
+				!src	? "wlr_texture_from_buffer"
+				: !swap ? "effect_pass_create_swapchain"
+						: "wlr_scene_buffer_create");
+		return false;
+	}
+	c->fx.active = true;
+	c->fx.shader = shader;
+	c->fx.src = src;
+	c->fx.swap = swap;
+	c->fx.scene_buffer = scene_buffer;
+	c->fx.width = width;
+	c->fx.height = height;
+	return true;
+}
+
+static void client_fx_tick(Client *c, float progress, int32_t passed_time) {
+	if (!c->fx.active || !c->fx.swap)
+		return;
+	struct wlr_buffer *dst = wlr_swapchain_acquire(c->fx.swap);
+	if (!dst)
+		return;
+	struct effect_uniforms u = {
+		.progress = progress,
+		.time = (float)passed_time / 1000.0f,
+	};
+	bool ok = effect_pass_run(c->fx.shader, c->fx.src, dst, u);
+	if (ok)
+		wlr_scene_buffer_set_buffer(c->fx.scene_buffer, dst);
+	wlr_buffer_unlock(dst);
+	if (!ok) {
+		wlr_log(WLR_ERROR, "effect_pass: shader pass failed, falling back to "
+						   "parametric animation");
+		client_fx_settle(c);
 	}
 }
 
@@ -1272,9 +1374,37 @@ void client_animation_next_tick(Client *c) {
 
 	c->is_pending_open_animation = false;
 
+	if (c->animation.action == OPEN && c->animation.running &&
+		!c->fx.open_setup_done && !c->fx.active && c->scene &&
+		c->scene->node.enabled && c->scene_surface) {
+		struct wlr_box fx_sgeom;
+		client_get_geometry(c, &fx_sgeom);
+		bool fx_size_ready = fx_sgeom.width >= c->geom.width - 2 * (int)c->bw &&
+							 fx_sgeom.height >= c->geom.height - 2 * (int)c->bw;
+		if (fx_size_ready || animation_passed > 0.33)
+			c->fx.open_setup_done = true;
+		struct effect_shader *fx_shader =
+			fx_size_ready ? pick_effect(c->effect_open, config.effect_open)
+						  : NULL;
+		if (fx_shader) {
+			struct wlr_box fx_clip;
+			client_get_clip(c, &fx_clip);
+			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
+											   &fx_clip);
+			if (client_fx_begin(c, fx_shader, &c->scene->node, c->scene,
+								c->geom.width, c->geom.height, false)) {
+				wlr_scene_node_set_enabled(&c->scene_surface->node, false);
+				wlr_log(WLR_DEBUG,
+						"effect_pass: open-fade shader active for client");
+			}
+		}
+	}
+
 	client_apply_clip(c, factor);
+	client_fx_tick(c, 1.0 - MANGO_MIN(animation_passed, 1.0), passed_time);
 
 	if (animation_passed >= 1.0) {
+		client_fx_settle(c);
 
 		// clear the open action state
 		// To prevent him from being mistaken that
@@ -1308,10 +1438,9 @@ void client_animation_next_tick(Client *c) {
 }
 
 void init_fadeout_client(Client *c) {
-
+	client_fx_settle(c);
 	if (!c->mon || client_is_unmanaged(c))
 		return;
-
 	if (!c->scene) {
 		return;
 	}
@@ -1342,6 +1471,19 @@ void init_fadeout_client(Client *c) {
 	if (!fadeout_client->scene) {
 		free(fadeout_client);
 		return;
+	}
+
+	struct effect_shader *fx_shader =
+		pick_effect(c->effect_close, config.effect_close);
+	fadeout_client->fx.fadeout = true;
+	if (fx_shader &&
+		client_fx_begin(fadeout_client, fx_shader, &fadeout_client->scene->node,
+						layers[LyrFadeOut], c->geom.width, c->geom.height,
+						true)) {
+		wlr_scene_node_set_enabled(&fadeout_client->scene->node, false);
+		wlr_scene_node_set_position(&fadeout_client->fx.scene_buffer->node,
+									c->geom.x, c->geom.y);
+		wlr_log(WLR_DEBUG, "effect_pass: close-fade shader active for client");
 	}
 
 	fadeout_client->animation.duration = config.animation_duration_close;
@@ -1394,7 +1536,8 @@ void init_fadeout_client(Client *c) {
 	}
 
 	fadeout_client->animation.time_started = get_now_in_ms();
-	wlr_scene_node_set_enabled(&fadeout_client->scene->node, true);
+	if (!fadeout_client->fx.active)
+		wlr_scene_node_set_enabled(&fadeout_client->scene->node, true);
 	wl_list_insert(&fadeout_clients, &fadeout_client->fadeout_link);
 
 	// 请求刷新屏幕
@@ -1478,6 +1621,10 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!c->mon)
 		return;
 
+	if (c->fx.active &&
+		(geo.width != c->fx.width || geo.height != c->fx.height))
+		client_fx_settle(c);
+
 	c->need_output_flush = true;
 	c->dirty = true;
 
@@ -1557,6 +1704,8 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	}
 
 	if (c == grabc) {
+		client_fx_settle(c);
+
 		c->animation.running = false;
 		c->need_output_flush = false;
 
@@ -1771,6 +1920,9 @@ bool client_draw_frame(Client *c) {
 	if (!c || !client_surface(c)->mapped)
 		return false;
 
+	if (c->fx.active && !c->animation.running)
+		client_fx_settle(c);
+
 	if (!c->need_output_flush) {
 		return client_apply_focus_opacity(c);
 	}
@@ -1778,6 +1930,7 @@ bool client_draw_frame(Client *c) {
 	if (config.animations && c->animation.running) {
 		client_animation_next_tick(c);
 	} else {
+		client_fx_settle(c);
 		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
 									c->pending.y);
 		c->animation.current = c->animainit_geom = c->animation.initial =

@@ -1,4 +1,4 @@
 {
 	"title": "Visuals",
-	"pages": ["theming", "status-bar", "effects", "animations"]
+	"pages": ["theming", "status-bar", "effects", "animations", "shaders"]
 }

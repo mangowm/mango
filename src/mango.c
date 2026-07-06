@@ -99,7 +99,9 @@
 #include <xcb/xcb_icccm.h>
 #endif
 #include "common/util.h"
+#include "draw/effect_pass.h"
 #include "draw/text-node.h"
+#include <math.h>
 
 /* macros */
 #define MANGO_MAX(A, B) ((A) > (B) ? (A) : (B))
@@ -357,6 +359,16 @@ struct Client {
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
+	struct {
+		bool active;
+		bool open_setup_done;
+		bool fadeout;
+		struct effect_shader *shader;
+		struct wlr_scene_buffer *scene_buffer;
+		struct wlr_swapchain *swap;
+		struct wlr_texture *src;
+		int width, height;
+	} fx;
 	union {
 		struct wlr_xdg_surface *xdg;
 		struct wlr_xwayland_surface *xwayland;
@@ -406,6 +418,8 @@ struct Client {
 
 	const char *animation_type_open;
 	const char *animation_type_close;
+	char effect_open[64];
+	char effect_close[64];
 	int32_t is_in_scratchpad;
 	int32_t iscustomsize;
 	int32_t iscustompos;
@@ -966,6 +980,36 @@ static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 static bool mango_output_commit(Monitor *m);
 static bool check_tearing_frame_allow(Monitor *m);
 static void client_set_group_config(Client *c);
+static void client_fx_settle(Client *c);
+static void client_surface_set_enabled(Client *c, bool enabled);
+static bool client_fx_begin(Client *c, struct effect_shader *shader,
+							struct wlr_scene_node *flatten_root,
+							struct wlr_scene_tree *parent, int width,
+							int height, bool include_rects);
+static void client_fx_tick(Client *c, float progress, int32_t passed_time);
+static struct effect_shader *pick_effect(const char *per_client,
+										 const char *global) {
+	const char *name = (per_client && per_client[0]) ? per_client
+					   : (global && global[0])		 ? global
+													 : NULL;
+	struct effect_shader *sh = name ? effect_pass_get(name) : NULL;
+	if (name && !sh)
+		wlr_log(WLR_DEBUG,
+				"effect_pass: shader '%s' not found, using "
+				"parametric animation",
+				name);
+	return sh;
+}
+
+static void load_user_shader_dir(void) {
+	const char *home = getenv("HOME");
+	if (!home) {
+		return;
+	}
+	char shader_dir[512];
+	snprintf(shader_dir, sizeof(shader_dir), "%s/.config/mango/shaders", home);
+	effect_pass_load_dir(shader_dir);
+}
 
 #include "data/static_keymap.h"
 #include "dispatch/bind_declare.h"
@@ -1346,6 +1390,8 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 
 	wl_list_safe_reinsert_next(&w->link, &c->link);
 	wl_list_safe_reinsert_prev(&w->flink, &c->flink);
+	client_fx_settle(w);
+	client_fx_settle(c);
 	wlr_scene_node_set_enabled(&w->scene->node, false);
 
 	if (!c->is_logic_hide) {
@@ -1490,6 +1536,8 @@ void gpureset(struct wl_listener *listener, void *data) {
 	struct wlr_renderer *old_drw = drw;
 	struct wlr_allocator *old_alloc = alloc;
 	struct Monitor *m = NULL;
+	Client *fxc = NULL, *fxtmp = NULL;
+	Client *oc = NULL, *octmp = NULL;
 
 	wlr_log(WLR_DEBUG, "gpu reset");
 
@@ -1498,6 +1546,15 @@ void gpureset(struct wl_listener *listener, void *data) {
 
 	if (!(alloc = wlr_allocator_autocreate(backend, drw)))
 		die("couldn't recreate allocator");
+
+	wl_list_for_each_safe(fxc, fxtmp, &fadeout_clients, fadeout_link)
+		client_fx_settle(fxc);
+
+	wl_list_for_each_safe(oc, octmp, &clients, link) client_fx_settle(oc);
+
+	effect_pass_finish();
+	effect_pass_init(drw, alloc);
+	load_user_shader_dir();
 
 	wl_list_remove(&gpu_reset.link);
 	wl_signal_add(&drw->events.lost, &gpu_reset);
@@ -1630,6 +1687,11 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 
 	APPLY_STRING_PROP(c, r, animation_type_open);
 	APPLY_STRING_PROP(c, r, animation_type_close);
+	if (r->effect_open)
+		snprintf(c->effect_open, sizeof(c->effect_open), "%s", r->effect_open);
+	if (r->effect_close)
+		snprintf(c->effect_close, sizeof(c->effect_close), "%s",
+				 r->effect_close);
 }
 
 void set_float_malposition(Client *tc) {
@@ -2680,6 +2742,8 @@ void cleanup(void) {
 	destroykeyboardgroup(&kb_group->destroy, NULL);
 
 	mango_im_relay_finish(mango_input_method_relay);
+
+	effect_pass_finish();
 
 	/* If it's not destroyed manually it will cause a use-after-free of
 	 * wlr_seat. Destroy it until it's fixed in the wlroots side */
@@ -6265,6 +6329,9 @@ void setup(void) {
 	if (!(alloc = wlr_allocator_autocreate(backend, drw)))
 		die("couldn't create allocator");
 
+	effect_pass_init(drw, alloc);
+	load_user_shader_dir();
+
 	/* This creates some hands-off wlroots interfaces. The compositor is
 	 * necessary for clients to allocate surfaces and the data device
 	 * manager handles the clipboard. Each of these wlroots interfaces has
@@ -6579,6 +6646,8 @@ void overview_backup_surface(Client *c) {
 		return;
 	}
 
+	client_fx_settle(c);
+
 	struct wlr_box geometry;
 	client_get_geometry(c, &geometry);
 	struct wlr_box clip_box = (struct wlr_box){
@@ -6803,6 +6872,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	client_fx_settle(c);
 	c->iskilling = 1;
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(

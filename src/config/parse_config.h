@@ -67,6 +67,8 @@ typedef struct {
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
+	const char *effect_open;
+	const char *effect_close;
 	const char *layer_animation_type_open;
 	const char *layer_animation_type_close;
 	int32_t isnoborder;
@@ -201,6 +203,8 @@ typedef struct {
 	char animation_type_close[10];
 	char layer_animation_type_open[10];
 	char layer_animation_type_close[10];
+	char effect_open[64];
+	char effect_close[64];
 	int32_t animation_fade_in;
 	int32_t animation_fade_out;
 	int32_t tag_animation_direction;
@@ -1362,6 +1366,12 @@ bool parse_option(Config *config, char *key, char *value) {
 		snprintf(config->animation_type_close,
 				 sizeof(config->animation_type_close), "%.9s",
 				 value); // string limit to 9 char
+	} else if (strcmp(key, "effect_open") == 0) {
+		snprintf(config->effect_open, sizeof(config->effect_open), "%.63s",
+				 value);
+	} else if (strcmp(key, "effect_close") == 0) {
+		snprintf(config->effect_close, sizeof(config->effect_close), "%.63s",
+				 value);
 	} else if (strcmp(key, "layer_animation_type_open") == 0) {
 		snprintf(config->layer_animation_type_open,
 				 sizeof(config->layer_animation_type_open), "%.9s",
@@ -2411,6 +2421,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		// string rule value, relay to a client property
 		rule->animation_type_open = NULL;
 		rule->animation_type_close = NULL;
+		rule->effect_open = NULL;
+		rule->effect_close = NULL;
 
 		// float rule value, relay to a client property
 		rule->focused_opacity = 0;
@@ -2452,6 +2464,10 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->animation_type_open = strdup(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
 					rule->animation_type_close = strdup(val);
+				} else if (strcmp(key, "effect_open") == 0) {
+					rule->effect_open = strdup(val);
+				} else if (strcmp(key, "effect_close") == 0) {
+					rule->effect_close = strdup(val);
 				} else if (strcmp(key, "tags") == 0) {
 					rule->tags = 1 << (atoi(val) - 1);
 				} else if (strcmp(key, "monitor") == 0) {
@@ -3221,12 +3237,18 @@ void free_config(void) {
 				free((void *)rule->animation_type_open);
 			if (rule->animation_type_close)
 				free((void *)rule->animation_type_close);
+			if (rule->effect_open)
+				free((void *)rule->effect_open);
+			if (rule->effect_close)
+				free((void *)rule->effect_close);
 			if (rule->monitor)
 				free((void *)rule->monitor);
 			rule->id = NULL;
 			rule->title = NULL;
 			rule->animation_type_open = NULL;
 			rule->animation_type_close = NULL;
+			rule->effect_open = NULL;
+			rule->effect_close = NULL;
 			rule->monitor = NULL;
 			// 释放 globalkeybinding 的 arg.v（如果动态分配）
 			if (rule->globalkeybinding.arg.v) {
