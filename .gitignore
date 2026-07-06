@@ -1,6 +1,8 @@
 /.cache
 /.vscode
 /result
+/subprojects/*
+!/subprojects/*.wrap
 config.h
 mango
 mango.o

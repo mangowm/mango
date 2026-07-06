@@ -1,0 +1,6 @@
+[wrap-git]
+url = https://github.com/wlrfx/scenefx.git
+revision = 0.4.1
+
+[provide]
+dependency_names = scenefx-0.4
