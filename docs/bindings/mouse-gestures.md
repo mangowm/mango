@@ -86,6 +86,34 @@ gesturebind=none,up,4,toggleoverview
 gesturebind=none,down,4,toggleoverview
 ```
 
+### Continuous (1:1) tag scrubbing
+tagscrub drags the adjacent tag in proportionally to a multi-finger swipe, rather than firing once on release. Past half a screen (or a quick flick) commits the switch, otherwise the tag snaps back.
+
+```ini
+# 4-finger horizontal: scrub between numeric-adjacent tags
+gesturebind=none,horizontal,4,tagscrub
+
+# Skip empty tags (land on the next occupied tag), like *_have_client dispatchers
+gesturebind=none,horizontal,4,tagscrub,have_client
+```
+
+- The direction field (`horizontal`/`vertical`) selects which finger axis drives the scrub. For best results match it to `tag_animation_direction`.
+
+### Scrub feel
+
+The scrub follows your `trackpad_natural_scrolling` setting.
+
+`gesture_swipe_distance` (px, default `500`) is how much finger travel maps to a full tag slide. Lower = more sensitive (less travel to switch); higher = more deliberate.
+
+`gesture_commit_ratio` (0–1, default `0.5`) sets how far through that distance you must swipe to commit a `tagscrub`, e.g. `0.3` commits after 30%. A fast flick can commit a bit below this via momentum.
+
+`gesture_axis_lock` (px, default `16`) is how far the swipe must travel before the scrub decides whether it's along its axis. Raise it if imprecise swipes get misread.
+
+```ini
+gesture_swipe_distance=500
+gesture_commit_ratio=0.5
+```
+
 ---
 
 ## Switch Bindings

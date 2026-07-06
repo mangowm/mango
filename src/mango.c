@@ -580,6 +580,18 @@ struct Monitor {
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
+	bool scrub_active;
+	uint8_t scrub_axis;
+	int8_t scrub_dir;
+	bool scrub_have_client;
+	bool scrub_rubberband;
+	uint32_t scrub_incoming_tag;
+	double scrub_accum;
+	double scrub_progress;
+	double scrub_last_delta;
+	uint32_t scrub_last_time;
+	double scrub_velocity;
+	bool scrub_axis_locked;
 };
 
 typedef struct {
@@ -1121,6 +1133,8 @@ static struct wl_event_source *sync_keymap;
 #include "animation/common.h"
 #include "animation/layer.h"
 #include "animation/tag.h"
+#include "animation/tag_scrub.h"
+#include "animation/tag_scrub_math.h"
 #include "dispatch/bind_define.h"
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
@@ -2170,7 +2184,15 @@ int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
 void swipe_begin(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_begin_event *event = data;
 
-	// Forward swipe begin event to client
+	int ji;
+	for (ji = 0; ji < config.gesture_bindings_count; ji++) {
+		const GestureBinding *g = &config.gesture_bindings[ji];
+		if (g->continuous && g->fingers_count == event->fingers) {
+			if (tag_scrub_arm(selmon, g))
+				break;
+		}
+	}
+
 	wlr_pointer_gestures_v1_send_swipe_begin(pointer_gestures, seat,
 											 event->time_msec, event->fingers);
 }
@@ -2179,21 +2201,26 @@ void swipe_update(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_update_event *event = data;
 
 	swipe_fingers = event->fingers;
-	// Accumulate swipe distance
 	swipe_dx += event->dx;
 	swipe_dy += event->dy;
 
-	// Forward swipe update event to client
+	if (tag_scrub_active(selmon))
+		tag_scrub_feed(selmon, event->dx, event->dy, event->time_msec);
 	wlr_pointer_gestures_v1_send_swipe_update(
 		pointer_gestures, seat, event->time_msec, event->dx, event->dy);
 }
 
 void swipe_end(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_swipe_end_event *event = data;
-	ongesture(event);
+
+	if (tag_scrub_engaged(selmon)) {
+		tag_scrub_release(selmon, event->cancelled);
+	} else {
+		tag_scrub_abort(selmon);
+		ongesture(event);
+	}
 	swipe_dx = 0;
 	swipe_dy = 0;
-	// Forward swipe end event to client
 	wlr_pointer_gestures_v1_send_swipe_end(pointer_gestures, seat,
 										   event->time_msec, event->cancelled);
 }
