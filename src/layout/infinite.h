@@ -45,7 +45,8 @@ static Client *check_colision(float nx, float ny, Client *self, int32_t gap,
 							  Monitor *m) {
 	Client *other;
 	wl_list_for_each(other, &clients, link) {
-		if (other == self || !VISIBLEON(other, m) || !ISFAKETILED(other))
+		if (other == self ||
+			!VISIBLEON(other, m) /*|| !ISFAKETILED(other)*/) // experimental
 			continue;
 		int32_t g2 = gap / 2;
 		int32_t ax = (int32_t)roundf(nx);
@@ -273,13 +274,8 @@ static void set_initial_positon(Monitor *m, Client *c) {
 static void move_canvas(Monitor *m, int32_t dx, int32_t dy) {
 	Client *c;
 	wl_list_for_each(c, &clients, link) {
-		if (infinite_data.isRigid) {
-			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
-				continue;
-		} else {
-			if (!VISIBLEON(c, m))
-				continue;
-		}
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+			continue;
 		c->geom.x += dx;
 		c->geom.y += dy;
 		resize(c, c->geom, 0);
@@ -298,13 +294,8 @@ void home_canvas(Monitor *m) {
 	Client *c;
 	int32_t cx = 0, cy = 0, i = 0;
 	wl_list_for_each(c, &clients, link) {
-		if (infinite_data.isRigid) {
-			if (!VISIBLEON(c, m) || !ISFAKETILED(c))
-				continue;
-		} else {
-			if (!VISIBLEON(c, m))
-				continue;
-		}
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+			continue;
 		cx += c->geom.x + c->geom.width / 2;
 		cy += c->geom.y + c->geom.height / 2;
 		i++;
