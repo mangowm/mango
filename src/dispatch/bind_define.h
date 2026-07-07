@@ -2149,7 +2149,9 @@ int32_t dwindle_set_split_direction(Client *c, bool istoggle, bool horizontal) {
 		leaf->custom_leaf_split_h = false;
 	}
 	bool hit_no_border = check_hit_no_border(c);
-	client_draw_split_border(c, hit_no_border);
+
+	struct ivec2 offsets = compute_edge_offsets(c);
+	client_draw_split_border(c, hit_no_border, offsets);
 	return 0;
 }
 
