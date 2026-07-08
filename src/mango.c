@@ -6606,6 +6606,7 @@ void touchdown(struct wl_listener *listener, void *data) {
 	struct wlr_surface *surface;
 	Client *c = NULL;
 	Monitor *m;
+	bool map_to_mon_applied = false;
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
@@ -6615,17 +6616,32 @@ void touchdown(struct wl_listener *listener, void *data) {
 
 	// Map the input to the appropriate output, to ensure that rotation is
 	// handled.
-	wl_list_for_each(m, &mons, link) {
-		if (m == NULL || m->wlr_output == NULL) {
-			continue;
+	if (config.touchscreen_map_to_mon) {
+		wl_list_for_each(m, &mons, link) {
+			if (match_monitor_spec(config.touchscreen_map_to_mon, m)) {
+				wlr_log(WLR_DEBUG, "Mapping touchscreen %s to output %s",
+						event->touch->base.name, config.touchscreen_map_to_mon);
+				wlr_cursor_map_input_to_output(cursor, &event->touch->base,
+											   m->wlr_output);
+				map_to_mon_applied = true;
+				break;
+			}
 		}
-		if (event->touch->output_name != NULL &&
-			0 != strcmp(event->touch->output_name, m->wlr_output->name)) {
-			continue;
-		}
+	}
+	if (!map_to_mon_applied) {
+		wl_list_for_each(m, &mons, link) {
+			if (m == NULL || m->wlr_output == NULL) {
+				continue;
+			}
+			if (event->touch->output_name != NULL &&
+				0 != strcmp(event->touch->output_name, m->wlr_output->name)) {
+				continue;
+			}
 
-		wlr_cursor_map_input_to_output(cursor, &event->touch->base,
-									   m->wlr_output);
+			wlr_cursor_map_input_to_output(cursor, &event->touch->base,
+										   m->wlr_output);
+			break;
+		}
 	}
 	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
 										 event->y, &lx, &ly);

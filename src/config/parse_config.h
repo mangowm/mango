@@ -308,6 +308,9 @@ typedef struct {
 	/* tablet */
 	char *tablet_map_to_mon;
 
+	/* touchscreen */
+	char *touchscreen_map_to_mon;
+
 	/* Trackpad */
 	int32_t trackpad_natural_scrolling;
 	uint32_t trackpad_accel_profile;
@@ -1966,6 +1969,10 @@ bool parse_option(Config *config, char *key, char *value) {
 		if (config->tablet_map_to_mon)
 			free(config->tablet_map_to_mon);
 		config->tablet_map_to_mon = strdup(value);
+	} else if (strcmp(key, "touchscreen_map_to_mon") == 0) {
+		if (config->touchscreen_map_to_mon)
+			free(config->touchscreen_map_to_mon);
+		config->touchscreen_map_to_mon = strdup(value);
 	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
 		config->trackpad_scroll_factor = atof(value);
 	} else if (strcmp(key, "gappih") == 0) {
@@ -3457,6 +3464,11 @@ void free_config(void) {
 		config.tablet_map_to_mon = NULL;
 	}
 
+	if (config.touchscreen_map_to_mon) {
+		free(config.touchscreen_map_to_mon);
+		config.touchscreen_map_to_mon = NULL;
+	}
+
 	// 释放 circle_layout
 	free_circle_layout(&config);
 
@@ -4003,6 +4015,7 @@ bool parse_config(void) {
 	config.jumplabeldata.font_desc = NULL;
 	config.groupbardata.font_desc = NULL;
 	config.tablet_map_to_mon = NULL;
+	config.touchscreen_map_to_mon = NULL;
 	strcpy(config.keymode, "default");
 
 	create_config_keymap();
