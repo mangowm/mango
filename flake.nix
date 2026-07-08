@@ -25,13 +25,12 @@
 
       perSystem = {
         config,
-        system,
         pkgs,
         ...
       }: let
         inherit (pkgs) callPackage;
         mango = callPackage ./nix {
-          scenefx = inputs.scenefx.packages.${system}.default;
+          scenefx = inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
         shellOverride = old: {
           nativeBuildInputs = old.nativeBuildInputs ++ [];
