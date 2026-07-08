@@ -12,6 +12,8 @@ static void usage(void) {
 	printf("One-shot queries (get):\n");
 	printf(
 		"  get version                              Show compositor version\n");
+	printf("  get cursorpos                            Show pointer position + "
+		   "monitor\n");
 	printf("  get keymode                              Show current keymode\n");
 	printf("  get keyboardlayout                       Show current keyboard "
 		   "layout\n");

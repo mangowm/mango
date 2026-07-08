@@ -843,7 +843,7 @@ get_nearest_output_mode(struct wlr_output *output, int32_t width,
 
 static void client_commit(Client *c);
 static void layer_commit(LayerSurface *l);
-static void client_draw_border(Client *c);
+static void client_draw_border(Client *c, struct ivec2 offsets);
 static void client_set_opacity(Client *c, double opacity);
 static void init_baked_points(void);
 static void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer,
@@ -4420,7 +4420,8 @@ void keypress(struct wl_listener *listener, void *data) {
 		tag_combo = false;
 	}
 
-	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0) {
+	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0 &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
 		group->keysyms = syms;
 		group->keycode = keycode;

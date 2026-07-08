@@ -5,6 +5,7 @@
   #:use-module (guix packages)
   #:use-module (guix utils)
   #:use-module (gnu packages wm)
+  #:use-module (gnu packages gtk)
   #:use-module (gnu packages freedesktop)
   #:use-module (gnu packages xdisorg)
   #:use-module (gnu packages pciutils)
