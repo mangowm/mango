@@ -4420,7 +4420,8 @@ void keypress(struct wl_listener *listener, void *data) {
 		tag_combo = false;
 	}
 
-	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0) {
+	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0 &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
 		group->keysyms = syms;
 		group->keycode = keycode;
