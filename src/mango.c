@@ -1039,6 +1039,7 @@ static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
 static struct wl_list mons;
 static Monitor *selmon;
+static struct wlr_scene_output_layout *scene_layout;
 
 static int32_t enablegaps = 1; /* enables gaps, used by togglegaps */
 static int32_t axis_apply_time = 0;
@@ -3438,14 +3439,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_output_state_set_enabled(&m->pending, true);
 	}
 
-	if (m->hdr_enable) {
-		output_state_setup_hdr(m, false, &m->pending);
-	}
-
-	// 虚拟显示器在加入显示器链前必须先配置，否则会崩溃
-	if (wlr_output_is_headless(m->wlr_output)) {
-		mango_output_commit(m);
-	}
+	mango_output_commit(m);
 
 	wl_list_insert(&mons, &m->link);
 
@@ -3488,16 +3482,22 @@ void createmon(struct wl_listener *listener, void *data) {
 	 * display, which Wayland clients can see to find out information about the
 	 * output (such as DPI, scale factor, manufacturer, etc).
 	 */
+	struct wlr_output_layout_output *layout_output;
 	m->scene_output = wlr_scene_output_create(scene, wlr_output);
 	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
-		wlr_output_layout_add_auto(output_layout, wlr_output);
+		layout_output = wlr_output_layout_add_auto(output_layout, wlr_output);
 	else
-		wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
+		layout_output =
+			wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
 
-	// 无头显示器不不要支持hdr
-	if (!wlr_output_is_headless(m->wlr_output)) {
-		mango_scene_output_commit(m->scene_output, &m->pending);
+	wlr_scene_output_layout_add_output(scene_layout, layout_output,
+									   m->scene_output);
+
+	if (m->hdr_enable) {
+		output_state_setup_hdr(m, false, &m->pending);
 	}
+
+	mango_scene_output_commit(m->scene_output, &m->pending);
 
 	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
@@ -6207,6 +6207,7 @@ void setup(void) {
 	 * the backend. */
 	wl_list_init(&mons);
 	wl_signal_add(&backend->events.new_output, &new_output);
+	scene_layout = wlr_scene_attach_output_layout(scene, output_layout);
 
 	/* Set up our client lists and the xdg-shell. The xdg-shell is a
 	 * Wayland protocol which is used for application windows. For more
