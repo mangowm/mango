@@ -1,4 +1,4 @@
-self: {
+mangoPackage: {
   config,
   lib,
   pkgs,
@@ -16,17 +16,16 @@ in {
       };
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
+        default = mangoPackage;
         description = "The mango package to use";
       };
     };
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages =
-      [
-        cfg.package
-      ];
+    environment.systemPackages = [
+      cfg.package
+    ];
 
     xdg.portal = {
       enable = lib.mkDefault true;
@@ -60,7 +59,7 @@ in {
     programs.xwayland.enable = lib.mkDefault true;
 
     services = {
-      displayManager.sessionPackages = lib.mkIf cfg.addLoginEntry [ cfg.package ];
+      displayManager.sessionPackages = lib.mkIf cfg.addLoginEntry [cfg.package];
 
       graphical-desktop.enable = lib.mkDefault true;
     };

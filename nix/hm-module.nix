@@ -1,11 +1,9 @@
-self:
-{
+mangoPackage: {
   lib,
   config,
   pkgs,
   ...
-}:
-let
+}: let
   cfg = config.wayland.windowManager.mango;
   selflib = import ./lib.nix lib;
   variables = lib.concatStringsSep " " cfg.systemd.variables;
@@ -15,8 +13,7 @@ let
     ${lib.optionalString cfg.systemd.enable systemdActivation}
     ${cfg.autostart_sh}
   '';
-in
-{
+in {
   options = {
     wayland.windowManager.mango = with lib; {
       enable = mkOption {
@@ -26,7 +23,7 @@ in
       };
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
+        default = mangoPackage;
         description = "The mango package to use";
       };
       systemd = {
@@ -59,7 +56,7 @@ in
             "XCURSOR_THEME"
             "XCURSOR_SIZE"
           ];
-          example = [ "--all" ];
+          example = ["--all"];
           description = ''
             Environment variables imported into the systemd and D-Bus user environment.
           '';
@@ -80,25 +77,23 @@ in
         '';
       };
       settings = mkOption {
-        type =
-          with lib.types;
-          let
-            valueType =
-              nullOr (oneOf [
-                bool
-                int
-                float
-                str
-                path
-                (attrsOf valueType)
-                (listOf valueType)
-              ])
-              // {
-                description = "Mango configuration value";
-              };
-          in
+        type = with lib.types; let
+          valueType =
+            nullOr (oneOf [
+              bool
+              int
+              float
+              str
+              path
+              (attrsOf valueType)
+              (listOf valueType)
+            ])
+            // {
+              description = "Mango configuration value";
+            };
+        in
           valueType;
-        default = { };
+        default = {};
         description = ''
           Mango configuration written in Nix. Entries with the same key
           should be written as lists. Variables and colors names should be
@@ -178,21 +173,21 @@ in
       };
       topPrefixes = mkOption {
         type = with lib.types; listOf str;
-        default = [ ];
+        default = [];
         description = ''
           List of prefixes for attributes that should appear at the top of the config file.
           Attributes starting with these prefixes will be sorted to the beginning.
         '';
-        example = [ "source" ];
+        example = ["source"];
       };
       bottomPrefixes = mkOption {
         type = with lib.types; listOf str;
-        default = [ ];
+        default = [];
         description = ''
           List of prefixes for attributes that should appear at the bottom of the config file.
           Attributes starting with these prefixes will be sorted to the end.
         '';
-        example = [ "source" ];
+        example = ["source"];
       };
       autostart_sh = mkOption {
         description = ''
@@ -217,25 +212,25 @@ in
       finalConfigText =
         # Support old string-based config during transition period
         (
-          if builtins.isString cfg.settings then
-            cfg.settings
+          if builtins.isString cfg.settings
+          then cfg.settings
           else
-            lib.optionalString (cfg.settings != { }) (
+            lib.optionalString (cfg.settings != {}) (
               selflib.toMango {
                 topCommandsPrefixes = cfg.topPrefixes;
                 bottomCommandsPrefixes = cfg.bottomPrefixes;
-              } cfg.settings
+              }
+              cfg.settings
             )
         )
         + lib.optionalString (cfg.extraConfig != "") cfg.extraConfig
         + lib.optionalString (cfg.autostart_sh != "") "\nexec-once=~/.config/mango/autostart.sh\n";
 
-      validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
+      validatedConfig = pkgs.runCommand "mango-config.conf" {} ''
         cp ${pkgs.writeText "mango-config.conf" finalConfigText} "$out"
         ${cfg.package}/bin/mango -c "$out" -p || exit 1
       '';
-    in
-    {
+    in {
       # Backwards compatibility warning for old string-based config
       warnings = lib.optional (builtins.isString cfg.settings) ''
         wayland.windowManager.mango.settings: Using a string for settings is deprecated.
@@ -244,13 +239,13 @@ in
         The old string format will be removed in a future release.
       '';
 
-      home.packages = [ cfg.package ];
+      home.packages = [cfg.package];
       xdg.configFile = {
         "mango/config.conf" =
-          lib.mkIf (cfg.settings != { } || cfg.extraConfig != "" || cfg.autostart_sh != "")
-            {
-              source = validatedConfig;
-            };
+          lib.mkIf (cfg.settings != {} || cfg.extraConfig != "" || cfg.autostart_sh != "")
+          {
+            source = validatedConfig;
+          };
         "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "") {
           source = autostart_sh;
           executable = true;
@@ -259,13 +254,14 @@ in
       systemd.user.targets.mango-session = lib.mkIf cfg.systemd.enable {
         Unit = {
           Description = "mango compositor session";
-          Documentation = [ "man:systemd.special(7)" ];
-          BindsTo = [ "graphical-session.target" ];
-          Wants = [
-            "graphical-session-pre.target"
-          ]
-          ++ lib.optional cfg.systemd.xdgAutostart "xdg-desktop-autostart.target";
-          After = [ "graphical-session-pre.target" ];
+          Documentation = ["man:systemd.special(7)"];
+          BindsTo = ["graphical-session.target"];
+          Wants =
+            [
+              "graphical-session-pre.target"
+            ]
+            ++ lib.optional cfg.systemd.xdgAutostart "xdg-desktop-autostart.target";
+          After = ["graphical-session-pre.target"];
           Before = lib.optional cfg.systemd.xdgAutostart "xdg-desktop-autostart.target";
         };
       };
