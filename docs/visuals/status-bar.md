@@ -7,8 +7,6 @@ description: Configure Waybar for mangowm.
 
 mangowm is compatible with Waybar's `ext/workspaces` module (Wayland standard) or the `dwl/tags` module. We recommend `ext/workspaces` for the best experience.
 
-> **Tip:** You can also use the `dwl/tags` module, but `ext/workspaces` provides better integration with mangowm's features. The `ext/workspaces` module requires **Waybar > 0.14.0**.
-
 ### `config.jsonc`
 
 Add the following to your Waybar configuration:
@@ -16,23 +14,42 @@ Add the following to your Waybar configuration:
 ```jsonc
 {
   "modules-left": [
-    "ext/workspaces",
-    "dwl/window"
+    "mango/workspaces",
+    "mango/layout",
+    "mango/window"
   ],
-  "ext/workspaces": {
-    "format": "{icon}",
-    "ignore-hidden": true,
-    "on-click": "activate",
-    "on-click-right": "deactivate",
-    "sort-by-id": true
+  "modules-right": [
+    "mango/language",
+    "mango/keymode",
+  ],
+  "mango/workspaces": {
+      "format": "{icon}",
+      "hide-empty": true,
+      "on-click": "activate",
+      "on-click-right": "toggle",
+      "overview-label": "OVERVIEW",
   },
-  "dwl/window": {
-    "format": "[{layout}] {title}"
-  }
+  "mango/keymode": {
+  	"format": "{}",
+  	// "format-default": " Default",
+    // "format-test": " Test",
+  },
+  "mango/window": {
+    "format": "{}",
+	  "icon-size": 20
+  },
+  "mango/layout": {
+      "format": "{}",
+      // "format-S": "Scroller",
+      // "format-T": "Tile",
+  },
+  "mango/language": {
+  "format": "{short}",
+  },
 }
 ```
 
-## Styling
+## Styling Example
 
 You can style the tags using standard CSS in `style.css`.
 
@@ -40,27 +57,13 @@ You can style the tags using standard CSS in `style.css`.
 
 ```css
 #workspaces {
-  border-radius: 4px;
-  border-width: 2px;
-  border-style: solid;
   border-color: #c9b890;
-  margin-left: 4px;
-  padding-left: 10px;
-  padding-right: 6px;
   background: rgba(40, 40, 40, 0.76);
 }
 
 #workspaces button {
-  border: none;
   background: none;
-  box-shadow: inherit;
-  text-shadow: inherit;
   color: #ddca9e;
-  padding: 1px;
-  padding-left: 1px;
-  padding-right: 1px;
-  margin-right: 2px;
-  margin-left: 2px;
 }
 
 #workspaces button.hidden {
@@ -79,61 +82,44 @@ You can style the tags using standard CSS in `style.css`.
 #workspaces button.active {
   background-color: #ddca9e;
   color: #282828;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  padding-top: 1px;
-  padding-bottom: 0px;
-  border-radius: 3px;
 }
 
 #workspaces button.urgent {
   background-color: #ef5e5e;
   color: #282828;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  padding-top: 1px;
-  padding-bottom: 0px;
-  border-radius: 3px;
 }
 
-#tags {
-  background-color: transparent;
-}
-
-#tags button {
-  background-color: #fff;
-  color: #a585cd;
-}
-
-#tags button:not(.occupied):not(.focused) {
-  font-size: 0;
-  min-width: 0;
-  min-height: 0;
-  margin: -17px;
-  padding: 0;
-  color: transparent;
-  background-color: transparent;
-}
-
-#tags button.occupied {
-  background-color: #fff;
-  color: #cdc885;
-}
-
-#tags button.focused {
-  background-color: rgb(186, 142, 213);
-  color: #fff;
-}
-
-#tags button.urgent {
-  background: rgb(171, 101, 101);
-  color: #fff;
+#workspaces button.overview {
+  background-color: #ef5e5e;
+  color: #282828;
 }
 
 #window {
-  background-color: rgb(237, 196, 147);
-  color: rgb(63, 37, 5);
+  background-color: #CA9297;
+  color: #282828;
 }
+
+window#waybar.empty #window {
+    background: none;
+    margin: 0px;
+    padding: 0px;
+}
+
+#layout {
+  background-color: #CA9297;
+  color: #282828;
+}
+
+#language {
+  background-color: #CA9297;
+  color: #282828;
+}
+
+#keymode {
+  background-color: #CA9297;
+  color: #282828;
+}
+
 ```
 
 ## Complete Configuration Example

@@ -1,13 +1,11 @@
 void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height) {
-	struct wlr_box box;
 
 	if (l->animation.running) {
 		*width = l->animation.current.width;
 		*height = l->animation.current.height;
 	} else {
-		get_layer_target_geometry(l, &box);
-		*width = box.width;
-		*height = box.height;
+		*width = l->geom.width;
+		*height = l->geom.height;
 	}
 }
 
@@ -148,6 +146,34 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 	default:
 		geo->x = l->geom.x;
 		geo->y = 0 - l->geom.height;
+	}
+}
+
+void layer_draw_shield(LayerSurface *l) {
+	int32_t width, height;
+
+	if (!l->mapped)
+		return;
+
+	if (active_capture_count > 0 && l->shield_when_capture) {
+
+		layer_actual_size(l, &width, &height);
+
+		if (width <= 0 || height <= 0) {
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+			return;
+		}
+
+		wlr_scene_node_raise_to_top(&l->shield->node);
+		wlr_scene_node_set_position(&l->shield->node, 0, 0);
+		wlr_scene_rect_set_size(l->shield, width, height);
+		wlr_scene_node_set_enabled(&l->shield->node, true);
+	} else {
+		if (l->shield->node.enabled) {
+			wlr_scene_node_lower_to_bottom(&l->shield->node);
+			wlr_scene_node_set_position(&l->shield->node, 0, 0);
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+		}
 	}
 }
 
@@ -327,6 +353,10 @@ void init_fadeout_layers(LayerSurface *l) {
 
 	if (!l->mon || !l->scene)
 		return;
+
+	if (l->shield_when_capture) {
+		return;
+	}
 
 	if ((l->animation_type_close &&
 		 strcmp(l->animation_type_close, "none") == 0) ||
@@ -522,6 +552,7 @@ bool layer_draw_frame(LayerSurface *l) {
 		!l->noanim) {
 		layer_animation_next_tick(l);
 	} else {
+		layer_draw_shield(l);
 		l->need_output_flush = false;
 	}
 	return true;

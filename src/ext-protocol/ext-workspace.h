@@ -148,7 +148,7 @@ static void add_workspace_by_tag(int32_t tag, Monitor *m) {
 	wlr_ext_workspace_handle_v1_set_name(workspace->ext_workspace, name);
 }
 
-void dwl_ext_workspace_printstatus(Monitor *m) {
+void mango_ext_workspace_printstatus(Monitor *m) {
 	struct workspace *w;
 	uint32_t tag_status = 0;
 
@@ -199,7 +199,7 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 		}
 	}
 
-	dwl_ext_workspace_printstatus(m);
+	mango_ext_workspace_printstatus(m);
 }
 
 void workspaces_init() {

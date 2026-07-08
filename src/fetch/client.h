@@ -31,7 +31,7 @@ Client *termforwin(Client *w) {
 		return NULL;
 
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->isterm && !c->swallowing && c->pid &&
+		if (c->isterm && !c->swallowdby && c->pid &&
 			isdescprocess(c->pid, w->pid)) {
 			return c;
 		}
@@ -48,9 +48,9 @@ Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title) {
 			continue;
 		}
 
-		if (c->swallowedby) {
-			appid = client_get_appid(c->swallowedby);
-			title = client_get_title(c->swallowedby);
+		if (c->swallowing) {
+			appid = client_get_appid(c->swallowing);
+			title = client_get_title(c->swallowing);
 		} else {
 			appid = client_get_appid(c);
 			title = client_get_title(c);
@@ -184,22 +184,17 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			break;
 
 		wl_list_for_each(c, &clients, link) {
-			if (!c || c == tc)
+			if (!c || !c->mon || c == tc)
 				continue;
 			if (!findfloating && c->isfloating)
 				continue;
-			if (c->is_monocle_hide)
+			if (!VISIBLEON(c, c->mon))
 				continue;
 			if (c->isunglobal)
 				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
 				continue;
 			if (!(c->tags & c->mon->tagset[c->mon->seltags]))
-				continue;
-
-			if (step == 0 && ((!tc->mon->isoverview &&
-							   !client_is_in_same_stack(tc, c, NULL)) ||
-							  c->mon != tc->mon))
 				continue;
 
 			int32_t c_l = c->geom.x;
@@ -257,17 +252,24 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			if (!match_dir)
 				continue;
 
+			if (step == 0) {
+				if (c->mon != tc->mon)
+					continue;
+				if (!tc->mon->isoverview &&
+					!client_is_in_same_stack(tc, c, NULL))
+					continue;
+				if (orth_dist != 0)
+					continue;
+			}
+
 			int64_t penalty = 0;
 			if (main_dist < 0) {
-				penalty = 10000000000LL; // 主方向重叠（反方向）的极大惩罚
+				penalty = 10000000000LL;
 				main_dist = -main_dist;
 			}
 
-			// 正交方向无重叠惩罚，优先选择在同一行/列的窗口
 			int64_t no_overlap_penalty = 0;
 			if (orth_dist > 0) {
-				// LEFT/RIGHT 时 orth_dist 是垂直间距，>0 表示垂直无重叠
-				// UP/DOWN  时 orth_dist 是水平间距，>0 表示水平无重叠
 				no_overlap_penalty = 10000000LL;
 			}
 
@@ -442,7 +444,7 @@ Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
 		return sc;
 
 	wl_list_for_each(tc, &fstack, flink) {
-		if (tc->iskilling || tc->isunglobal || tc->is_monocle_hide)
+		if (tc->iskilling || tc->isunglobal)
 			continue;
 		if (!VISIBLEON(tc, sc->mon))
 			continue;
