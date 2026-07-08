@@ -30,7 +30,7 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data) {
 	SnapshotMetadata *meta = wl_container_of(listener, meta, destroy);
-	wl_list_remove(&meta->destroy.link); // 安全移除监听器
+	wl_list_remove(&meta->destroy.link);
 	free(meta);
 }
 
@@ -175,6 +175,7 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 		}
 		meta->orig_width = scene_buffer->dst_width;
 		meta->orig_height = scene_buffer->dst_height;
+		meta->type = Snapshot;
 
 		struct wlr_scene_surface *scene_surface =
 			wlr_scene_surface_try_from_buffer(scene_buffer);
@@ -212,11 +213,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 
 		// Effects
 		wlr_scene_buffer_set_opacity(snapshot_buffer, scene_buffer->opacity);
-		wlr_scene_buffer_set_corner_radius(snapshot_buffer,
-										   scene_buffer->corner_radius,
-										   scene_buffer->corners);
-
-		wlr_scene_buffer_set_backdrop_blur(snapshot_buffer, false);
+		wlr_scene_buffer_set_corner_radii(snapshot_buffer,
+										  scene_buffer->corners);
 
 		if (scene_surface != NULL && scene_surface->surface->buffer != NULL) {
 			wlr_scene_buffer_set_buffer(snapshot_buffer,
@@ -248,6 +246,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 
 		break;
 	}
+	case WLR_SCENE_NODE_BLUR:
+		break;
 	case WLR_SCENE_NODE_OPTIMIZED_BLUR:
 		return true;
 	}

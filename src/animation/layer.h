@@ -1,13 +1,11 @@
 void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height) {
-	struct wlr_box box;
 
 	if (l->animation.running) {
 		*width = l->animation.current.width;
 		*height = l->animation.current.height;
 	} else {
-		get_layer_target_geometry(l, &box);
-		*width = box.width;
-		*height = box.height;
+		*width = l->geom.width;
+		*height = l->geom.height;
 	}
 }
 
@@ -151,6 +149,34 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 	}
 }
 
+void layer_draw_shield(LayerSurface *l) {
+	int32_t width, height;
+
+	if (!l->mapped)
+		return;
+
+	if (active_capture_count > 0 && l->shield_when_capture) {
+
+		layer_actual_size(l, &width, &height);
+
+		if (width <= 0 || height <= 0) {
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+			return;
+		}
+
+		wlr_scene_node_raise_to_top(&l->shield->node);
+		wlr_scene_node_set_position(&l->shield->node, 0, 0);
+		wlr_scene_rect_set_size(l->shield, width, height);
+		wlr_scene_node_set_enabled(&l->shield->node, true);
+	} else {
+		if (l->shield->node.enabled) {
+			wlr_scene_node_lower_to_bottom(&l->shield->node);
+			wlr_scene_node_set_position(&l->shield->node, 0, 0);
+			wlr_scene_node_set_enabled(&l->shield->node, false);
+		}
+	}
+}
+
 void layer_draw_shadow(LayerSurface *l) {
 
 	if (!l->mapped || !l->shadow)
@@ -187,8 +213,7 @@ void layer_draw_shadow(LayerSurface *l) {
 
 	struct clipped_region clipped_region = {
 		.area = intersection_box,
-		.corner_radius = config.border_radius,
-		.corners = config.border_radius_location_default,
+		.corners = corner_radii_all(config.border_radius),
 	};
 
 	wlr_scene_node_set_position(&l->shadow->node, shadow_box.x, shadow_box.y);
@@ -279,7 +304,7 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	double percent = config.fadeout_begin_opacity -
 					 (opacity_eased_progress * config.fadeout_begin_opacity);
 
-	double opacity = MAX(percent, 0.0f);
+	double opacity = MANGO_MAX(percent, 0.0f);
 
 	if (config.animation_fade_out)
 		wlr_scene_node_for_each_buffer(&l->scene->node,
@@ -323,14 +348,19 @@ void layer_animation_next_tick(LayerSurface *l) {
 	double opacity_eased_progress =
 		find_animation_curve_at(animation_passed, OPAFADEIN);
 
-	double opacity =
-		MIN(config.fadein_begin_opacity +
-				opacity_eased_progress * (1.0 - config.fadein_begin_opacity),
-			1.0f);
+	double opacity = MANGO_MIN(config.fadein_begin_opacity +
+								   opacity_eased_progress *
+									   (1.0 - config.fadein_begin_opacity),
+							   1.0f);
 
-	if (config.animation_fade_in)
+	if (config.animation_fade_in) {
+		if (config.blur && !l->noblur && !config.blur_optimized) {
+			wlr_scene_blur_set_strength(l->blur, opacity);
+			wlr_scene_blur_set_alpha(l->blur, opacity);
+		}
 		wlr_scene_node_for_each_buffer(&l->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
+	}
 
 	wlr_scene_node_set_position(&l->scene->node, x, y);
 
@@ -358,6 +388,10 @@ void layer_animation_next_tick(LayerSurface *l) {
 		.height = height,
 	};
 
+	if (config.blur && config.blur_layer && !l->noblur && l->blur)
+		wlr_scene_blur_set_size(l->blur, l->animation.current.width,
+								l->animation.current.height);
+
 	if (animation_passed >= 1.0) {
 		l->animation.running = false;
 		l->need_output_flush = false;
@@ -373,6 +407,10 @@ void init_fadeout_layers(LayerSurface *l) {
 
 	if (!l->mon || !l->scene)
 		return;
+
+	if (l->shield_when_capture) {
+		return;
+	}
 
 	if ((l->animation_type_close &&
 		 strcmp(l->animation_type_close, "none") == 0) ||
@@ -567,8 +605,10 @@ bool layer_draw_frame(LayerSurface *l) {
 	if (config.animations && config.layer_animations && l->animation.running &&
 		!l->noanim) {
 		layer_animation_next_tick(l);
+		layer_draw_shield(l);
 		layer_draw_shadow(l);
 	} else {
+		layer_draw_shield(l);
 		layer_draw_shadow(l);
 		l->need_output_flush = false;
 	}

@@ -7,7 +7,75 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+static void usage(void) {
+	printf("Usage: mmsg <command> [args...]\n\n");
+	printf("One-shot queries (get):\n");
+	printf(
+		"  get version                              Show compositor version\n");
+	printf("  get cursorpos                            Show pointer position + "
+		   "monitor\n");
+	printf("  get keymode                              Show current keymode\n");
+	printf("  get keyboardlayout                       Show current keyboard "
+		   "layout\n");
+	printf("  get last_open_surface [monitor]          Show last open surface "
+		   "(default focused monitor)\n");
+	printf("  get monitor <name>                       Show monitor details\n");
+	printf("  get focusing-client                      Show focused client "
+		   "details\n");
+	printf("  get client <id>                          Show client details by "
+		   "ID\n");
+	printf("  get tag <monitor> <index>                Show tag details "
+		   "(1‑based index)\n");
+	printf("  get all-clients                          List all clients\n");
+	printf("  get all-monitors                         List all monitors\n");
+	printf("  get all-tags                             List all tags (all "
+		   "monitors)\n");
+	printf(
+		"  get tags <monitor>                       List tags for a monitor\n");
+	printf("  dispatch <func>[,arg...] [client,<id>]   Call a compositor "
+		   "function\n");
+	printf("     <func> and arguments are separated by commas.\n");
+	printf("     Add 'client,<id>' at the beginning or end to target a "
+		   "specific client.\n");
+	printf("     Examples:\n");
+	printf("       dispatch togglefloating\n");
+	printf("       dispatch movewin,10,100\n");
+	printf("       dispatch movewin,10,100 client,4\n");
+	printf("Persistent streams (watch):\n");
+	printf(
+		"  watch monitor <name>                     Stream monitor changes\n");
+	printf("  watch focusing-client                    Stream focused client "
+		   "changes\n");
+	printf(
+		"  watch client <id>                        Stream client changes\n");
+	printf("  watch tags <monitor>                     Stream tag changes for "
+		   "a monitor\n");
+	printf("  watch all-monitors                       Stream all monitors "
+		   "changes\n");
+	printf(
+		"  watch all-tags                           Stream all tags changes\n");
+	printf("  watch all-clients                        Stream all clients "
+		   "changes\n");
+	printf(
+		"  watch keymode                            Stream keymode changes\n");
+	printf("  watch keyboardlayout                     Stream keyboard layout "
+		   "changes\n");
+	printf("  watch last_open_surface [monitor]        Stream last open "
+		   "surface changes\n\n");
+	printf("Environment:\n");
+	printf("  MANGO_INSTANCE_SIGNATURE  IPC socket path (set by the "
+		   "compositor)\n\n");
+	printf("Run 'mmsg --help', '-h' or 'help' to see this message.\n");
+}
+
 int main(int argc, char *argv[]) {
+	if (argc >= 2 &&
+		(strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0 ||
+		 strcmp(argv[1], "help") == 0)) {
+		usage();
+		return EXIT_SUCCESS;
+	}
+
 	if (argc < 2) {
 		fprintf(stderr, "Usage: mmsg <command> [args...]\n");
 		fprintf(stderr, "  get <type> ...      one-shot request\n");
@@ -37,7 +105,6 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	// 拼接命令，缓冲区大小 4096 以容纳较长参数
 	char cmd[4096] = {0};
 	int offset = 0;
 	for (int i = 1; i < argc; i++) {
@@ -51,7 +118,6 @@ int main(int argc, char *argv[]) {
 		offset += n;
 	}
 
-	// 添加换行符
 	int n = snprintf(cmd + offset, sizeof(cmd) - offset, "\n");
 	if (n < 0 || n >= (int)(sizeof(cmd) - offset)) {
 		fprintf(stderr, "Error: command too long to append newline.\n");
@@ -59,14 +125,12 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	// 发送命令，使用 MSG_NOSIGNAL 避免 SIGPIPE
 	if (send(sock, cmd, strlen(cmd), MSG_NOSIGNAL) < 0) {
 		perror("send");
 		close(sock);
 		return EXIT_FAILURE;
 	}
 
-	// 将 socket 封装为行缓冲文件流，自动处理 TCP 拆包，按完整行读取
 	FILE *stream = fdopen(sock, "r");
 	if (!stream) {
 		perror("fdopen");
@@ -74,7 +138,6 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	// 按行读取并输出，直到连接关闭（get 模式服务端主动 close）或出错
 	char *line = NULL;
 	size_t len = 0;
 	while (getline(&line, &len, stream) != -1) {
@@ -82,11 +145,10 @@ int main(int argc, char *argv[]) {
 		fflush(stdout);
 	}
 
-	// 检查是否因读取错误退出（而非正常 EOF）
 	if (ferror(stream)) {
 		perror("recv");
 		free(line);
-		fclose(stream); // 关闭 stream 同时关闭 socket
+		fclose(stream);
 		return EXIT_FAILURE;
 	}
 

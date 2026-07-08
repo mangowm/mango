@@ -1,4 +1,4 @@
-#include "wlr_ext_workspace_v1.h"
+#include <wlr/types/wlr_ext_workspace_v1.h>
 
 #define EXT_WORKSPACE_ENABLE_CAPS                                              \
 	EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE |                  \
@@ -148,7 +148,7 @@ static void add_workspace_by_tag(int32_t tag, Monitor *m) {
 	wlr_ext_workspace_handle_v1_set_name(workspace->ext_workspace, name);
 }
 
-void dwl_ext_workspace_printstatus(Monitor *m) {
+void mango_ext_workspace_printstatus(Monitor *m) {
 	struct workspace *w;
 	uint32_t tag_status = 0;
 
@@ -188,10 +188,10 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 	int32_t i;
 
 	if (m->isoverview) {
+		add_workspace_by_tag(0, m);
 		for (i = 1; i <= LENGTH(tags); i++) {
 			remove_workspace_by_tag(i, m);
 		}
-		add_workspace_by_tag(0, m);
 	} else {
 		remove_workspace_by_tag(0, m);
 		for (i = 1; i <= LENGTH(tags); i++) {
@@ -199,7 +199,7 @@ void refresh_monitors_workspaces_status(Monitor *m) {
 		}
 	}
 
-	dwl_ext_workspace_printstatus(m);
+	mango_ext_workspace_printstatus(m);
 }
 
 void workspaces_init() {

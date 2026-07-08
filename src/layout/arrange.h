@@ -20,10 +20,20 @@ void set_size_per(Monitor *m, Client *c) {
 		}
 	}
 
-	if (!found) {
+	if (!found || c->isfloating) {
 		c->master_mfact_per = m->pertag->mfacts[m->pertag->curtag];
 		c->master_inner_per = 1.0f;
 		c->stack_inner_per = 1.0f;
+	}
+
+	if (!c->iscustom_scroller_proportion) {
+		c->scroller_proportion =
+			m->pertag->scroller_default_proportion[m->pertag->curtag];
+	}
+
+	if (!c->iscustom_scroller_proportion_single) {
+		c->scroller_proportion_single =
+			m->pertag->scroller_default_proportion_single[m->pertag->curtag];
 	}
 }
 
@@ -751,6 +761,7 @@ void resize_tile_grid_fair(Client *grabc, bool isdrag, int32_t offsetx,
 
 void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 						  int32_t offsety, uint32_t time, bool isvertical) {
+
 	if (!grabc || grabc->isfullscreen || grabc->ismaximizescreen)
 		return;
 	if (grabc->mon->isoverview)
@@ -772,7 +783,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 
 	Client *stack_head_client = headnode->client;
 
-	if (m->visible_tiling_clients == 1 &&
+	if (m->visible_scroll_tiling_clients == 1 &&
 		!config.scroller_ignore_proportion_single)
 		return;
 
@@ -1117,6 +1128,14 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 			set_size_per(m, c);
 		}
 
+		if (m->is_jump_mode && !c->jump_label_node) {
+			client_add_jump_label_node(c);
+		}
+
+		if (c->group_bar->scene_buffer->node.enabled) {
+			client_check_tab_node_visible(c);
+		}
+
 		if (c->mon == m && (c->isglobal || c->isunglobal)) {
 			c->tags = m->tagset[m->seltags];
 		}
@@ -1212,6 +1231,10 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 	if (!m->wlr_output->enabled)
 		return;
 
+	if (!m->sel) {
+		m->sel = focustop(m);
+	}
+
 	pre_caculate_before_arrange(m, want_animation, from_view, false);
 
 	if (m->isoverview) {
@@ -1225,5 +1248,5 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		checkidleinhibitor(NULL);
 	}
 
-	printstatus();
+	printstatus(IPC_WATCH_ARRANGGE);
 }

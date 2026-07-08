@@ -12,16 +12,16 @@ void handle_foreign_maximize_request(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, foreign_maximize_request);
 	struct wlr_foreign_toplevel_handle_v1_maximized_event *event = data;
 
-	if (c->swallowing || !c->mon)
+	if (c->swallowdby || !c->mon)
 		return;
 
 	if (c->ismaximizescreen && !event->maximized) {
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 		return;
 	}
 
 	if (!c->ismaximizescreen && event->maximized) {
-		setmaximizescreen(c, 1);
+		setmaximizescreen(c, 1, true);
 		return;
 	}
 }
@@ -30,7 +30,7 @@ void handle_foreign_minimize_request(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, foreign_minimize_request);
 	struct wlr_foreign_toplevel_handle_v1_minimized_event *event = data;
 
-	if (c->swallowing || !c->mon)
+	if (c->swallowdby || !c->mon)
 		return;
 
 	if (!c->isminimized && event->minimized) {
@@ -55,16 +55,16 @@ void handle_foreign_fullscreen_request(struct wl_listener *listener,
 	Client *c = wl_container_of(listener, c, foreign_fullscreen_request);
 	struct wlr_foreign_toplevel_handle_v1_fullscreen_event *event = data;
 
-	if (c->swallowing || !c->mon)
+	if (c->swallowdby || !c->mon)
 		return;
 
 	if (c->isfullscreen && !event->fullscreen) {
-		setfullscreen(c, 0);
+		setfullscreen(c, 0, true);
 		return;
 	}
 
 	if (!c->isfullscreen && event->fullscreen) {
-		setfullscreen(c, 1);
+		setfullscreen(c, 1, true);
 		return;
 	}
 }

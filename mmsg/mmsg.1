@@ -1,0 +1,126 @@
+.TH "mmsg" "1" "2026-05-31" "mmsg 0.14.0" "mmsg manual"
+.SH NAME
+mmsg \- send commands to the mango Wayland compositor and receive JSON responses
+.SH SYNOPSIS
+\fBmmsg\fR <command> [\fIargs\fR...]
+.br
+\fBmmsg\fR \-\-help | \-h | help
+.SH DESCRIPTION
+\fBmmsg\fR connects to a running \fBmango\fR(1) compositor via the UNIX domain socket
+specified by the \fIMANGO_INSTANCE_SIGNATURE\fR environment variable. It sends
+the given command and prints the JSON reply to standard output. In \fBwatch\fR
+mode it keeps the connection open and prints a stream of updates as they
+occur.
+.PP
+If \fB\-\-help\fR, \fB\-h\fR or \fBhelp\fR is given, a complete usage summary is printed and
+the program exits with success.
+.SH COMMANDS
+.SS "One\-shot queries (get)"
+All \fBget\fR commands print a single JSON object and then close the connection.
+.TP
+\fBget version\fR
+Return compositor version.
+.TP
+\fBget cursorpos\fR
+Return the global pointer position (\fBx\fR, \fBy\fR) and the monitor under it
+(\fBnull\fR if over no output).
+.TP
+\fBget keymode\fR
+Return current keymode.
+.TP
+\fBget keyboardlayout\fR
+Return current keyboard layout.
+.TP
+\fBget last_open_surface\fR [\fImonitor\fR]
+Return the last open surface (application) for the given monitor.
+If \fImonitor\fR is omitted the focused monitor is used.
+.TP
+\fBget monitor\fR <name>
+Return details of the named monitor.
+.TP
+\fBget focusing\-client\fR
+Return details of the currently focused client.
+.TP
+\fBget client\fR <id>
+Return details of the client with the given numeric ID.
+.TP
+\fBget tag\fR <monitor> <index>
+Return details of a specific tag (1\-based index) on the named monitor.
+.TP
+\fBget all\-clients\fR
+List all clients.
+.TP
+\fBget all\-monitors\fR
+List all monitors.
+.TP
+\fBget all\-tags\fR
+List tags for all monitors.
+.TP
+\fBget tags\fR <monitor>
+List tags for a specific monitor.
+.TP
+\fBdispatch\fR <func>[,arg...] [client,<id>]
+Invoke an internal compositor function.
+The function name and its arguments are separated by commas.
+Optionally add \fBclient,<id>\fR (before or after the function) to target a
+specific client.
+.br
+Examples:
+.RS
+.IP \(bu 2
+\fBmmsg dispatch togglefloating\fR
+.IP \(bu 2
+\fBmmsg dispatch movewin,10,100\fR
+.IP \(bu 2
+\fBmmsg dispatch movewin,10,100 client,4\fR
+.RE
+.SS "Persistent streams (watch)"
+\fBWatch\fR commands keep the connection open and continuously output JSON
+updates. The initial state is sent immediately, followed by updates whenever
+relevant changes occur.
+.TP
+\fBwatch monitor\fR <name>
+Stream updates for the named monitor.
+.TP
+\fBwatch focusing\-client\fR
+Stream updates for the focused client.
+.TP
+\fBwatch client\fR <id>
+Stream updates for the client with the given ID.
+.TP
+\fBwatch tags\fR <monitor>
+Stream tag updates for the named monitor.
+.TP
+\fBwatch all\-monitors\fR
+Stream updates for all monitors.
+.TP
+\fBwatch all\-tags\fR
+Stream updates for all tags.
+.TP
+\fBwatch all\-clients\fR
+Stream updates for all clients.
+.TP
+\fBwatch keymode\fR
+Stream keymode changes.
+.TP
+\fBwatch keyboardlayout\fR
+Stream keyboard layout changes.
+.TP
+\fBwatch last_open_surface\fR [\fImonitor\fR]
+Stream last open surface changes for a specific monitor (or the focused one).
+.SH ENVIRONMENT
+.TP
+\fIMANGO_INSTANCE_SIGNATURE\fR
+Path to the compositor's IPC socket. Set automatically by \fBmango\fR(1).
+If unset, \fBmmsg\fR prints an error and exits.
+.SH EXIT STATUS
+.TP
+\fB0\fR
+Success (or help message printed).
+.TP
+\fBEXIT_FAILURE\fR
+An error occurred (connection refused, send/receive error, etc.).
+.SH SEE ALSO
+\fBmango\fR(1)
+.SH BUGS
+Report issues at the project's issue tracker.

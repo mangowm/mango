@@ -17,8 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
           token: ${{ github.token }}
+
+      - name: Fetch tags for versioned docs
+        run: git fetch origin --tags --depth=1
 
       - name: Checkout website
         uses: actions/checkout@v4
@@ -30,8 +32,35 @@ jobs:
 
       - name: Sync docs
         run: |
-          rm -rf website/apps/web/content/docs
-          cp -r docs website/apps/web/content/docs
+          TARGET=website/apps/web/content/docs
+          rm -rf "$TARGET"
+          mkdir -p "$TARGET"
+
+          # Copy current docs as "(git)"
+          cp -r docs "$TARGET/(git)"
+
+          # Generate versioned docs from last 2 semver tags
+          tags=$(git tag --sort=-v:refname | grep '^v\?[0-9]\+\.[0-9]\+\.[0-9]\+$' | head -2)
+          for tag in $tags; do
+            git worktree add /tmp/docs-"$tag" "$tag" || continue
+            if [ -d "/tmp/docs-$tag/docs" ]; then
+              name="v${tag#v}"
+              cp -r "/tmp/docs-$tag/docs" "$TARGET/$name"
+              jq --arg title "$name" --arg desc "$name release" \
+                '.title = $title | .description = $desc | .root = true' \
+                "$TARGET/$name/meta.json" > "$TARGET/$name/meta.json.tmp" \
+                && mv "$TARGET/$name/meta.json.tmp" "$TARGET/$name/meta.json"
+            fi
+            git worktree remove /tmp/docs-"$tag"
+          done
+
+          # Generate root version index
+          {
+            echo "(git)"
+            for tag in $tags; do
+              echo "v${tag#v}"
+            done
+          } | jq -Rn '[inputs | select(length > 0)] | {pages: .}' > "$TARGET/meta.json"
 
       - name: Commit and push
         working-directory: website

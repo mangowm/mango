@@ -21,7 +21,6 @@ wayland_xmls = [
 	wl_protocol_dir + '/staging/ext-workspace/ext-workspace-v1.xml',
 	wl_protocol_dir + '/staging/tearing-control/tearing-control-v1.xml',
 	'wlr-foreign-toplevel-management-unstable-v1.xml',
-	'dwl-ipc-unstable-v2.xml',
 	'wlr-layer-shell-unstable-v1.xml',
 	'wlr-output-power-management-unstable-v1.xml',
 ]

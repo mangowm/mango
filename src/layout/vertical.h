@@ -58,7 +58,7 @@ void vertical_tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				w = master_surplus_width * c->master_inner_per /
 					master_surplus_ratio;
@@ -137,12 +137,10 @@ void vertical_deck(Monitor *m) {
 		return;
 
 	wl_list_for_each(fc, &clients, link) {
-
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
-	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
 
@@ -156,16 +154,18 @@ void vertical_deck(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < nmasters) {
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + cur_gappoh + mx,
-								 .y = m->w.y + cur_gappov,
-								 .width = (m->w.width - 2 * cur_gappoh - mx) /
-										  (MIN(n, nmasters) - i),
-								 .height = mh},
-				0);
-			mx += c->geom.width;
+			c->master_mfact_per = mfact;
+			int32_t w = (m->w.width - 2 * cur_gappoh - mx) /
+						(MANGO_MIN(n, nmasters) - i);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + cur_gappoh + mx,
+												.y = m->w.y + cur_gappov,
+												.width = w,
+												.height = mh},
+							   0);
+			mx += w;
 		} else {
+			c->master_mfact_per = mfact;
 			client_tile_resize(
 				c,
 				(struct wlr_box){.x = m->w.x + cur_gappoh,
@@ -186,14 +186,13 @@ void vertical_grid(Monitor *m) {
 	int32_t cw, ch;
 	int32_t rows, cols, overrows;
 	Client *c = NULL;
-	int32_t target_gappo =
-		enablegaps ? m->isoverview ? config.overviewgappo : config.gappov : 0;
-	int32_t target_gappi =
-		enablegaps ? m->isoverview ? config.overviewgappi : config.gappiv : 0;
-	float single_width_ratio = m->isoverview ? 0.7 : 0.9;
-	float single_height_ratio = m->isoverview ? 0.8 : 0.9;
+	int32_t target_gappo = enablegaps ? config.gappov : 0;
+	int32_t target_gappi = enablegaps ? config.gappiv : 0;
+	float single_width_ratio = 0.9;
+	float single_height_ratio = 0.9;
+	struct wlr_box target_geom;
 
-	n = m->isoverview ? m->visible_clients : m->visible_fake_tiling_clients;
+	n = m->visible_fake_tiling_clients;
 	if (n == 0)
 		return;
 
@@ -202,15 +201,14 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) ||
-				 ISFAKETILED(c))) {
+				(!client_is_x11_popup(c) || ISFAKETILED(c))) {
 				ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
 				cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
-				c->geom.x = m->w.x + (m->w.width - cw) / 2;
-				c->geom.y = m->w.y + (m->w.height - ch) / 2;
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.x = m->w.x + (m->w.width - cw) / 2;
+				target_geom.y = m->w.y + (m->w.height - ch) / 2;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				return;
 			}
 		}
@@ -224,8 +222,7 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) ||
-				 ISFAKETILED(c))) {
+				(!client_is_x11_popup(c) || ISFAKETILED(c))) {
 				if (i < 2)
 					row_pers[i] =
 						(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
@@ -242,8 +239,7 @@ void vertical_grid(Monitor *m) {
 			if (c->mon != m)
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
-				((m->isoverview && !client_is_x11_popup(c)) ||
-				 ISFAKETILED(c))) {
+				(!client_is_x11_popup(c) || ISFAKETILED(c))) {
 				c->grid_col_idx = 0;
 				c->grid_row_idx = i;
 				c->grid_col_per = 1.0f;
@@ -252,17 +248,17 @@ void vertical_grid(Monitor *m) {
 				// 根据分配的权重动态计算当前窗口的高度
 				ch = avail_h * (row_pers[i] / sum_row);
 
-				c->geom.x = m->w.x + (m->w.width - cw) / 2 + target_gappo;
+				target_geom.x = m->w.x + (m->w.width - cw) / 2 + target_gappo;
 				if (i == 0) {
-					c->geom.y = m->w.y + target_gappo;
+					target_geom.y = m->w.y + target_gappo;
 				} else if (i == 1) {
 					// 第二个窗口的 Y 坐标紧跟第一个窗口下面
 					float ch0 = avail_h * (row_pers[0] / sum_row);
-					c->geom.y = m->w.y + target_gappo + ch0 + target_gappi;
+					target_geom.y = m->w.y + target_gappo + ch0 + target_gappi;
 				}
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				i++;
 			}
 		}
@@ -287,7 +283,7 @@ void vertical_grid(Monitor *m) {
 		if (c->mon != m)
 			continue;
 		if (VISIBLEON(c, m) && !c->isunglobal &&
-			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
+			(!client_is_x11_popup(c) || ISFAKETILED(c))) {
 			int32_t c_idx = i / rows;
 			int32_t r_idx = i % rows;
 			if (r_idx == 0)
@@ -314,7 +310,7 @@ void vertical_grid(Monitor *m) {
 		if (c->mon != m)
 			continue;
 		if (VISIBLEON(c, m) && !c->isunglobal &&
-			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
+			(!client_is_x11_popup(c) || ISFAKETILED(c))) {
 			int32_t c_idx = i / rows;
 			int32_t r_idx = i % rows;
 
@@ -352,11 +348,11 @@ void vertical_grid(Monitor *m) {
 							  ? (m->w.x + m->w.width - target_gappo - fl_cx)
 							  : avail_w * (col_pers[c_idx] / sum_col);
 
-			c->geom.x = (int32_t)fl_cx;
-			c->geom.y = (int32_t)fl_cy;
-			c->geom.width = (int32_t)fl_cw;
-			c->geom.height = (int32_t)fl_ch;
-			client_tile_resize(c, c->geom, 0);
+			target_geom.x = (int32_t)fl_cx;
+			target_geom.y = (int32_t)fl_cy;
+			target_geom.width = (int32_t)fl_cw;
+			target_geom.height = (int32_t)fl_ch;
+			client_tile_resize(c, target_geom, 0);
 			i++;
 		}
 	}

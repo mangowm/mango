@@ -31,7 +31,7 @@ Client *termforwin(Client *w) {
 		return NULL;
 
 	wl_list_for_each(c, &fstack, flink) {
-		if (c->isterm && !c->swallowing && c->pid &&
+		if (c->isterm && !c->swallowdby && c->pid &&
 			isdescprocess(c->pid, w->pid)) {
 			return c;
 		}
@@ -48,9 +48,9 @@ Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title) {
 			continue;
 		}
 
-		if (c->swallowedby) {
-			appid = client_get_appid(c->swallowedby);
-			title = client_get_title(c->swallowedby);
+		if (c->swallowing) {
+			appid = client_get_appid(c->swallowing);
+			title = client_get_title(c->swallowing);
 		} else {
 			appid = client_get_appid(c);
 			title = client_get_title(c);
@@ -91,9 +91,9 @@ setclient_coordinate_center(Client *c, Monitor *tm, struct wlr_box geom,
 	if (!m)
 		return geom;
 
-	uint32_t cbw = check_hit_no_border(c) ? c->bw : 0;
+	uint32_t cbw = c && check_hit_no_border(c) ? c->bw : 0;
 
-	if (!c->no_force_center && m) {
+	if ((!c || !c->no_force_center) && m) {
 		tempbox.x = m->w.x + (m->w.width - geom.width) / 2;
 		tempbox.y = m->w.y + (m->w.height - geom.height) / 2;
 	} else {
@@ -163,291 +163,134 @@ Client *center_tiled_select(Monitor *m) {
 	}
 	return target_c;
 }
-Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating,
-								 bool ignore_align) {
+
+Client *find_client_by_direction(Client *tc, const Arg *arg,
+								 bool findfloating) {
 	Client *c = NULL;
-	Client **tempClients = NULL; // 初始化为 NULL
-	int32_t last = -1;
-
-	// 第一次遍历，计算客户端数量
-	wl_list_for_each(c, &clients, link) {
-		if (c && (findfloating || !c->isfloating) && !c->isunglobal &&
-			(config.focus_cross_monitor || c->mon == tc->mon) &&
-			(c->tags & c->mon->tagset[c->mon->seltags])) {
-			last++;
-		}
-	}
-
-	if (last < 0) {
-		return NULL; // 没有符合条件的客户端
-	}
-
-	// 动态分配内存
-	tempClients = malloc((last + 1) * sizeof(Client *));
-	if (!tempClients) {
-		// 处理内存分配失败的情况
-		return NULL;
-	}
-
-	// 第二次遍历，填充 tempClients
-	last = -1;
-	wl_list_for_each(c, &clients, link) {
-		if (c && (findfloating || !c->isfloating) && !c->isunglobal &&
-			(config.focus_cross_monitor || c->mon == tc->mon) &&
-			(c->tags & c->mon->tagset[c->mon->seltags])) {
-			last++;
-			tempClients[last] = c;
-		}
-	}
-
-	int32_t sel_x = tc->geom.x;
-	int32_t sel_y = tc->geom.y;
-	int64_t distance = LLONG_MAX;
-	int64_t same_monitor_distance = LLONG_MAX;
 	Client *tempFocusClients = NULL;
 	Client *tempSameMonitorFocusClients = NULL;
+	int64_t distance = LLONG_MAX;
+	int64_t same_monitor_distance = LLONG_MAX;
 
-	switch (arg->i) {
-	case UP:
-		if (!ignore_align) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y < sel_y &&
-					tempClients[_i]->geom.x == sel_x &&
-					tempClients[_i]->mon == tc->mon) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
+	int32_t tc_l = tc->geom.x;
+	int32_t tc_r = tc->geom.x + tc->geom.width;
+	int32_t tc_t = tc->geom.y;
+	int32_t tc_b = tc->geom.y + tc->geom.height;
+	int32_t tc_cx = tc_l + tc->geom.width / 2;
+	int32_t tc_cy = tc_t + tc->geom.height / 2;
+
+	for (int32_t step = 0; step < 2; step++) {
+		if (step == 1 && tempFocusClients)
+			break;
+
+		wl_list_for_each(c, &clients, link) {
+			if (!c || !c->mon || c == tc)
+				continue;
+			if (!findfloating && c->isfloating)
+				continue;
+			if (!VISIBLEON(c, c->mon))
+				continue;
+			if (c->isunglobal)
+				continue;
+			if (!config.focus_cross_monitor && c->mon != tc->mon)
+				continue;
+			if (!(c->tags & c->mon->tagset[c->mon->seltags]))
+				continue;
+
+			int32_t c_l = c->geom.x;
+			int32_t c_r = c->geom.x + c->geom.width;
+			int32_t c_t = c->geom.y;
+			int32_t c_b = c->geom.y + c->geom.height;
+			int32_t c_cx = c_l + c->geom.width / 2;
+			int32_t c_cy = c_t + c->geom.height / 2;
+
+			int64_t main_dist = 0;
+			int64_t orth_dist = 0;
+			bool match_dir = false;
+
+			switch (arg->i) {
+			case LEFT:
+				if (c_cx < tc_cx || (c_cx == tc_cx && c_l < tc_l)) {
+					match_dir = true;
+					main_dist = tc_l - c_r;
+					orth_dist = (c_b < tc_t)
+									? (tc_t - c_b)
+									: ((c_t > tc_b) ? (c_t - tc_b) : 0);
 				}
+				break;
+			case RIGHT:
+				if (c_cx > tc_cx || (c_cx == tc_cx && c_l > tc_l)) {
+					match_dir = true;
+					main_dist = c_l - tc_r;
+					orth_dist = (c_b < tc_t)
+									? (tc_t - c_b)
+									: ((c_t > tc_b) ? (c_t - tc_b) : 0);
+				}
+				break;
+			case UP:
+				if (c_cy < tc_cy || (c_cy == tc_cy && c_t < tc_t)) {
+					match_dir = true;
+					main_dist = tc_t - c_b;
+					orth_dist = (c_r < tc_l)
+									? (tc_l - c_r)
+									: ((c_l > tc_r) ? (c_l - tc_r) : 0);
+				}
+				break;
+			case DOWN:
+				if (c_cy > tc_cy || (c_cy == tc_cy && c_t > tc_t)) {
+					match_dir = true;
+					main_dist = c_t - tc_b;
+					orth_dist = (c_r < tc_l)
+									? (tc_l - c_r)
+									: ((c_l > tc_r) ? (c_l - tc_r) : 0);
+				}
+				break;
+			default:
+				continue;
+			}
+
+			if (!match_dir)
+				continue;
+
+			if (step == 0) {
+				if (c->mon != tc->mon)
+					continue;
+				if (!tc->mon->isoverview &&
+					!client_is_in_same_stack(tc, c, NULL))
+					continue;
+				if (orth_dist != 0)
+					continue;
+			}
+
+			int64_t penalty = 0;
+			if (main_dist < 0) {
+				penalty = 10000000000LL;
+				main_dist = -main_dist;
+			}
+
+			int64_t no_overlap_penalty = 0;
+			if (orth_dist > 0) {
+				no_overlap_penalty = 10000000LL;
+			}
+
+			int64_t tmp_distance = penalty + no_overlap_penalty +
+								   (main_dist * main_dist) +
+								   (orth_dist * orth_dist);
+
+			if (tmp_distance < distance) {
+				distance = tmp_distance;
+				tempFocusClients = c;
+			}
+			if (c->mon == tc->mon && tmp_distance < same_monitor_distance) {
+				same_monitor_distance = tmp_distance;
+				tempSameMonitorFocusClients = c;
 			}
 		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y < sel_y &&
-					tempClients[_i]->mon == tc->mon &&
-					client_is_in_same_stack(tc, tempClients[_i], NULL)) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y < sel_y) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		break;
-	case DOWN:
-		if (!ignore_align) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y > sel_y &&
-					tempClients[_i]->geom.x == sel_x &&
-					tempClients[_i]->mon == tc->mon) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y > sel_y &&
-					tempClients[_i]->mon == tc->mon &&
-					client_is_in_same_stack(tc, tempClients[_i], NULL)) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.y > sel_y) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		break;
-	case LEFT:
-		if (!ignore_align) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x < sel_x &&
-					tempClients[_i]->geom.y == sel_y &&
-					tempClients[_i]->mon == tc->mon) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x < sel_x &&
-					tempClients[_i]->mon == tc->mon &&
-					client_is_in_same_stack(tc, tempClients[_i], NULL)) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x < sel_x) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		break;
-	case RIGHT:
-		if (!ignore_align) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x > sel_x &&
-					tempClients[_i]->geom.y == sel_y &&
-					tempClients[_i]->mon == tc->mon) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x > sel_x &&
-					tempClients[_i]->mon == tc->mon &&
-					client_is_in_same_stack(tc, tempClients[_i], NULL)) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		if (!tempFocusClients) {
-			for (int32_t _i = 0; _i <= last; _i++) {
-				if (tempClients[_i]->geom.x > sel_x) {
-					int32_t dis_x = tempClients[_i]->geom.x - sel_x;
-					int32_t dis_y = tempClients[_i]->geom.y - sel_y;
-					int64_t tmp_distance =
-						dis_x * dis_x + dis_y * dis_y; // 计算距离
-					if (tmp_distance < distance) {
-						distance = tmp_distance;
-						tempFocusClients = tempClients[_i];
-					}
-					if (tempClients[_i]->mon == tc->mon &&
-						tmp_distance < same_monitor_distance) {
-						same_monitor_distance = tmp_distance;
-						tempSameMonitorFocusClients = tempClients[_i];
-					}
-				}
-			}
-		}
-		break;
 	}
 
-	free(tempClients); // 释放内存
-	if (tempSameMonitorFocusClients) {
+	if (tempSameMonitorFocusClients)
 		return tempSameMonitorFocusClients;
-	} else {
-		return tempFocusClients;
-	}
+	return tempFocusClients;
 }
 
 Client *direction_select(const Arg *arg) {
@@ -462,10 +305,7 @@ Client *direction_select(const Arg *arg) {
 		return NULL;
 	}
 
-	return find_client_by_direction(
-		tc, arg, true,
-		(is_scroller_layout(selmon) || is_centertile_layout(selmon)) &&
-			!selmon->isoverview);
+	return find_client_by_direction(tc, arg, true);
 }
 
 /* We probably should change the name of this, it sounds like
