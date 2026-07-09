@@ -36,16 +36,21 @@ jobs:
           rm -rf "$TARGET"
           mkdir -p "$TARGET"
 
-          # Copy current docs as "(git)"
+          # Copy current docs as "(git)", excluding patches dir
           cp -r docs "$TARGET/(git)"
+          rm -rf "$TARGET/(git)/patches"
 
           # Generate versioned docs from last 2 semver tags
           tags=$(git tag --sort=-v:refname | grep '^v\?[0-9]\+\.[0-9]\+\.[0-9]\+$' | head -2)
           for tag in $tags; do
+            name="v${tag#v}"
             git worktree add /tmp/docs-"$tag" "$tag" || continue
             if [ -d "/tmp/docs-$tag/docs" ]; then
-              name="v${tag#v}"
               cp -r "/tmp/docs-$tag/docs" "$TARGET/$name"
+              # Overlay any patches for this version
+              if [ -d "docs/patches/$name" ]; then
+                cp -r "docs/patches/$name"/* "$TARGET/$name/"
+              fi
               jq --arg title "$name" --arg desc "$name release" \
                 '.title = $title | .description = $desc | .root = true' \
                 "$TARGET/$name/meta.json" > "$TARGET/$name/meta.json.tmp" \
