@@ -390,7 +390,10 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			while (end >= token && (*end == ' ' || *end == '\t'))
 				*end-- = '\0';
 			tokens[token_count++] = token;
-			token = strtok_r(NULL, ",", &saveptr);
+			if (token_count >= 5)
+				token = saveptr;
+			else
+				token = strtok_r(NULL, ",", &saveptr);
 		}
 
 		Arg arg = {0};
