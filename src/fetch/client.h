@@ -391,10 +391,13 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 
 	uint32_t id = sc->mon->pertag->ltidxs[sc->mon->pertag->curtag]->id;
 
-	if (id != SCROLLER && id != VERTICAL_SCROLLER && id != TILE &&
-		id != VERTICAL_TILE && id != DECK && id != VERTICAL_DECK &&
-		id != CENTER_TILE && id != RIGHT_TILE)
-		return false;
+	if ((id != SCROLLER && id != VERTICAL_SCROLLER) && tc->mon != selmon &&
+		(tc->isfullscreen || tc->ismaximizescreen))
+		return true;
+
+	if (id == MONOCLE) {
+		return true;
+	}
 
 	if (id == SCROLLER || id == VERTICAL_SCROLLER) {
 		Client *source_stack_head = scroll_get_stack_head_client(sc);
@@ -434,11 +437,11 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 }
 
 Client *get_focused_stack_client(Client *sc, Client *custom_focus_client) {
-	if (!sc || sc->isfloating)
+	if (!sc || sc->isfloating || !selmon)
 		return sc;
 
 	Client *tc = NULL;
-	Client *fc = custom_focus_client ? custom_focus_client : focustop(sc->mon);
+	Client *fc = custom_focus_client ? custom_focus_client : selmon->sel;
 
 	if (fc->isfloating || sc->isfloating)
 		return sc;
