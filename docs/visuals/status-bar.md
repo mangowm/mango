@@ -5,8 +5,6 @@ description: Configure Waybar for mangowm.
 
 ## Module Configuration
 
-mangowm is compatible with Waybar's `ext/workspaces` module (Wayland standard) or the `dwl/tags` module. We recommend `ext/workspaces` for the best experience.
-
 ### `config.jsonc`
 
 Add the following to your Waybar configuration:
