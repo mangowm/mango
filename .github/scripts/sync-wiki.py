@@ -24,7 +24,7 @@ def collect_all_files() -> list[tuple[Path, str]]:
         files.append((src, "Home" if src.stem == "index" else src.stem))
 
     for subdir in sorted(DOCS_DIR.iterdir()):
-        if subdir.is_dir():
+        if subdir.is_dir() and subdir.name != "patches":
             for src in from_dir(subdir):
                 files.append((src, src.stem))
 
