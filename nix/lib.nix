@@ -6,7 +6,6 @@ let
     foldl
     generators
     partition
-    removeAttrs
     ;
 
   inherit (lib.strings)
