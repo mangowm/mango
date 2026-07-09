@@ -681,7 +681,7 @@ int32_t restore_minimized(const Arg *arg) {
 			show_hide_client(c);
 			setborder_color(c);
 			arrange(c->mon, false, false);
-			focusclient(c, 0);
+			focusclient(c, 1);
 			warp_cursor(c);
 			return 0;
 		}

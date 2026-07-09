@@ -1433,7 +1433,7 @@ bool switch_scratchpad_client_state(Client *c) {
 			c->tags = get_tags_first_tag(selmon->tagset[selmon->seltags]);
 			resize(c, c->float_geom, 0);
 			arrange(selmon, false, false);
-			focusclient(c, true);
+			focusclient(c, 1);
 			c->scratchpad_switching_mon = false;
 			return true;
 		} else {
@@ -1446,7 +1446,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		(c->mon->tagset[c->mon->seltags] & c->tags) == 0) {
 		c->tags = c->mon->tagset[c->mon->seltags];
 		arrange(c->mon, false, false);
-		focusclient(c, true);
+		focusclient(c, 1);
 		return true;
 	} else if (c->is_in_scratchpad && c->is_scratchpad_show &&
 			   (c->mon->tagset[c->mon->seltags] & c->tags) != 0) {
@@ -3791,7 +3791,7 @@ void destroylock(SessionLock *lock, int32_t unlock) {
 		wlr_scene_node_set_enabled(&locked_bg->node, false);
 	}
 
-	focusclient(focustop(selmon), 0);
+	focusclient(focustop(selmon), 1);
 	motionnotify(0, NULL, 0, 0, 0, 0);
 
 destroy:
@@ -6738,7 +6738,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		}
 
 		if (nextfocus) {
-			focusclient(nextfocus, 0);
+			focusclient(nextfocus, 1);
 		}
 
 		if (!nextfocus && selmon->isoverview) {
