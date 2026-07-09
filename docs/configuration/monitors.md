@@ -113,7 +113,7 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 - you must set `env=WLR_RENDERER,vulkan` before mango starts.
 
 #### for example(must relogin once after setting):
-```conf
+```ini
 env=WLR_RENDERER,vulkan
 monitorrule=name:eDP-1,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0,scale:1,vrr:0,rr:0:hdr:1
 ```
