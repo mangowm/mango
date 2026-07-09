@@ -130,6 +130,10 @@
 #define TAGMATCH(C, M)                                                         \
 	((C) && (M) && (C)->mon == (M) && (((C)->tags & (M)->tagset[(M)->seltags])))
 
+#define ISMODEKEYCODE(KEY)                                                     \
+	((KEY) == 133 || (KEY) == 37 || (KEY) == 64 || (KEY) == 50 ||              \
+	 (KEY) == 134 || (KEY) == 105 || (KEY) == 108 || (KEY) == 62)
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
 #define TAGMASK ((1 << LENGTH(tags)) - 1)
@@ -4310,14 +4314,11 @@ void keypress(struct wl_listener *listener, void *data) {
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	// ov tab mode detect moe key release
-	if (config.ov_tab_mode && !selmon->is_jump_mode && !locked &&
-		group == kb_group && event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
-		(keycode == 133 || keycode == 37 || keycode == 64 || keycode == 50 ||
-		 keycode == 134 || keycode == 105 || keycode == 108 || keycode == 62) &&
-		selmon && selmon->sel) {
-		if (selmon->isoverview && selmon->sel) {
-			toggleoverview(&(Arg){.i = 1});
-		}
+	if (config.ov_tab_mode && selmon && !selmon->is_jump_mode &&
+		selmon->isoverview && selmon->sel && !locked && group == kb_group &&
+		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+		ISMODEKEYCODE(keycode)) {
+		toggleoverview(&(Arg){.i = 1});
 	}
 
 	if (config.cursor_hide_on_keypress && !cursor_hidden &&

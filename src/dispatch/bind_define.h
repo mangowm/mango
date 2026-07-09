@@ -1909,6 +1909,11 @@ int32_t toggleoverview(const Arg *arg) {
 	}
 
 	view(&(Arg){.ui = target}, false);
+
+	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode) {
+		focusstack(&(Arg){.i = 1});
+	}
+
 	fix_mon_tagset_from_overview(selmon);
 	refresh_monitors_workspaces_status(selmon);
 
