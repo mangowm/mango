@@ -5437,6 +5437,8 @@ run(char *startup_cmd) {
 		die("startup: display_add_socket_auto");
 	setenv("WAYLAND_DISPLAY", socket, 1);
 
+	set_env_display();
+
 	/* Start the backend. This will enumerate outputs and inputs, become the
 	 * DRM master, etc */
 	if (!wlr_backend_start(backend))
@@ -6027,7 +6029,7 @@ void setup(void) {
 	}
 	init_baked_points();
 
-	set_env();
+	set_env_without_display();
 
 	int32_t drm_fd, i;
 	int32_t sig[] = {SIGCHLD, SIGINT,
