@@ -1022,6 +1022,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "focus_first_tiled") == 0) {
+		func = focus_first_tiled;
 	} else if (strcmp(func_name, "groupfocus") == 0) {
 		func = groupfocus;
 		(*arg).i = parse_circle_direction(arg_value);
