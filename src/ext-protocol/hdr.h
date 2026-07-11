@@ -1,4 +1,6 @@
 #include <drm_fourcc.h>
+#include <glob.h>
+#include <libdisplay-info/info.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -59,6 +61,60 @@ static bool output_supports_hdr(const struct wlr_output *output,
 	return !r;
 }
 
+/* hdr:2 — fill the image description's mastering data from the panel's
+ * EDID so it tone-maps against its real limits instead of guessing. */
+static bool output_fill_edid_hdr_caps(Monitor *m,
+									  struct wlr_output_image_description *desc) {
+	char pattern[128];
+	snprintf(pattern, sizeof(pattern), "/sys/class/drm/card*-%s/edid",
+			 m->wlr_output->name);
+	glob_t g;
+	if (glob(pattern, 0, NULL, &g) != 0 || g.gl_pathc == 0) {
+		globfree(&g);
+		return false;
+	}
+	FILE *f = fopen(g.gl_pathv[0], "rb");
+	globfree(&g);
+	if (!f)
+		return false;
+	uint8_t edid[4096];
+	size_t len = fread(edid, 1, sizeof(edid), f);
+	fclose(f);
+	if (len < 128)
+		return false;
+
+	struct di_info *info = di_info_parse_edid(edid, len);
+	if (!info)
+		return false;
+
+	bool filled = false;
+	const struct di_hdr_static_metadata *hsm =
+		di_info_get_hdr_static_metadata(info);
+	if (hsm && hsm->desired_content_max_luminance > 0) {
+		desc->mastering_luminance.min = hsm->desired_content_min_luminance;
+		desc->mastering_luminance.max = hsm->desired_content_max_luminance;
+		desc->max_cll = hsm->desired_content_max_luminance;
+		desc->max_fall = hsm->desired_content_max_frame_avg_luminance > 0
+							 ? hsm->desired_content_max_frame_avg_luminance
+							 : hsm->desired_content_max_luminance;
+		filled = true;
+	}
+
+	const struct di_color_primaries *cp =
+		di_info_get_default_color_primaries(info);
+	if (cp && cp->has_primaries) {
+		desc->mastering_display_primaries = (struct wlr_color_primaries){
+			.red = {cp->primary[0].x, cp->primary[0].y},
+			.green = {cp->primary[1].x, cp->primary[1].y},
+			.blue = {cp->primary[2].x, cp->primary[2].y},
+			.white = {cp->default_white.x, cp->default_white.y},
+		};
+		filled = true;
+	}
+	di_info_destroy(info);
+	return filled;
+}
+
 void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 					   bool silent) {
 	if (enabled && !output_supports_hdr(m->wlr_output, NULL))
@@ -81,6 +137,11 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 		.primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
 		.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
 	};
+	if (m->hdr_enable >= 2 && output_fill_edid_hdr_caps(m, &desc) && !silent)
+		wlr_log(WLR_DEBUG,
+				"HDR mastering data from EDID for %s: max %.0f avg %.0f min %.4f",
+				m->wlr_output->name, desc.mastering_luminance.max,
+				desc.max_fall, desc.mastering_luminance.min);
 	wlr_output_state_set_image_description(os, &desc);
 }
 

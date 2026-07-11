@@ -2192,7 +2192,7 @@ bool parse_option(Config *config, char *key, char *value) {
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "hdr") == 0) {
-					rule->hdr = CLAMP_INT(atoi(val), 0, 1);
+					rule->hdr = CLAMP_INT(atoi(val), 0, 2);
 				} else if (strcmp(key, "disable") == 0) {
 					rule->disable = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "custom") == 0) {
