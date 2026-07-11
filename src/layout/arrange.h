@@ -1225,7 +1225,7 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
 
-	if (!m)
+	if (!m || m->iscleanuping)
 		return;
 
 	if (!m->wlr_output->enabled)
