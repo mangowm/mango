@@ -113,18 +113,21 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 			if (!silent)
 				wlr_log(WLR_INFO,
 						"No 10 bit color formats supported, HDR disabled.");
-			if (!output_set_render_format(m, output_formats_8bit,
-										  ARRAY_SIZE(output_formats_8bit),
-										  state))
+			hdr_succeeded = output_set_render_format(
+				m, output_formats_8bit, ARRAY_SIZE(output_formats_8bit), state);
+			if (!hdr_succeeded) {
 				if (!silent)
-					wlr_log(WLR_ERROR, "No 8 bit color formats either!");
+					wlr_log(WLR_ERROR, "No 8 bit color formats supported!");
+			}
 		}
 	} else {
 		// 明确要求8位或自动降级
-		if (!output_set_render_format(m, output_formats_8bit,
-									  ARRAY_SIZE(output_formats_8bit), state))
+		hdr_succeeded = output_set_render_format(
+			m, output_formats_8bit, ARRAY_SIZE(output_formats_8bit), state);
+		if (!hdr_succeeded) {
 			if (!silent)
 				wlr_log(WLR_ERROR, "No 8 bit color formats supported!");
+		}
 	}
 
 	output_enable_hdr(m, state, hdr_succeeded, silent);
