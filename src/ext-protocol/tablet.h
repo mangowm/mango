@@ -278,8 +278,12 @@ void tablettoolmotion(struct TabletTool *tool, bool change_x, bool change_y,
 
 	motionnotify(0, NULL, 0, 0, 0, 0);
 
-	if (config.sloppyfocus)
+	if (config.sloppyfocus) {
+		Monitor *oldmon = selmon;
 		selmon = xytomon(cursor->x, cursor->y);
+		if (oldmon != selmon)
+			printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
+	}
 
 	xytonode(cursor->x, cursor->y, &surface, &c, NULL, NULL, &sx, &sy);
 	if (cursor_mode == CurPressed && !seat->drag &&

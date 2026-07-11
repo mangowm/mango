@@ -134,6 +134,10 @@
 #define TAGMATCH(C, M)                                                         \
 	((C) && (M) && (C)->mon == (M) && (((C)->tags & (M)->tagset[(M)->seltags])))
 
+#define ISMODEKEYCODE(KEY)                                                     \
+	((KEY) == 133 || (KEY) == 37 || (KEY) == 64 || (KEY) == 50 ||              \
+	 (KEY) == 134 || (KEY) == 105 || (KEY) == 108 || (KEY) == 62)
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
 #define TAGMASK ((1 << LENGTH(tags)) - 1)
@@ -490,6 +494,7 @@ typedef struct {
 
 typedef struct {
 	struct wlr_keyboard_group *wlr_group;
+	struct wlr_keyboard *virtual_keyboard;
 
 	int32_t nsyms;
 	const xkb_keysym_t *keysyms; /* invalid if nsyms == 0 */
@@ -1065,6 +1070,7 @@ static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
 static struct wl_list mons;
 static Monitor *selmon;
+static struct wlr_scene_output_layout *scene_layout;
 static struct wl_list touch_groups;
 
 static bool emulating_pointer_from_touch = false;
@@ -1097,7 +1103,7 @@ static struct wl_event_source *hide_cursor_source;
 static struct wl_event_source *keep_idle_inhibit_source;
 static bool cursor_hidden = false;
 static bool tag_combo = false;
-static const char *cli_config_path = NULL;
+static char cli_config_path[1024] = {0};
 static int active_capture_count = 0;
 static bool cli_debug_log = false;
 static KeyMode keymode = {
@@ -1467,7 +1473,7 @@ bool switch_scratchpad_client_state(Client *c) {
 			c->tags = get_tags_first_tag(selmon->tagset[selmon->seltags]);
 			resize(c, c->float_geom, 0);
 			arrange(selmon, false, false);
-			focusclient(c, true);
+			focusclient(c, 1);
 			c->scratchpad_switching_mon = false;
 			return true;
 		} else {
@@ -1480,7 +1486,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		(c->mon->tagset[c->mon->seltags] & c->tags) == 0) {
 		c->tags = c->mon->tagset[c->mon->seltags];
 		arrange(c->mon, false, false);
-		focusclient(c, true);
+		focusclient(c, 1);
 		return true;
 	} else if (c->is_in_scratchpad && c->is_scratchpad_show &&
 			   (c->mon->tagset[c->mon->seltags] & c->tags) != 0) {
@@ -3555,14 +3561,7 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_output_state_set_enabled(&m->pending, true);
 	}
 
-	if (m->hdr_enable) {
-		output_state_setup_hdr(m, false, &m->pending);
-	}
-
-	// 虚拟显示器在加入显示器链前必须先配置，否则会崩溃
-	if (wlr_output_is_headless(m->wlr_output)) {
-		mango_output_commit(m);
-	}
+	mango_output_commit(m);
 
 	wl_list_insert(&mons, &m->link);
 
@@ -3605,16 +3604,22 @@ void createmon(struct wl_listener *listener, void *data) {
 	 * display, which Wayland clients can see to find out information about the
 	 * output (such as DPI, scale factor, manufacturer, etc).
 	 */
+	struct wlr_output_layout_output *layout_output;
 	m->scene_output = wlr_scene_output_create(scene, wlr_output);
 	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
-		wlr_output_layout_add_auto(output_layout, wlr_output);
+		layout_output = wlr_output_layout_add_auto(output_layout, wlr_output);
 	else
-		wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
+		layout_output =
+			wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
 
-	// 无头显示器不不要支持hdr
-	if (!wlr_output_is_headless(m->wlr_output)) {
-		mango_scene_output_commit(m->scene_output, &m->pending);
+	wlr_scene_output_layout_add_output(scene_layout, layout_output,
+									   m->scene_output);
+
+	if (m->hdr_enable) {
+		output_state_setup_hdr(m, false, &m->pending);
 	}
+
+	mango_scene_output_commit(m->scene_output, &m->pending);
 
 	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
@@ -3937,7 +3942,7 @@ void destroylock(SessionLock *lock, int32_t unlock) {
 		wlr_scene_node_set_enabled(&locked_bg->node, false);
 	}
 
-	focusclient(focustop(selmon), 0);
+	focusclient(focustop(selmon), 1);
 	motionnotify(0, NULL, 0, 0, 0, 0);
 
 destroy:
@@ -4461,14 +4466,11 @@ void keypress(struct wl_listener *listener, void *data) {
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	// ov tab mode detect moe key release
-	if (config.ov_tab_mode && !selmon->is_jump_mode && !locked &&
-		group == kb_group && event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
-		(keycode == 133 || keycode == 37 || keycode == 64 || keycode == 50 ||
-		 keycode == 134 || keycode == 105 || keycode == 108 || keycode == 62) &&
-		selmon && selmon->sel) {
-		if (selmon->isoverview && selmon->sel) {
-			toggleoverview(&(Arg){.i = 1});
-		}
+	if (config.ov_tab_mode && selmon && !selmon->is_jump_mode &&
+		selmon->isoverview && selmon->sel && !locked && group == kb_group &&
+		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+		ISMODEKEYCODE(keycode)) {
+		toggleoverview(&(Arg){.i = 1});
 	}
 
 	if (config.cursor_hide_on_keypress && !cursor_hidden &&
@@ -4486,7 +4488,8 @@ void keypress(struct wl_listener *listener, void *data) {
 		tag_combo = false;
 	}
 
-	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0) {
+	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0 &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
 		group->keysyms = syms;
 		group->keycode = keycode;
@@ -5065,8 +5068,12 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 		/* Update selmon (even while dragging a window) */
-		if (config.sloppyfocus)
+		if (config.sloppyfocus) {
+			Monitor *oldmon = selmon;
 			selmon = xytomon(cursor->x, cursor->y);
+			if (oldmon != selmon)
+				printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
+		}
 	}
 
 	/* Find the client under the pointer and send the event along. */
@@ -5621,6 +5628,8 @@ run(char *startup_cmd) {
 	if (!socket)
 		die("startup: display_add_socket_auto");
 	setenv("WAYLAND_DISPLAY", socket, 1);
+
+	set_env_display();
 
 	/* Start the backend. This will enumerate outputs and inputs, become the
 	 * DRM master, etc */
@@ -6212,7 +6221,7 @@ void setup(void) {
 	}
 	init_baked_points();
 
-	set_env();
+	set_env_without_display();
 
 	int32_t drm_fd, i;
 	int32_t sig[] = {SIGCHLD, SIGINT,
@@ -6398,6 +6407,7 @@ void setup(void) {
 	 * the backend. */
 	wl_list_init(&mons);
 	wl_signal_add(&backend->events.new_output, &new_output);
+	scene_layout = wlr_scene_attach_output_layout(scene, output_layout);
 
 	/* Set up our client lists and the xdg-shell. The xdg-shell is a
 	 * Wayland protocol which is used for application windows. For more
@@ -7198,7 +7208,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		}
 
 		if (nextfocus) {
-			focusclient(nextfocus, 0);
+			focusclient(nextfocus, 1);
 		}
 
 		if (!nextfocus && selmon->isoverview) {
@@ -7597,6 +7607,7 @@ void virtualkeyboard(struct wl_listener *listener, void *data) {
 	wlr_seat_set_capabilities(seat,
 							  seat->capabilities | WL_SEAT_CAPABILITY_KEYBOARD);
 	KeyboardGroup *group = createkeyboardgroup();
+	group->virtual_keyboard = &kb->keyboard;
 	/* Set the keymap to match the group keymap */
 	wlr_keyboard_set_keymap(&kb->keyboard, group->wlr_group->keyboard.keymap);
 	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
@@ -7848,7 +7859,7 @@ int32_t main(int32_t argc, char *argv[]) {
 			printf("mango " VERSION "\n");
 			return EXIT_SUCCESS;
 		} else if (c == 'c') {
-			cli_config_path = optarg;
+			snprintf(cli_config_path, sizeof(cli_config_path), "%s", optarg);
 		} else if (c == 'p') {
 			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
 		} else {

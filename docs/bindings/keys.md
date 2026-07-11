@@ -167,6 +167,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `spawn_shell` | `cmd` | Execute shell command (supports pipes `\|`). |
 | `spawn_on_empty` | `cmd,tagnumber` | Open command on empty tag. |
 | `reload_config` | - | Hot-reload configuration. |
+| `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. |
 | `quit` | - | Exit mangowm. |
 | `toggleoverview` | - | Toggle overview mode. |
 | `togglejump` | - | Toggle overview with jump mode. |

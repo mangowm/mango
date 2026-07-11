@@ -608,8 +608,6 @@ monocle(Monitor *m) {
 		geom.height = m->w.height - 2 * cur_gappov;
 		client_tile_resize(c, geom, 0);
 	}
-	if ((c = focustop(m)))
-		wlr_scene_node_raise_to_top(&c->scene->node);
 }
 
 // 网格布局窗口大小和位置计算

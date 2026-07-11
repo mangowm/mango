@@ -286,7 +286,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    Clone and install the specific version required (check README for latest version).
 
    ```bash
-   git clone -b 0.19.3 https://gitlab.freedesktop.org/wlroots/wlroots.git
+   git clone -b 0.20.2 https://gitlab.freedesktop.org/wlroots/wlroots.git
    cd wlroots
    meson build -Dprefix=/usr
    sudo ninja -C build install
@@ -296,7 +296,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    This library handles the visual effects.
 
    ```bash
-   git clone -b 0.4.1 https://github.com/wlrfx/scenefx.git
+   git clone -b 0.5.0 https://github.com/wlrfx/scenefx.git
    cd scenefx
    meson build -Dprefix=/usr
    sudo ninja -C build install

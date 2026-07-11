@@ -43,6 +43,7 @@ int32_t focusstack(const Arg *arg);
 int32_t groupfocus(const Arg *arg);
 int32_t chvt(const Arg *arg);
 int32_t reload_config(const Arg *arg);
+int32_t load_config_file(const Arg *arg);
 int32_t smartmovewin(const Arg *arg);
 int32_t smartresizewin(const Arg *arg);
 int32_t centerwin(const Arg *arg);

@@ -1215,6 +1215,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "reload_config") == 0) {
 		func = reload_config;
+	} else if (strcmp(func_name, "load_config_file") == 0) {
+		func = load_config_file;
+		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "tag") == 0) {
 		func = tag;
 		(*arg).ui = 1 << (atoi(arg_value) - 1);
@@ -1332,9 +1335,20 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	return func;
 }
 
-void set_env() {
+void set_env_without_display() {
 	for (int32_t i = 0; i < config.env_count; i++) {
+		if (strcmp(config.env[i]->type, "DISPLAY") == 0) {
+			continue; // Skip setting DISPLAY
+		}
 		setenv(config.env[i]->type, config.env[i]->value, 1);
+	}
+}
+
+void set_env_display() {
+	for (int32_t i = 0; i < config.env_count; i++) {
+		if (strcmp(config.env[i]->type, "DISPLAY") == 0) {
+			setenv("DISPLAY", config.env[i]->value, 1);
+		}
 	}
 }
 
@@ -3098,7 +3112,7 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	if (file_path[0] == '.' && file_path[1] == '/') {
 		// Relative path
 
-		if (cli_config_path) {
+		if (cli_config_path[0]) {
 			char *config_path = strdup(cli_config_path);
 			char *config_dir = dirname(config_path);
 			snprintf(full_path, sizeof(full_path), "%s/%s", config_dir,
@@ -3718,7 +3732,7 @@ void set_value_default() {
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;
 	config.capslock = 0;
-	config.ov_tab_mode = 1;
+	config.ov_tab_mode = 0;
 	config.ov_no_resize = 1;
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
@@ -4026,7 +4040,7 @@ bool parse_config(void) {
 
 	create_config_keymap();
 
-	if (cli_config_path) {
+	if (cli_config_path[0]) {
 		snprintf(filename, sizeof(filename), "%s", cli_config_path);
 	} else {
 		// 获取当前用户家目录
@@ -4092,10 +4106,7 @@ void reapply_monitor_rules(void) {
 		if (!m->wlr_output->enabled)
 			continue;
 
-		for (ji = 0; ji < config.monitor_rules_count; ji++) {
-			if (config.monitor_rules_count < 1)
-				break;
-
+		for (ji = config.monitor_rules_count - 1; ji >= 0; ji--) {
 			mr = &config.monitor_rules[ji];
 
 			if (monitor_matches_rule(m, mr)) {
@@ -4353,7 +4364,8 @@ void reset_option(void) {
 	handlecursoractivity();
 	reset_keyboard_layout();
 	reset_blur_params();
-	set_env();
+	set_env_without_display();
+	set_env_display();
 	run_exec();
 
 	reapply_cursor_style();

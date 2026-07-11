@@ -105,8 +105,6 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 | `allow_tearing` | `0` | Global tearing control: `0` (Disable), `1` (Enable), `2` (Fullscreen only). |
 
 ## HDR
-> HDR is only supported in wl-only branch, since it requires the `vulkan` renderer but scenefx is not supported yet.
-
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |

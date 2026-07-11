@@ -680,7 +680,7 @@ int32_t restore_minimized(const Arg *arg) {
 			show_hide_client(c);
 			setborder_color(c);
 			arrange(c->mon, false, false);
-			focusclient(c, 0);
+			focusclient(c, 1);
 			warp_cursor(c);
 			return 0;
 		}
@@ -1908,6 +1908,11 @@ int32_t toggleoverview(const Arg *arg) {
 	}
 
 	view(&(Arg){.ui = target}, false);
+
+	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode) {
+		focusstack(&(Arg){.i = 1});
+	}
+
 	fix_mon_tagset_from_overview(selmon);
 	refresh_monitors_workspaces_status(selmon);
 
@@ -2245,5 +2250,11 @@ int32_t focusid(const Arg *arg) {
 		client_focus_group_member(c);
 
 	client_active(c);
+	return 0;
+}
+
+int32_t load_config_file(const Arg *arg) {
+	snprintf(cli_config_path, sizeof(cli_config_path), "%s", arg->v);
+	reload_config(arg);
 	return 0;
 }
