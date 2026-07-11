@@ -607,6 +607,7 @@ struct Monitor {
 	bool is_vrr_opening;
 	bool hdr_enable;
 	bool prefer_disable;
+	bool need_init_hdr;
 };
 
 typedef struct {
@@ -3464,6 +3465,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->carousel_anim_dir = 0;
 	m->vrr_global_enable = false;
 	m->is_vrr_opening = false;
+	m->need_init_hdr = false;
 
 	m->hdr_enable = false;
 	m->prefer_disable = false;
@@ -3523,6 +3525,10 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_output_state_set_enabled(&m->pending, true);
 	}
 
+	if (m->hdr_enable) {
+		m->need_init_hdr = true;
+	}
+
 	mango_output_commit(m);
 
 	wl_list_insert(&mons, &m->link);
@@ -3577,12 +3583,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_scene_output_layout_add_output(scene_layout, layout_output,
 									   m->scene_output);
 
-	if (m->hdr_enable) {
-		output_state_setup_hdr(m, false, &m->pending);
-	}
-
-	mango_scene_output_commit(m->scene_output, &m->pending);
-
 	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	if (config.blur) {
@@ -3598,6 +3598,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	for (i = 1; i <= LENGTH(tags); i++) {
 		add_workspace_by_tag(i, m);
 	}
+
+	wlr_output_schedule_frame(m->wlr_output);
 
 	printstatus(IPC_WATCH_ARRANGGE);
 }

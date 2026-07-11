@@ -4108,14 +4108,11 @@ void reapply_monitor_rules(void) {
 		}
 
 		if (m->hdr_enable) {
-			output_state_setup_hdr(m, false, &m->pending);
+			m->need_init_hdr = true;
 		}
 
-		if (!(mango_scene_output_commit(m->scene_output, &m->pending))) {
-			if (m->hdr_enable) {
-				output_state_setup_hdr(m, true, &m->pending);
-			}
-		}
+		mango_scene_output_commit(m->scene_output, &m->pending);
+
 		wlr_output_effective_resolution(m->wlr_output, &m->m.width,
 										&m->m.height);
 	}
