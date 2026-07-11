@@ -1943,7 +1943,7 @@ int32_t disable_monitor(const Arg *arg) {
 		if (match_monitor_spec(arg->v, m)) {
 			wlr_output_state_set_enabled(&m->pending, false);
 			mango_output_commit(m);
-			m->only_sleep = 0;
+			m->only_sleep = 1;
 			updatemons(NULL, NULL);
 			break;
 		}
