@@ -3444,7 +3444,8 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_output_state_set_enabled(&m->pending, true);
 	}
 
-	mango_output_commit(m);
+	wlr_output_commit_state(m->wlr_output, &m->pending);
+	wlr_output_state_finish(&m->pending);
 
 	wl_list_insert(&mons, &m->link);
 
@@ -3472,21 +3473,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	// apply tag rule
 	parse_tagrule(m);
 
-	/* The xdg-protocol specifies:
-	 *
-	 * If the fullscreened surface is not opaque, the compositor must make
-	 * sure that other screen content not part of the same surface tree (made
-	 * up of subsurfaces, popups or similarly coupled surfaces) are not
-	 * visible below the fullscreened surface.
-	 *
-	 */
-
-	/* Adds this to the output layout in the order it was configured.
-	 *
-	 * The output layout utility automatically adds a wl_output global to the
-	 * display, which Wayland clients can see to find out information about the
-	 * output (such as DPI, scale factor, manufacturer, etc).
-	 */
 	struct wlr_output_layout_output *layout_output;
 	m->scene_output = wlr_scene_output_create(scene, wlr_output);
 	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
@@ -3502,7 +3488,11 @@ void createmon(struct wl_listener *listener, void *data) {
 		output_state_setup_hdr(m, false, &m->pending);
 	}
 
-	mango_scene_output_commit(m->scene_output, &m->pending);
+	if (!(mango_scene_output_commit(m->scene_output, &m->pending))) {
+		if (m->hdr_enable) {
+			output_state_setup_hdr(m, true, &m->pending);
+		}
+	}
 
 	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
