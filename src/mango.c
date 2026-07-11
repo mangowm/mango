@@ -6658,22 +6658,36 @@ void touchdown(struct wl_listener *listener, void *data) {
 	}
 	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
 										 event->y, &lx, &ly);
+	wlr_cursor_warp_absolute(cursor, &event->touch->base, event->x, event->y);
 
 	t->touch_id = event->touch_id;
 	t->start_x = lx;
 	t->start_y = ly;
+	wl_list_insert(&tg->touch_points, &t->link);
 
 	Monitor *oldmon = selmon;
 	selmon = xytomon(lx, ly);
 	if (oldmon != selmon)
 		printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
 
+	struct wlr_pointer_button_event button_event = {
+		.pointer = (struct wlr_pointer *)event->touch,
+		.time_msec = event->time_msec,
+		.button = BTN_LEFT,
+		.state = WL_POINTER_BUTTON_STATE_PRESSED};
+
+	if (wl_list_length(&tg->touch_points) == 1 &&
+		handle_buttonpress(&button_event)) {
+		hidecursor(NULL);
+		emulating_pointer_from_touch = true;
+		emulated_pointer_touch_id = event->touch_id;
+		return;
+	}
+
 	/* Find the client under the pointer and send the event along. */
 	xytonode(lx, ly, &surface, &c, NULL, NULL, &sx, &sy);
 	t->start_surface_x = sx;
 	t->start_surface_y = sy;
-	wl_list_insert(&tg->touch_points, &t->link);
-
 	if (surface != NULL && wlr_surface_accepts_touch(surface, seat)) {
 		if (c)
 			focusclient(c, 0);
@@ -6689,17 +6703,11 @@ void touchdown(struct wl_listener *listener, void *data) {
 		emulating_pointer_from_touch = true;
 		emulated_pointer_touch_id = event->touch_id;
 
-		wlr_cursor_warp_closest(cursor, &event->touch->base, lx, ly);
 		dx = lx - cursor->x;
 		dy = ly - cursor->y;
 		motionnotify(event->time_msec, &event->touch->base, dx, dy, dx, dy);
-
-		struct wlr_pointer_button_event button_event = {
-			.pointer = (struct wlr_pointer *)event->touch,
-			.time_msec = event->time_msec,
-			.button = BTN_LEFT,
-			.state = WL_POINTER_BUTTON_STATE_PRESSED};
-		buttonpress(listener, &button_event);
+		wlr_seat_pointer_notify_button(seat, button_event.time_msec,
+									   button_event.button, button_event.state);
 	}
 }
 
@@ -6727,7 +6735,8 @@ void touchup(struct wl_listener *listener, void *data) {
 				.time_msec = event->time_msec,
 				.button = BTN_LEFT,
 				.state = WL_POINTER_BUTTON_STATE_RELEASED};
-			buttonpress(listener, &button_event);
+			buttonpress(NULL, &button_event);
+			hidecursor(NULL);
 
 			emulating_pointer_from_touch = false;
 		}
@@ -6774,12 +6783,14 @@ void touchmotion(struct wl_listener *listener, void *data) {
 
 	wlr_cursor_absolute_to_layout_coords(cursor, &event->touch->base, event->x,
 										 event->y, &lx, &ly);
+	wlr_cursor_warp_absolute(cursor, &event->touch->base, event->x, event->y);
 
 	if (emulating_pointer_from_touch) {
 		if (emulated_pointer_touch_id == event->touch_id) {
 			dx = lx - cursor->x;
 			dy = ly - cursor->y;
 			motionnotify(event->time_msec, &event->touch->base, dx, dy, dx, dy);
+			hidecursor(NULL);
 		}
 		return;
 	}
