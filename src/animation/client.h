@@ -1404,6 +1404,9 @@ bool client_apply_focus_opacity(Client *c) {
 }
 
 bool client_draw_frame(Client *c) {
+
+	bool need_more_frame = false;
+
 	if (!c || !client_surface(c)->mapped)
 		return false;
 
@@ -1411,6 +1414,7 @@ bool client_draw_frame(Client *c) {
 		return client_apply_focus_opacity(c);
 
 	if (config.animations && c->animation.running) {
+		need_more_frame = true;
 		client_animation_next_tick(c);
 	} else {
 		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
@@ -1420,5 +1424,5 @@ bool client_draw_frame(Client *c) {
 		client_apply_clip(c, 1.0);
 		c->need_output_flush = false;
 	}
-	return client_apply_focus_opacity(c);
+	return need_more_frame || client_apply_focus_opacity(c);
 }
