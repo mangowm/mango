@@ -2740,6 +2740,11 @@ void closemon(Monitor *m) {
 	 * move closed monitor's clients to the focused one */
 	Client *c = NULL;
 	int32_t i = 0, nmons = wl_list_length(&mons);
+
+	if (m->isoverview) {
+		toggleoverview(&(Arg){.i = 1});
+	}
+
 	if (!nmons) {
 		selmon = NULL;
 	} else if (m == selmon) {
