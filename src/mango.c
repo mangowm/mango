@@ -3432,9 +3432,15 @@ void createmon(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	if (!custom_monitor_mode)
-		wlr_output_state_set_mode(&pending,
-								  wlr_output_preferred_mode(wlr_output));
+	if (!custom_monitor_mode) {
+		struct wlr_output_mode *preferred_mode =
+			wlr_output_preferred_mode(wlr_output);
+		if (preferred_mode) {
+			wlr_output_state_set_mode(&pending, preferred_mode);
+		} else {
+			wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+		}
+	}
 
 	// ===================================================
 	// 构建最终的输出状态，包含 HDR，并通过 scene 提交
