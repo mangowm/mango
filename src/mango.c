@@ -6705,6 +6705,7 @@ void touchdown(struct wl_listener *listener, void *data) {
 		wlr_seat_touch_notify_down(seat, surface, event->time_msec,
 								   event->touch_id, sx, sy);
 		emulating_pointer_from_touch = false;
+		cursor_mode = CurNormal;
 		return;
 	}
 
