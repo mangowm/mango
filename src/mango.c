@@ -2756,6 +2756,11 @@ void closemon(Monitor *m) {
 	 * move closed monitor's clients to the focused one */
 	Client *c = NULL;
 	int32_t i = 0, nmons = wl_list_length(&mons);
+
+	if (m->isoverview) {
+		toggleoverview(&(Arg){.i = 1});
+	}
+
 	if (!nmons) {
 		selmon = NULL;
 	} else if (m == selmon) {
@@ -3437,8 +3442,6 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 }
 
 void createmon(struct wl_listener *listener, void *data) {
-	/* This event is raised by the backend when a new output (aka a display or
-	 * monitor) becomes available. */
 	struct wlr_output *wlr_output = data;
 	const ConfigMonitorRule *r;
 	uint32_t i;
@@ -3469,8 +3472,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->carousel_anim_dir = 0;
 	m->vrr_global_enable = false;
 	m->is_vrr_opening = false;
-	m->need_init_hdr = false;
-
 	m->hdr_enable = false;
 	m->prefer_disable = false;
 
@@ -3489,12 +3490,14 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->is_in_hotarea = 0;
 	m->m.x = INT32_MAX;
 	m->m.y = INT32_MAX;
+
+	// 临时 pending 状态，用于匹配规则时暂存设置
+	struct wlr_output_state pending;
+	wlr_output_state_init(&pending);
 	float scale = 1;
 	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
-
-	wlr_output_state_init(&m->pending);
-	wlr_output_state_set_scale(&m->pending, scale);
-	wlr_output_state_set_transform(&m->pending, rr);
+	wlr_output_state_set_scale(&pending, scale);
+	wlr_output_state_set_transform(&pending, rr);
 
 	for (ji = 0; ji < config.monitor_rules_count; ji++) {
 		if (config.monitor_rules_count < 1)
@@ -3506,37 +3509,102 @@ void createmon(struct wl_listener *listener, void *data) {
 			m->m.x = r->x == INT32_MAX ? INT32_MAX : r->x;
 			m->m.y = r->y == INT32_MAX ? INT32_MAX : r->y;
 
-			if (apply_rule_to_state(m, r, &m->pending)) {
+			if (apply_rule_to_state(m, r, &pending)) {
 				custom_monitor_mode = true;
 			}
 			break; // 只应用第一个匹配规则
 		}
 	}
 
-	if (!custom_monitor_mode)
-		wlr_output_state_set_mode(&m->pending,
-								  wlr_output_preferred_mode(wlr_output));
+	if (!custom_monitor_mode) {
+		struct wlr_output_mode *preferred_mode =
+			wlr_output_preferred_mode(wlr_output);
+		if (preferred_mode) {
+			wlr_output_state_set_mode(&pending, preferred_mode);
+		} else {
+			wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+		}
+	}
 
-	/* Set up event listeners */
-	LISTEN(&wlr_output->events.frame, &m->frame, rendermon);
-	LISTEN(&wlr_output->events.destroy, &m->destroy, cleanupmon);
-	LISTEN(&wlr_output->events.request_state, &m->request_state,
-		   requestmonstate);
+	// ===================================================
+	// 构建最终的输出状态，包含 HDR，并通过 scene 提交
+	// ===================================================
+	struct wlr_output_state state;
+	wlr_output_state_init(&state);
 
+	// 启用/禁用
 	if (m->prefer_disable) {
-		wlr_output_state_set_enabled(&m->pending, false);
+		wlr_output_state_set_enabled(&state, false);
 	} else {
-		wlr_output_state_set_enabled(&m->pending, true);
+		wlr_output_state_set_enabled(&state, true);
 	}
 
+	// 模式设置
+	if (pending.committed & WLR_OUTPUT_STATE_MODE) {
+		if (pending.mode_type == WLR_OUTPUT_STATE_MODE_FIXED) {
+			wlr_output_state_set_mode(&state, pending.mode);
+		} else if (pending.mode_type == WLR_OUTPUT_STATE_MODE_CUSTOM) {
+			wlr_output_state_set_custom_mode(&state, pending.custom_mode.width,
+											 pending.custom_mode.height,
+											 pending.custom_mode.refresh);
+		}
+	} else {
+		// 兜底,使用首选模式
+		struct wlr_output_mode *pref = wlr_output_preferred_mode(wlr_output);
+		if (pref)
+			wlr_output_state_set_mode(&state, pref);
+	}
+
+	// 缩放、变换
+	if (pending.committed & WLR_OUTPUT_STATE_SCALE)
+		wlr_output_state_set_scale(&state, pending.scale);
+	if (pending.committed & WLR_OUTPUT_STATE_TRANSFORM)
+		wlr_output_state_set_transform(&state, pending.transform);
+
+	// 自适应同步 (VRR)
+	if (pending.committed & WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED)
+		wlr_output_state_set_adaptive_sync_enabled(
+			&state, pending.adaptive_sync_enabled);
+
+	// HDR 设置
 	if (m->hdr_enable) {
-		m->need_init_hdr = true;
+		output_state_setup_hdr(m, false, &state);
 	}
 
-	mango_output_commit(m);
+	// 创建 scene_output（如果尚未创建）
+	m->scene_output = wlr_scene_output_create(scene, wlr_output);
 
+	// 通过 scene 构建最终提交状态（初始化 swapchain）
+	struct wlr_scene_output_state_options opts = {
+		.swapchain = NULL, // 让 scene 自动创建
+		.color_transform = NULL,
+	};
+
+	wlr_scene_output_build_state(m->scene_output, &state, &opts);
+
+	wlr_output_commit_state(wlr_output, &state);
+
+	wlr_output_state_finish(&state);
+	wlr_output_state_finish(&pending);
+
+	// 加入布局
+	struct wlr_output_layout_output *layout_output;
+	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
+		layout_output = wlr_output_layout_add_auto(output_layout, wlr_output);
+	else
+		layout_output =
+			wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
+
+	wlr_scene_output_layout_add_output(scene_layout, layout_output,
+									   m->scene_output);
+
+	// 获取有效分辨率
+	wlr_output_effective_resolution(wlr_output, &m->m.width, &m->m.height);
+
+	// 加入全局 monitor 链表
 	wl_list_insert(&mons, &m->link);
 
+	// 初始化 Pertag 等
 	m->pertag = calloc(1, sizeof(Pertag));
 	for (int i = 0; i < LENGTH(tags) + 1; i++)
 		m->pertag->scroller_state[i] = NULL;
@@ -3558,36 +3626,8 @@ void createmon(struct wl_listener *listener, void *data) {
 		m->pertag->ltidxs[i] = &layouts[0];
 	}
 
-	// apply tag rule
+	// 应用 tag rule
 	parse_tagrule(m);
-
-	/* The xdg-protocol specifies:
-	 *
-	 * If the fullscreened surface is not opaque, the compositor must make
-	 * sure that other screen content not part of the same surface tree (made
-	 * up of subsurfaces, popups or similarly coupled surfaces) are not
-	 * visible below the fullscreened surface.
-	 *
-	 */
-
-	/* Adds this to the output layout in the order it was configured.
-	 *
-	 * The output layout utility automatically adds a wl_output global to the
-	 * display, which Wayland clients can see to find out information about the
-	 * output (such as DPI, scale factor, manufacturer, etc).
-	 */
-	struct wlr_output_layout_output *layout_output;
-	m->scene_output = wlr_scene_output_create(scene, wlr_output);
-	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
-		layout_output = wlr_output_layout_add_auto(output_layout, wlr_output);
-	else
-		layout_output =
-			wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
-
-	wlr_scene_output_layout_add_output(scene_layout, layout_output,
-									   m->scene_output);
-
-	wlr_output_effective_resolution(m->wlr_output, &m->m.width, &m->m.height);
 
 	if (config.blur) {
 		m->blur = wlr_scene_optimized_blur_create(&scene->tree, 0, 0);
@@ -3595,6 +3635,8 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_scene_node_reparent(&m->blur->node, layers[LyrBlur]);
 		wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 	}
+
+	// ext workspace group
 	m->ext_group = wlr_ext_workspace_group_handle_v1_create(
 		ext_manager, EXT_WORKSPACE_ENABLE_CAPS);
 	wlr_ext_workspace_group_handle_v1_output_enter(m->ext_group, m->wlr_output);
@@ -3603,7 +3645,13 @@ void createmon(struct wl_listener *listener, void *data) {
 		add_workspace_by_tag(i, m);
 	}
 
-	wlr_output_schedule_frame(m->wlr_output);
+	updatemons(NULL, NULL);
+
+	// 设置监听器
+	LISTEN(&wlr_output->events.frame, &m->frame, rendermon);
+	LISTEN(&wlr_output->events.destroy, &m->destroy, cleanupmon);
+	LISTEN(&wlr_output->events.request_state, &m->request_state,
+		   requestmonstate);
 
 	printstatus(IPC_WATCH_ARRANGGE);
 }
