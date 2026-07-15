@@ -150,6 +150,7 @@ static cJSON *build_client_json(Client *c) {
 	cJSON_AddStringToObject(obj, "monitor",
 							c->mon ? c->mon->wlr_output->name : "");
 	cJSON_AddItemToObject(obj, "tags", tags_mask_to_array(c->tags));
+	cJSON_AddBoolToObject(obj, "is_xwayland", c->type == X11 ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowing", c->swallowing ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowedby", c->swallowdby ? true : false);
 	cJSON_AddBoolToObject(obj, "is_group", c->group_prev || c->group_next);
