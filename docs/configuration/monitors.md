@@ -175,28 +175,27 @@ Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash app
 ## Power Management
 
 You can control monitor power using the `mmsg` IPC tool.
-> Notice: This command does not remove the monitor, it only turns it off.
-> if you want completely remove monitor, just use `wlr-randr`
+> Notice: This sleep command does not remove the monitor, it only turns the power off.
 
 ```bash
-# Turn off
-mmsg dispatch disable_monitor,eDP-1
+# Turn power off
+mmsg dispatch sleep_monitor,eDP-1
 
-# Turn on
-mmsg dispatch enable_monitor,eDP-1
+# Turn power on
+mmsg dispatch wakeup_monitor,eDP-1
 
-# Toggle
-mmsg dispatch toggle_monitor,eDP-1
+# Toggle power
+mmsg dispatch sleep_toggle_monitor,eDP-1
 ```
 
 You can also use `wlr-randr` for monitor management:
 
 ```bash
 # remove a monitor
-wlr-randr --output eDP-1 --off
+mmsg dispatch disable_monitor,eDP-1
 
 # add a monitor
-wlr-randr --output eDP-1 --on
+mmsg dispatch enable_monitor,eDP-1
 
 # Show all monitors spec
 wlr-randr
