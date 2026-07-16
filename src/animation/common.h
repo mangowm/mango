@@ -197,7 +197,7 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 			return false;
 		}
 
-		// etain the original data pointer (e.g., Client*) to prevent event dispatching/focus acquisition from failing.
+		// retain the original data pointer (e.g., Client*) to prevent event dispatching/focus acquisition from failing.
 		snapshot_buffer->node.data = scene_buffer->node.data;
 
 		wlr_scene_buffer_set_dest_size(snapshot_buffer, scene_buffer->dst_width,
