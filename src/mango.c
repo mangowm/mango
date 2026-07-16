@@ -91,7 +91,11 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
+#ifndef __OpenBSD__
 #include <wordexp.h>
+#else
+#include <glob.h>
+#endif
 #include <xkbcommon/xkbcommon.h>
 #ifdef XWAYLAND
 #include <X11/Xlib.h>
@@ -607,6 +611,7 @@ struct Monitor {
 	bool is_vrr_opening;
 	bool hdr_enable;
 	bool prefer_disable;
+	bool need_init_hdr;
 };
 
 typedef struct {

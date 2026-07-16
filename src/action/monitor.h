@@ -13,6 +13,11 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 	if (!wlr_scene_output_build_state(scene_output, state, NULL))
 		return false;
 
+	if (m->need_init_hdr) {
+		output_state_setup_hdr(m, false, state);
+		m->need_init_hdr = false;
+	}
+
 	if (frame_allow_tearing) {
 		state->tearing_page_flip = true;
 	} else {
