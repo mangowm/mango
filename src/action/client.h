@@ -1,5 +1,5 @@
 static void client_swap_layout_properties(Client *c1, Client *c2) {
-	// Grid 属性交换
+	// grid property swap
 	double grid_col_per = c1->grid_col_per;
 	double grid_row_per = c1->grid_row_per;
 	int32_t grid_col_idx = c1->grid_col_idx;
@@ -15,7 +15,7 @@ static void client_swap_layout_properties(Client *c1, Client *c2) {
 	c2->grid_col_idx = grid_col_idx;
 	c2->grid_row_idx = grid_row_idx;
 
-	// Master / Stack 属性交换
+	// master / stack property swap
 	double master_inner_per = c1->master_inner_per;
 	double master_mfact_per = c1->master_mfact_per;
 	double stack_inner_per = c1->stack_inner_per;
