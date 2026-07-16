@@ -173,12 +173,12 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 				!!wlr_subsurface_try_from_wlr_surface(scene_surface->surface);
 		}
 
-		// 绑定销毁回调监听，随包装节点销毁而释放内存
+		// bind a destruction callback listener to free memory when the wrapper node is destroyed
 		meta->destroy.notify = handle_snapshot_meta_destroy;
 		wl_signal_add(&wrapper->node.events.destroy, &meta->destroy);
 		wrapper->node.data = meta;
 
-		// 将真正的 buffer 挂靠在 wrapper 下面（相对坐标0,0）
+		// attach the real buffer underneath the wrapper (relative coordinates 0,0)
 		struct wlr_scene_buffer *snapshot_buffer =
 			wlr_scene_buffer_create(wrapper, NULL);
 		if (snapshot_buffer == NULL) {
@@ -186,7 +186,7 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 			return false;
 		}
 
-		// 保留原生的 data 指针（如 Client*），防止事件派发/焦点获取失效
+		// etain the original data pointer (e.g., Client*) to prevent event dispatching/focus acquisition from failing.
 		snapshot_buffer->node.data = scene_buffer->node.data;
 
 		wlr_scene_buffer_set_dest_size(snapshot_buffer, scene_buffer->dst_width,
