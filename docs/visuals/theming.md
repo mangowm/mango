@@ -14,6 +14,7 @@ Control the sizing of window borders and gaps.
 | `gappiv` | `5` | Vertical inner gap. |
 | `gappoh` | `10` | Horizontal outer gap (between windows and screen edges). |
 | `gappov` | `10` | Vertical outer gap. |
+| `tab_bar_height` | `50` | Height of the tab bar for monocle layout. |
 
 ## Colors
 
@@ -51,6 +52,20 @@ You can also color-code windows based on their state:
 | Overlay | `overlaycolor` | `0x14a57cff` |
 
 > **Tip:** For scratchpad window sizing, see [Scratchpad](/docs/window-management/scratchpad) configuration.
+
+### Overview Jump Mode
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `text_decorate_fg_color` | `0xc4939dff` | label text color. |
+| `text_decorate_bg_color` | `0x201b14ff` | label background color.|
+| `text_decorate_focus_fg_color` | `0x201b14ff` | label text color for focus. |
+| `text_decorate_focus_bg_color` | `0xc4939dff` | label background color for focus.|
+| `text_decorate_border_color` | `0x8BAA9Bff` | label border color.|
+| `text_decorate_border_width` | `4` | label border width.|
+| `text_decorate_corner_radius` | `5` | label corner radius.|
+| `text_decorate_padding_x` | `10` | label horizontal padding.|
+| `text_decorate_padding_y` | `10` | label vertical padding.|
+| `text_decorate_font_desc` | `monospace Bold 16` | label font set.|
 
 ## Cursor Theme
 

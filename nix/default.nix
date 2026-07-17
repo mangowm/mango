@@ -3,8 +3,10 @@
   libX11,
   libinput,
   libxcb,
+  libdrm,
   libxkbcommon,
   pcre2,
+  pango,
   cjson,
   pixman,
   pkg-config,
@@ -54,6 +56,7 @@ stdenv.mkDerivation {
       libxcb
       libxkbcommon
       pcre2
+      pango
       cjson
       pixman
       wayland
@@ -61,6 +64,7 @@ stdenv.mkDerivation {
       wlroots_0_19
       scenefx
       libGL
+      libdrm
     ]
     ++ lib.optionals enableXWayland [
       libX11

@@ -160,11 +160,26 @@ void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
 	if (pl)
 		*pl = l;
 
-	if (selmon && selmon->isoverview && (!l || layer_ignores_focus(l))) {
+	if (selmon && selmon->isoverview && config.ov_no_resize) {
 		ovc = xytoclient(x, y);
-		if (pc)
-			*pc = ovc;
-		if (psurface && ovc)
-			*psurface = client_surface(ovc);
+
+		bool is_below = false;
+		if (l && l->layer_surface) {
+			is_below = (l->layer_surface->current.layer ==
+							ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND ||
+						l->layer_surface->current.layer ==
+							ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM);
+		}
+
+		if (ovc && (!l || layer_ignores_focus(l) || is_below)) {
+			if (pc)
+				*pc = ovc;
+
+			if (psurface)
+				*psurface = ovc ? client_surface(ovc) : NULL;
+
+			if (pl && ovc)
+				*pl = NULL;
+		}
 	}
 }

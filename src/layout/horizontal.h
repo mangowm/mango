@@ -62,7 +62,7 @@ void tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -179,7 +179,7 @@ void right_tile(Monitor *m) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -345,7 +345,7 @@ void center_tile(Monitor *m) {
 
 		if (i < nmasters) {
 			// 主区域窗口
-			r = MIN(n, nmasters) - i;
+			r = MANGO_MIN(n, nmasters) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -500,16 +500,13 @@ void deck(Monitor *m) {
 		return;
 
 	wl_list_for_each(fc, &clients, link) {
-
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
 			break;
 	}
 
-	// Calculate master width using mfact from pertag
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
 										: m->pertag->mfacts[m->pertag->curtag];
 
-	// Calculate master width including outer gaps
 	if (n > nmasters)
 		mw = nmasters ? round((m->w.width - 2 * cur_gappoh) * mfact) : 0;
 	else
@@ -521,16 +518,15 @@ void deck(Monitor *m) {
 			continue;
 		if (i < nmasters) {
 			c->master_mfact_per = mfact;
-			// Master area clients
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + cur_gappoh,
-								 .y = m->w.y + cur_gappov + my,
-								 .width = mw,
-								 .height = (m->w.height - 2 * cur_gappov - my) /
-										   (MIN(n, nmasters) - i)},
-				0);
-			my += c->geom.height;
+			int32_t h = (m->w.height - 2 * cur_gappov - my) /
+						(MANGO_MIN(n, nmasters) - i);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + cur_gappoh,
+												.y = m->w.y + cur_gappov + my,
+												.width = mw,
+												.height = h},
+							   0);
+			my += h;
 		} else {
 			// Stack area clients
 			c->master_mfact_per = mfact;
@@ -549,32 +545,70 @@ void deck(Monitor *m) {
 	}
 }
 
-void // 17
-monocle(Monitor *m) {
-	Client *c = NULL;
+void monocle(Monitor *m) {
+	Client *c, *fc;
 	struct wlr_box geom;
-
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
+	int32_t cur_gapiv = enablegaps ? m->gappiv : 0;
+	int32_t cur_gapih = enablegaps ? m->gappih : 0;
 
-	cur_gappoh = config.smartgaps && m->visible_fake_tiling_clients == 1
-					 ? 0
-					 : cur_gappoh;
-	cur_gappov = config.smartgaps && m->visible_fake_tiling_clients == 1
-					 ? 0
-					 : cur_gappov;
+	if (config.smartgaps && m->visible_fake_tiling_clients == 1) {
+		cur_gappov = cur_gappoh = cur_gapiv = cur_gapih = 0;
+	}
 
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+	int n = m->visible_fake_tiling_clients;
+	if (n == 0)
+		return;
+
+	wl_list_for_each(c, &fstack, flink) {
+		if (c->iskilling || c->isunglobal || !ISFAKETILED(c))
 			continue;
+		if (VISIBLEON(c, m)) {
+			fc = c;
+			break;
+		}
+	}
+
+	if (n == 1) {
 		geom.x = m->w.x + cur_gappoh;
 		geom.y = m->w.y + cur_gappov;
 		geom.width = m->w.width - 2 * cur_gappoh;
 		geom.height = m->w.height - 2 * cur_gappov;
-		client_tile_resize(c, geom, 0);
+		client_tile_resize(fc, geom, 0);
+		monocle_set_focus(fc, true);
+		return;
 	}
-	if ((c = focustop(m)))
-		wlr_scene_node_raise_to_top(&c->scene->node);
+
+	int titlebar_height = config.tab_bar_height;
+	int title_y = m->w.y + cur_gappov;
+	int main_y = title_y + titlebar_height + cur_gapiv;
+	int main_height =
+		m->w.height - 2 * cur_gappov - 2 * cur_gapiv - titlebar_height;
+
+	int title_area_width = m->w.width - 2 * cur_gappoh;
+	int tw = (title_area_width - (n - 1) * cur_gapih) / n;
+	int title_x = m->w.x + cur_gappoh;
+
+	wl_list_for_each(c, &clients, link) {
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+			continue;
+
+		if (c == fc) {
+			monocle_set_focus(c, true);
+		} else {
+			monocle_set_focus(c, false);
+		}
+
+		geom.x = m->w.x + cur_gappoh;
+		geom.y = main_y;
+		geom.width = m->w.width - 2 * cur_gappoh;
+		geom.height = main_height;
+		client_tile_resize(c, geom, 0);
+
+		global_draw_titlebar(c, title_x, title_y, tw, titlebar_height);
+		title_x += tw + cur_gapih;
+	}
 }
 
 // 网格布局窗口大小和位置计算
@@ -588,6 +622,7 @@ void grid(Monitor *m) {
 	int32_t target_gappi = enablegaps ? config.gappih : 0;
 	float single_width_ratio = 0.9;
 	float single_height_ratio = 0.9;
+	struct wlr_box target_geom;
 
 	n = m->visible_fake_tiling_clients;
 
@@ -603,11 +638,11 @@ void grid(Monitor *m) {
 				 ISFAKETILED(c))) {
 				cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
 				ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
-				c->geom.x = m->w.x + (m->w.width - cw) / 2;
-				c->geom.y = m->w.y + (m->w.height - ch) / 2;
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.x = m->w.x + (m->w.width - cw) / 2;
+				target_geom.y = m->w.y + (m->w.height - ch) / 2;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				return;
 			}
 		}
@@ -651,16 +686,16 @@ void grid(Monitor *m) {
 				cw = avail_w * (col_pers[i] / sum_col);
 
 				if (i == 0) {
-					c->geom.x = m->w.x + target_gappo;
+					target_geom.x = m->w.x + target_gappo;
 				} else if (i == 1) {
 					// 第二个窗口的 X 坐标紧跟第一个窗口后面
 					float cw0 = avail_w * (col_pers[0] / sum_col);
-					c->geom.x = m->w.x + target_gappo + cw0 + target_gappi;
+					target_geom.x = m->w.x + target_gappo + cw0 + target_gappi;
 				}
-				c->geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-				c->geom.width = cw;
-				c->geom.height = ch;
-				client_tile_resize(c, c->geom, 0);
+				target_geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0);
 				i++;
 			}
 		}
@@ -757,11 +792,11 @@ void grid(Monitor *m) {
 							  ? (m->w.y + m->w.height - target_gappo - fl_cy)
 							  : avail_h * (row_pers[r_idx] / sum_row);
 
-			c->geom.x = (int32_t)fl_cx;
-			c->geom.y = (int32_t)fl_cy;
-			c->geom.width = (int32_t)fl_cw;
-			c->geom.height = (int32_t)fl_ch;
-			client_tile_resize(c, c->geom, 0);
+			target_geom.x = (int32_t)fl_cx;
+			target_geom.y = (int32_t)fl_cy;
+			target_geom.width = (int32_t)fl_cw;
+			target_geom.height = (int32_t)fl_ch;
+			client_tile_resize(c, target_geom, 0);
 			i++;
 		}
 	}

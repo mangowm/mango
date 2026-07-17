@@ -48,10 +48,13 @@ static void finish_exchange_arrange_and_focus(Client *c1, Client *c2,
 	}
 	wl_list_remove(&c2->flink);
 	wl_list_insert(&c1->flink, &c2->flink);
+
+	if (config.warpcursor)
+		warp_cursor(c1);
 }
 
 void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
-	if (!ISSCROLLTILED(c))
+	if (!ISFAKETILED(c))
 		return;
 
 	if (!c->isfullscreen && !c->ismaximizescreen) {
@@ -92,4 +95,22 @@ void client_pending_force_kill(Client *c) {
 	if (!c)
 		return;
 	kill(c->pid, SIGKILL);
+}
+
+void client_add_text_node(Client *c) {
+	c->text_node = mango_text_node_create(c->scene, config.textdata);
+	wlr_scene_node_lower_to_bottom(&c->text_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, false);
+}
+
+void client_add_titlebar_node(Client *c) {
+	MangoNodeData *mangonodedata = ecalloc(1, sizeof(MangoNodeData));
+	mangonodedata->node_data = c;
+	mangonodedata->type = MANGO_TITLE_NODE;
+
+	c->titlebar_node = mango_titlebar_node_create(
+		mangonodedata, layers[LyrDecorate], config.textdata, 0, 0);
+	wlr_scene_node_lower_to_bottom(&c->titlebar_node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&c->titlebar_node->scene_buffer->node, false);
+	mango_titlebar_node_update(c->titlebar_node, client_get_title(c), 1.0);
 }

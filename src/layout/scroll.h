@@ -284,6 +284,10 @@ void scroller(Monitor *m) {
 	uint32_t tag = m->pertag->curtag;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
+	float scroller_default_proportion_single =
+		m->pertag->scroller_default_proportion_single[tag];
+	int32_t scroller_ignore_proportion_single =
+		m->pertag->scroller_ignore_proportion_single[tag];
 
 	/* 按全局客户端链表顺序收集所有堆叠头，确保视觉顺序正确 */
 	struct ScrollerStackNode *heads[64];
@@ -323,14 +327,13 @@ void scroller(Monitor *m) {
 		m->w.width - 2 * config.scroller_structs - cur_gappih;
 
 	/* 单客户端特例 */
-	if (n_heads == 1 && !config.scroller_ignore_proportion_single &&
+	if (n_heads == 1 && !scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
 		!heads[0]->client->ismaximizescreen) {
 		struct ScrollerStackNode *head = heads[0];
-		float single_proportion =
-			head->scroller_proportion_single > 0.0f
-				? head->scroller_proportion_single
-				: config.scroller_default_proportion_single;
+		float single_proportion = head->scroller_proportion_single > 0.0f
+									  ? head->scroller_proportion_single
+									  : scroller_default_proportion_single;
 		struct wlr_box target_geom;
 		target_geom.height = m->w.height - 2 * cur_gappov;
 		target_geom.width = (m->w.width - 2 * cur_gappoh) * single_proportion;
@@ -420,7 +423,7 @@ void scroller(Monitor *m) {
 					max_client_width) >
 			   m->w.width - 2 * config.scroller_structs - cur_gappih)));
 
-	if (n_heads == 1 && config.scroller_ignore_proportion_single) {
+	if (n_heads == 1 && scroller_ignore_proportion_single) {
 		need_scroller = true;
 	}
 	if (start_drag_window)
@@ -507,6 +510,10 @@ void vertical_scroller(Monitor *m) {
 	uint32_t tag = m->pertag->curtag;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
+	float scroller_default_proportion_single =
+		m->pertag->scroller_default_proportion_single[tag];
+	int32_t scroller_ignore_proportion_single =
+		m->pertag->scroller_ignore_proportion_single[tag];
 
 	/* 按全局顺序收集堆叠头 */
 	struct ScrollerStackNode *heads[64];
@@ -542,14 +549,13 @@ void vertical_scroller(Monitor *m) {
 	int32_t max_client_height =
 		m->w.height - 2 * config.scroller_structs - cur_gappiv;
 
-	if (n_heads == 1 && !config.scroller_ignore_proportion_single &&
+	if (n_heads == 1 && !scroller_ignore_proportion_single &&
 		!heads[0]->client->isfullscreen &&
 		!heads[0]->client->ismaximizescreen) {
 		struct ScrollerStackNode *head = heads[0];
-		float single_proportion =
-			head->scroller_proportion_single > 0.0f
-				? head->scroller_proportion_single
-				: config.scroller_default_proportion_single;
+		float single_proportion = head->scroller_proportion_single > 0.0f
+									  ? head->scroller_proportion_single
+									  : scroller_default_proportion_single;
 		struct wlr_box target_geom;
 		target_geom.width = m->w.width - 2 * cur_gappoh;
 		target_geom.height = (m->w.height - 2 * cur_gappov) * single_proportion;
@@ -638,7 +644,7 @@ void vertical_scroller(Monitor *m) {
 					max_client_height) >
 			   m->w.height - 2 * config.scroller_structs - cur_gappiv)));
 
-	if (n_heads == 1 && config.scroller_ignore_proportion_single) {
+	if (n_heads == 1 && scroller_ignore_proportion_single) {
 		need_scroller = true;
 	}
 	if (start_drag_window)
@@ -743,9 +749,9 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		return;
 
 	if (c->isfullscreen)
-		setfullscreen(c, 0);
+		setfullscreen(c, 0, true);
 	if (c->ismaximizescreen)
-		setmaximizescreen(c, 0);
+		setmaximizescreen(c, 0, true);
 
 	Monitor *m = c->mon;
 	uint32_t tag = m->pertag->curtag;
@@ -785,9 +791,9 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		head = head->prev_in_stack;
 	Client *stack_head = head->client;
 	if (stack_head->ismaximizescreen)
-		setmaximizescreen(stack_head, 0);
+		setmaximizescreen(stack_head, 0, true);
 	if (stack_head->isfullscreen)
-		setfullscreen(stack_head, 0);
+		setfullscreen(stack_head, 0, true);
 
 	/* 同步到 Client 字段 */
 	sync_scroller_state_to_clients(m, tag);

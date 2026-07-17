@@ -353,10 +353,64 @@ void overview_resize(Monitor *m) {
 	free(c_arr);
 }
 
+void create_jump_hints(Monitor *m) {
+	const char jump_labels[] = "HJKLASDFGQWERTYUIOPZXCVBNM";
+	int label_idx = 0;
+	Client *c;
+
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && !c->isunglobal && !client_is_x11_popup(c)) {
+			if (label_idx >= 26)
+				break;
+			char c_char = jump_labels[label_idx];
+			c->jump_char = c_char;
+
+			// 把字符变成字符串
+			char label_text[2] = {c_char, '\0'};
+
+			mango_text_node_update(c->text_node, label_text, 1.0f);
+			wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node, true);
+			wlr_scene_node_raise_to_top(&c->text_node->scene_buffer->node);
+			wlr_scene_node_set_position(
+				&c->text_node->scene_buffer->node,
+				c->geom.width / 2 - c->text_node->logical_width / 2,
+				c->geom.height / 2 - c->text_node->logical_height / 2);
+			label_idx++;
+		}
+	}
+}
+
+void begin_jump_mode(Monitor *m) { m->is_jump_mode = 1; }
+
+void finish_jump_mode(Monitor *m) {
+	Client *c = NULL;
+
+	if (!m->is_jump_mode) {
+		return;
+	}
+
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m)) {
+			if (c->text_node->scene_buffer->node.enabled) {
+				c->jump_char = '\0';
+				wlr_scene_node_set_enabled(&c->text_node->scene_buffer->node,
+										   false);
+			}
+		}
+	}
+
+	m->is_jump_mode = 0;
+}
+
 void overview(Monitor *m) {
+
 	if (config.ov_no_resize) {
 		overview_scale(m);
 	} else {
 		overview_resize(m);
+	}
+
+	if (m->is_jump_mode) {
+		create_jump_hints(m);
 	}
 }

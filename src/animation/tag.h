@@ -23,30 +23,32 @@ void set_tagin_animation(Monitor *m, Client *c) {
 
 		c->animainit_geom.x = config.tag_animation_direction == VERTICAL
 								  ? c->animation.current.x
-								  : MAX(c->mon->m.x + c->mon->m.width,
-										c->geom.x + c->mon->m.width);
+								  : MANGO_MAX(c->mon->m.x + c->mon->m.width,
+											  c->geom.x + c->mon->m.width);
 		c->animainit_geom.y = config.tag_animation_direction == VERTICAL
-								  ? MAX(c->mon->m.y + c->mon->m.height,
-										c->geom.y + c->mon->m.height)
+								  ? MANGO_MAX(c->mon->m.y + c->mon->m.height,
+											  c->geom.y + c->mon->m.height)
 								  : c->animation.current.y;
 
 	} else {
 
-		c->animainit_geom.x =
-			config.tag_animation_direction == VERTICAL
-				? c->animation.current.x
-				: MIN(m->m.x - c->geom.width, c->geom.x - c->mon->m.width);
-		c->animainit_geom.y =
-			config.tag_animation_direction == VERTICAL
-				? MIN(m->m.y - c->geom.height, c->geom.y - c->mon->m.height)
-				: c->animation.current.y;
+		c->animainit_geom.x = config.tag_animation_direction == VERTICAL
+								  ? c->animation.current.x
+								  : MANGO_MIN(m->m.x - c->geom.width,
+											  c->geom.x - c->mon->m.width);
+		c->animainit_geom.y = config.tag_animation_direction == VERTICAL
+								  ? MANGO_MIN(m->m.y - c->geom.height,
+											  c->geom.y - c->mon->m.height)
+								  : c->animation.current.y;
 	}
 }
 
 void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 
-	if (!c->is_clip_to_hide || !ISTILED(c) || !is_scroller_layout(c->mon)) {
+	if (!ISTILED(c) || ((!c->is_clip_to_hide || !is_scroller_layout(c->mon)) &&
+						(!c->is_monocle_hide || !is_monocle_layout(c->mon)))) {
 		c->is_clip_to_hide = false;
+		c->is_monocle_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 	}
@@ -84,13 +86,13 @@ void set_tagout_animation(Monitor *m, Client *c) {
 							 : m->pertag->curtag > m->pertag->prevtag;
 	if (going_forward) {
 		c->pending = c->geom;
-		c->pending.x =
-			config.tag_animation_direction == VERTICAL
-				? c->animation.current.x
-				: MIN(c->mon->m.x - c->geom.width, c->geom.x - c->mon->m.width);
+		c->pending.x = config.tag_animation_direction == VERTICAL
+						   ? c->animation.current.x
+						   : MANGO_MIN(c->mon->m.x - c->geom.width,
+									   c->geom.x - c->mon->m.width);
 		c->pending.y = config.tag_animation_direction == VERTICAL
-						   ? MIN(c->mon->m.y - c->geom.height,
-								 c->geom.y - c->mon->m.height)
+						   ? MANGO_MIN(c->mon->m.y - c->geom.height,
+									   c->geom.y - c->mon->m.height)
 						   : c->animation.current.y;
 
 		resize(c, c->geom, 0);
@@ -98,11 +100,11 @@ void set_tagout_animation(Monitor *m, Client *c) {
 		c->pending = c->geom;
 		c->pending.x = config.tag_animation_direction == VERTICAL
 						   ? c->animation.current.x
-						   : MAX(c->mon->m.x + c->mon->m.width,
-								 c->geom.x + c->mon->m.width);
+						   : MANGO_MAX(c->mon->m.x + c->mon->m.width,
+									   c->geom.x + c->mon->m.width);
 		c->pending.y = config.tag_animation_direction == VERTICAL
-						   ? MAX(c->mon->m.y + c->mon->m.height,
-								 c->geom.y + c->mon->m.height)
+						   ? MANGO_MAX(c->mon->m.y + c->mon->m.height,
+									   c->geom.y + c->mon->m.height)
 						   : c->animation.current.y;
 		resize(c, c->geom, 0);
 	}
@@ -117,6 +119,9 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		c->animation.tagining = false;
 		set_tagout_animation(m, c);
 	} else {
+		c->animation.running = false;
 		wlr_scene_node_set_enabled(&c->scene->node, false);
+		c->animainit_geom = c->current = c->pending = c->animation.current =
+			c->geom;
 	}
 }
