@@ -26,9 +26,11 @@ void get_layer_target_geometry(LayerSurface *l, struct wlr_box *target_box) {
 	const struct wlr_layer_surface_v1_state *state = &l->layer_surface->current;
 
 	// restriction area
-	// waybar is usually greater than 0, meaning it occupies a certain amount of area, so position calculation should also use the entire area as a baseline
-	// if it's -1, it may mean exclusive use of all available space
-	// if it's 0, it should mean using the available area outside the exclusive_zone
+	// waybar is usually greater than 0, meaning it occupies a certain amount of
+	// area, so position calculation should also use the entire area as a
+	// baseline if it's -1, it may mean exclusive use of all available space if
+	// it's 0, it should mean using the available area outside the
+	// exclusive_zone
 	struct wlr_box bounds;
 	if (state->exclusive_zone > 0 || state->exclusive_zone == -1)
 		bounds = l->mon->m;
@@ -393,8 +395,8 @@ void init_fadeout_layers(LayerSurface *l) {
 	fadeout_layer->animation_type_close = l->animation_type_close;
 	fadeout_layer->animation_type_open = l->animation_type_open;
 
-	// Here the coordinate setting for snap nodes uses relative coordinates; absolute coordinates cannot be used
-	// This differs from ordinary nodes
+	// Here the coordinate setting for snap nodes uses relative coordinates;
+	// absolute coordinates cannot be used This differs from ordinary nodes
 
 	fadeout_layer->animation.initial.x = 0;
 	fadeout_layer->animation.initial.y = 0;
@@ -413,8 +415,8 @@ void init_fadeout_layers(LayerSurface *l) {
 		fadeout_layer->current.y = usable_area.y + usable_area.height / 2 -
 								   fadeout_layer->current.height / 2;
 		// calculate the deviation coordinates;
-		// size is not needed because subsequent settings do not use its size deviation,
-		// but instead directly scale the buffer
+		// size is not needed because subsequent settings do not use its size
+		// deviation, but instead directly scale the buffer
 		fadeout_layer->current.x =
 			fadeout_layer->current.x - l->animation.current.x;
 		fadeout_layer->current.y =
@@ -445,7 +447,8 @@ void init_fadeout_layers(LayerSurface *l) {
 	fadeout_layer->animation.time_started = get_now_in_ms();
 
 	// Insert the node into the close animation linked list;
-	// during screen refresh, it will check whether there are nodes in the list that can be applied to animation.
+	// during screen refresh, it will check whether there are nodes in the list
+	// that can be applied to animation.
 	wlr_scene_node_set_enabled(&fadeout_layer->scene->node, true);
 	wl_list_insert(&fadeout_layers, &fadeout_layer->fadeout_link);
 

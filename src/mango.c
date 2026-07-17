@@ -3489,6 +3489,8 @@ void createmon(struct wl_listener *listener, void *data) {
 	// HDR 设置
 	if (m->hdr_enable) {
 		output_state_setup_hdr(m, false, &state);
+	} else {
+		output_enable_hdr(m, &state, false, false);
 	}
 
 	// 创建 scene_output（如果尚未创建）
