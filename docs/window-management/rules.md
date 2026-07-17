@@ -35,6 +35,9 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
 | `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
+| `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
+
 
 ### Geometry & Position
 
@@ -138,7 +141,7 @@ windowrule=offsetx:20,offsety:-30,width:800,height:600,appid:alacritty
 # Send to specific tag and monitor
 windowrule=tags:9,monitor:HDMI-A-1,appid:discord
 
-# Terminal swallowing setup
+# Terminal swallowdby setup
 windowrule=isterm:1,appid:st
 windowrule=noswallow:1,appid:foot
 
@@ -237,6 +240,7 @@ layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 | `noblur` | integer | `0` / `1` | Disable blur |
 | `noanim` | integer | `0` / `1` | Disable layer animation |
 | `noshadow` | integer | `0` / `1` | Disable layer shadow |
+| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `noanim:1`) |
 
 > **Tip:** For animation types, see [Animations](/docs/visuals/animations#animation-types). For visual effects, see [Window Effects](/docs/visuals/effects).
 

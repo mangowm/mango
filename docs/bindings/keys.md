@@ -106,12 +106,20 @@ bindr=Super,Super_L,spawn,rofi -show run
 
 | Command | Param | Description |
 | :--- | :--- | :--- |
+| `focusid` | - | Focus window (can target any window via IPC: `mmsg dispatch focusid client,<id>`) |
 | `focusdir` | `left/right/up/down` | Focus window in direction. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
 | `focuslast` | - | Focus the previously active window. |
 | `exchange_client` | `left/right/up/down` | Swap window with neighbor in direction. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
 | `zoom` | - | Swap focused window with Master. |
+
+### Group
+| Command | Param | Description |
+| :--- | :--- | :--- |
+| `groupjoin` | `left/right/up/down`  | Join group by direction. |
+| `groupfocus` | `prev/next`  | Focus group member by direction. |
+| `groupleave` | -  | Leave group. |
 
 ### Tags & Monitors
 
@@ -159,6 +167,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `spawn_shell` | `cmd` | Execute shell command (supports pipes `\|`). |
 | `spawn_on_empty` | `cmd,tagnumber` | Open command on empty tag. |
 | `reload_config` | - | Hot-reload configuration. |
+| `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. |
 | `quit` | - | Exit mangowm. |
 | `toggleoverview` | - | Toggle overview mode. |
 | `togglejump` | - | Toggle overview with jump mode. |
@@ -169,9 +178,12 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `setkeymode` | `mode` | Set keymode. |
 | `switch_keyboard_layout` | `[index]` | Switch keyboard layout. Optional index (0, 1, 2...) to switch to specific layout. |
 | `setoption` | `key,value` | Set config option temporarily. |
-| `disable_monitor` | `monitor_spec` | Shutdown monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `enable_monitor` | `monitor_spec` | Power on monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `toggle_monitor` | `monitor_spec` | Toggle monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `sleep_monitor` | `monitor_spec` | Shutdown monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `wakeup_monitor` | `monitor_spec` | Turn on monitor power. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `sleep_toggle_monitor` | `monitor_spec` | Toggle monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format).
+| `disable_monitor` | `monitor_spec` | remove monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `enable_monitor` | `monitor_spec` | add monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `toggle_monitor` | `monitor_spec` | Toggle monitor add/remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 
 ### Media Controls
 

@@ -1,5 +1,5 @@
 project('mango', ['c'],
-  version : '0.14.4',
+  version : '0.15.2',
 )
 
 subdir('protocols')
@@ -30,12 +30,12 @@ libdrm = dependency('libdrm')
 xcb = dependency('xcb', required : get_option('xwayland'))
 xlibs = dependency('xcb-icccm', required : get_option('xwayland'))
 wayland_server_dep = dependency('wayland-server',version: '>=1.23.1')
-wlroots_dep = dependency('wlroots-0.19',version: '>=0.19.0')
+wlroots_dep = dependency('wlroots-0.20',version: '>=0.20.0')
 xkbcommon_dep = dependency('xkbcommon')
 libinput_dep = dependency('libinput',version: '>=1.27.1')
 libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
-libscenefx_dep = dependency('scenefx-0.4',version: '>=0.4.1')
+libscenefx_dep = dependency('scenefx-0.5',version: '>=0.5.0')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
 pangocairo_dep = dependency('pangocairo')
@@ -98,7 +98,7 @@ executable('mango',
   'src/common/util.c',
   'src/session/session.c',
   'src/draw/text-node.c',
-  'src/ext-protocol/wlr_ext_workspace_v1.c',
+
   wayland_sources,
   dependencies : [
     libm,
@@ -122,7 +122,6 @@ executable('mango',
 )
 
 # build mmsg
-dwl_ipc_protocol = 'protocols/dwl-ipc-unstable-v2.xml'
 
 wayland_scanner_client_header = generator(
   wayland_scanner,
@@ -139,8 +138,6 @@ wayland_scanner_private_code = generator(
 # use generator in mmsg target
 executable('mmsg',
   'mmsg/mmsg.c',
-  wayland_scanner_private_code.process(dwl_ipc_protocol),
-  wayland_scanner_client_header.process(dwl_ipc_protocol),
   dependencies: [
     libwayland_client_dep
   ],

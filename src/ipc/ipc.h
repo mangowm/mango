@@ -143,11 +143,18 @@ static cJSON *build_client_json(Client *c) {
 
 	cJSON_AddNumberToObject(obj, "id", c->id);
 	cJSON_AddNumberToObject(obj, "pid", c->pid);
+	cJSON_AddStringToObject(obj, "foreign_toplevel_id",
+							c->ext_foreign_toplevel->identifier);
 	cJSON_AddStringToObject(obj, "title", client_get_title(c));
 	cJSON_AddStringToObject(obj, "appid", client_get_appid(c));
 	cJSON_AddStringToObject(obj, "monitor",
 							c->mon ? c->mon->wlr_output->name : "");
 	cJSON_AddItemToObject(obj, "tags", tags_mask_to_array(c->tags));
+	cJSON_AddBoolToObject(obj, "is_xwayland", c->type == X11 ? true : false);
+	cJSON_AddBoolToObject(obj, "is_swallowing", c->swallowing ? true : false);
+	cJSON_AddBoolToObject(obj, "is_swallowedby", c->swallowdby ? true : false);
+	cJSON_AddBoolToObject(obj, "is_group", c->group_prev || c->group_next);
+	cJSON_AddBoolToObject(obj, "is_visible", c->mon && VISIBLEON(c, c->mon));
 	cJSON_AddBoolToObject(obj, "is_focused", c->isfocusing);
 	cJSON_AddBoolToObject(obj, "is_fullscreen", c->isfullscreen);
 	cJSON_AddBoolToObject(obj, "is_floating", c->isfloating);
@@ -164,6 +171,8 @@ static cJSON *build_client_json(Client *c) {
 	cJSON_AddNumberToObject(obj, "y", c->geom.y);
 	cJSON_AddNumberToObject(obj, "width", c->geom.width);
 	cJSON_AddNumberToObject(obj, "height", c->geom.height);
+	cJSON_AddNumberToObject(obj, "scroller_proportion",
+							(double)c->scroller_proportion);
 	return obj;
 }
 
@@ -235,6 +244,15 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 	if (strcmp(cmd, "get version") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "version", VERSION);
+	} else if (strcmp(cmd, "get cursorpos") == 0) {
+		resp = cJSON_CreateObject();
+		cJSON_AddNumberToObject(resp, "x", cursor->x);
+		cJSON_AddNumberToObject(resp, "y", cursor->y);
+		Monitor *m = xytomon(cursor->x, cursor->y);
+		if (m)
+			cJSON_AddStringToObject(resp, "monitor", m->wlr_output->name);
+		else
+			cJSON_AddNullToObject(resp, "monitor");
 	} else if (strcmp(cmd, "get keymode") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "keymode", keymode.mode);
@@ -373,7 +391,10 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			while (end >= token && (*end == ' ' || *end == '\t'))
 				*end-- = '\0';
 			tokens[token_count++] = token;
-			token = strtok_r(NULL, ",", &saveptr);
+			if (token_count >= 5)
+				token = saveptr;
+			else
+				token = strtok_r(NULL, ",", &saveptr);
 		}
 
 		Arg arg = {0};

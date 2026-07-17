@@ -206,3 +206,29 @@ void wl_list_swap(struct wl_list *l1, struct wl_list *l2) {
 		tmp2_next->prev = l1;
 	}
 }
+
+void wl_list_safe_reinsert_prev(struct wl_list *l1, struct wl_list *l2) {
+	if (!l1 || !l2)
+		return;
+	if (l1 == l2)
+		return;
+	if (l1->prev == l2)
+		return;
+
+	wl_list_remove(l2);
+	wl_list_init(l2);
+	wl_list_insert(l1->prev, l2);
+}
+
+void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2) {
+	if (!l1 || !l2)
+		return;
+	if (l1 == l2)
+		return;
+	if (l1->next == l2)
+		return;
+
+	wl_list_remove(l2);
+	wl_list_init(l2);
+	wl_list_insert(l1, l2);
+}

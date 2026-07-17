@@ -105,8 +105,6 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 | `allow_tearing` | `0` | Global tearing control: `0` (Disable), `1` (Enable), `2` (Fullscreen only). |
 
 ## HDR
-> HDR is only supported in wl-only branch, since it requires the `vulkan` renderer but scenefx is not supported yet.
-
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
@@ -175,27 +173,28 @@ Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash app
 ## Power Management
 
 You can control monitor power using the `mmsg` IPC tool.
-> Notice: This sleep command does not remove the monitor, it only turns the power off.
+> Notice: This command does not remove the monitor, it only turns it off.
+> if you want completely remove monitor, just use `wlr-randr`
 
 ```bash
-# Turn power off
-mmsg dispatch sleep_monitor,eDP-1
+# Turn off
+mmsg dispatch disable_monitor,eDP-1
 
-# Turn power on
-mmsg dispatch wakeup_monitor,eDP-1
+# Turn on
+mmsg dispatch enable_monitor,eDP-1
 
-# Toggle power
-mmsg dispatch sleep_toggle_monitor,eDP-1
+# Toggle
+mmsg dispatch toggle_monitor,eDP-1
 ```
 
 You can also use `wlr-randr` for monitor management:
 
 ```bash
 # remove a monitor
-mmsg dispatch disable_monitor,eDP-1
+wlr-randr --output eDP-1 --off
 
 # add a monitor
-mmsg dispatch enable_monitor,eDP-1
+wlr-randr --output eDP-1 --on
 
 # Show all monitors spec
 wlr-randr

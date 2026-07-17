@@ -30,7 +30,7 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data) {
 	SnapshotMetadata *meta = wl_container_of(listener, meta, destroy);
-	wl_list_remove(&meta->destroy.link); // 安全移除监听器
+	wl_list_remove(&meta->destroy.link);
 	free(meta);
 }
 
@@ -175,6 +175,7 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 		}
 		meta->orig_width = scene_buffer->dst_width;
 		meta->orig_height = scene_buffer->dst_height;
+		meta->type = Snapshot;
 
 		struct wlr_scene_surface *scene_surface =
 			wlr_scene_surface_try_from_buffer(scene_buffer);
@@ -183,12 +184,14 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 				!!wlr_subsurface_try_from_wlr_surface(scene_surface->surface);
 		}
 
-		// 绑定销毁回调监听，随包装节点销毁而释放内存
+		// bind a destruction callback listener to free memory when the wrapper
+		// node is destroyed
 		meta->destroy.notify = handle_snapshot_meta_destroy;
 		wl_signal_add(&wrapper->node.events.destroy, &meta->destroy);
 		wrapper->node.data = meta;
 
-		// 将真正的 buffer 挂靠在 wrapper 下面（相对坐标0,0）
+		// attach the real buffer underneath the wrapper (relative coordinates
+		// 0,0)
 		struct wlr_scene_buffer *snapshot_buffer =
 			wlr_scene_buffer_create(wrapper, NULL);
 		if (snapshot_buffer == NULL) {
@@ -196,7 +199,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 			return false;
 		}
 
-		// 保留原生的 data 指针（如 Client*），防止事件派发/焦点获取失效
+		// etain the original data pointer (e.g., Client*) to prevent event
+		// dispatching/focus acquisition from failing.
 		snapshot_buffer->node.data = scene_buffer->node.data;
 
 		wlr_scene_buffer_set_dest_size(snapshot_buffer, scene_buffer->dst_width,
@@ -212,11 +216,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 
 		// Effects
 		wlr_scene_buffer_set_opacity(snapshot_buffer, scene_buffer->opacity);
-		wlr_scene_buffer_set_corner_radius(snapshot_buffer,
-										   scene_buffer->corner_radius,
-										   scene_buffer->corners);
-
-		wlr_scene_buffer_set_backdrop_blur(snapshot_buffer, false);
+		wlr_scene_buffer_set_corner_radii(snapshot_buffer,
+										  scene_buffer->corners);
 
 		if (scene_surface != NULL && scene_surface->surface->buffer != NULL) {
 			wlr_scene_buffer_set_buffer(snapshot_buffer,
@@ -248,6 +249,8 @@ static bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx,
 
 		break;
 	}
+	case WLR_SCENE_NODE_BLUR:
+		break;
 	case WLR_SCENE_NODE_OPTIMIZED_BLUR:
 		return true;
 	}
