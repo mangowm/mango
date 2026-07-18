@@ -4,6 +4,7 @@
   libinput,
   libxcb,
   libdrm,
+  libdisplay-info,
   libxkbcommon,
   pcre2,
   pango,
@@ -60,6 +61,7 @@ stdenv.mkDerivation {
       scenefx
       libGL
       libdrm
+      libdisplay-info
     ]
     ++ lib.optionals enableXWayland [
       libX11
