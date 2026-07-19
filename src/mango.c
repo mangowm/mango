@@ -592,7 +592,7 @@ struct Monitor {
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
-	bool is_vrr_opening;
+	bool is_vrr_enabling;
 	bool hdr_enable;
 	bool prefer_disable;
 	bool is_hdr_enabling;
@@ -3304,7 +3304,7 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 		wlr_log(WLR_DEBUG, "failed to enable adaptive sync for output %s",
 				m->wlr_output->name);
 	} else {
-		m->is_vrr_opening = true;
+		m->is_vrr_enabling = true;
 		wlr_log(WLR_INFO, "adaptive sync enabled for output %s",
 				m->wlr_output->name);
 	}
@@ -3312,7 +3312,7 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 
 void disable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	wlr_output_state_set_adaptive_sync_enabled(state, false);
-	m->is_vrr_opening = false;
+	m->is_vrr_enabling = false;
 }
 
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
@@ -3392,7 +3392,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->resizing_count_current = 0;
 	m->carousel_anim_dir = 0;
 	m->vrr_global_enable = false;
-	m->is_vrr_opening = false;
+	m->is_vrr_enabling = false;
 	m->hdr_enable = false;
 	m->prefer_disable = false;
 	m->is_hdr_enabling = false;
@@ -6654,7 +6654,7 @@ void check_vrr_enable(Client *c) {
 	if (!m)
 		return;
 
-	if (!c && m && !m->iscleanuping && m->is_vrr_opening &&
+	if (!c && m && !m->iscleanuping && m->is_vrr_enabling &&
 		!m->vrr_global_enable) {
 		disable_adaptive_sync(m, &m->pending);
 		mango_output_commit(m);
@@ -6665,16 +6665,16 @@ void check_vrr_enable(Client *c) {
 		return;
 
 	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
-		!c->mon->is_vrr_opening) {
+		!c->mon->is_vrr_enabling) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 		return;
 	}
 
-	if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
+	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
-	} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
+	} else if (c->mon->is_vrr_enabling && !c->mon->vrr_global_enable) {
 		disable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 	}
