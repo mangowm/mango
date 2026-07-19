@@ -1443,7 +1443,7 @@ int32_t togglefakefullscreen(const Arg *arg) {
 }
 
 int32_t togglefloating(const Arg *arg) {
-	if (!selmon)
+	if (!selmon || grabc)
 		return 0;
 
 	Client *sel = arg->tc ? arg->tc : focustop(selmon);
