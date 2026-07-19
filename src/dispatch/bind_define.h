@@ -499,7 +499,8 @@ int32_t moveresize(const Arg *arg) {
 		set_size_per(grabc->mon, grabc);
 	}
 
-	if (grabc && grabc->drag_to_tile && config.drag_tile_small) {
+	if (grabc && grabc->drag_to_tile && config.drag_tile_to_tile &&
+		config.drag_tile_small) {
 		grabc->geom.x = cursor->x - 150;
 		grabc->geom.y = cursor->y - 150;
 		grabc->geom.width = 300;

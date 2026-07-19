@@ -3640,7 +3640,7 @@ void set_value_default() {
 	config.allow_lock_transparent = 0;
 	config.no_border_when_single = 0;
 	config.snap_distance = 30;
-	config.drag_tile_to_tile = 0;
+	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
 	config.enable_floating_snap = 0;
 	config.swipe_min_threshold = 1;
