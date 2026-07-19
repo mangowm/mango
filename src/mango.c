@@ -2530,6 +2530,10 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 			selmon = xytomon(cursor->x, cursor->y);
 			client_update_oldmonname_record(grabc, selmon);
 			setmon(grabc, selmon, 0, true);
+			/* if the view changed mid-drag, drop onto the current tag
+			 * instead of silently returning to the original one */
+			if (!VISIBLEON(grabc, selmon))
+				grabc->tags = selmon->tagset[selmon->seltags];
 			selmon->prevsel = ISTILED(selmon->sel) ? selmon->sel : NULL;
 			selmon->sel = grabc;
 			tmpc = grabc;
