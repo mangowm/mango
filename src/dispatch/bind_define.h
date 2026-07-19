@@ -1834,7 +1834,7 @@ void fix_mon_tagset_from_overview(Monitor *m) {
 
 int32_t toggleoverview(const Arg *arg) {
 	Client *c = NULL;
-	if (!selmon)
+	if (!selmon || grabc)
 		return 0;
 
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
