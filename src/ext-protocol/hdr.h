@@ -19,10 +19,15 @@ static bool output_set_render_format(Monitor *m, uint32_t candidates[],
 									 size_t count,
 									 struct wlr_output_state *state) {
 	for (size_t i = 0; i < count; i++) {
-		wlr_output_state_set_render_format(state, candidates[i]);
-		if (wlr_output_test_state(m->wlr_output, state))
+		struct wlr_output_state test_state = *state;
+		wlr_output_state_set_render_format(&test_state, candidates[i]);
+		if (wlr_output_test_state(m->wlr_output, &test_state)) {
+			wlr_output_state_set_render_format(state, candidates[i]);
 			return true;
+		}
 	}
+
+	wlr_log(WLR_DEBUG, "HDR: Failed to set render format");
 	return false;
 }
 
