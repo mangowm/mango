@@ -6774,6 +6774,11 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	if (c == grabc) {
 		cursor_mode = CurNormal;
 		grabc = NULL;
+		if (dropc) {
+			dropc->enable_drop_area_draw = false;
+			client_set_drop_area(dropc);
+			dropc = NULL;
+		}
 	}
 
 	if (c == dropc) {
