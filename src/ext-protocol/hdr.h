@@ -19,10 +19,15 @@ static bool output_set_render_format(Monitor *m, uint32_t candidates[],
 									 size_t count,
 									 struct wlr_output_state *state) {
 	for (size_t i = 0; i < count; i++) {
-		wlr_output_state_set_render_format(state, candidates[i]);
-		if (wlr_output_test_state(m->wlr_output, state))
+		struct wlr_output_state test_state = *state;
+		wlr_output_state_set_render_format(&test_state, candidates[i]);
+		if (wlr_output_test_state(m->wlr_output, &test_state)) {
+			wlr_output_state_set_render_format(state, candidates[i]);
 			return true;
+		}
 	}
+
+	wlr_log(WLR_DEBUG, "HDR: Failed to set render format");
 	return false;
 }
 
@@ -61,8 +66,14 @@ static bool output_supports_hdr(const struct wlr_output *output,
 
 void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 					   bool silent) {
-	if (enabled && !output_supports_hdr(m->wlr_output, NULL))
-		enabled = false;
+
+	if (!m->is_hdr_enabling && !enabled)
+		return;
+
+	if (!output_supports_hdr(m->wlr_output, NULL)) {
+		m->is_hdr_enabling = false;
+		return;
+	}
 
 	if (!enabled) {
 		if (m->wlr_output->supported_primaries ||
@@ -72,6 +83,7 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 						m->wlr_output->name);
 			wlr_output_state_set_image_description(os, NULL);
 		}
+		m->is_hdr_enabling = false;
 		return;
 	}
 
@@ -81,6 +93,7 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 		.primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
 		.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
 	};
+	m->is_hdr_enabling = true;
 	wlr_output_state_set_image_description(os, &desc);
 }
 
@@ -92,16 +105,16 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 		output_supports_hdr(m->wlr_output, &unsupported_reason);
 	bool hdr_succeeded = false;
 
+	if (!hdr_supported) {
+		if (!silent)
+			wlr_log(WLR_INFO, "HDR not supported on output %s: %s",
+					m->wlr_output->name, unsupported_reason);
+		return;
+	}
+
 	enum render_bit_depth depth = config.hdr_depth;
 	if (depth == MANGO_RENDER_BIT_DEPTH_DEFAULT)
 		depth = bit_depth_from_format(render_format);
-
-	if (!hdr_supported && depth == MANGO_RENDER_BIT_DEPTH_10) {
-		if (!silent)
-			wlr_log(WLR_INFO, "Cannot enable HDR on output %s: %s",
-					m->wlr_output->name, unsupported_reason);
-		depth = MANGO_RENDER_BIT_DEPTH_8;
-	}
 
 	if (depth == MANGO_RENDER_BIT_DEPTH_10 &&
 		bit_depth_from_format(render_format) == depth) {

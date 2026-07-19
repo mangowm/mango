@@ -454,6 +454,7 @@ struct Client {
 	float unfocused_opacity;
 	char oldmonname[128];
 	int32_t noblur;
+	float blur_opacity;
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
 	double master_mfact_per, master_inner_per, stack_inner_per;
 	double old_master_mfact_per, old_master_inner_per, old_stack_inner_per;
@@ -604,9 +605,10 @@ struct Monitor {
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
-	bool is_vrr_opening;
+	bool is_vrr_enabling;
 	bool hdr_enable;
 	bool prefer_disable;
+	bool is_hdr_enabling;
 };
 
 typedef struct {
@@ -3382,7 +3384,7 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 		wlr_log(WLR_DEBUG, "failed to enable adaptive sync for output %s",
 				m->wlr_output->name);
 	} else {
-		m->is_vrr_opening = true;
+		m->is_vrr_enabling = true;
 		wlr_log(WLR_INFO, "adaptive sync enabled for output %s",
 				m->wlr_output->name);
 	}
@@ -3390,7 +3392,7 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 
 void disable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	wlr_output_state_set_adaptive_sync_enabled(state, false);
-	m->is_vrr_opening = false;
+	m->is_vrr_enabling = false;
 }
 
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
@@ -3470,9 +3472,10 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->resizing_count_current = 0;
 	m->carousel_anim_dir = 0;
 	m->vrr_global_enable = false;
-	m->is_vrr_opening = false;
+	m->is_vrr_enabling = false;
 	m->hdr_enable = false;
 	m->prefer_disable = false;
+	m->is_hdr_enabling = false;
 
 	m->wlr_output = wlr_output;
 	m->wlr_output->data = m;
@@ -4618,6 +4621,7 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 }
 
 void init_client_properties(Client *c) {
+	c->blur_opacity = 1.0f;
 	c->is_logic_hide = false;
 	c->isgroupfocusing = false;
 	c->group_prev = NULL;
@@ -6781,7 +6785,7 @@ void check_vrr_enable(Client *c) {
 	if (!m)
 		return;
 
-	if (!c && m && !m->iscleanuping && m->is_vrr_opening &&
+	if (!c && m && !m->iscleanuping && m->is_vrr_enabling &&
 		!m->vrr_global_enable) {
 		disable_adaptive_sync(m, &m->pending);
 		mango_output_commit(m);
@@ -6792,16 +6796,16 @@ void check_vrr_enable(Client *c) {
 		return;
 
 	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
-		!c->mon->is_vrr_opening) {
+		!c->mon->is_vrr_enabling) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 		return;
 	}
 
-	if (!c->mon->is_vrr_opening && c->mon->vrr_global_enable) {
+	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
-	} else if (c->mon->is_vrr_opening && !c->mon->vrr_global_enable) {
+	} else if (c->mon->is_vrr_enabling && !c->mon->vrr_global_enable) {
 		disable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 	}

@@ -1491,6 +1491,14 @@ void client_set_unfocused_opacity_animation(Client *c) {
 }
 
 bool client_apply_focus_opacity(Client *c) {
+
+	if (config.blur && !c->noblur && c->blur_opacity != 1.0f &&
+		c->animation.action != OPEN) {
+		c->blur_opacity = 1.0f;
+		wlr_scene_blur_set_strength(c->blur, 1.0f);
+		wlr_scene_blur_set_alpha(c->blur, 1.0f);
+	}
+
 	float *border_color = get_border_color(c);
 	if (c->isfullscreen) {
 		c->opacity_animation.running = false;
@@ -1527,6 +1535,7 @@ bool client_apply_focus_opacity(Client *c) {
 			float blur_val = MIN(percent * (1.0 - config.fadein_begin_opacity) +
 									 config.fadein_begin_opacity,
 								 1.0);
+			c->blur_opacity = blur_val;
 			wlr_scene_blur_set_strength(c->blur, blur_val);
 			wlr_scene_blur_set_alpha(c->blur, blur_val);
 		}
