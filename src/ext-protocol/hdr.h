@@ -61,8 +61,8 @@ static bool output_supports_hdr(const struct wlr_output *output,
 
 void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 					   bool silent) {
-	if (enabled && !output_supports_hdr(m->wlr_output, NULL))
-		enabled = false;
+	if (!output_supports_hdr(m->wlr_output, NULL))
+		return;
 
 	if (!enabled) {
 		if (m->wlr_output->supported_primaries ||
