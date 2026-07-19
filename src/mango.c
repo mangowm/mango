@@ -4810,7 +4810,7 @@ void unminimize(Client *c) {
 
 void set_minimized(Client *c) {
 
-	if (!c || !c->mon)
+	if (!c || !c->mon || c == grabc)
 		return;
 
 	c->isglobal = 0;
@@ -5725,7 +5725,8 @@ void exit_scroller_stack(Client *c) {
 
 void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 	struct wlr_box maximizescreen_box;
-	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
+	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
+		c == grabc)
 		return;
 
 	if (c->mon->isoverview)
@@ -5788,7 +5789,8 @@ void setfullscreen(Client *c, int32_t fullscreen,
 				   bool rearrange) // 用自定义全屏代理自带全屏
 {
 
-	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
+	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
+		c == grabc)
 		return;
 
 	if (c->mon->isoverview)
