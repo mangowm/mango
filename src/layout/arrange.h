@@ -1204,7 +1204,8 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 				if (!only_caculate)
 					set_arrange_visible(m, c, want_animation);
 			} else {
-				if (!only_caculate)
+				/* keep the dragged client visible across view switches */
+				if (!only_caculate && c != grabc)
 					set_arrange_hidden(m, c, want_animation);
 			}
 		}
