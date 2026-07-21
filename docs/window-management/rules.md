@@ -23,6 +23,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `isfloating` | integer | `0` / `1` | Force floating state |
 | `isfullscreen` | integer | `0` / `1` | Force fullscreen state |
 | `isfakefullscreen` | integer | `0` / `1` | Force fake-fullscreen state (window stays constrained) |
+| `ismaximized` | integer | `0` / `1` | Force Mango's screen-maximize state (the same behavior as `togglemaximizescreen`) |
 | `isglobal` | integer | `0` / `1` | Open as global window (sticky across tags) |
 | `isoverlay` | integer | `0` / `1` | Make it always in top layer |
 | `isopensilent` | integer | `0` / `1` | Open without focus |

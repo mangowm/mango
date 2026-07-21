@@ -64,6 +64,7 @@ typedef struct {
 	int32_t isfloating;
 	int32_t isfullscreen;
 	int32_t isfakefullscreen;
+	int32_t ismaximized;
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
@@ -2393,6 +2394,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		rule->isfloating = -1;
 		rule->isfullscreen = -1;
 		rule->isfakefullscreen = -1;
+		rule->ismaximized = -1;
 		rule->isnoborder = -1;
 		rule->isnoshadow = -1;
 		rule->isnoradius = -1;
@@ -2546,6 +2548,8 @@ bool parse_option(Config *config, char *key, char *value) {
 					rule->isfullscreen = atoi(val);
 				} else if (strcmp(key, "isfakefullscreen") == 0) {
 					rule->isfakefullscreen = atoi(val);
+				} else if (strcmp(key, "ismaximized") == 0) {
+					rule->ismaximized = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
