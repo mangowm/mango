@@ -154,7 +154,10 @@ typedef struct {
 } AxisBinding;
 
 typedef struct {
-	uint32_t fold;
+	struct {
+		enum wlr_switch_type type;
+		enum wlr_switch_state state;
+	} switch_action;
 	int32_t (*func)(const Arg *);
 	Arg arg;
 } SwitchBinding;
@@ -599,24 +602,41 @@ int32_t parse_force(const char *str) {
 	}
 }
 
-int32_t parse_fold_state(const char *str) {
+typeof((SwitchBinding){}.switch_action) parse_switch_action(const char *str) {
 	// 将输入字符串转换为小写
-	char lowerStr[10];
+	char lowerStr[18];
 	int32_t i = 0;
-	while (str[i] && i < 9) {
+	while (str[i] && i < 17) {
 		lowerStr[i] = tolower(str[i]);
 		i++;
 	}
 	lowerStr[i] = '\0';
 
 	// 根据转换后的小写字符串返回对应的枚举值
+	typeof((SwitchBinding){}.switch_action) result = {};
 	if (strcmp(lowerStr, "fold") == 0) {
-		return FOLD;
+		result.type = WLR_SWITCH_TYPE_LID;
+		result.state = WLR_SWITCH_STATE_ON;
 	} else if (strcmp(lowerStr, "unfold") == 0) {
-		return UNFOLD;
+		result.type = WLR_SWITCH_TYPE_LID;
+		result.state = WLR_SWITCH_STATE_OFF;
+	} else if (strcmp(lowerStr, "tablet_on") == 0) {
+		result.type = WLR_SWITCH_TYPE_TABLET_MODE;
+		result.state = WLR_SWITCH_STATE_ON;
+	} else if (strcmp(lowerStr, "tablet_off") == 0) {
+		result.type = WLR_SWITCH_TYPE_TABLET_MODE;
+		result.state = WLR_SWITCH_STATE_OFF;
+	} else if (strcmp(lowerStr, "keypad_slide_on") == 0) {
+		result.type = WLR_SWITCH_TYPE_KEYPAD_SLIDE;
+		result.state = WLR_SWITCH_STATE_ON;
+	} else if (strcmp(lowerStr, "keypad_slide_off") == 0) {
+		result.type = WLR_SWITCH_TYPE_KEYPAD_SLIDE;
+		result.state = WLR_SWITCH_STATE_OFF;
 	} else {
-		return INVALIDFOLD;
+		result.type = -1;
+		result.state = -1;
 	}
+	return result;
 }
 int64_t parse_color(const char *hex_str) {
 	char *endptr;
@@ -2949,7 +2969,7 @@ bool parse_option(Config *config, char *key, char *value) {
 		trim_whitespace(arg_value4);
 		trim_whitespace(arg_value5);
 
-		binding->fold = parse_fold_state(fold_str);
+		binding->switch_action = parse_switch_action(fold_str);
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);

@@ -211,7 +211,6 @@ enum {
 #endif
 enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
 enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT, OVERVIEW };
-enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { PREV, NEXT };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
 enum { FORCE, UNFORCE };
@@ -3807,7 +3806,8 @@ void switch_toggle(struct wl_listener *listener, void *data) {
 		if (config.switch_bindings_count < 1)
 			break;
 		s = &config.switch_bindings[ji];
-		if (event->switch_state == s->fold && s->func) {
+		if (event->switch_type == s->switch_action.type &&
+			event->switch_state == s->switch_action.state && s->func) {
 			s->func(&s->arg);
 			return;
 		}
