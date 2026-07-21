@@ -6,33 +6,16 @@ labels: "A: bug"
 assignees: ""
 ---
 
+## Checklist
+
+- [ ] I have tested this on the latest mango version (main branch) and the required wlroots / 我已使用最新版本测试过此问题
+
 ## Info
 
-<!--Paste mango version from running "mango -v"-->
-<!--
-Wlroots library needs to be built from this repository to avoid crashes
-https://github.com/DreamMaoMao/wlroots.git
--->
-
-mango version:
+mango version(mango -v):
 wlroots version:
 
 ## Crash track
-1.you need to build mango by enable asan flag.
+1. you need to build mango by enabling the asan flag.
 ```bash
 meson build -Dprefix=/usr -Dasan=true
-``
-2.run mango in tty.
-```bash
-export ASAN_OPTIONS="detect_leaks=1:halt_on_error=0:log_path=/home/xxx/asan.log"
-mango
-
-```
-
-3.after mango crash,paste the log file `/home/xxx/asan.log` here.
-
-## Description
-
-<!--
-Only report bugs that can be reproduced on the main line
--->
