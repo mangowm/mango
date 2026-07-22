@@ -1,0 +1,4 @@
+CompileFlags:
+  Add:
+    - "-include"
+    - "src/mango.c"
