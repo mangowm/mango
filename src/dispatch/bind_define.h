@@ -1107,10 +1107,10 @@ int32_t spawn_on_empty(const Arg *arg) {
 		}
 	}
 	if (!is_empty) {
-		view(arg, true);
+		bind_to_view(arg);
 		return 0;
 	} else {
-		view(arg, true);
+		bind_to_view(arg);
 		spawn_shell(arg);
 	}
 	return 0;

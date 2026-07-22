@@ -1193,6 +1193,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = spawn_on_empty;
 		(*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
 		(*arg).ui = 1 << (atoi(arg_value2) - 1);
+		(*arg).i = atoi(arg_value3);
 	} else if (strcmp(func_name, "quit") == 0) {
 		func = quit;
 	} else if (strcmp(func_name, "create_virtual_output") == 0) {
