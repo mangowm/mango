@@ -313,18 +313,25 @@ int32_t focusmon(const Arg *arg) {
 		return 0;
 
 	selmon = tm;
-	if (config.warpcursor) {
-		warp_cursor_to_selmon(selmon);
+	c = arg->tc;
+	if (config.focus_cross_monitor_mru || !c) {
+		c = focustop(selmon);
 	}
-	c = arg->tc ? arg->tc : focustop(selmon);
+
 	if (!c) {
 		selmon->sel = NULL;
 		wlr_seat_pointer_notify_clear_focus(seat);
 		wlr_seat_keyboard_notify_clear_focus(seat);
 		focusclient(NULL, 0);
-	} else
+		if (config.warpcursor) {
+			warp_cursor_to_selmon(selmon);
+		}
+	} else {
 		focusclient(c, 1);
-
+		if (config.warpcursor) {
+			warp_cursor(c);
+		}
+	}
 	return 0;
 }
 
