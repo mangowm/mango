@@ -137,6 +137,11 @@ int32_t focusdir(const Arg *arg) {
 	Client *c = NULL;
 	c = direction_select(arg);
 
+	if (config.focus_cross_monitor_mru && c && c->mon != selmon) {
+		focusmon(arg);
+		return 0;
+	}
+
 	if (!selmon->isoverview)
 		c = get_focused_stack_client(c, arg->tc);
 	if (c) {
@@ -313,6 +318,7 @@ int32_t focusmon(const Arg *arg) {
 		return 0;
 
 	selmon = tm;
+
 	c = arg->tc;
 	if (config.focus_cross_monitor_mru || !c) {
 		c = focustop(selmon);
