@@ -261,24 +261,11 @@ typedef struct {
 	uint32_t ui2;
 	Client *tc;
 } Arg;
-typedef struct {
-	uint32_t mod;
-	uint32_t button;
-	int32_t (*func)(const Arg *);
-	const Arg arg;
-} Button; // 鼠标按键
 
 typedef struct {
 	char mode[28];
 	bool isdefault;
 } KeyMode;
-
-typedef struct {
-	uint32_t mod;
-	uint32_t dir;
-	int32_t (*func)(const Arg *);
-	const Arg arg;
-} Axis;
 
 typedef struct {
 	struct wl_list link;
@@ -476,13 +463,6 @@ struct Client {
 	bool isgroupfocusing;
 	bool is_logic_hide;
 };
-
-typedef struct {
-	uint32_t mod;
-	xkb_keysym_t keysym;
-	int32_t (*func)(const Arg *);
-	const Arg arg;
-} Key;
 
 typedef struct {
 	struct wlr_keyboard_group *wlr_group;
