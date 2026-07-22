@@ -3448,7 +3448,14 @@ void createmon(struct wl_listener *listener, void *data) {
 		if (preferred_mode) {
 			wlr_output_state_set_mode(&pending, preferred_mode);
 		} else {
-			wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+			struct wlr_output_state custom_test_mode;
+			wlr_output_state_init(&custom_test_mode);
+			wlr_output_state_set_custom_mode(&custom_test_mode, 1920, 1080,
+											 60000);
+			if (wlr_output_test_state(wlr_output, &custom_test_mode)) {
+				wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+			}
+			wlr_output_state_finish(&custom_test_mode);
 		}
 	}
 

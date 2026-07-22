@@ -22,7 +22,8 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 	// test whether tearing is supported
 	if (state->tearing_page_flip == true) {
 		if (!wlr_output_test_state(wlr_output, state)) {
-			// if DRM rejects (e.g. the current output/driver doesn't support tearing), fall back to disabling tearing
+			// if DRM rejects (e.g. the current output/driver doesn't support
+			// tearing), fall back to disabling tearing
 			state->tearing_page_flip = false;
 		}
 	}
