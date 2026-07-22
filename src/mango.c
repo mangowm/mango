@@ -574,6 +574,8 @@ struct Monitor {
 	struct wl_listener destroy_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;
 	struct wl_event_source *skip_frame_timeout;
+	struct wl_event_source *vrr_retry_source;
+	int32_t vrr_retry_count;
 	struct wlr_box m;		  /* monitor area, layout-relative */
 	struct wlr_box w;		  /* window area, layout-relative */
 	struct wl_list layers[4]; /* LayerSurface::link */
@@ -923,6 +925,9 @@ static Client *get_focused_stack_client(Client *sc,
 static bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc);
 static void monitor_stop_skip_frame_timer(Monitor *m);
 static int monitor_skip_frame_timeout_callback(void *data);
+static int monitor_vrr_retry_callback(void *data);
+#define VRR_RETRY_INTERVAL_MS 200
+#define VRR_RETRY_MAX_ATTEMPTS 25
 static Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 static bool match_monitor_spec(char *spec, Monitor *m);
 static void last_cursor_surface_destroy(struct wl_listener *listener,
@@ -2747,6 +2752,10 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 		wl_event_source_remove(m->skip_frame_timeout);
 		m->skip_frame_timeout = NULL;
 	}
+	if (m->vrr_retry_source) {
+		wl_event_source_remove(m->vrr_retry_source);
+		m->vrr_retry_source = NULL;
+	}
 	m->wlr_output->data = NULL;
 
 	cleanup_monitor_dwindle(m);
@@ -3471,6 +3480,9 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->iscleanuping = false;
 	m->skip_frame_timeout =
 		wl_event_loop_add_timer(loop, monitor_skip_frame_timeout_callback, m);
+	m->vrr_retry_source =
+		wl_event_loop_add_timer(loop, monitor_vrr_retry_callback, m);
+	m->vrr_retry_count = 0;
 	m->skiping_frame = false;
 	m->resizing_count_pending = 0;
 	m->resizing_count_current = 0;
@@ -3661,6 +3673,11 @@ void createmon(struct wl_listener *listener, void *data) {
 	}
 
 	updatemons(NULL, NULL);
+
+	/* VRR was requested but couldn't be enabled during the initial modeset;
+	 * retry on a timer until the connector accepts it. */
+	if (m->vrr_global_enable && !m->is_vrr_enabling)
+		wl_event_source_timer_update(m->vrr_retry_source, VRR_RETRY_INTERVAL_MS);
 
 	// 设置监听器
 	LISTEN(&wlr_output->events.frame, &m->frame, rendermon);
@@ -5428,6 +5445,33 @@ static int monitor_skip_frame_timeout_callback(void *data) {
 	return 1;
 }
 
+/* Enable VRR once the connector accepts it. A physical hotplug modeset can
+ * complete before the connector is ready for adaptive sync, so retry on a timer
+ * until the enable test passes or the attempt budget runs out. */
+static int monitor_vrr_retry_callback(void *data) {
+	Monitor *m = data;
+
+	/* Nothing to do if the monitor is going away, disabled, no longer wants
+	 * VRR, or already has it enabled. */
+	if (m->iscleanuping || !m->wlr_output->enabled || !m->vrr_global_enable ||
+		m->is_vrr_enabling)
+		return 1;
+
+	m->vrr_retry_count++;
+	enable_adaptive_sync(m, &m->pending); // sets is_vrr_enabling on test pass
+	if (m->is_vrr_enabling) {
+		if (mango_output_commit(m))
+			updatemons(NULL, NULL);
+		else
+			m->is_vrr_enabling = false; // commit failed, retry
+	}
+
+	if (!m->is_vrr_enabling && m->vrr_retry_count < VRR_RETRY_MAX_ATTEMPTS)
+		wl_event_source_timer_update(m->vrr_retry_source, VRR_RETRY_INTERVAL_MS);
+
+	return 1;
+}
+
 void monitor_check_skip_frame_timeout(Monitor *m) {
 	if (m->skiping_frame &&
 		m->resizing_count_pending == m->resizing_count_current) {
@@ -6801,7 +6845,10 @@ void check_vrr_enable(Client *c) {
 	if (!c && m && !m->iscleanuping && m->is_vrr_enabling &&
 		!m->vrr_global_enable) {
 		disable_adaptive_sync(m, &m->pending);
-		mango_output_commit(m);
+		if (mango_output_commit(m))
+			updatemons(NULL, NULL);
+		else
+			m->is_vrr_enabling = true;
 		return;
 	}
 
@@ -6811,16 +6858,25 @@ void check_vrr_enable(Client *c) {
 	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
 		!c->mon->is_vrr_enabling) {
 		enable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
+		if (mango_output_commit(m))
+			updatemons(NULL, NULL);
+		else
+			m->is_vrr_enabling = false;
 		return;
 	}
 
 	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable) {
 		enable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
+		if (mango_output_commit(m))
+			updatemons(NULL, NULL);
+		else
+			m->is_vrr_enabling = false;
 	} else if (c->mon->is_vrr_enabling && !c->mon->vrr_global_enable) {
 		disable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
+		if (mango_output_commit(m))
+			updatemons(NULL, NULL);
+		else
+			m->is_vrr_enabling = true;
 	}
 }
 
@@ -7170,6 +7226,20 @@ void updatemons(struct wl_listener *listener, void *data) {
 	 * wl_pointer.motion event for the clients, it's only the image what
 	 * it's at the wrong position after all. */
 	wlr_cursor_move(cursor, NULL, 0, 0);
+
+	/* focusclient above may have changed output state (e.g. enabled VRR via
+	 * check_vrr_enable); rebuild the config so clients receive the current
+	 * state rather than the snapshot taken before the loop. */
+	wlr_output_configuration_v1_destroy(output_config);
+	output_config = wlr_output_configuration_v1_create();
+	wl_list_for_each(m, &mons, link) {
+		config_head = wlr_output_configuration_head_v1_create(output_config,
+															  m->wlr_output);
+		if (m->wlr_output->enabled) {
+			config_head->state.x = m->m.x;
+			config_head->state.y = m->m.y;
+		}
+	}
 
 	wlr_output_manager_v1_set_configuration(output_mgr, output_config);
 }
