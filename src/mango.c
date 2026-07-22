@@ -4326,30 +4326,21 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 	int32_t ji;
 	int32_t isbreak = 0;
 
+	if (state != WL_KEYBOARD_KEY_STATE_PRESSED &&
+		state != WL_KEYBOARD_KEY_STATE_RELEASED) {
+		return 0;
+	}
+
 	if (is_keyboard_shortcut_inhibitor(seat->keyboard_state.focused_surface)) {
-		return false;
+		return 0;
 	}
 
 	for (ji = 0; ji < config.key_bindings_count; ji++) {
-		if (config.key_bindings_count < 1)
-			break;
-
-		if (locked && config.key_bindings[ji].islockapply == false)
-			continue;
-
-		if (state == WL_KEYBOARD_KEY_STATE_RELEASED &&
-			config.key_bindings[ji].isreleaseapply == false)
-			continue;
-
-		if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
-			config.key_bindings[ji].isreleaseapply == true)
-			continue;
-
-		if (state != WL_KEYBOARD_KEY_STATE_PRESSED &&
-			state != WL_KEYBOARD_KEY_STATE_RELEASED)
-			continue;
-
 		k = &config.key_bindings[ji];
+
+		if (locked && k->islockapply == false)
+			continue;
+
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
 			CLEANMASK(mods) == CLEANMASK(k->mod) &&
@@ -4366,6 +4357,14 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 				handled = 1;
 			else
 				handled = 0;
+
+			if (state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+				k->isreleaseapply == false)
+				continue;
+
+			if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+				k->isreleaseapply == true)
+				continue;
 
 			isbreak = k->func(&k->arg);
 
