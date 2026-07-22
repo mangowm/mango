@@ -1096,8 +1096,8 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 	}
 }
 
-void pre_caculate_before_arrange(Monitor *m, bool want_animation,
-								 bool from_view, bool only_caculate) {
+void pre_calculate_before_arrange(Monitor *m, bool want_animation,
+								 bool from_view, bool only_calculate) {
 	Client *c = NULL;
 	double total_stack_inner_percent = 0;
 	double total_master_inner_percent = 0;
@@ -1201,16 +1201,16 @@ void pre_caculate_before_arrange(Monitor *m, bool want_animation,
 					i++;
 				}
 
-				if (!only_caculate)
+				if (!only_calculate)
 					set_arrange_visible(m, c, want_animation);
 			} else {
 				/* keep the dragged client visible across view switches */
-				if (!only_caculate && c != grabc)
+				if (!only_calculate && c != grabc)
 					set_arrange_hidden(m, c, want_animation);
 			}
 		}
 
-		if (!only_caculate && c->mon == m && c->ismaximizescreen &&
+		if (!only_calculate && c->mon == m && c->ismaximizescreen &&
 			!c->animation.tagouted && !c->animation.tagouting &&
 			VISIBLEON(c, m)) {
 			reset_maximizescreen_size(c);
@@ -1236,7 +1236,7 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		m->sel = focustop(m);
 	}
 
-	pre_caculate_before_arrange(m, want_animation, from_view, false);
+	pre_calculate_before_arrange(m, want_animation, from_view, false);
 
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
