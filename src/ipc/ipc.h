@@ -658,7 +658,7 @@ static int ipc_handle_client_data(int fd, uint32_t mask, void *data) {
 			size_t new_cap = client->buf_cap ? client->buf_cap * 2 : 8192;
 			char *new_buf = realloc(client->buf, new_cap);
 			if (!new_buf) {
-				wlr_log(WLR_ERROR, "IPC: out of memory");
+				mango_error(true, WLR_ERROR, "IPC: out of memory");
 				goto cleanup;
 			}
 			client->buf = new_buf;
@@ -1031,14 +1031,14 @@ void ipc_init(struct wl_event_loop *event_loop) {
 	// 设置 FD_CLOEXEC
 	int flags = fcntl(ipc_sock_fd, F_GETFD, 0);
 	if (flags == -1 || fcntl(ipc_sock_fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
-		wlr_log(WLR_ERROR, "failed to set FD_CLOEXEC on IPC socket");
+		mango_error(true, WLR_ERROR, "failed to set FD_CLOEXEC on IPC socket");
 		close(ipc_sock_fd);
 		return;
 	}
 	// 设置 O_NONBLOCK
 	flags = fcntl(ipc_sock_fd, F_GETFL, 0);
 	if (flags == -1 || fcntl(ipc_sock_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-		wlr_log(WLR_ERROR, "failed to set O_NONBLOCK on IPC socket");
+		mango_error(true, WLR_ERROR, "failed to set O_NONBLOCK on IPC socket");
 		close(ipc_sock_fd);
 		return;
 	}

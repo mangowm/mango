@@ -99,6 +99,7 @@
 #include <xcb/xcb_icccm.h>
 #endif
 #include "common/util.h"
+#include "common/log.h"
 #include "draw/text-node.h"
 
 /* macros */
@@ -1499,7 +1500,7 @@ void gpureset(struct wl_listener *listener, void *data) {
 	struct wlr_allocator *old_alloc = alloc;
 	struct Monitor *m = NULL;
 
-	wlr_log(WLR_DEBUG, "gpu reset");
+	mango_error(true, WLR_DEBUG, "gpu reset");
 
 	if (!(drw = fx_renderer_create(backend)))
 		die("couldn't recreate renderer");
@@ -3102,7 +3103,7 @@ static bool popup_unconstrain(Popup *popup) {
 
 	struct wlr_scene_node *parent_node = wlr_popup->parent->data;
 	if (!parent_node) {
-		wlr_log(WLR_ERROR, "Popup parent has no scene node");
+		mango_error(true, WLR_ERROR, "Popup parent has no scene node");
 		return false;
 	}
 
@@ -3385,11 +3386,11 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	wlr_output_state_set_adaptive_sync_enabled(state, true);
 	if (!wlr_output_test_state(m->wlr_output, state)) {
 		wlr_output_state_set_adaptive_sync_enabled(state, false);
-		wlr_log(WLR_DEBUG, "failed to enable adaptive sync for output %s",
+		mango_error(true, WLR_DEBUG, "failed to enable adaptive sync for output %s",
 				m->wlr_output->name);
 	} else {
 		m->is_vrr_enabling = true;
-		wlr_log(WLR_INFO, "adaptive sync enabled for output %s",
+		mango_error(true, WLR_INFO, "adaptive sync enabled for output %s",
 				m->wlr_output->name);
 	}
 }
@@ -4232,7 +4233,7 @@ void requestmonstate(struct wl_listener *listener, void *data) {
 	}
 
 	if (!wlr_output_commit_state(m->wlr_output, event->state)) {
-		wlr_log(WLR_ERROR,
+		mango_error(false, WLR_ERROR,
 				"Backend requested a new state that could not be applied");
 	}
 }
@@ -5342,7 +5343,7 @@ void handle_session_destroy(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	wlr_log(WLR_DEBUG, "Capture session ended, active count: %d",
+	mango_error(true, WLR_DEBUG, "Capture session ended, active count: %d",
 			active_capture_count);
 	free(tracker);
 }
@@ -5354,7 +5355,7 @@ void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 
 	struct capture_session_tracker *tracker = calloc(1, sizeof(*tracker));
 	if (!tracker) {
-		wlr_log(WLR_ERROR, "Failed to allocate capture session tracker");
+		mango_error(true, WLR_ERROR, "Failed to allocate capture session tracker");
 		return;
 	}
 	tracker->session = session;
@@ -5371,7 +5372,7 @@ void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 		}
 	}
 
-	wlr_log(WLR_DEBUG, "New capture session started, active count: %d",
+	mango_error(true, WLR_DEBUG, "New capture session started, active count: %d",
 			active_capture_count);
 }
 
@@ -5522,7 +5523,7 @@ static void requestdrmlease(struct wl_listener *listener, void *data) {
 	struct wlr_drm_lease_v1 *lease = wlr_drm_lease_request_v1_grant(req);
 
 	if (!lease) {
-		wlr_log(WLR_ERROR, "Failed to grant lease request");
+		mango_error(true, WLR_ERROR, "Failed to grant lease request");
 		wlr_drm_lease_request_v1_reject(req);
 	}
 }
@@ -5582,12 +5583,12 @@ void exchange_two_client(Client *c1, Client *c2) {
 
 void set_activation_env() {
 	if (!getenv("DBUS_SESSION_BUS_ADDRESS")) {
-		wlr_log(WLR_INFO, "Not updating dbus execution environment: "
+		mango_error(true, WLR_INFO, "Not updating dbus execution environment: "
 						  "DBUS_SESSION_BUS_ADDRESS not set");
 		return;
 	}
 
-	wlr_log(WLR_INFO, "Updating dbus execution environment");
+	mango_error(true, WLR_INFO, "Updating dbus execution environment");
 
 	char *env_keys = join_strings(env_vars, " ");
 
@@ -5595,7 +5596,7 @@ void set_activation_env() {
 	const char *arg1 = env_keys;
 	char *cmd1 = string_printf("dbus-update-activation-environment %s", arg1);
 	if (!cmd1) {
-		wlr_log(WLR_ERROR, "Failed to allocate command string");
+		mango_error(true, WLR_ERROR, "Failed to allocate command string");
 		goto cleanup;
 	}
 	spawn(&(Arg){.v = cmd1});
@@ -5605,7 +5606,7 @@ void set_activation_env() {
 	const char *action = "import-environment";
 	char *cmd2 = string_printf("systemctl --user %s %s", action, env_keys);
 	if (!cmd2) {
-		wlr_log(WLR_ERROR, "Failed to allocate command string");
+		mango_error(true, WLR_ERROR, "Failed to allocate command string");
 		goto cleanup;
 	}
 	spawn(&(Arg){.v = cmd2});
@@ -5966,13 +5967,13 @@ void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
 
 void reset_keyboard_layout(void) {
 	if (!kb_group || !kb_group->wlr_group || !seat) {
-		wlr_log(WLR_ERROR, "Invalid keyboard group or seat");
+		mango_error(true, WLR_ERROR, "Invalid keyboard group or seat");
 		return;
 	}
 
 	struct wlr_keyboard *keyboard = &kb_group->wlr_group->keyboard;
 	if (!keyboard || !keyboard->keymap) {
-		wlr_log(WLR_ERROR, "Invalid keyboard or keymap");
+		mango_error(true, WLR_ERROR, "Invalid keyboard or keymap");
 		return;
 	}
 
@@ -5981,14 +5982,14 @@ void reset_keyboard_layout(void) {
 		keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 	const int32_t num_layouts = xkb_keymap_num_layouts(keyboard->keymap);
 	if (num_layouts < 1) {
-		wlr_log(WLR_INFO, "No layouts available");
+		mango_error(true, WLR_INFO, "No layouts available");
 		return;
 	}
 
 	// Create context
 	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 	if (!context) {
-		wlr_log(WLR_ERROR, "Failed to create XKB context");
+		mango_error(true, WLR_ERROR, "Failed to create XKB context");
 		return;
 	}
 
@@ -5996,7 +5997,7 @@ void reset_keyboard_layout(void) {
 		context, &config.xkb_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
 	if (!new_keymap) {
 		// 理论上这里不应该失败，因为前面已经验证过了
-		wlr_log(WLR_ERROR,
+		mango_error(true, WLR_ERROR,
 				"Unexpected failure to create keymap after validation");
 		goto cleanup_context;
 	}
@@ -6004,14 +6005,14 @@ void reset_keyboard_layout(void) {
 	// 验证新keymap是否有布局
 	const int32_t new_num_layouts = xkb_keymap_num_layouts(new_keymap);
 	if (new_num_layouts < 1) {
-		wlr_log(WLR_ERROR, "New keymap has no layouts");
+		mango_error(true, WLR_ERROR, "New keymap has no layouts");
 		xkb_keymap_unref(new_keymap);
 		goto cleanup_context;
 	}
 
 	// 确保当前布局索引在新keymap中有效
 	if (current >= new_num_layouts) {
-		wlr_log(WLR_INFO,
+		mango_error(true, WLR_INFO,
 				"Current layout index %u out of range for new keymap, "
 				"resetting to 0",
 				current);
@@ -6257,7 +6258,7 @@ void setup(void) {
 
 	headless_backend = wlr_headless_backend_create(event_loop);
 	if (!headless_backend) {
-		wlr_log(WLR_ERROR, "Failed to create secondary headless backend");
+		mango_error(true, WLR_ERROR, "Failed to create secondary headless backend");
 	} else {
 		wlr_multi_backend_add(backend, headless_backend);
 	}
@@ -6310,7 +6311,7 @@ void setup(void) {
 		if (cm) {
 			wlr_scene_set_color_manager_v1(scene, cm);
 		} else {
-			wlr_log(WLR_ERROR, "unable to create color manager");
+			mango_error(true, WLR_ERROR, "unable to create color manager");
 		}
 	}
 
@@ -6564,8 +6565,8 @@ void setup(void) {
 	if (drm_lease_manager) {
 		wl_signal_add(&drm_lease_manager->events.request, &drm_lease_request);
 	} else {
-		wlr_log(WLR_DEBUG, "Failed to create wlr_drm_lease_device_v1.");
-		wlr_log(WLR_INFO, "VR will not be available.");
+		mango_error(true, WLR_DEBUG, "Failed to create wlr_drm_lease_device_v1.");
+		mango_error(true, WLR_INFO, "VR will not be available.");
 	}
 
 	// 创建顶层管理句柄
@@ -6590,7 +6591,7 @@ void setup(void) {
 
 		setenv("DISPLAY", xwayland->display_name, 1);
 	} else {
-		fprintf(stderr,
+		mango_error(true, WLR_ERROR,
 				"failed to setup XWayland X server, continuing without it\n");
 	}
 	sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
@@ -7291,7 +7292,7 @@ handle_keyboard_shortcuts_inhibitor_destroy(struct wl_listener *listener,
 	KeyboardShortcutsInhibitor *inhibitor =
 		wl_container_of(listener, inhibitor, destroy);
 
-	wlr_log(WLR_DEBUG, "Removing keyboard shortcuts inhibitor");
+	mango_error(true, WLR_DEBUG, "Removing keyboard shortcuts inhibitor");
 
 	wl_list_remove(&inhibitor->link);
 	wl_list_remove(&inhibitor->destroy.link);
@@ -7320,7 +7321,7 @@ void handle_keyboard_shortcuts_inhibit_new_inhibitor(
 		return;
 	}
 
-	wlr_log(WLR_DEBUG, "Adding keyboard shortcuts inhibitor");
+	mango_error(true, WLR_DEBUG, "Adding keyboard shortcuts inhibitor");
 
 	KeyboardShortcutsInhibitor *kbsinhibitor =
 		calloc(1, sizeof(KeyboardShortcutsInhibitor));
@@ -7396,7 +7397,7 @@ void fix_xwayland_coordinate(struct wlr_box *geom) {
 int32_t synckeymap(void *data) {
 	reset_keyboard_layout();
 	// we only need to sync keymap once
-	wlr_log(WLR_INFO, "timer to synckeymap done");
+	mango_error(true, WLR_INFO, "timer to synckeymap done");
 	wl_event_source_timer_update(sync_keymap, 0);
 	return 0;
 }

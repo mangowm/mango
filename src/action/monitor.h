@@ -41,7 +41,7 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 			wlr_output_state_init(&m->pending);
 		}
 	} else {
-		wlr_log(WLR_INFO, "Failed to commit output %s", m->wlr_output->name);
+		mango_error(true, WLR_INFO, "Failed to commit output %s", m->wlr_output->name);
 		return false;
 	}
 
@@ -55,7 +55,7 @@ bool mango_output_commit(Monitor *m) {
 		wlr_output_state_finish(&m->pending);
 		wlr_output_state_init(&m->pending);
 	} else {
-		wlr_log(WLR_ERROR, "Failed to commit frame");
+		mango_error(true, WLR_ERROR, "Failed to commit frame");
 	}
 	return committed;
 }

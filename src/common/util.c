@@ -6,6 +6,9 @@
 #include <string.h>
 #include <time.h>
 
+#include <wlr/util/log.h>
+
+#include "log.h"
 #include "util.h"
 
 #define PCRE2_CODE_UNIT_WIDTH 8
@@ -64,7 +67,7 @@ int32_t regex_match(const char *pattern, const char *str) {
 	if (!re) {
 		PCRE2_UCHAR errbuf[256];
 		pcre2_get_error_message(errnum, errbuf, sizeof(errbuf));
-		fprintf(stderr, "PCRE2 error: %s at offset %zu\n", errbuf, erroffset);
+		mango_error(false, WLR_ERROR, "PCRE2 : %s at offset %zu\n", errbuf, erroffset);
 		return 0;
 	}
 

@@ -45,7 +45,7 @@ void handle_tearing_new_object(struct wl_listener *listener, void *data) {
 	enum wp_tearing_control_v1_presentation_hint hint =
 		wlr_tearing_control_manager_v1_surface_hint_from_surface(
 			tearing_control, new_tearing_control->surface);
-	wlr_log(WLR_DEBUG, "New presentation hint %d received for surface %p", hint,
+	mango_error(true, WLR_DEBUG, "New presentation hint %d received for surface %p", hint,
 			new_tearing_control->surface);
 
 	struct tearing_controller *controller =
