@@ -296,7 +296,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    This library handles the visual effects.
 
    ```bash
-   git clone -b 0.5.0 https://github.com/wlrfx/scenefx.git
+   git clone -b 0.5 https://github.com/wlrfx/scenefx.git
    cd scenefx
    meson build -Dprefix=/usr
    sudo ninja -C build install
