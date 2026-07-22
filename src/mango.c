@@ -2540,6 +2540,10 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 			selmon = xytomon(cursor->x, cursor->y);
 			client_update_oldmonname_record(grabc, selmon);
 			setmon(grabc, selmon, 0, true);
+			/* if the view changed mid-drag, drop onto the current tag
+			 * instead of silently returning to the original one */
+			if (!VISIBLEON(grabc, selmon))
+				grabc->tags = selmon->tagset[selmon->seltags];
 			selmon->prevsel = ISTILED(selmon->sel) ? selmon->sel : NULL;
 			selmon->sel = grabc;
 			tmpc = grabc;
@@ -3524,7 +3528,14 @@ void createmon(struct wl_listener *listener, void *data) {
 		if (preferred_mode) {
 			wlr_output_state_set_mode(&pending, preferred_mode);
 		} else {
-			wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+			struct wlr_output_state custom_test_mode;
+			wlr_output_state_init(&custom_test_mode);
+			wlr_output_state_set_custom_mode(&custom_test_mode, 1920, 1080,
+											 60000);
+			if (wlr_output_test_state(wlr_output, &custom_test_mode)) {
+				wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+			}
+			wlr_output_state_finish(&custom_test_mode);
 		}
 	}
 
@@ -4929,7 +4940,7 @@ void unminimize(Client *c) {
 
 void set_minimized(Client *c) {
 
-	if (!c || !c->mon)
+	if (!c || !c->mon || c == grabc)
 		return;
 
 	c->isglobal = 0;
@@ -5847,7 +5858,8 @@ void exit_scroller_stack(Client *c) {
 
 void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 	struct wlr_box maximizescreen_box;
-	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
+	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
+		c == grabc)
 		return;
 
 	if (c->mon->isoverview)
@@ -5910,7 +5922,8 @@ void setfullscreen(Client *c, int32_t fullscreen,
 				   bool rearrange) // 用自定义全屏代理自带全屏
 {
 
-	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
+	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
+		c == grabc)
 		return;
 
 	if (c->mon->isoverview)
@@ -6903,6 +6916,11 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	if (c == grabc) {
 		cursor_mode = CurNormal;
 		grabc = NULL;
+		if (dropc) {
+			dropc->enable_drop_area_draw = false;
+			client_set_drop_area(dropc);
+			dropc = NULL;
+		}
 	}
 
 	if (c == dropc) {
