@@ -28,8 +28,8 @@ Add the following to your Waybar configuration:
       "overview-label": "OVERVIEW",
   },
   "mango/keymode": {
-    "format": "{}",
-    // "format-default": " Default",
+  	"format": "{}",
+  	// "format-default": " Default",
     // "format-test": " Test",
   },
   "mango/window": {

@@ -1,5 +1,6 @@
 #include "session.h"
 
+#include <cjson/cJSON.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -8,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <wlr/util/log.h>
 
 #include "../common/util.h"
 
@@ -35,7 +37,7 @@ static PendingSessionEntry *pending_entries;
 static size_t pending_count;
 static bool restore_started;
 
-static bool mkdir_p(const char *dir) {
+static bool ensure_directory_tree(const char *dir) {
 	char tmp[PATH_MAX];
 	size_t len;
 
@@ -105,188 +107,109 @@ static void free_pending_entries(void) {
 	pending_count = 0;
 }
 
-static const char *skip_ws(const char *p) {
-	while (p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t'))
-		++p;
-	return p;
-}
+static bool session_json_string(const cJSON *object, const char *key, char *dest,
+								size_t dest_size, bool required) {
+	const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	size_t len;
 
-static const char *find_matching_brace(const char *start) {
-	int depth = 0;
-	bool in_string = false;
-	bool escaped = false;
-
-	for (const char *p = start; p && *p != '\0'; ++p) {
-		if (in_string) {
-			if (escaped) {
-				escaped = false;
-			} else if (*p == '\\') {
-				escaped = true;
-			} else if (*p == '"') {
-				in_string = false;
-			}
-			continue;
-		}
-
-		if (*p == '"') {
-			in_string = true;
-		} else if (*p == '{') {
-			depth++;
-		} else if (*p == '}') {
-			depth--;
-			if (depth == 0)
-				return p;
-		}
-	}
-
-	return NULL;
-}
-
-static bool parse_json_string_value(const char *value, char *dest, size_t dest_size) {
-	size_t i = 0;
-	const char *p = skip_ws(value);
-
-	if (!p || *p != '"' || dest_size == 0)
+	if (!item)
+		return !required;
+	if (!cJSON_IsString(item) || !item->valuestring || dest_size == 0)
 		return false;
 
-	++p;
-	while (*p != '\0' && *p != '"' && i + 1 < dest_size) {
-		if (*p == '\\') {
-			++p;
-			if (*p == '\0')
-				break;
-			switch (*p) {
-			case 'n':
-				dest[i++] = '\n';
-				break;
-			case 'r':
-				dest[i++] = '\r';
-				break;
-			case 't':
-				dest[i++] = '\t';
-				break;
-			case '\\':
-			case '"':
-			case '/':
-				dest[i++] = *p;
-				break;
-			default:
-				dest[i++] = *p;
-				break;
-			}
-			++p;
-			continue;
-		}
-		dest[i++] = *p++;
-	}
+	len = strlen(item->valuestring);
+	if ((required && len == 0) || len >= dest_size)
+		return false;
 
-	dest[i] = '\0';
+	memcpy(dest, item->valuestring, len + 1);
 	return true;
 }
 
-static bool extract_json_string(const char *obj, const char *key, char *dest,
-								size_t dest_size) {
-	const char *p = strstr(obj, key);
-	if (!p)
-		return false;
-	p = strchr(p, ':');
-	if (!p)
-		return false;
-	return parse_json_string_value(p + 1, dest, dest_size);
-}
+static bool session_json_int32(const cJSON *object, const char *key, int32_t *out,
+							   bool required) {
+	const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	double value;
 
-static bool extract_json_int(const char *obj, const char *key, int32_t *out) {
-	char *end = NULL;
-	const char *p = strstr(obj, key);
-	long value;
-
-	if (!p)
-		return false;
-	p = strchr(p, ':');
-	if (!p)
-		return false;
-	p = skip_ws(p + 1);
-	if (!p)
+	if (!item)
+		return !required;
+	if (!cJSON_IsNumber(item))
 		return false;
 
-	value = strtol(p, &end, 10);
-	if (end == p)
+	value = item->valuedouble;
+	if (value < INT32_MIN || value > INT32_MAX ||
+		value != (double)(int32_t)value)
 		return false;
 
 	*out = (int32_t)value;
 	return true;
 }
 
-static bool extract_json_object_range(const char *obj, const char *key,
-									  const char **start, const char **end) {
-	const char *p = strstr(obj, key);
-	if (!p)
+static bool session_json_uint32(const cJSON *object, const char *key,
+								uint32_t *out, bool required) {
+	const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	double value;
+
+	if (!item)
+		return !required;
+	if (!cJSON_IsNumber(item))
 		return false;
-	p = strchr(p, ':');
-	if (!p)
+
+	value = item->valuedouble;
+	if (value < 0 || value > UINT32_MAX || value != (double)(uint32_t)value)
 		return false;
-	p = skip_ws(p + 1);
-	if (!p || *p != '{')
-		return false;
-	*start = p;
-	*end = find_matching_brace(p);
-	return *end != NULL;
+
+	*out = (uint32_t)value;
+	return true;
 }
 
-static bool parse_geom_object(const char *obj, const char *key, SessionRect *geom) {
-	const char *start = NULL, *end = NULL;
-	char *sub = NULL;
-	bool ok;
-	size_t len;
+static bool session_json_rect(const cJSON *object, const char *key,
+							  SessionRect *rect) {
+	const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
 
-	if (!extract_json_object_range(obj, key, &start, &end))
+	if (!item)
+		return true;
+	if (!cJSON_IsObject(item))
 		return false;
 
-	len = (size_t)(end - start + 1);
-	sub = ecalloc(len + 1, 1);
-	memcpy(sub, start, len);
-
-	ok = extract_json_int(sub, "\"x\"", &geom->x) &&
-		 extract_json_int(sub, "\"y\"", &geom->y) &&
-		 extract_json_int(sub, "\"width\"", &geom->width) &&
-		 extract_json_int(sub, "\"height\"", &geom->height);
-
-	free(sub);
-	return ok;
+	return session_json_int32(item, "x", &rect->x, true) &&
+		   session_json_int32(item, "y", &rect->y, true) &&
+		   session_json_int32(item, "width", &rect->width, true) &&
+		   session_json_int32(item, "height", &rect->height, true);
 }
 
-static bool parse_session_entry(const char *obj, SessionRestoreEntry *entry) {
-	int32_t tags = 0;
-
+static bool parse_session_entry(const cJSON *object,
+								SessionRestoreEntry *entry) {
 	memset(entry, 0, sizeof(*entry));
 
-	if (!extract_json_string(obj, "\"app_id\"", entry->app_id,
-							 sizeof(entry->app_id)))
-		return false;
-
-	extract_json_string(obj, "\"title\"", entry->title, sizeof(entry->title));
-	extract_json_string(obj, "\"monitor\"", entry->monitor,
-						sizeof(entry->monitor));
-	extract_json_string(obj, "\"launch_command\"", entry->launch_command,
-						sizeof(entry->launch_command));
-	extract_json_int(obj, "\"pid\"", &entry->pid);
-	extract_json_int(obj, "\"tags\"", &tags);
-	entry->tags = (uint32_t)tags;
-	extract_json_int(obj, "\"is_floating\"", &entry->is_floating);
-	extract_json_int(obj, "\"is_fullscreen\"", &entry->is_fullscreen);
-	extract_json_int(obj, "\"is_minimized\"", &entry->is_minimized);
-	parse_geom_object(obj, "\"geom\"", &entry->geom);
-	parse_geom_object(obj, "\"float_geom\"", &entry->float_geom);
-
-	return true;
+	return cJSON_IsObject(object) &&
+		   session_json_string(object, "app_id", entry->app_id,
+							   sizeof(entry->app_id), true) &&
+		   session_json_string(object, "title", entry->title,
+							   sizeof(entry->title), false) &&
+		   session_json_string(object, "monitor", entry->monitor,
+							   sizeof(entry->monitor), false) &&
+		   session_json_string(object, "launch_command", entry->launch_command,
+							   sizeof(entry->launch_command), false) &&
+		   session_json_int32(object, "pid", &entry->pid, false) &&
+		   session_json_uint32(object, "tags", &entry->tags, false) &&
+		   session_json_int32(object, "is_floating", &entry->is_floating,
+							  false) &&
+		   session_json_int32(object, "is_fullscreen", &entry->is_fullscreen,
+							  false) &&
+		   session_json_int32(object, "is_minimized", &entry->is_minimized,
+							  false) &&
+		   session_json_rect(object, "geom", &entry->geom) &&
+		   session_json_rect(object, "float_geom", &entry->float_geom);
 }
 
 static bool load_pending_entries(void) {
 	char *path = session_file_path();
 	char *contents = NULL;
 	FILE *in = NULL;
-	const char *cursor;
+	cJSON *root = NULL;
+	const cJSON *object;
 	bool loaded = false;
+	size_t index = 0;
 
 	free_pending_entries();
 	if (!path)
@@ -296,8 +219,8 @@ static bool load_pending_entries(void) {
 		goto cleanup;
 
 	if (!session_file_is_trusted(path)) {
-		fprintf(stderr,
-				"mango session: refusing to restore from untrusted session file: %s\n",
+		wlr_log(WLR_ERROR,
+				"mango session: refusing to restore from untrusted session file: %s",
 				path);
 		goto cleanup;
 	}
@@ -317,41 +240,39 @@ static bool load_pending_entries(void) {
 		goto cleanup;
 	contents[size] = '\0';
 
-	cursor = contents;
-	while ((cursor = strchr(cursor, '{')) != NULL) {
-		const char *end = find_matching_brace(cursor);
+	root = cJSON_ParseWithOpts(contents, NULL, true);
+	if (!cJSON_IsArray(root)) {
+		wlr_log(WLR_ERROR, "mango session: invalid session file: %s", path);
+		goto cleanup;
+	}
+
+	cJSON_ArrayForEach(object, root) {
 		SessionRestoreEntry entry;
-		char *obj;
-		size_t len;
 
-		if (!end)
-			break;
-
-		len = (size_t)(end - cursor + 1);
-		obj = ecalloc(len + 1, 1);
-		memcpy(obj, cursor, len);
-
-		if (parse_session_entry(obj, &entry)) {
-				PendingSessionEntry *new_entries = realloc(
-					pending_entries, sizeof(*pending_entries) * (pending_count + 1));
-				if (!new_entries) {
-					free(obj);
-					goto cleanup;
-				}
-				pending_entries = new_entries;
-				pending_entries[pending_count].entry = entry;
-				pending_entries[pending_count].used = false;
-				pending_count++;
-			loaded = true;
+		if (!parse_session_entry(object, &entry)) {
+			wlr_log(WLR_ERROR,
+					"mango session: skipping invalid session entry at index %zu",
+					index++);
+			continue;
 		}
 
-		free(obj);
-		cursor = end + 1;
+		PendingSessionEntry *new_entries = realloc(
+			pending_entries, sizeof(*pending_entries) * (pending_count + 1));
+		if (!new_entries)
+			goto cleanup;
+
+		pending_entries = new_entries;
+		pending_entries[pending_count].entry = entry;
+		pending_entries[pending_count].used = false;
+		pending_count++;
+		index++;
 	}
+	loaded = pending_count > 0;
 
 cleanup:
 	if (in)
 		fclose(in);
+	cJSON_Delete(root);
 	free(contents);
 	free(path);
 	return loaded;
@@ -476,7 +397,7 @@ void session_save_now(bool is_final_shutdown) {
 		return;
 
 	dir = session_data_dir();
-	if (!dir || !mkdir_p(dir))
+	if (!dir || !ensure_directory_tree(dir))
 		goto cleanup;
 
 	tmp_path = string_printf("%s/session.json.tmp", dir);
@@ -489,6 +410,10 @@ void session_save_now(bool is_final_shutdown) {
 		goto cleanup;
 
 	count = mango_session_write_snapshot(out);
+	if (count < 0) {
+		wlr_log(WLR_ERROR, "mango session: failed to serialize session state");
+		goto cleanup;
+	}
 	if (fclose(out) != 0) {
 		out = NULL;
 		goto cleanup;
@@ -506,6 +431,8 @@ void session_save_now(bool is_final_shutdown) {
 cleanup:
 	if (out)
 		fclose(out);
+	if (tmp_path)
+		unlink(tmp_path);
 	free(dir);
 	free(tmp_path);
 	free(final_path);

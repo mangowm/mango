@@ -65,7 +65,7 @@ Then force it for your specific game:
 windowrule=force_tearing:1,title:Counter-Strike 2
 ```
 
-> **Warning:** Some graphics cards require setting `env=WLR_DRM_NO_ATOMIC,1` in config before mango starts for tearing to work.
+> **Warning:** Some graphics cards require setting `env=WLR_DRM_NO_ATOMIC,1` in config before mango starts for tearing to work. 
 > See [Monitors — Tearing](/docs/configuration/monitors#tearing-game-mode) for details.
 
 ---

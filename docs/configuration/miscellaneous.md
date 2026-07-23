@@ -12,6 +12,45 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `allow_lock_transparent` | `0` | Allow the lock screen to be transparent. |
 | `allow_shortcuts_inhibit` | `1` | Allow shortcuts to be inhibited by clients. |
 
+## Session Restore
+
+Session restore is opt-in and disabled by default. When enabled, Mango saves
+restorable applications during a clean shutdown, relaunches them at the next
+startup, and restores their tag, monitor, floating or fullscreen state, and
+floating geometry as their windows map.
+
+```ini
+session_restore=1
+```
+
+Mango prefers exact commands for applications it spawned itself. For other
+applications, it tries to recover a suitable command from process metadata,
+normalizing desktop-entry and Flatpak launchers before falling back to raw
+process arguments.
+
+Use `session_launch` when an application needs an explicit launch command.
+An app ID-only rule applies to every matching window; adding a title allows
+different commands for windows sharing an app ID.
+
+```ini
+session_launch=foot|foot
+session_launch=foot|gamma|foot -a foot -T gamma -e sh -lc "sleep 600"
+```
+
+Mango restores only from its session file when that file is owned by the
+current user and is not writable by group or others. The file is stored at
+`$XDG_DATA_HOME/mango/session.json`, or
+`$HOME/.local/share/mango/session.json` when `XDG_DATA_HOME` is unset.
+
+Current limitations:
+
+- Minimized state is not restored.
+- Target outputs must already exist before clients map; Mango does not recreate
+  outputs or reconcile windows when an output appears later.
+- Manual `session_launch` rules may still be needed for unusual wrappers,
+  applications without reliable launcher metadata, and duplicate windows that
+  intentionally require different commands.
+
 ## Focus & Input
 
 | Setting | Default | Description |

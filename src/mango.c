@@ -4,6 +4,7 @@
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "wlr/util/box.h"
 #include "wlr/util/edges.h"
+#include <cjson/cJSON.h>
 #include <getopt.h>
 #include <libinput.h>
 #include <limits.h>
@@ -1219,37 +1220,6 @@ static struct wl_event_source *sync_keymap;
 #include "layout/scroll.h"
 #include "layout/vertical.h"
 
-static void session_write_json_string(FILE *out, const char *str) {
-	const unsigned char *p = (const unsigned char *)(str ? str : "");
-
-	fputc('"', out);
-	for (; *p != '\0'; ++p) {
-		switch (*p) {
-		case '\\':
-			fputs("\\\\", out);
-			break;
-		case '"':
-			fputs("\\\"", out);
-			break;
-		case '\n':
-			fputs("\\n", out);
-			break;
-		case '\r':
-			fputs("\\r", out);
-			break;
-		case '\t':
-			fputs("\\t", out);
-			break;
-		default:
-			if (*p < 0x20)
-				fprintf(out, "\\u%04x", *p);
-			else
-				fputc(*p, out);
-		}
-	}
-	fputc('"', out);
-}
-
 const char *mango_session_client_appid(Client *c) { return client_get_appid(c); }
 
 const char *mango_session_client_title(Client *c) { return client_get_title(c); }
@@ -2043,54 +2013,107 @@ static const char *session_client_launch_command(Client *c) {
 	return appid;
 }
 
+static cJSON *session_json_rect(const struct wlr_box *rect) {
+	cJSON *object = cJSON_CreateObject();
+
+	if (!object)
+		return NULL;
+	if (!cJSON_AddNumberToObject(object, "x", rect->x) ||
+		!cJSON_AddNumberToObject(object, "y", rect->y) ||
+		!cJSON_AddNumberToObject(object, "width", rect->width) ||
+		!cJSON_AddNumberToObject(object, "height", rect->height)) {
+		cJSON_Delete(object);
+		return NULL;
+	}
+
+	return object;
+}
+
+static cJSON *session_json_client_entry(Client *c) {
+	const char *monitor_name =
+		(c->mon && c->mon->wlr_output) ? c->mon->wlr_output->name : "";
+	const char *title = client_get_title(c);
+	cJSON *object = cJSON_CreateObject();
+	cJSON *geom = NULL;
+	cJSON *float_geom = NULL;
+
+	if (!object)
+		return NULL;
+
+	if (!cJSON_AddStringToObject(object, "app_id", client_get_appid(c)) ||
+		!cJSON_AddStringToObject(object, "title", title ? title : "") ||
+		!cJSON_AddNumberToObject(object, "pid", client_get_pid(c)) ||
+		!cJSON_AddStringToObject(object, "monitor", monitor_name) ||
+		!cJSON_AddStringToObject(object, "launch_command",
+								session_client_launch_command(c)) ||
+		!cJSON_AddNumberToObject(object, "tags", c->tags) ||
+		!cJSON_AddNumberToObject(object, "is_floating", c->isfloating) ||
+		!cJSON_AddNumberToObject(object, "is_fullscreen", c->isfullscreen) ||
+		!cJSON_AddNumberToObject(object, "is_minimized", c->isminimized))
+		goto fail;
+
+	geom = session_json_rect(&c->geom);
+	float_geom = session_json_rect(&c->float_geom);
+	if (!geom || !float_geom)
+		goto fail;
+	if (!cJSON_AddItemToObject(object, "geom", geom))
+		goto fail;
+	geom = NULL;
+	if (!cJSON_AddItemToObject(object, "float_geom", float_geom))
+		goto fail;
+	float_geom = NULL;
+
+	return object;
+
+fail:
+	cJSON_Delete(geom);
+	cJSON_Delete(float_geom);
+	cJSON_Delete(object);
+	return NULL;
+}
+
 int32_t mango_session_write_snapshot(FILE *out) {
 	Client *c;
+	cJSON *root = NULL;
+	char *json = NULL;
 	int32_t count = 0;
+	int32_t result = -1;
 
-	fputs("[\n", out);
+	if (!out)
+		return -1;
+
+	root = cJSON_CreateArray();
+	if (!root)
+		return -1;
+
 	wl_list_for_each(c, &clients, link) {
-		const char *monitor_name;
-		const char *appid;
-		const char *launch_command;
-		const char *title;
-		const char *separator;
+		cJSON *entry;
 
 		if (!session_client_should_save(c))
 			continue;
 
-		monitor_name =
-			(c->mon && c->mon->wlr_output) ? c->mon->wlr_output->name : "";
-		appid = client_get_appid(c);
-		launch_command = session_client_launch_command(c);
-		title = client_get_title(c);
-		separator = count == 0 ? "" : ",\n";
-
-		fputs(separator, out);
-		fputs("  {\n", out);
-		fputs("    \"app_id\": ", out);
-		session_write_json_string(out, appid);
-		fputs(",\n    \"title\": ", out);
-		session_write_json_string(out, title);
-		fprintf(out,
-				",\n    \"pid\": %d,\n    \"monitor\": ",
-				client_get_pid(c));
-		session_write_json_string(out, monitor_name);
-		fputs(",\n    \"launch_command\": ", out);
-		session_write_json_string(out, launch_command);
-		fprintf(out,
-				",\n    \"tags\": %u,\n    \"is_floating\": %d,\n    "
-				"\"is_fullscreen\": %d,\n    \"is_minimized\": %d,\n    "
-				"\"geom\": {\"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d},"
-				"\n    \"float_geom\": {\"x\": %d, \"y\": %d, \"width\": %d, "
-				"\"height\": %d}\n  }",
-				c->tags, c->isfloating, c->isfullscreen, c->isminimized, c->geom.x,
-				c->geom.y, c->geom.width, c->geom.height, c->float_geom.x,
-				c->float_geom.y, c->float_geom.width, c->float_geom.height);
+		entry = session_json_client_entry(c);
+		if (!entry)
+			goto cleanup;
+		if (!cJSON_AddItemToArray(root, entry)) {
+			cJSON_Delete(entry);
+			goto cleanup;
+		}
 		count++;
 	}
-	fputs("\n]\n", out);
 
-	return count;
+	json = cJSON_Print(root);
+	if (!json)
+		goto cleanup;
+	if (fputs(json, out) == EOF || fputc('\n', out) == EOF)
+		goto cleanup;
+
+	result = count;
+
+cleanup:
+	cJSON_free(json);
+	cJSON_Delete(root);
+	return result;
 }
 
 void mango_session_apply_restore_entry(Client *c,
