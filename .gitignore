@@ -8,3 +8,4 @@ util.o
 *-protocol.h
 *-protocol.c
 *-protocol.o
+compile_commands.json
