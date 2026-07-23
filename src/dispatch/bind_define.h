@@ -2023,6 +2023,55 @@ int32_t sleep_toggle_monitor(const Arg *arg) {
 	return 0;
 }
 
+void set_touchscreen_send_events(enum libinput_config_send_events_mode mode) {
+	InputDevice *id;
+	struct libinput_device *device;
+	wl_list_for_each(id, &inputdevices, link) {
+		if (id->wlr_device->type != WLR_INPUT_DEVICE_TOUCH) {
+			continue;
+		}
+
+		device = id->libinput_device;
+		if (wlr_input_device_is_libinput(id->wlr_device) && device) {
+			uint32_t possible =
+				libinput_device_config_send_events_get_modes(device);
+			if (possible & mode || mode == LIBINPUT_CONFIG_SEND_EVENTS_ENABLED)
+				libinput_device_config_send_events_set_mode(device, mode);
+		}
+	}
+}
+
+int32_t disable_touchscreen(const Arg *arg) {
+	set_touchscreen_send_events(LIBINPUT_CONFIG_SEND_EVENTS_DISABLED);
+	return 0;
+}
+
+int32_t enable_touchscreen(const Arg *arg) {
+	set_touchscreen_send_events(LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
+	return 0;
+}
+
+int32_t toggle_touchscreen(const Arg *arg) {
+	InputDevice *id;
+	struct libinput_device *device;
+	wl_list_for_each(id, &inputdevices, link) {
+		if (id->wlr_device->type != WLR_INPUT_DEVICE_TOUCH) {
+			continue;
+		}
+
+		device = id->libinput_device;
+		if (wlr_input_device_is_libinput(id->wlr_device) && device) {
+			enum libinput_config_send_events_mode current =
+				libinput_device_config_send_events_get_mode(device);
+			set_touchscreen_send_events(
+				current == LIBINPUT_CONFIG_SEND_EVENTS_ENABLED
+					? LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
+					: LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
+		}
+	}
+	return 0;
+}
+
 int32_t scroller_apply_stack(Client *c, Client *target_client,
 							 int32_t direction) {
 	if (!c || !c->mon || c->isfloating || !is_scroller_layout(c->mon))
