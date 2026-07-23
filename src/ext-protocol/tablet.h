@@ -63,7 +63,7 @@ static struct wl_listener tablet_tool_tip = {.notify = tablettooltip};
 void createtablet(struct wlr_input_device *device) {
 	struct Tablet *tablet = calloc(1, sizeof(struct Tablet));
 	if (!tablet) {
-		wlr_log(WLR_ERROR, "could not allocate tablet");
+		mango_error(true, WLR_ERROR, "could not allocate tablet");
 		return;
 	}
 
@@ -157,7 +157,7 @@ void tabletpadattach(struct wl_listener *listener, void *data) {
 void createtabletpad(struct wlr_input_device *device) {
 	struct TabletPad *tablet_pad = calloc(1, sizeof(struct TabletPad));
 	if (!tablet_pad) {
-		wlr_log(WLR_ERROR, "could not allocate tablet_pad");
+		mango_error(true, WLR_ERROR, "could not allocate tablet_pad");
 		return;
 	}
 
@@ -165,7 +165,7 @@ void createtabletpad(struct wlr_input_device *device) {
 	tablet_pad->pad_v2 = wlr_tablet_pad_create(tablet_mgr, seat, device);
 
 	if (!tablet_pad->pad_v2) {
-		wlr_log(WLR_ERROR, "could not create tablet_pad_v2 wrapper");
+		mango_error(true, WLR_ERROR, "could not create tablet_pad_v2 wrapper");
 		free(tablet_pad);
 		return;
 	}
@@ -345,7 +345,7 @@ void tablettoolproximity(struct wl_listener *listener, void *data) {
 	if (!tool) {
 		tool = calloc(1, sizeof(struct TabletTool));
 		if (!tool) {
-			wlr_log(WLR_ERROR, "could not allocate tablet_tool");
+			mango_error(true, WLR_ERROR, "could not allocate tablet_tool");
 			return;
 		}
 		tool->tool_v2 = wlr_tablet_tool_create(tablet_mgr, seat, wlr_tool);
@@ -360,7 +360,7 @@ void tablettoolproximity(struct wl_listener *listener, void *data) {
 		if (config.tablet_map_to_mon) {
 			wl_list_for_each(m_iter, &mons, link) {
 				if (match_monitor_spec(config.tablet_map_to_mon, m_iter)) {
-					wlr_log(WLR_DEBUG, "Mapping tablet %s to output %s",
+					mango_error(true, WLR_DEBUG, "Mapping tablet %s to output %s",
 							event->tablet->base.name, config.tablet_map_to_mon);
 					wlr_cursor_map_input_to_output(cursor, &event->tablet->base,
 												   m_iter->wlr_output);

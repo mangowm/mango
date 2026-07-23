@@ -68,7 +68,7 @@ static void handle_ext_commit(struct wl_listener *listener, void *data) {
 			}
 
 			goto_workspace(workspace);
-			wlr_log(WLR_INFO, "ext activating workspace %d", workspace->tag);
+			mango_error(true, WLR_INFO, "ext activating workspace %d", workspace->tag);
 			break;
 		}
 		case WLR_EXT_WORKSPACE_V1_REQUEST_DEACTIVATE: {
@@ -90,7 +90,7 @@ static void handle_ext_commit(struct wl_listener *listener, void *data) {
 			}
 
 			toggle_workspace(workspace);
-			wlr_log(WLR_INFO, "ext deactivating workspace %d", workspace->tag);
+			mango_error(true, WLR_INFO, "ext deactivating workspace %d", workspace->tag);
 			break;
 		}
 		default:

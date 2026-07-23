@@ -27,7 +27,7 @@ static bool output_set_render_format(Monitor *m, uint32_t candidates[],
 		}
 	}
 
-	wlr_log(WLR_DEBUG, "HDR: Failed to set render format");
+	mango_error(true, WLR_DEBUG, "HDR: Failed to set render format");
 	return false;
 }
 
@@ -79,7 +79,7 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 		if (m->wlr_output->supported_primaries ||
 			m->wlr_output->supported_transfer_functions) {
 			if (!silent)
-				wlr_log(WLR_DEBUG, "Disabling HDR on output %s",
+				mango_error(true, WLR_DEBUG, "Disabling HDR on output %s",
 						m->wlr_output->name);
 			wlr_output_state_set_image_description(os, NULL);
 		}
@@ -88,7 +88,7 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 	}
 
 	if (!silent)
-		wlr_log(WLR_DEBUG, "Enabling HDR on output %s", m->wlr_output->name);
+		mango_error(true, WLR_DEBUG, "Enabling HDR on output %s", m->wlr_output->name);
 	struct wlr_output_image_description desc = {
 		.primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
 		.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
@@ -107,7 +107,7 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 
 	if (!hdr_supported) {
 		if (!silent)
-			wlr_log(WLR_INFO, "HDR not supported on output %s: %s",
+			mango_error(true, WLR_INFO, "HDR not supported on output %s: %s",
 					m->wlr_output->name, unsupported_reason);
 		return;
 	}
@@ -124,13 +124,13 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 			m, output_formats_10bit, ARRAY_SIZE(output_formats_10bit), state);
 		if (!hdr_succeeded) {
 			if (!silent)
-				wlr_log(WLR_INFO,
+				mango_error(true, WLR_INFO,
 						"No 10 bit color formats supported, HDR disabled.");
 			hdr_succeeded = output_set_render_format(
 				m, output_formats_8bit, ARRAY_SIZE(output_formats_8bit), state);
 			if (!hdr_succeeded) {
 				if (!silent)
-					wlr_log(WLR_ERROR, "No 8 bit color formats supported!");
+					mango_error(true, WLR_ERROR, "No 8 bit color formats supported!");
 			}
 		}
 	} else {
@@ -139,7 +139,7 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 			m, output_formats_8bit, ARRAY_SIZE(output_formats_8bit), state);
 		if (!hdr_succeeded) {
 			if (!silent)
-				wlr_log(WLR_ERROR, "No 8 bit color formats supported!");
+				mango_error(true, WLR_ERROR, "No 8 bit color formats supported!");
 		}
 	}
 
