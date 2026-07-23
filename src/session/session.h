@@ -6,6 +6,7 @@
 
 typedef struct Client Client;
 
+#define SESSION_APP_ID_MAX 256
 #define SESSION_TITLE_MAX 512
 #define SESSION_MONITOR_MAX 128
 #define SESSION_COMMAND_MAX 1024
@@ -18,7 +19,7 @@ typedef struct {
 } SessionRect;
 
 typedef struct {
-	char app_id[256];
+	char app_id[SESSION_APP_ID_MAX];
 	char title[SESSION_TITLE_MAX];
 	char monitor[SESSION_MONITOR_MAX];
 	char launch_command[SESSION_COMMAND_MAX];

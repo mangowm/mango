@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../session/session.h"
+
 #ifndef SYSCONFDIR
 #define SYSCONFDIR "/etc"
 #endif
@@ -62,9 +64,9 @@ typedef struct {
 } ConfigEnv;
 
 typedef struct {
-	char app_id[256];
-	char title[512];
-	char command[1024];
+	char app_id[SESSION_APP_ID_MAX];
+	char title[SESSION_TITLE_MAX];
+	char command[SESSION_COMMAND_MAX];
 } ConfigSessionLaunchRule;
 
 typedef struct {
