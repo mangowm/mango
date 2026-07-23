@@ -6105,7 +6105,6 @@ void show_hide_client(Client *c) {
 	target = get_tags_first_tag(c->oldtags);
 
 	if (!c->is_in_scratchpad) {
-		tag_client(&(Arg){.ui = target}, c);
 		c->tags = target;
 		c->istagswitching = 1;
 		Client *fc = NULL;
