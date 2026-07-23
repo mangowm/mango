@@ -6106,6 +6106,16 @@ void show_hide_client(Client *c) {
 
 	if (!c->is_in_scratchpad) {
 		tag_client(&(Arg){.ui = target}, c);
+		c->tags = target;
+		c->istagswitching = 1;
+		Client *fc = NULL;
+		wl_list_for_each(fc, &clients, link) {
+			if (fc && fc != c && c->tags & fc->tags && ISFULLSCREEN(fc) &&
+				!c->isfloating) {
+				clear_fullscreen_flag(fc);
+			}
+		}
+		view_in_mon(&(Arg){.ui = target}, true, c->mon, false);
 	} else {
 		c->tags = c->oldtags;
 		arrange(c->mon, false, false);
