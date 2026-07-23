@@ -1499,7 +1499,7 @@ bool parse_option(Config *config, char *key, char *value) {
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
 	} else if (strcmp(key, "focus_cross_monitor_mru") == 0) {
-		config->focus_cross_monitor = atoi(value);
+		config->focus_cross_monitor_mru = atoi(value);
 	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
 		config->exchange_cross_monitor = atoi(value);
 	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
