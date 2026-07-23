@@ -603,6 +603,8 @@ typedef struct {
 	struct wl_listener new_surface;
 	struct wl_listener unlock;
 	struct wl_listener destroy;
+
+	bool sent_locked; /* have we sent locked yet */
 } SessionLock;
 
 struct capture_session_tracker {
@@ -910,7 +912,7 @@ static void last_cursor_surface_destroy(struct wl_listener *listener,
 static int32_t keep_idle_inhibit(void *data);
 static void check_keep_idle_inhibit(Client *c);
 static void pre_calculate_before_arrange(Monitor *m, bool want_animation,
-										bool from_view, bool only_calculate);
+										 bool from_view, bool only_calculate);
 static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
 static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
@@ -4584,7 +4586,10 @@ void locksession(struct wl_listener *listener, void *data) {
 	LISTEN(&session_lock->events.destroy, &lock->destroy, destroysessionlock);
 	LISTEN(&session_lock->events.unlock, &lock->unlock, unlocksession);
 
-	wlr_session_lock_v1_send_locked(session_lock);
+	if (config.allow_lock_transparent) {
+		wlr_session_lock_v1_send_locked(lock->lock);
+		lock->sent_locked = true;
+	}
 }
 
 static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
@@ -5429,6 +5434,7 @@ void rendermon(struct wl_listener *listener, void *data) {
 	struct wl_list *layer_list;
 	struct timespec now;
 	bool need_more_frames = false;
+	SessionLock *lock;
 
 	if (session && !session->active) {
 		return;
@@ -5474,6 +5480,15 @@ void rendermon(struct wl_listener *listener, void *data) {
 	}
 
 	mango_scene_output_commit(m->scene_output, &m->pending);
+
+	// If this is a lock_surface, send locked after this frame
+	if (m->lock_surface && cur_lock) {
+		lock = cur_lock->data;
+		if (!lock->sent_locked) {
+			wlr_session_lock_v1_send_locked(lock->lock);
+			lock->sent_locked = true;
+		}
+	}
 
 skip:
 	// 发送帧完成通知
