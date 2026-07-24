@@ -1195,6 +1195,8 @@ void switch_keyboard_layout(const Arg *arg) {
 		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD) {
 			continue;
 		}
+		if (id->has_custom_keymap)
+			continue;
 
 		struct wlr_keyboard *tkb = (struct wlr_keyboard *)id->device_data;
 
