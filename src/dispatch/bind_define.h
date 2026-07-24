@@ -343,17 +343,21 @@ void focusmon(const Arg *arg) {
 		return;
 
 	selmon = tm;
-	if (config.warpcursor) {
-		warp_cursor_to_selmon(selmon);
-	}
 	c = arg->tc ? arg->tc : focustop(selmon);
 	if (!c) {
 		selmon->sel = NULL;
 		wlr_seat_pointer_notify_clear_focus(seat);
 		wlr_seat_keyboard_notify_clear_focus(seat);
 		focusclient(NULL, 0);
-	} else
+        if (config.warpcursor) {
+            warp_cursor_to_selmon(selmon);
+        }
+	} else {
 		focusclient(c, 1);
+        if (config.warpcursor) {
+            warp_cursor(c);
+        }
+    }
 
 	return;
 }
@@ -1342,7 +1346,7 @@ void tagmon(const Arg *arg) {
 		arrange(selmon, false, false);
 	}
 	if (config.warpcursor) {
-		warp_cursor_to_selmon(c->mon);
+		warp_cursor(c);
 	}
 	return;
 }
