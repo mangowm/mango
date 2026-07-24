@@ -99,6 +99,7 @@ static cJSON *build_tags_json(Monitor *m) {
 		}
 		cJSON *tag_obj = cJSON_CreateObject();
 		cJSON_AddNumberToObject(tag_obj, "index", tag);
+		cJSON_AddStringToObject(tag_obj, "name", get_tag_name(tag));
 		cJSON_AddBoolToObject(tag_obj, "is_active", is_active);
 		cJSON_AddBoolToObject(tag_obj, "is_urgent", is_urgent);
 		cJSON_AddStringToObject(tag_obj, "layout",
@@ -360,6 +361,41 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_tags_response(m);
+	} else if (strncmp(cmd, "rename tag ", 11) == 0) {
+		char *rest = (char *)(cmd + 11);
+		char *endptr;
+		long tag_index = strtol(rest, &endptr, 10);
+		if (endptr == rest || *endptr != ' ' ||
+				tag_index < 1 || tag_index > (int)LENGTH(tags)) {
+			send_static_json(client_fd, "{\"error\":\"usage: rename tag <index> <name>\"}\n");
+			return;
+		}
+		const char *new_name = endptr + 1;
+		if (*new_name == '\0') {
+			send_static_json(client_fd, "{\"error\":\"usage: rename tag <index> <name>\"}\n");
+			return;
+		}
+		bool found = false;
+		for (int i = 0; i < config.tag_rules_count; i++) {
+			if (config.tag_rules[i].id == (int)tag_index) {
+				free(config.tag_rules[i].name);
+				config.tag_rules[i].name = strdup(new_name);
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			config.tag_rules = realloc(config.tag_rules,
+				(config.tag_rules_count + 1) * sizeof(ConfigTagRule));
+			ConfigTagRule *rule = &config.tag_rules[config.tag_rules_count];
+			memset(rule, 0, sizeof(ConfigTagRule));
+			rule->id = (int)tag_index;
+			rule->name = strdup(new_name);
+			config.tag_rules_count++;
+		}
+		printstatus(IPC_WATCH_ARRANGGE);
+		resp = cJSON_CreateObject();
+		cJSON_AddBoolToObject(resp, "success", true);
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;

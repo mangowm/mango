@@ -74,6 +74,24 @@ Examples:
 .IP \(bu 2
 \fBmmsg dispatch movewin,10,100 client,4\fR
 .RE
+.SS "Rename commands"
+.TP
+\fBrename tag\fR <index> <name>
+Rename a tag at runtime.
+\fIindex\fR is the 1-based tag number.
+\fIname\fR may contain spaces.
+The change is reflected immediately in the ext-workspace-v1 protocol and in all
+active IPC watch streams.
+Survives \fBreload_config\fR only if also set via \fBtagrule=id:<index>,name:<name>\fR
+in the config file.
+.br
+Example:
+.RS
+.IP \(bu 2
+\fBmmsg rename tag 1 web\fR
+.IP \(bu 2
+\fBmmsg rename tag 2 my projects\fR
+.RE
 .SS "Persistent streams (watch)"
 \fBWatch\fR commands keep the connection open and continuously output JSON
 updates. The initial state is sent immediately, followed by updates whenever
