@@ -157,6 +157,36 @@ int32_t focusdir(const Arg *arg) {
 	return 0;
 }
 
+int32_t focus_window_or_workspace(const Arg *arg) {
+	if (!selmon)
+		return 0;
+
+	if (selmon->isoverview)
+		return 0;
+
+	Client *c = NULL;
+
+	c = direction_select(arg);
+	if (!selmon->isoverview)
+		c = get_focused_stack_client(c, arg->tc);
+	if (c) {
+		focusclient(c, 1);
+		if (config.warpcursor)
+			warp_cursor(c);
+		return 0;
+	}
+
+	int dir = arg->i;
+
+	if (dir == LEFT || dir == UP) {
+		viewtoleft(&(Arg){0});
+	} else if (dir == RIGHT || dir == DOWN) {
+		viewtoright(&(Arg){0});
+	}
+
+	return 0;
+}
+
 int32_t groupjoin(const Arg *arg) {
 
 	if (!selmon)
