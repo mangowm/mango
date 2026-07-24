@@ -1028,6 +1028,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
 		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "focus_window_or_workspace") == 0) {
+		func = focus_window_or_workspace;
+		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "groupjoin") == 0) {
 		func = groupjoin;
 		(*arg).i = parse_direction(arg_value);
