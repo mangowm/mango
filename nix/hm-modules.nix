@@ -228,7 +228,7 @@ in
             )
         )
         + lib.optionalString (cfg.extraConfig != "") cfg.extraConfig
-        + lib.optionalString (cfg.autostart_sh != "") "\nexec-once=~/.config/mango/autostart.sh\n";
+        + lib.optionalString (cfg.autostart_sh != "" || cfg.systemd.enable) "\nexec-once=~/.config/mango/autostart.sh\n";
 
       validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
         cp ${pkgs.writeText "mango-config.conf" finalConfigText} "$out"
@@ -247,11 +247,11 @@ in
       home.packages = [ cfg.package ];
       xdg.configFile = {
         "mango/config.conf" =
-          lib.mkIf (cfg.settings != { } || cfg.extraConfig != "" || cfg.autostart_sh != "")
+          lib.mkIf (cfg.settings != { } || cfg.extraConfig != "" || cfg.autostart_sh != "" || cfg.systemd.enable)
             {
               source = validatedConfig;
             };
-        "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "") {
+        "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "" || cfg.systemd.enable) {
           source = autostart_sh;
           executable = true;
         };
