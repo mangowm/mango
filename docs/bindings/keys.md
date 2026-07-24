@@ -98,7 +98,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `toggle_render_border` | - | Toggle border rendering. |
 | `centerwin` | - | Center the floating window. |
 | `minimized` | - | Minimize window to scratchpad. |
-| `restore_minimized` | - | Restore window from scratchpad. |
+| `restore_minimized` | `0/1` | Restore minimized window to its previous state.(`1` means keep previous tags, `0` means restore to current tags.) |
 | `toggle_scratchpad` | - | Toggle scratchpad. |
 | `toggle_named_scratchpad` | `appid,title,cmd` | Toggle named scratchpad. Launches app if not running, otherwise shows/hides it. |
 
