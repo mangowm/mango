@@ -96,6 +96,7 @@ endif
 executable('mango',
   'src/mango.c',
   'src/common/util.c',
+  'src/session/session.c',
   'src/draw/text-node.c',
 
   wayland_sources,
