@@ -400,7 +400,7 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		}
 
 		Arg arg = {0};
-		int32_t (*func)(const Arg *) = parse_func_name(
+		void (*func)(const Arg *) = parse_func_name(
 			token_count > 0 ? tokens[0] : "", &arg,
 			token_count > 1 ? tokens[1] : "", token_count > 2 ? tokens[2] : "",
 			token_count > 3 ? tokens[3] : "", token_count > 4 ? tokens[4] : "",
