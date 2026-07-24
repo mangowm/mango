@@ -4498,7 +4498,7 @@ void keypress(struct wl_listener *listener, void *data) {
 				wl_list_for_each(c, &clients, link) {
 					if (c->mon == selmon && c->jump_char == c_char) {
 						focusclient(c, 1);
-						toggleoverview(&(Arg){.i = 1});
+						toggleoverview(&(Arg){.i = 1, .tc = c});
 						return;
 					}
 				}
