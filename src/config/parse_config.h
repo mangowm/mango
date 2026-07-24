@@ -1132,6 +1132,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = minimized;
 	} else if (strcmp(func_name, "restore_minimized") == 0) {
 		func = restore_minimized;
+		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "toggle_scratchpad") == 0) {
 		func = toggle_scratchpad;
 	} else if (strcmp(func_name, "toggle_render_border") == 0) {

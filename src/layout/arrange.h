@@ -1097,7 +1097,7 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 }
 
 void pre_calculate_before_arrange(Monitor *m, bool want_animation,
-								 bool from_view, bool only_calculate) {
+								  bool from_view, bool only_calculate) {
 	Client *c = NULL;
 	double total_stack_inner_percent = 0;
 	double total_master_inner_percent = 0;

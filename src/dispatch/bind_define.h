@@ -674,11 +674,19 @@ int32_t restore_minimized(const Arg *arg) {
 		return 0;
 	}
 
+	bool is_keep_before_tag = arg->i == 1 ? true : false;
+
 	wl_list_for_each(c, &clients, link) {
 		if (c->isminimized && !c->isnamedscratchpad) {
 			c->is_scratchpad_show = 0;
 			c->is_in_scratchpad = 0;
 			c->isnamedscratchpad = 0;
+
+			if (!is_keep_before_tag) {
+				c->mon = selmon;
+				c->oldtags = c->tags = selmon->tagset[selmon->seltags];
+			}
+
 			show_hide_client(c);
 			setborder_color(c);
 			arrange(c->mon, false, false);
