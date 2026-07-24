@@ -42,7 +42,7 @@ typedef struct {
 typedef struct {
 	uint32_t mod;
 	KeySymCode keysymcode;
-	int32_t (*func)(const Arg *);
+	void (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -139,20 +139,20 @@ KeyBinding default_key_bindings[] = {CHVT(1), CHVT(2),	CHVT(3),  CHVT(4),
 typedef struct {
 	uint32_t mod;
 	uint32_t button;
-	int32_t (*func)(const Arg *);
+	void (*func)(const Arg *);
 	Arg arg;
 } MouseBinding;
 
 typedef struct {
 	uint32_t mod;
 	uint32_t dir;
-	int32_t (*func)(const Arg *);
+	void (*func)(const Arg *);
 	Arg arg;
 } AxisBinding;
 
 typedef struct {
 	uint32_t fold;
-	int32_t (*func)(const Arg *);
+	void (*func)(const Arg *);
 	Arg arg;
 } SwitchBinding;
 
@@ -160,7 +160,7 @@ typedef struct {
 	uint32_t mod;
 	uint32_t motion;
 	uint32_t fingers_count;
-	int32_t (*func)(const Arg *);
+	void (*func)(const Arg *);
 	Arg arg;
 } GestureBinding;
 
@@ -403,7 +403,7 @@ typedef struct {
 	int32_t hdr_depth;
 } Config;
 
-typedef int32_t (*FuncType)(const Arg *);
+typedef void (*FuncType)(const Arg *);
 Config config;
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
@@ -4201,9 +4201,9 @@ void reset_option(void) {
 	arrange(selmon, false, false);
 }
 
-int32_t reload_config(const Arg *arg) {
+void reload_config(const Arg *arg) {
 	parse_config();
 	reset_option();
 	printstatus(IPC_WATCH_ARRANGGE);
-	return 1;
+	return;
 }

@@ -3960,6 +3960,7 @@ void focusclient(Client *c, int32_t lift) {
 
 	/* Raise client in stacking order if requested */
 	if (c && lift) {
+		wlr_log(WLR_ERROR, "%s", client_get_title(c));
 		client_raise_group(c);
 	}
 
@@ -4217,7 +4218,6 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 	int32_t handled = 0;
 	const KeyBinding *k;
 	int32_t ji;
-	int32_t isbreak = 0;
 
 	if (is_keyboard_shortcut_inhibitor(seat->keyboard_state.focused_surface)) {
 		return false;
@@ -4260,10 +4260,10 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			else
 				handled = 0;
 
-			isbreak = k->func(&k->arg);
+			k->func(&k->arg);
 
-			if (isbreak)
-				break;
+			// only match the first keybind
+			break;
 		}
 	}
 	return handled;
