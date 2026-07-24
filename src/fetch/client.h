@@ -326,31 +326,44 @@ Client *get_next_stack_client(Client *c, bool reverse) {
 	if (!c || !c->mon)
 		return NULL;
 
-	Client *next = NULL;
-	if (reverse) {
-		wl_list_for_each_reverse(next, &c->link, link) {
-			if (&next->link == &clients)
-				continue; /* wrap past the sentinel node */
+	float cx = c->geom.x + c->geom.width / 2.0f;
+	float cy = c->geom.y + c->geom.height / 2.0f;
 
-			if (next->isunglobal)
-				continue;
+	Client *best_fwd = NULL, *best_wrap = NULL;
+	float best_fwd_val = reverse ? -1e30f : 1e30f;
+	float best_wrap_val = reverse ? -1e30f : 1e30f;
 
-			if (next != c && next->mon && VISIBLEON(next, c->mon))
-				return next;
-		}
-	} else {
-		wl_list_for_each(next, &c->link, link) {
-			if (&next->link == &clients)
-				continue; /* wrap past the sentinel node */
+	Client *next;
+	wl_list_for_each(next, &clients, link) {
+		if (&next->link == &clients || next == c || next->isunglobal ||
+			!next->mon || !VISIBLEON(next, c->mon))
+			continue;
 
-			if (next->isunglobal)
-				continue;
+		float tx = next->geom.x + next->geom.width / 2.0f;
+		float ty = next->geom.y + next->geom.height / 2.0f;
+		float angle = atan2f(ty - cy, tx - cx);
 
-			if (next != c && next->mon && VISIBLEON(next, c->mon))
-				return next;
+		if (reverse) {
+			if (angle < 0 && angle > best_fwd_val) {
+				best_fwd_val = angle;
+				best_fwd = next;
+			}
+			if (angle >= 0 && angle > best_wrap_val) {
+				best_wrap_val = angle;
+				best_wrap = next;
+			}
+		} else {
+			if (angle > 0 && angle < best_fwd_val) {
+				best_fwd_val = angle;
+				best_fwd = next;
+			}
+			if (angle < 0 && angle < best_wrap_val) {
+				best_wrap_val = angle;
+				best_wrap = next;
+			}
 		}
 	}
-	return NULL;
+	return best_fwd ? best_fwd : best_wrap;
 }
 
 float *get_border_color(Client *c) {

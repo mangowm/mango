@@ -1100,6 +1100,16 @@ struct Pertag {
 	const Layout *ltidxs[LENGTH(tags) + 1];
 	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];
 };
+
+extern int32_t scroll_left(const Arg *arg);
+extern int32_t scroll_right(const Arg *arg);
+extern int32_t scroll_up(const Arg *arg);
+extern int32_t scroll_down(const Arg *arg);
+extern int32_t home_canvas_wrapper(const Arg *arg);
+extern int32_t center_focused_wrapper(const Arg *arg);
+extern void center_focused(Monitor *m, Client *c);
+extern void home_canvas(Monitor *m);
+
 #include "config/parse_config.h"
 
 static struct wl_signal mango_print_status;
@@ -1175,6 +1185,7 @@ static struct wl_event_source *sync_keymap;
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
+#include "layout/infinite.h"
 #include "layout/overview.h"
 #include "layout/scroll.h"
 #include "layout/vertical.h"
@@ -4091,6 +4102,12 @@ void focusclient(Client *c, int32_t lift) {
 			(c->tags & selmon->tagset[selmon->seltags]) && !c->isfloating &&
 			(is_scroller_layout(selmon) || is_monocle_layout(selmon))) {
 			arrange(selmon, false, false);
+		}
+
+		if (selmon->pertag->ltidxs[selmon->pertag->curtag]->id == INFINITE ||
+			selmon->pertag->ltidxs[selmon->pertag->curtag]->id ==
+				FREE_INFINITE) {
+			center_focused(selmon, c);
 		}
 
 		// change border color

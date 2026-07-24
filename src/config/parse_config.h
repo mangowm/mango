@@ -228,6 +228,7 @@ typedef struct {
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
 	int32_t scroller_prefer_overspread;
+	float new_window_scale;
 	int32_t edge_scroller_pointer_focus;
 	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;
@@ -1324,6 +1325,18 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = dwindle_split_horizontal;
 	} else if (strcmp(func_name, "dwindle_split_vertical") == 0) {
 		func = dwindle_split_vertical;
+	} else if (strcmp(func_name, "scroll_left") == 0) {
+		func = scroll_left;
+	} else if (strcmp(func_name, "scroll_right") == 0) {
+		func = scroll_right;
+	} else if (strcmp(func_name, "scroll_up") == 0) {
+		func = scroll_up;
+	} else if (strcmp(func_name, "scroll_down") == 0) {
+		func = scroll_down;
+	} else if (strcmp(func_name, "home_canvas_wrapper") == 0) {
+		func = home_canvas_wrapper;
+	} else if (strcmp(func_name, "center_focused_wrapper") == 0) {
+		func = center_focused_wrapper;
 	} else {
 		return NULL;
 	}
@@ -1483,6 +1496,8 @@ bool parse_option(Config *config, char *key, char *value) {
 		}
 	} else if (strcmp(key, "scroller_structs") == 0) {
 		config->scroller_structs = atoi(value);
+	} else if (strcmp(key, "new_window_scale") == 0) {
+		config->new_window_scale = atof(value);
 	} else if (strcmp(key, "scroller_default_proportion") == 0) {
 		config->scroller_default_proportion = atof(value);
 	} else if (strcmp(key, "scroller_default_proportion_single") == 0) {
@@ -3513,6 +3528,7 @@ void override_config(void) {
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
 	config.scroller_default_proportion_single =
 		CLAMP_FLOAT(config.scroller_default_proportion_single, 0.1f, 1.0f);
+	config.new_window_scale = CLAMP_FLOAT(config.new_window_scale, 0.1f, 5.0f);
 	config.scroller_ignore_proportion_single =
 		CLAMP_INT(config.scroller_ignore_proportion_single, 0, 1);
 	config.scroller_focus_center =
@@ -3733,6 +3749,7 @@ void set_value_default() {
 	config.scratchpad_height_ratio = 0.9f;
 
 	config.scroller_structs = 20;
+	config.new_window_scale = 1.0f;
 	config.scroller_default_proportion = 0.9f;
 	config.scroller_default_proportion_single = 1.0f;
 	config.scroller_ignore_proportion_single = 1;
