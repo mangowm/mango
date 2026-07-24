@@ -2,6 +2,7 @@ int32_t minimized(const Arg *arg);
 int32_t restore_minimized(const Arg *arg);
 int32_t toggle_scratchpad(const Arg *arg);
 int32_t focusdir(const Arg *arg);
+int32_t focus_window_or_workspace(const Arg *arg);
 int32_t groupjoin(const Arg *arg);
 int32_t groupleave(const Arg *arg);
 int32_t toggleoverview(const Arg *arg);
