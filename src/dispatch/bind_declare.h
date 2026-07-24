@@ -35,6 +35,7 @@ int32_t setmfact(const Arg *arg);
 int32_t quit(const Arg *arg);
 int32_t moveresize(const Arg *arg);
 int32_t exchange_client(const Arg *arg);
+int32_t move_client(const Arg *arg);
 int32_t exchange_stack_client(const Arg *arg);
 int32_t killclient(const Arg *arg);
 int32_t toggleglobal(const Arg *arg);
