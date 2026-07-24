@@ -480,6 +480,8 @@ typedef struct {
 	const xkb_keysym_t *keysyms; /* invalid if nsyms == 0 */
 	uint32_t mods;				 /* invalid if nsyms == 0 */
 	uint32_t keycode;
+	bool intercepted[256]; // press was consumed by a binding, indexed by
+						   // event->keycode
 	struct wl_event_source *key_repeat_source;
 
 	struct wl_listener modifiers;
@@ -4306,30 +4308,21 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 	const KeyBinding *k;
 	int32_t ji;
 
+	if (state != WL_KEYBOARD_KEY_STATE_PRESSED &&
+		state != WL_KEYBOARD_KEY_STATE_RELEASED) {
+		return 0;
+	}
+
 	if (is_keyboard_shortcut_inhibitor(seat->keyboard_state.focused_surface)) {
-		return false;
+		return 0;
 	}
 
 	for (ji = 0; ji < config.key_bindings_count; ji++) {
-		if (config.key_bindings_count < 1)
-			break;
-
-		if (locked && config.key_bindings[ji].islockapply == false)
-			continue;
-
-		if (state == WL_KEYBOARD_KEY_STATE_RELEASED &&
-			config.key_bindings[ji].isreleaseapply == false)
-			continue;
-
-		if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
-			config.key_bindings[ji].isreleaseapply == true)
-			continue;
-
-		if (state != WL_KEYBOARD_KEY_STATE_PRESSED &&
-			state != WL_KEYBOARD_KEY_STATE_RELEASED)
-			continue;
-
 		k = &config.key_bindings[ji];
+
+		if (locked && k->islockapply == false)
+			continue;
+
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
 			CLEANMASK(mods) == CLEANMASK(k->mod) &&
@@ -4344,8 +4337,14 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 
 			if (!k->ispassapply)
 				handled = 1;
-			else
-				handled = 0;
+
+			if (state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+				k->isreleaseapply == false)
+				continue;
+
+			if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+				k->isreleaseapply == true)
+				continue;
 
 			k->func(&k->arg);
 
@@ -4485,8 +4484,19 @@ void keypress(struct wl_listener *listener, void *data) {
 		wl_event_source_timer_update(group->key_repeat_source, 0);
 	}
 
-	if (handled)
-		return;
+	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+		if (group->intercepted[event->keycode & 0xff]) {
+			group->intercepted[event->keycode & 0xff] = false;
+			// press was intercepted -> intercept release
+			return;
+		}
+		// press was forwarded -> forward release no matter what keybinding
+		// returns
+	} else {
+		group->intercepted[event->keycode & 0xff] = handled;
+		if (handled)
+			return;
+	}
 
 	if (selmon && selmon->is_jump_mode &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
