@@ -718,7 +718,8 @@ void restore_minimized(const Arg *arg) {
 
 			show_hide_client(c);
 			setborder_color(c);
-			arrange(c->mon, false, false);
+			uint32_t target = get_tags_first_tag(c->tags);
+			view_in_mon(&(Arg){.ui = target}, true, c->mon, true);
 			focusclient(c, 1);
 			warp_cursor(c);
 			return;
