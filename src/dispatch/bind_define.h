@@ -710,16 +710,17 @@ void restore_minimized(const Arg *arg) {
 			c->is_scratchpad_show = 0;
 			c->is_in_scratchpad = 0;
 			c->isnamedscratchpad = 0;
+			c->isminimized = 0;
 
 			if (!is_keep_before_tag) {
 				c->mon = selmon;
 				c->oldtags = c->tags = selmon->tagset[selmon->seltags];
+			} else {
+				selmon = c->mon;
 			}
 
 			show_hide_client(c);
 			setborder_color(c);
-			arrange(c->mon, false, false);
-			focusclient(c, 1);
 			warp_cursor(c);
 			return;
 		}
