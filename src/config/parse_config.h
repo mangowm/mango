@@ -1004,6 +1004,37 @@ uint32_t parse_num_type(char *str) {
 	}
 }
 
+uint32_t parse_tag_mask(char *str) {
+	uint32_t mask = 0;
+	char *token;
+	char *arg_copy = strdup(str);
+
+	if (arg_copy != NULL) {
+		char *saveptr = NULL;
+		token = strtok_r(arg_copy, "|", &saveptr);
+
+		while (token != NULL) {
+			int32_t num = atoi(token);
+			if (num > 0 && num <= LENGTH(tags)) {
+				mask |= (1 << (num - 1));
+			}
+			token = strtok_r(NULL, "|", &saveptr);
+		}
+
+		free(arg_copy);
+	}
+
+	uint32_t result = 0;
+
+	if (mask) {
+		result = mask;
+	} else {
+		result = atoi(str);
+	}
+
+	return result;
+}
+
 FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						 char *arg_value2, char *arg_value3, char *arg_value4,
 						 char *arg_value5) {
@@ -1074,7 +1105,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "tagsilent") == 0) {
 		func = tagsilent;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 	} else if (strcmp(func_name, "tagtoleft") == 0) {
 		func = tagtoleft;
 		(*arg).i = atoi(arg_value);
@@ -1195,8 +1226,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = combine_args_until_empty(values, 5);
 	} else if (strcmp(func_name, "spawn_on_empty") == 0) {
 		func = spawn_on_empty;
-		(*arg).v = strdup(arg_value); // 注意：之后需要释放这个内存
-		(*arg).ui = 1 << (atoi(arg_value2) - 1);
+		(*arg).v = strdup(arg_value);
+		(*arg).ui = parse_tag_mask(arg_value2);
 	} else if (strcmp(func_name, "quit") == 0) {
 		func = quit;
 	} else if (strcmp(func_name, "create_virtual_output") == 0) {
@@ -1221,53 +1252,29 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = strdup(arg_value);
 	} else if (strcmp(func_name, "tag") == 0) {
 		func = tag;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 		(*arg).i = atoi(arg_value2);
 	} else if (strcmp(func_name, "view") == 0) {
 		func = bind_to_view;
-
-		uint32_t mask = 0;
-		char *token;
-		char *arg_copy = strdup(arg_value);
-
-		if (arg_copy != NULL) {
-			char *saveptr = NULL;
-			token = strtok_r(arg_copy, "|", &saveptr);
-
-			while (token != NULL) {
-				int32_t num = atoi(token);
-				if (num > 0 && num <= LENGTH(tags)) {
-					mask |= (1 << (num - 1));
-				}
-				token = strtok_r(NULL, "|", &saveptr);
-			}
-
-			free(arg_copy);
-		}
-
-		if (mask) {
-			(*arg).ui = mask;
-		} else {
-			(*arg).ui = atoi(arg_value);
-		}
+		(*arg).ui = parse_tag_mask(arg_value);
 		(*arg).i = atoi(arg_value2);
 	} else if (strcmp(func_name, "viewcrossmon") == 0) {
 		func = viewcrossmon;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 		(*arg).v = strdup(arg_value2);
 	} else if (strcmp(func_name, "tagcrossmon") == 0) {
 		func = tagcrossmon;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 		(*arg).v = strdup(arg_value2);
 	} else if (strcmp(func_name, "toggletag") == 0) {
 		func = toggletag;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 	} else if (strcmp(func_name, "toggleview") == 0) {
 		func = toggleview;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 	} else if (strcmp(func_name, "comboview") == 0) {
 		func = comboview;
-		(*arg).ui = 1 << (atoi(arg_value) - 1);
+		(*arg).ui = parse_tag_mask(arg_value);
 	} else if (strcmp(func_name, "smartmovewin") == 0) {
 		func = smartmovewin;
 		(*arg).i = parse_direction(arg_value);
@@ -2471,7 +2478,7 @@ bool parse_option(Config *config, char *key, char *value) {
 				} else if (strcmp(key, "animation_type_close") == 0) {
 					rule->animation_type_close = strdup(val);
 				} else if (strcmp(key, "tags") == 0) {
-					rule->tags = 1 << (atoi(val) - 1);
+					rule->tags = parse_tag_mask(val);
 				} else if (strcmp(key, "monitor") == 0) {
 					rule->monitor = strdup(val);
 				} else if (strcmp(key, "offsetx") == 0) {
@@ -2801,15 +2808,6 @@ bool parse_option(Config *config, char *key, char *value) {
 		binding->arg.v3 = NULL;
 		binding->arg.tc = NULL;
 
-		// TODO: remove this in next version
-		if (binding->mod == 0 &&
-			(binding->button == BTN_LEFT || binding->button == BTN_RIGHT)) {
-			mango_error(false, WLR_ERROR,
-					"\033[31m%s\033[33m can't "
-					"bind to \033[31m%s\033[33m mod key\n",
-					button_str, mod_str);
-			return false;
-		}
 
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,

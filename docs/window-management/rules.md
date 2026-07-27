@@ -48,7 +48,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
 | `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
-| `tags` | integer | 1-9 | Assign to specific tag |
+| `tags` | mask | `1-9` / `1\|3\|5` | Assign to specific one tag or multiple tags(use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
 
