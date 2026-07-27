@@ -1044,7 +1044,13 @@ void ipc_init(struct wl_event_loop *event_loop) {
 	}
 
 	struct sockaddr_un addr = {.sun_family = AF_UNIX};
-	strncpy(addr.sun_path, ipc_socket_path, sizeof(addr.sun_path) - 1);
+	int len =
+		snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", ipc_socket_path);
+	if (len < 0 || (size_t)len >= sizeof(addr.sun_path)) {
+		wlr_log(WLR_ERROR, "IPC socket path too long for sun_path");
+		close(ipc_sock_fd);
+		return;
+	}
 
 	unlink(ipc_socket_path);
 	if (bind(ipc_sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
