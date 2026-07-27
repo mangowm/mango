@@ -126,24 +126,24 @@ bindr=Super,Super_L,spawn,rofi -show run
 
 | Command | Param | Description |
 | :--- | :--- | :--- |
-| `view` | `mask[,synctag]` | View tag(s). Accepts a [tag mask](#tag-mask-format). Additionally, `0` shows all tags, `-1` shows the previous tagset. Optional `synctag` (0/1) syncs the action to all monitors. |
+| `view` | `mask[,synctag]` | View tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). Additionally, `0` shows all tags, `-1` shows the previous tagset. Optional `synctag` (0/1) syncs the action to all monitors. |
 | `viewtoleft` | `[synctag]` | View previous tag. Optional `synctag` (0/1) syncs to all monitors. |
 | `viewtoright` | `[synctag]` | View next tag. Optional `synctag` (0/1) syncs to all monitors. |
 | `viewtoleft_have_client` | `[synctag]` | View left tag and focus client if present. Optional `synctag` (0/1). |
 | `viewtoright_have_client` | `[synctag]` | View right tag and focus client if present. Optional `synctag` (0/1). |
-| `viewcrossmon` | `mask,monitor_spec` | View specified tag(s) on specified monitor. Accepts a [tag mask](#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `tag` | `mask[,synctag]` | Move window to tag(s). Accepts a [tag mask](#tag-mask-format). Optional `synctag` (0/1) syncs to all monitors. |
-| `tagsilent` | `mask` | Move window to tag(s) without focusing it. Accepts a [tag mask](#tag-mask-format). |
+| `viewcrossmon` | `mask,monitor_spec` | View specified tag(s) on specified monitor. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `tag` | `mask[,synctag]` | Move window to tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). Optional `synctag` (0/1) syncs to all monitors. |
+| `tagsilent` | `mask` | Move window to tag(s) without focusing it. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
 | `tagtoleft` | `[synctag]` | Move window to left tag. Optional `synctag` (0/1). |
 | `tagtoright` | `[synctag]` | Move window to right tag. Optional `synctag` (0/1). |
-| `tagcrossmon` | `mask,monitor_spec` | Move window to tag(s) on specified monitor. Accepts a [tag mask](#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
-| `toggletag` | `mask` | Toggle tag(s) on window. Accepts a [tag mask](#tag-mask-format). `0` toggles all tags. |
-| `toggleview` | `mask` | Toggle view of tag(s). Accepts a [tag mask](#tag-mask-format). |
-| `comboview` | `mask` | View multiple tags simultaneously. Accepts a [tag mask](#tag-mask-format) (typically built by pressing keys, e.g., `1|3`). |
+| `tagcrossmon` | `mask,monitor_spec` | Move window to tag(s) on specified monitor. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+| `toggletag` | `mask` | Toggle tag(s) on window. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). `0` toggles all tags. |
+| `toggleview` | `mask` | Toggle view of tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
+| `comboview` | `mask` | View multiple tags simultaneously. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format) (typically built by pressing keys, e.g., `1|3`). |
 | `focusmon` | `left/right/up/down/monitor_spec` | Focus monitor by direction or [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `tagmon` | `left/right/up/down/monitor_spec,[keeptag]` | Move window to monitor by direction or [monitor spec](/docs/configuration/monitors#monitor-spec-format). `keeptag` is 0 or 1. |
 
-##### Tag Mask Format
+#### Tag Mask Format
 
 A tag mask specifies one or more tags for commands that operate on tags.  
 It is formed by tag numbers `1`–`9`, optionally combined with `|`.
@@ -174,7 +174,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | :--- | :--- | :--- |
 | `spawn` | `cmd` | Execute a command. |
 | `spawn_shell` | `cmd` | Execute shell command (supports pipes `\|`). |
-| `spawn_on_empty` | `cmd, tagmask` | Open command on empty tag.Accepts a cmd string and [tagmask](#tag-mask-format) |
+| `spawn_on_empty` | `cmd, tagmask` | Open command on empty tag.Accepts a cmd string and [tagmask](/docs/bindings/keys#tag-mask-format) |
 | `reload_config` | - | Hot-reload configuration. |
 | `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. |
 | `quit` | - | Exit mangowm. |
