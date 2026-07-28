@@ -6,6 +6,8 @@ self: {
 }: let
   cfg = config.programs.mango;
 in {
+  disabledModules = ["programs/wayland/mango.nix"];
+
   options = {
     programs.mango = {
       enable = lib.mkEnableOption "mango, a wayland compositor based on dwl";
