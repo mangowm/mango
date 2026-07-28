@@ -14,6 +14,8 @@ static void vertical_deck(Monitor *mon);
 static void dwindle(Monitor *m);
 static void fair(Monitor *m);
 static void vertical_fair(Monitor *m);
+static void infinite(Monitor *m);
+static void free_infinite(Monitor *m);
 
 /* layout(s) */
 Layout overviewlayout = {"󰃇", overview, "overview"};
@@ -33,6 +35,8 @@ enum {
 	DWINDLE,
 	FAIR,
 	VERTICAL_FAIR,
+	INFINITE,
+	FREE_INFINITE,
 };
 
 Layout layouts[] = {
@@ -53,4 +57,6 @@ Layout layouts[] = {
 	{"DW", dwindle, "dwindle", DWINDLE},
 	{"F", fair, "fair", FAIR},
 	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
+	{"I", infinite, "infinite", INFINITE},
+	{"FI", free_infinite, "free_infinite", FREE_INFINITE},
 };

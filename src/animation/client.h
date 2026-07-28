@@ -1331,7 +1331,9 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		(interact || c->isfloating || c->isfullscreen) ? &sgeom : &c->mon->w;
 	struct wlr_box clip;
 
-	if (is_scroller_layout(c->mon) && (!c->isfloating || c == grabc)) {
+	if (is_scroller_layout(c->mon) ||
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == INFINITE ||
+		c->mon->pertag->ltidxs[c->mon->pertag->curtag]->id == FREE_INFINITE) {
 		c->geom = geo;
 		c->geom.width = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.width);
 		c->geom.height = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
