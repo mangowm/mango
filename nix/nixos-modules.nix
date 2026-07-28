@@ -1,12 +1,15 @@
-self: {
+self:
+{
   config,
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.programs.mango;
-in {
-  disabledModules = ["programs/wayland/mango.nix"];
+in
+{
+  disabledModules = [ "programs/wayland/mango.nix" ];
 
   options = {
     programs.mango = {
@@ -25,10 +28,9 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages =
-      [
-        cfg.package
-      ];
+    environment.systemPackages = [
+      cfg.package
+    ];
 
     xdg.portal = {
       enable = lib.mkDefault true;
@@ -39,12 +41,12 @@ in {
             "gtk"
           ];
           # except those
-          "org.freedesktop.impl.portal.Secret" = ["gnome-keyring"];
-          "org.freedesktop.impl.portal.ScreenCast" = ["wlr"];
-          "org.freedesktop.impl.portal.Screenshot" = ["wlr"];
+          "org.freedesktop.impl.portal.Secret" = [ "gnome-keyring" ];
+          "org.freedesktop.impl.portal.ScreenCast" = [ "wlr" ];
+          "org.freedesktop.impl.portal.Screenshot" = [ "wlr" ];
 
           # wlr does not have this interface
-          "org.freedesktop.impl.portal.Inhibit" = [];
+          "org.freedesktop.impl.portal.Inhibit" = [ ];
         };
       };
       extraPortals = with pkgs; [
@@ -54,7 +56,7 @@ in {
 
       wlr.enable = lib.mkDefault true;
 
-      configPackages = [cfg.package];
+      configPackages = [ cfg.package ];
     };
 
     security.polkit.enable = lib.mkDefault true;
