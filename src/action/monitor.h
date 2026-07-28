@@ -42,7 +42,8 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 			wlr_output_state_init(&m->pending);
 		}
 	} else {
-		mango_error(true, WLR_INFO, "Failed to commit output %s", m->wlr_output->name);
+		mango_error(true, WLR_INFO, "Failed to commit output %s",
+					m->wlr_output->name);
 		return false;
 	}
 

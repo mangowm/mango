@@ -67,7 +67,8 @@ int32_t regex_match(const char *pattern, const char *str) {
 	if (!re) {
 		PCRE2_UCHAR errbuf[256];
 		pcre2_get_error_message(errnum, errbuf, sizeof(errbuf));
-		mango_error(false, WLR_ERROR, "PCRE2 : %s at offset %zu\n", errbuf, erroffset);
+		mango_error(false, WLR_ERROR, "PCRE2 : %s at offset %zu\n", errbuf,
+					erroffset);
 		return 0;
 	}
 

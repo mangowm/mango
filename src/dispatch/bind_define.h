@@ -1091,8 +1091,8 @@ void spawn_shell(const Arg *arg) {
 		execlp("bash", "bash", "-c", arg->v, (char *)NULL);
 
 		mango_error(true, WLR_DEBUG,
-				"mango: failed to execute command '%s' with shell: %s\n",
-				(char *)arg->v, strerror(errno));
+					"mango: failed to execute command '%s' with shell: %s\n",
+					(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
 	return;
@@ -1121,14 +1121,14 @@ void spawn(const Arg *arg) {
 		wordexp_t p;
 		if (wordexp(arg->v, &p, 0) != 0) {
 			mango_error(true, WLR_DEBUG, "mango: wordexp failed for '%s'\n",
-					(char *)arg->v);
+						(char *)arg->v);
 			_exit(EXIT_FAILURE);
 		}
 
 		execvp(p.we_wordv[0], p.we_wordv);
 
-		mango_error(true, WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
-				strerror(errno));
+		mango_error(true, WLR_DEBUG, "mango: execvp '%s' failed: %s\n",
+					p.we_wordv[0], strerror(errno));
 		wordfree(&p);
 		_exit(EXIT_FAILURE);
 	}

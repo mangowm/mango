@@ -360,8 +360,9 @@ void tablettoolproximity(struct wl_listener *listener, void *data) {
 		if (config.tablet_map_to_mon) {
 			wl_list_for_each(m_iter, &mons, link) {
 				if (match_monitor_spec(config.tablet_map_to_mon, m_iter)) {
-					mango_error(true, WLR_DEBUG, "Mapping tablet %s to output %s",
-							event->tablet->base.name, config.tablet_map_to_mon);
+					mango_error(
+						true, WLR_DEBUG, "Mapping tablet %s to output %s",
+						event->tablet->base.name, config.tablet_map_to_mon);
 					wlr_cursor_map_input_to_output(cursor, &event->tablet->base,
 												   m_iter->wlr_output);
 					break;

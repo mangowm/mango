@@ -98,8 +98,8 @@
 #include <wlr/xwayland.h>
 #include <xcb/xcb_icccm.h>
 #endif
-#include "common/util.h"
 #include "common/log.h"
+#include "common/util.h"
 #include "draw/text-node.h"
 
 /* macros */
@@ -3366,12 +3366,13 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	wlr_output_state_set_adaptive_sync_enabled(state, true);
 	if (!wlr_output_test_state(m->wlr_output, state)) {
 		wlr_output_state_set_adaptive_sync_enabled(state, false);
-		mango_error(true, WLR_DEBUG, "failed to enable adaptive sync for output %s",
-				m->wlr_output->name);
+		mango_error(true, WLR_DEBUG,
+					"failed to enable adaptive sync for output %s",
+					m->wlr_output->name);
 	} else {
 		m->is_vrr_enabling = true;
 		mango_error(true, WLR_INFO, "adaptive sync enabled for output %s",
-				m->wlr_output->name);
+					m->wlr_output->name);
 	}
 }
 
@@ -4221,7 +4222,7 @@ void requestmonstate(struct wl_listener *listener, void *data) {
 
 	if (!wlr_output_commit_state(m->wlr_output, event->state)) {
 		mango_error(false, WLR_ERROR,
-				"Backend requested a new state that could not be applied");
+					"Backend requested a new state that could not be applied");
 	}
 }
 
@@ -5330,7 +5331,7 @@ void handle_session_destroy(struct wl_listener *listener, void *data) {
 	}
 
 	mango_error(true, WLR_DEBUG, "Capture session ended, active count: %d",
-			active_capture_count);
+				active_capture_count);
 	free(tracker);
 }
 
@@ -5341,7 +5342,8 @@ void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 
 	struct capture_session_tracker *tracker = calloc(1, sizeof(*tracker));
 	if (!tracker) {
-		mango_error(true, WLR_ERROR, "Failed to allocate capture session tracker");
+		mango_error(true, WLR_ERROR,
+					"Failed to allocate capture session tracker");
 		return;
 	}
 	tracker->session = session;
@@ -5358,8 +5360,9 @@ void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
 		}
 	}
 
-	mango_error(true, WLR_DEBUG, "New capture session started, active count: %d",
-			active_capture_count);
+	mango_error(true, WLR_DEBUG,
+				"New capture session started, active count: %d",
+				active_capture_count);
 }
 
 void powermgrsetmode(struct wl_listener *listener, void *data) {
@@ -5569,8 +5572,9 @@ void exchange_two_client(Client *c1, Client *c2) {
 
 void set_activation_env() {
 	if (!getenv("DBUS_SESSION_BUS_ADDRESS")) {
-		mango_error(true, WLR_INFO, "Not updating dbus execution environment: "
-						  "DBUS_SESSION_BUS_ADDRESS not set");
+		mango_error(true, WLR_INFO,
+					"Not updating dbus execution environment: "
+					"DBUS_SESSION_BUS_ADDRESS not set");
 		return;
 	}
 
@@ -5984,7 +5988,7 @@ void reset_keyboard_layout(void) {
 	if (!new_keymap) {
 		// 理论上这里不应该失败，因为前面已经验证过了
 		mango_error(true, WLR_ERROR,
-				"Unexpected failure to create keymap after validation");
+					"Unexpected failure to create keymap after validation");
 		goto cleanup_context;
 	}
 
@@ -5999,9 +6003,9 @@ void reset_keyboard_layout(void) {
 	// 确保当前布局索引在新keymap中有效
 	if (current >= new_num_layouts) {
 		mango_error(true, WLR_INFO,
-				"Current layout index %u out of range for new keymap, "
-				"resetting to 0",
-				current);
+					"Current layout index %u out of range for new keymap, "
+					"resetting to 0",
+					current);
 		current = 0;
 	}
 
@@ -6244,7 +6248,8 @@ void setup(void) {
 
 	headless_backend = wlr_headless_backend_create(event_loop);
 	if (!headless_backend) {
-		mango_error(true, WLR_ERROR, "Failed to create secondary headless backend");
+		mango_error(true, WLR_ERROR,
+					"Failed to create secondary headless backend");
 	} else {
 		wlr_multi_backend_add(backend, headless_backend);
 	}
@@ -6551,7 +6556,8 @@ void setup(void) {
 	if (drm_lease_manager) {
 		wl_signal_add(&drm_lease_manager->events.request, &drm_lease_request);
 	} else {
-		mango_error(true, WLR_DEBUG, "Failed to create wlr_drm_lease_device_v1.");
+		mango_error(true, WLR_DEBUG,
+					"Failed to create wlr_drm_lease_device_v1.");
 		mango_error(true, WLR_INFO, "VR will not be available.");
 	}
 
@@ -6577,8 +6583,9 @@ void setup(void) {
 
 		setenv("DISPLAY", xwayland->display_name, 1);
 	} else {
-		mango_error(true, WLR_ERROR,
-				"failed to setup XWayland X server, continuing without it\n");
+		mango_error(
+			true, WLR_ERROR,
+			"failed to setup XWayland X server, continuing without it\n");
 	}
 	sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
 										  synckeymap, NULL);
