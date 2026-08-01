@@ -56,7 +56,8 @@ bool mango_output_commit(Monitor *m) {
 		wlr_output_state_finish(&m->pending);
 		wlr_output_state_init(&m->pending);
 	} else {
-		wlr_log(WLR_ERROR, "Failed to commit frame");
+		wlr_log(WLR_ERROR, "Failed to commit frame for output %s",
+				m->wlr_output->name);
 	}
 	return committed;
 }
