@@ -187,6 +187,10 @@ void mango_ext_workspace_printstatus(Monitor *m) {
 void refresh_monitors_workspaces_status(Monitor *m) {
 	int32_t i;
 
+	if (!m || !m->wlr_output->enabled || m->iscleanuping) {
+		return;
+	}
+
 	if (m->isoverview) {
 		add_workspace_by_tag(0, m);
 		for (i = 1; i <= LENGTH(tags); i++) {

@@ -46,7 +46,8 @@ uint32_t get_tag_status(uint32_t tag, Monitor *m) {
 	Client *c = NULL;
 	uint32_t status = 0;
 	wl_list_for_each(c, &clients, link) {
-		if (c->mon == m && c->tags & 1 << (tag - 1) & TAGMASK) {
+		if (c->mon == m && !c->is_logic_hide &&
+			c->tags & 1 << (tag - 1) & TAGMASK) {
 			if (c->isurgent) {
 				status = 2;
 				break;

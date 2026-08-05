@@ -9,7 +9,7 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 	if (!wlr_scene_output_needs_frame(scene_output))
 		return true;
 
-	// 构建状态，将场景的 Buffer 附着到 state 上
+	// build the state, attaching the scene's Buffer to it
 	if (!wlr_scene_output_build_state(scene_output, state, NULL))
 		return false;
 
@@ -19,18 +19,19 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 		state->tearing_page_flip = false;
 	}
 
-	// 测试是否支持撕裂
+	// test whether tearing is supported
 	if (state->tearing_page_flip == true) {
 		if (!wlr_output_test_state(wlr_output, state)) {
-			// 如果 DRM 拒绝（例如当前输出/驱动不支持撕裂），降级关闭撕裂
+			// if DRM rejects (e.g. the current output/driver doesn't support
+			// tearing), fall back to disabling tearing
 			state->tearing_page_flip = false;
 		}
 	}
 
-	// 提交状态
+	// commit state
 	committed = wlr_output_commit_state(wlr_output, state);
 	if (!committed && state->tearing_page_flip) {
-		// 重试一次
+		// retry once
 		state->tearing_page_flip = false;
 		committed = wlr_output_commit_state(wlr_output, state);
 	}

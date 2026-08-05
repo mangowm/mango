@@ -1385,7 +1385,7 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 		c->fake_no_border = true;
 	}
 
-	if (!c->mon->isoverview || !config.ov_no_resize)
+	if (!c->mon->isoverview)
 		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
 											  c->geom.height - 2 * c->bw);
 
@@ -1430,11 +1430,11 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (c->scratchpad_switching_mon && c->isfloating)
 		c->animainit_geom = c->geom;
 
-	if (config.animations && config.ov_no_resize && c->mon->isoverview &&
-		c != c->mon->sel && c->animation.action == OVERVIEW)
+	if (config.animations && c->mon->isoverview && c != c->mon->sel &&
+		c->animation.action == OVERVIEW)
 		set_overview_enter_animation(c);
 
-	if (!config.animations && config.ov_no_resize && c->mon->isoverview)
+	if (!config.animations && c->mon->isoverview)
 		c->animainit_geom = c->geom;
 
 	client_set_pending_state(c);
@@ -1491,6 +1491,14 @@ void client_set_unfocused_opacity_animation(Client *c) {
 }
 
 bool client_apply_focus_opacity(Client *c) {
+
+	if (config.blur && !c->noblur && c->blur_opacity != 1.0f &&
+		c->animation.action != OPEN) {
+		c->blur_opacity = 1.0f;
+		wlr_scene_blur_set_strength(c->blur, 1.0f);
+		wlr_scene_blur_set_alpha(c->blur, 1.0f);
+	}
+
 	float *border_color = get_border_color(c);
 	if (c->isfullscreen) {
 		c->opacity_animation.running = false;
@@ -1527,6 +1535,7 @@ bool client_apply_focus_opacity(Client *c) {
 			float blur_val = MIN(percent * (1.0 - config.fadein_begin_opacity) +
 									 config.fadein_begin_opacity,
 								 1.0);
+			c->blur_opacity = blur_val;
 			wlr_scene_blur_set_strength(c->blur, blur_val);
 			wlr_scene_blur_set_alpha(c->blur, blur_val);
 		}
@@ -1582,16 +1591,30 @@ bool client_apply_focus_opacity(Client *c) {
 
 bool client_draw_frame(Client *c) {
 
-	bool need_more_frame = false;
+	bool need_next_tick = false;
+	bool ov_live_need_fresh = false;
+	bool force_render = false;
 
 	if (!c || !client_surface(c)->mapped)
 		return false;
 
+	// always render when scene is disabled
+	if (c->force_render && !c->scene->node.enabled) {
+		force_render = client_force_render(c);
+		need_next_tick = force_render || need_next_tick;
+	}
+
+	/* 实时 overview 预览：喂 frame done + 检测新帧 + 限速重拍快照 */
+	if (c->ov_live_enabled) {
+		ov_live_need_fresh = overview_live_pass(c);
+		need_next_tick = ov_live_need_fresh || need_next_tick;
+	}
+
 	if (!c->need_output_flush)
-		return client_apply_focus_opacity(c);
+		return client_apply_focus_opacity(c) || need_next_tick;
 
 	if (config.animations && c->animation.running) {
-		need_more_frame = true;
+		need_next_tick = true;
 		client_animation_next_tick(c);
 	} else {
 		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
@@ -1601,5 +1624,8 @@ bool client_draw_frame(Client *c) {
 		client_apply_clip(c, 1.0);
 		c->need_output_flush = false;
 	}
-	return need_more_frame || client_apply_focus_opacity(c);
+
+	bool need_fade_focus = client_apply_focus_opacity(c);
+
+	return need_next_tick || need_fade_focus;
 }

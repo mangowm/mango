@@ -1,5 +1,5 @@
 static void client_swap_layout_properties(Client *c1, Client *c2) {
-	// Grid 属性交换
+	// grid property swap
 	double grid_col_per = c1->grid_col_per;
 	double grid_row_per = c1->grid_row_per;
 	int32_t grid_col_idx = c1->grid_col_idx;
@@ -15,7 +15,7 @@ static void client_swap_layout_properties(Client *c1, Client *c2) {
 	c2->grid_col_idx = grid_col_idx;
 	c2->grid_row_idx = grid_row_idx;
 
-	// Master / Stack 属性交换
+	// master / stack property swap
 	double master_inner_per = c1->master_inner_per;
 	double master_mfact_per = c1->master_mfact_per;
 	double stack_inner_per = c1->stack_inner_per;
@@ -306,4 +306,36 @@ void client_group_replace(Client *old, Client *new) {
 	} else {
 		new->isgroupfocusing = old->isgroupfocusing;
 	}
+}
+
+void mango_surface_frame_done(struct wlr_surface *surface, int sx, int sy,
+							  void *data) {
+	(void)sx;
+	(void)sy;
+	wlr_surface_send_frame_done(surface, data);
+}
+
+// 给被隐藏窗口的所有 surface（含 subsurface）喂 frame callback，
+// 让客户端在 overview 预览中继续渲染（解除帧回调节流导致的停画）。
+// 不能用 wlr_scene_node_for_each_buffer 遍历原 scene_surface 树：
+// 该树在拍完快照后被 disabled，scenefx 的 for_each_buffer 会直接跳过
+// disabled 节点（wlr_scene.c scene_node_for_each_scene_buffer），导致
+// 一个 surface 都喂不到——普通窗口就会因收不到 frame callback 而停画。
+void client_send_frame_done(Client *c, const struct timespec *now) {
+	struct wlr_surface *s = client_surface(c);
+	if (!s)
+		return;
+	wlr_surface_for_each_surface(s, mango_surface_frame_done, (void *)now);
+}
+
+bool client_force_render(Client *c) {
+	if (!c || !c->mon || c->iskilling || !client_surface(c)->mapped ||
+		c->scene->node.enabled)
+		return false;
+
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	client_send_frame_done(c, &now);
+	return true;
 }

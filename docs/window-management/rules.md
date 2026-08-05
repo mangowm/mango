@@ -37,6 +37,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
 | `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
 | `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
+| `force_render` | integer | `0` / `1` | Force render frame even if the window is not visible |
 
 
 ### Geometry & Position
@@ -48,7 +49,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
 | `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
-| `tags` | integer | 1-9 | Assign to specific tag |
+| `tags` | mask | `1-9` / `1\|3\|5` | Assign to specific one tag or multiple tags(use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
 

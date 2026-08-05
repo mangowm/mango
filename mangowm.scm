@@ -4,7 +4,7 @@
   #:use-module (guix gexp)
   #:use-module (guix packages)
   #:use-module (guix utils)
-  #:use-module (gnu packages wm)
+  #:use-module (gnu packages window-management)
   #:use-module (gnu packages gtk)
   #:use-module (gnu packages freedesktop)
   #:use-module (gnu packages xdisorg)
@@ -60,8 +60,8 @@
                   libxcb
                   pixman
                   xcb-util-wm
-                  wlroots-0.19
-                  scenefx))
+                  wlroots-0.20
+                  scenefx-0.5))
     (native-inputs (list pkg-config wayland-protocols))
     (home-page "https://github.com/mangowm/mango")
     (synopsis "Wayland compositor based on wlroots and scenefx")
@@ -71,6 +71,23 @@ built on dwl — crafted for speed, flexibility, and a customizable desktop expe
     (license (list license:gpl3 ;mangowm itself, dwl
                    license:expat ;dwm, sway, wlroots
                    license:cc0)))) ;tinywl
+
+(define-public scenefx-0.5
+  (package
+    (inherit scenefx)
+    (name "scenefx")
+    (version "0.5")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                     (url "https://github.com/wlrfx/scenefx")
+                     (commit version)))
+              (file-name (git-file-name name version))
+              (sha256
+               (base32
+                "0klxy73125lp9jab8qghh4v6di91l3y2rgan4m4lhv5flwdwnj5x"))))
+    (inputs (modify-inputs (package-inputs scenefx)
+              (replace "wlroots" wlroots-0.20)))))
 
 (define-deprecated-package mangowc
   mangowm-git)

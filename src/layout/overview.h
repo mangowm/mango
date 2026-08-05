@@ -399,11 +399,8 @@ void finish_jump_mode(Monitor *m) {
 }
 
 void overview(Monitor *m) {
-	if (config.ov_no_resize) {
-		overview_scale(m);
-	} else {
-		overview_resize(m);
-	}
+
+	overview_scale(m);
 
 	if (m->is_jump_mode) {
 		create_jump_hints(m);
