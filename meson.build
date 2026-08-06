@@ -36,6 +36,7 @@ libinput_dep = dependency('libinput',version: '>=1.27.1')
 libwayland_client_dep = dependency('wayland-client')
 pcre2_dep = dependency('libpcre2-8')
 libscenefx_dep = dependency('scenefx-0.5',version: '>=0.5.0')
+displayinfo_dep = dependency('libdisplay-info')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
 pangocairo_dep = dependency('pangocairo')
@@ -114,6 +115,7 @@ executable('mango',
     pixman_dep,
     cjson_dep,
     pangocairo_dep,
+    displayinfo_dep,
   ],
   install : true,
   c_args : c_args,

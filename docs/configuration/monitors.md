@@ -30,7 +30,7 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 | `y` | integer | 0-99999 | Y position |
 | `scale` | float | 0.01-100.0 | Monitor scale |
 | `vrr` | integer | 0, 1 | Enable variable refresh rate |
-| `hdr` | integer | 0, 1 | Enable hdr support |
+| `hdr` | integer | 0, 1, 2 | Enable hdr support. `2` additionally reads the panel's mastering luminance and color primaries from its EDID, so tone mapping targets the display's real limits |
 | `rr` | integer | 0-7 | Monitor transform |
 | `custom` | integer | 0, 1 | Enable custom mode (not supported on all displays — may cause black screen) |
 | `disable` | integer | 0, 1 | Disable the monitor |
