@@ -28,6 +28,7 @@ description: Control mangowm programmatically using mmsg.
 | `get keymode` | Returns the current active keyboard mode (e.g., normal, insert). |
 | `get keyboardlayout` | Returns the active XKB layout (abbreviated). |
 | `get monitor <name>` | Returns full JSON details for a specific monitor. |
+| `get wmlayout` | Returns JSON with current wmlayout. |
 | `get focusing-client` | Returns full JSON details for the client currently in focus. |
 | `get client <id>` | Returns full JSON details for a client with the given ID. |
 | `get tag <mon> <idx>` | Queries status of a specific tag on a monitor. |

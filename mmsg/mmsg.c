@@ -15,6 +15,8 @@ static void usage(void) {
 	printf("  get cursorpos                            Show pointer position + "
 		   "monitor\n");
 	printf("  get keymode                              Show current keymode\n");
+	printf(
+		"  get wmlayout                             Show current wmlayout\n");
 	printf("  get keyboardlayout                       Show current keyboard "
 		   "layout\n");
 	printf("  get last_open_surface [monitor]          Show last open surface "
