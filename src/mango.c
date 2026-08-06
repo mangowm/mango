@@ -3902,6 +3902,13 @@ void createpointerconstraint(struct wl_listener *listener, void *data) {
 	LISTEN(&pointer_constraint->constraint->events.destroy,
 		   &pointer_constraint->destroy, destroypointerconstraint);
 
+	// layer surfaces are never selmon->sel, so match pointer focus too
+	if (seat->pointer_state.focused_surface ==
+		pointer_constraint->constraint->surface) {
+		cursorconstrain(pointer_constraint->constraint);
+		return;
+	}
+
 	if (!selmon || !selmon->sel)
 		return;
 
@@ -5375,7 +5382,21 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	if (!c || !c->mon || !c->mon->isoverview) {
 		// don't let window get pointer focus,
 		// avoid game window force grab pointer in overview mode
+		struct wlr_surface *old_focus = seat->pointer_state.focused_surface;
 		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+
+		// toplevel constraints are handled by focusclient, this picks up the
+		// ones focusclient can't see
+		if (!c && surface != old_focus) {
+			struct wlr_pointer_constraint_v1 *constraint;
+			wl_list_for_each(constraint, &pointer_constraints->constraints,
+							 link) {
+				if (constraint->surface == surface) {
+					cursorconstrain(constraint);
+					break;
+				}
+			}
+		}
 	}
 
 	wlr_seat_pointer_notify_motion(seat, time, sx, sy);
