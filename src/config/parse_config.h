@@ -192,6 +192,7 @@ typedef struct {
 
 typedef struct {
 	int32_t id;
+	char *name;
 	char *layout_name;
 	char *monitor_name;
 	char *monitor_make;
@@ -2332,6 +2333,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		// 设置默认值
 		rule->id = 0;
+		rule->name = NULL;
 		rule->layout_name = NULL;
 		rule->monitor_name = NULL;
 		rule->monitor_make = NULL;
@@ -2360,6 +2362,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 				if (strcmp(key, "id") == 0) {
 					rule->id = CLAMP_INT(atoi(val), 0, LENGTH(tags));
+				} else if (strcmp(key, "name") == 0) {
+					rule->name = strdup(val);
 				} else if (strcmp(key, "layout_name") == 0) {
 					rule->layout_name = strdup(val);
 				} else if (strcmp(key, "monitor_name") == 0) {
@@ -3719,6 +3723,8 @@ void free_config(void) {
 	// 释放 tag_rules
 	if (config.tag_rules) {
 		for (int32_t i = 0; i < config.tag_rules_count; i++) {
+			if (config.tag_rules[i].name)
+				free((void *)config.tag_rules[i].name);
 			if (config.tag_rules[i].layout_name)
 				free((void *)config.tag_rules[i].layout_name);
 			if (config.tag_rules[i].monitor_name)
@@ -4753,4 +4759,14 @@ void reload_config(const Arg *arg) {
 	reset_option();
 	printstatus(IPC_WATCH_ARRANGGE);
 	return;
+}
+
+static const char *get_tag_name(int tag_index) {
+	for (int i = 0; i < config.tag_rules_count; i++) {
+		if (config.tag_rules[i].id == tag_index && config.tag_rules[i].name)
+			return config.tag_rules[i].name;
+	}
+	if (tag_index >= 1 && tag_index <= (int)LENGTH(tags))
+		return tags[tag_index - 1];
+	return NULL;
 }
