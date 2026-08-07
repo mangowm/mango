@@ -379,6 +379,26 @@ void focusstack(const Arg *arg) {
 	return;
 }
 
+void focus_first_tiled(const Arg *arg) {
+	Client *c = NULL;
+
+	if (!selmon || !selmon->pertag->ltidxs[selmon->pertag->curtag]->arrange)
+		return;
+
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, selmon) && ISFAKETILED(c))
+			break;
+	}
+
+	if (&c->link == &clients || c == selmon->sel)
+		return;
+
+	focusclient(c, 1);
+	if (config.warpcursor)
+		warp_cursor(c);
+	return;
+}
+
 void groupfocus(const Arg *arg) {
 	Client *c = arg->tc ? arg->tc : selmon->sel;
 	if (!c || !c->mon)
