@@ -3902,6 +3902,14 @@ void createpointerconstraint(struct wl_listener *listener, void *data) {
 	LISTEN(&pointer_constraint->constraint->events.destroy,
 		   &pointer_constraint->destroy, destroypointerconstraint);
 
+	// layer surfaces are never selmon->sel, so match pointer focus too
+	// (e.g. lan-mouse locks the pointer on a 1px layer surface)
+	if (seat->pointer_state.focused_surface ==
+		pointer_constraint->constraint->surface) {
+		cursorconstrain(pointer_constraint->constraint);
+		return;
+	}
+
 	if (!selmon || !selmon->sel)
 		return;
 
@@ -5357,6 +5365,15 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		focusclient(c, 0);
 
+	/* Pointer-driven layer constraints: deactivate as soon as the pointer
+	 * leaves their surface. Toplevel constraints are managed by focusclient
+	 * (keyboard focus driven), so they are left untouched here. */
+	if (active_constraint && surface != seat->pointer_state.focused_surface &&
+		toplevel_from_wlr_surface(active_constraint->surface, NULL, NULL) ==
+			LayerShell) {
+		cursorconstrain(NULL);
+	}
+
 	/* If surface is NULL, clear pointer focus */
 	if (!surface) {
 		wlr_seat_pointer_notify_clear_focus(seat);
@@ -5375,7 +5392,21 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	if (!c || !c->mon || !c->mon->isoverview) {
 		// don't let window get pointer focus,
 		// avoid game window force grab pointer in overview mode
+		struct wlr_surface *old_focus = seat->pointer_state.focused_surface;
 		wlr_seat_pointer_notify_enter(seat, surface, sx, sy);
+
+		// toplevel constraints are handled by focusclient, this picks up the
+		// ones focusclient can't see
+		if (!c && surface != old_focus) {
+			struct wlr_pointer_constraint_v1 *constraint;
+			wl_list_for_each(constraint, &pointer_constraints->constraints,
+							 link) {
+				if (constraint->surface == surface) {
+					cursorconstrain(constraint);
+					break;
+				}
+			}
+		}
 	}
 
 	wlr_seat_pointer_notify_motion(seat, time, sx, sy);
