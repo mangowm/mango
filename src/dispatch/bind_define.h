@@ -54,7 +54,7 @@ void chvt(const Arg *arg) {
 
 void create_virtual_output(const Arg *arg) {
 	if (!wlr_backend_is_multi(backend)) {
-		wlr_log(WLR_ERROR, "Expected a multi backend");
+		mango_error(true, WLR_ERROR, "Expected a multi backend");
 		return;
 	}
 
@@ -62,17 +62,17 @@ void create_virtual_output(const Arg *arg) {
 	wlr_multi_for_each_backend(backend, create_output, &done);
 
 	if (!done) {
-		wlr_log(WLR_ERROR, "Failed to create virtual output");
+		mango_error(true, WLR_ERROR, "Failed to create virtual output");
 		return;
 	}
 
-	wlr_log(WLR_INFO, "Virtual output created");
+	mango_error(true, WLR_INFO, "Virtual output created");
 	return;
 }
 
 void destroy_all_virtual_output(const Arg *arg) {
 	if (!wlr_backend_is_multi(backend)) {
-		wlr_log(WLR_ERROR, "Expected a multi backend");
+		mango_error(true, WLR_ERROR, "Expected a multi backend");
 		return;
 	}
 
@@ -80,7 +80,7 @@ void destroy_all_virtual_output(const Arg *arg) {
 	wl_list_for_each_safe(m, tmp, &mons, link) {
 		if (wlr_output_is_headless(m->wlr_output)) {
 			wlr_output_destroy(m->wlr_output);
-			wlr_log(WLR_INFO, "Virtual output destroyed");
+			mango_error(true, WLR_INFO, "Virtual output destroyed");
 		}
 	}
 	return;
@@ -1096,9 +1096,9 @@ void spawn_shell(const Arg *arg) {
 		execlp("sh", "sh", "-c", arg->v, (char *)NULL);
 		execlp("bash", "bash", "-c", arg->v, (char *)NULL);
 
-		wlr_log(WLR_DEBUG,
-				"mango: failed to execute command '%s' with shell: %s\n",
-				(char *)arg->v, strerror(errno));
+		mango_error(true, WLR_DEBUG,
+					"mango: failed to execute command '%s' with shell: %s\n",
+					(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
 	return;
@@ -1132,15 +1132,15 @@ void spawn(const Arg *arg) {
 
 		wordexp_t p;
 		if (wordexp(arg->v, &p, 0) != 0) {
-			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n",
-					(char *)arg->v);
+			mango_error(true, WLR_DEBUG, "mango: wordexp failed for '%s'\n",
+						(char *)arg->v);
 			_exit(EXIT_FAILURE);
 		}
 
 		execvp(p.we_wordv[0], p.we_wordv);
 
-		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
-				strerror(errno));
+		mango_error(true, WLR_DEBUG, "mango: execvp '%s' failed: %s\n",
+					p.we_wordv[0], strerror(errno));
 		wordfree(&p);
 		_exit(EXIT_FAILURE);
 	}
@@ -1169,13 +1169,13 @@ void spawn_on_empty(const Arg *arg) {
 
 void switch_keyboard_layout(const Arg *arg) {
 	if (!kb_group || !kb_group->wlr_group || !seat) {
-		wlr_log(WLR_ERROR, "Invalid keyboard group or seat");
+		mango_error(true, WLR_ERROR, "Invalid keyboard group or seat");
 		return;
 	}
 
 	struct wlr_keyboard *keyboard = &kb_group->wlr_group->keyboard;
 	if (!keyboard || !keyboard->keymap) {
-		wlr_log(WLR_ERROR, "Invalid keyboard or keymap");
+		mango_error(true, WLR_ERROR, "Invalid keyboard or keymap");
 		return;
 	}
 
@@ -1183,7 +1183,7 @@ void switch_keyboard_layout(const Arg *arg) {
 		keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 	const int32_t num_layouts = xkb_keymap_num_layouts(keyboard->keymap);
 	if (num_layouts < 2) {
-		wlr_log(WLR_INFO, "Only one layout available");
+		mango_error(true, WLR_INFO, "Only one layout available");
 		return;
 	}
 
