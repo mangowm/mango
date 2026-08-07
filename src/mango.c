@@ -3903,6 +3903,7 @@ void createpointerconstraint(struct wl_listener *listener, void *data) {
 		   &pointer_constraint->destroy, destroypointerconstraint);
 
 	// layer surfaces are never selmon->sel, so match pointer focus too
+	// (e.g. lan-mouse locks the pointer on a 1px layer surface)
 	if (seat->pointer_state.focused_surface ==
 		pointer_constraint->constraint->surface) {
 		cursorconstrain(pointer_constraint->constraint);
@@ -5363,6 +5364,15 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		 (selmon && selmon->isoverview && selmon->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		focusclient(c, 0);
+
+	/* Pointer-driven layer constraints: deactivate as soon as the pointer
+	 * leaves their surface. Toplevel constraints are managed by focusclient
+	 * (keyboard focus driven), so they are left untouched here. */
+	if (active_constraint && surface != seat->pointer_state.focused_surface &&
+		toplevel_from_wlr_surface(active_constraint->surface, NULL, NULL) ==
+			LayerShell) {
+		cursorconstrain(NULL);
+	}
 
 	/* If surface is NULL, clear pointer focus */
 	if (!surface) {
