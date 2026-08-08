@@ -96,6 +96,7 @@ typedef struct {
 	float width;
 	float height;
 	int32_t nofocus;
+	int32_t stayfocused;
 	int32_t nofadein;
 	int32_t nofadeout;
 	int32_t no_force_center;
@@ -2575,6 +2576,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->noswallow = -1;
 		rule->noblur = -1;
 		rule->nofocus = -1;
+		rule->stayfocused = -1;
 		rule->nofadein = -1;
 		rule->nofadeout = -1;
 		rule->no_force_center = -1;
@@ -2633,6 +2635,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->offsety = atoi(val);
 				} else if (strcmp(key, "nofocus") == 0) {
 					rule->nofocus = atoi(val);
+				} else if (strcmp(key, "stayfocused") == 0) {
+					rule->stayfocused = atoi(val);
 				} else if (strcmp(key, "nofadein") == 0) {
 					rule->nofadein = atoi(val);
 				} else if (strcmp(key, "nofadeout") == 0) {
