@@ -330,8 +330,7 @@ static void xdg_output_update_all(void) {
 			wl_resource_for_each(wl_res, &output->wlr_output->resources) {
 				if (wl_resource_get_version(wl_res) >=
 						WL_OUTPUT_DONE_SINCE_VERSION &&
-					xwayland && xwayland->server &&
-					xwayland->server->client == wl_resource_get_client(wl_res))
+					xdg_output_resource_is_xwayland(wl_res))
 					wl_output_send_done(wl_res);
 			}
 		}
