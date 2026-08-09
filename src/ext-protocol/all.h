@@ -4,3 +4,5 @@
 #include "tablet.h"
 #include "tearing.h"
 #include "text-input.h"
+#include "xdg-activation.h"
+#include "xdg-output.h"

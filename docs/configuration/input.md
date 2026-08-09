@@ -73,6 +73,19 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
 | `trackpad_scroll_factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
 ---
 
+### Touchscreen Settings
+
+Settings for touchscreen devices. Touch input is forwarded to clients
+that support the `wl_touch` protocol; otherwise it falls back to mouse
+emulation so the touchscreen keeps working with non-touch clients.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `touch_enable` | `1` | Set to `0` to completely disable touchscreen support. |
+| `touch_enable_mouse_emulation` | `1` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+
+---
+
 **Detailed descriptions:**
 
 - `scroll_button` values:

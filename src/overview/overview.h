@@ -88,9 +88,9 @@ void overview_layout_card(Client *c) {
 	struct wlr_box clip;
 	client_get_clip(c, &clip);
 
-	struct wlr_surface *s = client_surface(c);
 	float content_w, content_h;
 #ifdef XWAYLAND
+	struct wlr_surface *s = client_surface(c);
 	if (client_is_x11(c)) {
 		content_w = s->current.width;
 		content_h = s->current.height;

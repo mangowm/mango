@@ -288,23 +288,13 @@ void scroller(Monitor *m) {
 	int32_t scroller_ignore_proportion_single =
 		m->pertag->scroller_ignore_proportion_single[tag];
 
-	/* 按全局客户端链表顺序收集所有堆叠头，确保视觉顺序正确 */
-	struct ScrollerStackNode *heads[64];
+	/* 统计可见的平铺堆叠头数量 */
 	int32_t n_heads = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISSCROLLTILED(c)) {
 			struct ScrollerStackNode *node = find_scroller_node(st, c);
-			if (node && !node->prev_in_stack) {
-				bool already = false;
-				for (int k = 0; k < n_heads; k++) {
-					if (heads[k] == node) {
-						already = true;
-						break;
-					}
-				}
-				if (!already)
-					heads[n_heads++] = node;
-			}
+			if (node && !node->prev_in_stack)
+				n_heads++;
 		}
 	}
 
@@ -312,6 +302,31 @@ void scroller(Monitor *m) {
 		sync_scroller_state_to_clients(m, tag);
 		return;
 	}
+
+	/* 按全局客户端链表顺序收集所有堆叠头，确保视觉顺序正确 */
+	struct ScrollerStackNode **heads = calloc(n_heads, sizeof(*heads));
+	if (!heads) {
+		sync_scroller_state_to_clients(m, tag);
+		return;
+	}
+	int32_t head_idx = 0;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISSCROLLTILED(c)) {
+			struct ScrollerStackNode *node = find_scroller_node(st, c);
+			if (node && !node->prev_in_stack) {
+				bool already = false;
+				for (int k = 0; k < head_idx; k++) {
+					if (heads[k] == node) {
+						already = true;
+						break;
+					}
+				}
+				if (!already)
+					heads[head_idx++] = node;
+			}
+		}
+	}
+	n_heads = head_idx;
 
 	m->visible_scroll_tiling_clients = n_heads;
 
@@ -341,6 +356,7 @@ void scroller(Monitor *m) {
 		horizontal_check_scroller_root_inside_mon(head->client, &target_geom);
 		arrange_stack_node(head, target_geom, cur_gappiv);
 		sync_scroller_state_to_clients(m, tag);
+		free(heads);
 		return;
 	}
 
@@ -503,6 +519,7 @@ void scroller(Monitor *m) {
 	}
 
 	sync_scroller_state_to_clients(m, tag);
+	free(heads);
 }
 
 void vertical_scroller(Monitor *m) {
@@ -515,20 +532,13 @@ void vertical_scroller(Monitor *m) {
 	int32_t scroller_ignore_proportion_single =
 		m->pertag->scroller_ignore_proportion_single[tag];
 
-	/* 按全局顺序收集堆叠头 */
-	struct ScrollerStackNode *heads[64];
+	/* 统计可见的平铺堆叠头数量 */
 	int32_t n_heads = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISSCROLLTILED(c)) {
 			struct ScrollerStackNode *node = find_scroller_node(st, c);
-			if (node && !node->prev_in_stack) {
-				bool already = false;
-				for (int k = 0; k < n_heads; k++)
-					if (heads[k] == node)
-						already = true;
-				if (!already)
-					heads[n_heads++] = node;
-			}
+			if (node && !node->prev_in_stack)
+				n_heads++;
 		}
 	}
 
@@ -536,6 +546,28 @@ void vertical_scroller(Monitor *m) {
 		sync_scroller_state_to_clients(m, tag);
 		return;
 	}
+
+	/* 按全局顺序收集堆叠头 */
+	struct ScrollerStackNode **heads = calloc(n_heads, sizeof(*heads));
+	if (!heads) {
+		sync_scroller_state_to_clients(m, tag);
+		return;
+	}
+	int32_t head_idx = 0;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISSCROLLTILED(c)) {
+			struct ScrollerStackNode *node = find_scroller_node(st, c);
+			if (node && !node->prev_in_stack) {
+				bool already = false;
+				for (int k = 0; k < head_idx; k++)
+					if (heads[k] == node)
+						already = true;
+				if (!already)
+					heads[head_idx++] = node;
+			}
+		}
+	}
+	n_heads = head_idx;
 
 	m->visible_scroll_tiling_clients = n_heads;
 
@@ -564,6 +596,7 @@ void vertical_scroller(Monitor *m) {
 		vertical_check_scroller_root_inside_mon(head->client, &target_geom);
 		arrange_stack_vertical_node(head, target_geom, cur_gappih);
 		sync_scroller_state_to_clients(m, tag);
+		free(heads);
 		return;
 	}
 
@@ -738,6 +771,7 @@ void vertical_scroller(Monitor *m) {
 	}
 
 	sync_scroller_state_to_clients(m, tag);
+	free(heads);
 }
 
 void scroller_remove_client(Client *c) {
@@ -898,14 +932,20 @@ static void update_scroller_state(Monitor *m) {
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 
 	/* 收集当前可见的所有 scroller 平铺窗口 */
-	Client *vis[512];
 	int32_t count = 0;
 	Client *c;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISSCROLLTILED(c))
-			vis[count++] = c;
-		if (count == 512)
-			break;
+			count++;
+	}
+
+	Client **vis = calloc(count ? count : 1, sizeof(*vis));
+	if (!vis)
+		return;
+	int32_t vi = 0;
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISSCROLLTILED(c))
+			vis[vi++] = c;
 	}
 
 	struct ScrollerStackNode *n = st->all_first;
@@ -929,6 +969,8 @@ static void update_scroller_state(Monitor *m) {
 			scroller_node_create(st, vis[i]);
 		}
 	}
+
+	free(vis);
 }
 
 static void scroller_swap_nodes_in_same_stack(struct ScrollerStackNode *n1,

@@ -709,8 +709,13 @@ void grid(Monitor *m) {
 	rows = (cols && (cols - 1) * cols >= n) ? cols - 1 : cols;
 	overcols = n % cols;
 
-	float col_pers[cols];
-	float row_pers[rows];
+	float *col_pers = calloc(cols, sizeof(*col_pers));
+	float *row_pers = calloc(rows, sizeof(*row_pers));
+	if (!col_pers || !row_pers) {
+		free(col_pers);
+		free(row_pers);
+		return;
+	}
 	for (i = 0; i < cols; i++)
 		col_pers[i] = 1.0f;
 	for (i = 0; i < rows; i++)
@@ -799,6 +804,9 @@ void grid(Monitor *m) {
 			i++;
 		}
 	}
+
+	free(col_pers);
+	free(row_pers);
 }
 
 void fair(Monitor *m) {
@@ -833,7 +841,28 @@ void fair(Monitor *m) {
 	int32_t max_rows = base_rows + (remainder > 0 ? 1 : 0);
 
 	// 将有效客户端存入数组
-	Client *arr[n];
+	Client **arr = calloc(n, sizeof(*arr));
+	float *col_pers = calloc(cols, sizeof(*col_pers));
+	float *row_pers = calloc(max_rows, sizeof(*row_pers));
+	float *col_x = calloc(cols, sizeof(*col_x));
+	float *col_w = calloc(cols, sizeof(*col_w));
+	float *row_y_base = calloc(base_rows, sizeof(*row_y_base));
+	float *row_h_base = calloc(base_rows, sizeof(*row_h_base));
+	float *row_y_max = calloc(max_rows, sizeof(*row_y_max));
+	float *row_h_max = calloc(max_rows, sizeof(*row_h_max));
+	if (!arr || !col_pers || !row_pers || !col_x || !col_w || !row_y_base ||
+		!row_h_base || !row_y_max || !row_h_max) {
+		free(arr);
+		free(col_pers);
+		free(row_pers);
+		free(col_x);
+		free(col_w);
+		free(row_y_base);
+		free(row_h_base);
+		free(row_y_max);
+		free(row_h_max);
+		return;
+	}
 	int32_t arr_idx = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISFAKETILED(c)) {
@@ -844,8 +873,6 @@ void fair(Monitor *m) {
 	}
 
 	// 初始化比例数组
-	float col_pers[cols];
-	float row_pers[max_rows];
 	for (i = 0; i < cols; i++)
 		col_pers[i] = 0.0f;
 	for (i = 0; i < max_rows; i++)
@@ -896,7 +923,6 @@ void fair(Monitor *m) {
 	}
 
 	// 预计算所有列的 X 坐标和宽度
-	float col_x[cols], col_w[cols];
 	float avail_w = m->w.width - 2 * cur_gappoh - (cols - 1) * cur_gappih;
 	float next_x = m->w.x + cur_gappoh;
 	for (i = 0; i < cols; i++) {
@@ -907,7 +933,6 @@ void fair(Monitor *m) {
 	}
 
 	// 预计算两组不同的行几何参数（解决不同列行数不一致的问题）
-	float row_y_base[base_rows], row_h_base[base_rows];
 	float sum_row_base = 0.0f;
 	for (i = 0; i < base_rows; i++)
 		sum_row_base += row_pers[i];
@@ -922,7 +947,6 @@ void fair(Monitor *m) {
 		next_y += row_h_base[i] + cur_gappiv;
 	}
 
-	float row_y_max[max_rows], row_h_max[max_rows];
 	if (remainder > 0) {
 		float sum_row_max = 0.0f;
 		for (i = 0; i < max_rows; i++)
@@ -973,4 +997,14 @@ void fair(Monitor *m) {
 											.height = (int32_t)fl_ch},
 						   0);
 	}
+
+	free(arr);
+	free(col_pers);
+	free(row_pers);
+	free(col_x);
+	free(col_w);
+	free(row_y_base);
+	free(row_h_base);
+	free(row_y_max);
+	free(row_h_max);
 }

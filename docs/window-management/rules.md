@@ -38,6 +38,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
 | `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
 | `force_render` | integer | `0` / `1` | Force render frame even if the window is not visible |
+| `activation_bypass` | integer | `0` / `1` | Bypass xdg-activation authentication: activation requests for this window are treated as authenticated, so the normal activation behavior applies regardless of token validity |
 
 
 ### Geometry & Position
@@ -124,6 +125,9 @@ windowrule=isopensilent:1,appid:com.obsproject.Studio
 
 # Force tearing for games
 windowrule=force_tearing:1,title:vkcube
+
+# Skip xdg-activation authentication for this app
+windowrule=activation_bypass:1,appid:org.example.App
 windowrule=force_tearing:1,title:Counter-Strike 2
 
 # Named scratchpad for file manager
@@ -170,13 +174,14 @@ You can set all parameters in one line. If only `id` is set, the rule is followe
 tagrule=id:Values,Parameter:Values,Parameter:Values
 tagrule=id:Values,monitor_name:eDP-1,Parameter:Values,Parameter:Values
 tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
+tagrule=id:*,Parameter:Values
 ```
 
 > **Tip:** See [Layouts](/docs/window-management/layouts#supported-layouts) for detailed descriptions of each layout type.
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | integer | 0-9 | Match by tag id, 0 means the ~0 tag |
+| `id` | integer / wildcard | 0-9 / `*` | Match by tag id, 0 means the ~0 tag. Use `*` to match all tags at once |
 | `monitor_name` | string | monitor name | Match by monitor name |
 | `monitor_make` | string | monitor make | Match by monitor manufacturer |
 | `monitor_model` | string | monitor model | Match by monitor model |
@@ -194,6 +199,9 @@ tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
 ### Examples
 
 ```ini
+# Set layout for all tags at once (equivalent to the two rules below)
+tagrule=id:*,layout_name:scroller
+
 # Set layout for specific tags
 tagrule=id:1,layout_name:scroller
 tagrule=id:2,layout_name:scroller

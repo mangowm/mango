@@ -144,10 +144,12 @@ static inline void client_get_clip(Client *c, struct wlr_box *clip) {
 static inline void client_get_geometry(Client *c, struct wlr_box *geom) {
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
-		geom->x = c->surface.xwayland->x;
-		geom->y = c->surface.xwayland->y;
-		geom->width = c->surface.xwayland->width;
-		geom->height = c->surface.xwayland->height;
+		/* X11 物理尺寸转回逻辑尺寸 */
+		float scale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
+		geom->x = (int32_t)roundf(c->surface.xwayland->x / scale);
+		geom->y = (int32_t)roundf(c->surface.xwayland->y / scale);
+		geom->width = (int32_t)roundf(c->surface.xwayland->width / scale);
+		geom->height = (int32_t)roundf(c->surface.xwayland->height / scale);
 		return;
 	}
 #endif
@@ -290,6 +292,98 @@ static inline void client_set_scale(struct wlr_surface *s, float scale) {
 	wlr_surface_set_preferred_buffer_scale(s, (int32_t)ceilf(scale));
 }
 
+/* XWayland 根 surface 的 source_box 裁剪。
+ *
+ * X11 buffer 是物理尺寸（应用按 1:1 渲染），而 clip 是 mango 的逻辑可见
+ * 区域。wlr_scene_subsurface_tree_set_clip 会把 clip 当作 surface 逻辑坐标
+ * （XWayland 的 state->width/height 实为物理）去裁剪并重设 dest_size，导致
+ * 内容被放大。这里改用 source_box + dest_size 直接裁剪 xwl_root_buffer：
+ *   - source_box 用物理坐标（clip 逻辑 × xwayland_scale），保持 1:1 采样；
+ *   - dest_size 用逻辑坐标（clip 逻辑尺寸），保持逻辑缩放显示；
+ *   - buffer 节点平移到 (clip.x, clip.y)，让可见内容保持在原屏幕位置
+ *     （否则窗口向左溢出时，裁剩的内容不会右移，仍会溢出到屏幕外）。 */
+static inline void client_update_xwayland_clip(Client *c,
+											   struct wlr_box *clip) {
+#ifdef XWAYLAND
+	if (!c->xwl_root_buffer || !c->xwl_root_buffer->buffer)
+		return;
+	struct wlr_buffer *buf = c->xwl_root_buffer->buffer;
+	float scale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
+
+	/* 记录裁剪状态，供 surface commit 后恢复 */
+	c->xwl_clip = *clip;
+	c->xwl_clip_active = true;
+
+	if (clip->width <= 0 || clip->height <= 0)
+		return;
+
+	struct wlr_fbox src = {
+		.x = (float)clip->x * scale,
+		.y = (float)clip->y * scale,
+		.width = (float)clip->width * scale,
+		.height = (float)clip->height * scale,
+	};
+	/* clamp 到物理 buffer 范围，防止越界采样 */
+	if (src.x < 0.f)
+		src.x = 0.f;
+	if (src.y < 0.f)
+		src.y = 0.f;
+	if (src.x + src.width > buf->width)
+		src.width = buf->width - src.x;
+	if (src.y + src.height > buf->height)
+		src.height = buf->height - src.y;
+	/* 裁剪起点已超出 buffer 范围时 src.width/height 可能为负，
+	 * wlr_scene_buffer_set_source_box 断言要求非负，这里兜底 clamp */
+	if (src.width < 0.f)
+		src.width = 0.f;
+	if (src.height < 0.f)
+		src.height = 0.f;
+
+	wlr_scene_buffer_set_source_box(c->xwl_root_buffer, &src);
+	wlr_scene_buffer_set_dest_size(c->xwl_root_buffer, clip->width,
+								   clip->height);
+	/* 平移 buffer 节点到裁剪起点，保持可见内容在屏幕上的原位置 */
+	wlr_scene_node_set_position(&c->xwl_root_buffer->node, clip->x, clip->y);
+#endif
+}
+
+/* 同步 XWayland 根 surface 的 dest_size（逻辑尺寸） */
+static inline void client_update_xwayland_dest_size(Client *c) {
+#ifdef XWAYLAND
+	if (!c->xwl_root_buffer || !c->xwl_root_buffer->buffer)
+		return;
+	/* 处于 source_box 裁剪状态时，surface 提交后恢复裁剪，
+	 * 避免窗口静止（动画结束）后被强制复原为未裁剪 */
+	if (c->xwl_clip_active) {
+		client_update_xwayland_clip(c, &c->xwl_clip);
+		return;
+	}
+	struct wlr_buffer *buf = c->xwl_root_buffer->buffer;
+	float scale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
+	int32_t w, h;
+	if (client_is_unmanaged(c)) {
+		w = (int32_t)roundf(buf->width / scale);
+		h = (int32_t)roundf(buf->height / scale);
+	} else {
+		struct wlr_box cur = c->animation.current;
+		w = cur.width - 2 * (int32_t)c->bw;
+		h = cur.height - 2 * (int32_t)c->bw;
+	}
+	if (w > 0 && h > 0) {
+		wlr_scene_buffer_set_dest_size(c->xwl_root_buffer, w, h);
+		/* 恢复整块采样与原点，清除裁剪残留 */
+		struct wlr_fbox full = {
+			.x = 0,
+			.y = 0,
+			.width = buf->width,
+			.height = buf->height,
+		};
+		wlr_scene_buffer_set_source_box(c->xwl_root_buffer, &full);
+		wlr_scene_node_set_position(&c->xwl_root_buffer->node, 0, 0);
+	}
+#endif
+}
+
 static inline uint32_t client_set_size(Client *c, uint32_t width,
 									   uint32_t height) {
 #ifdef XWAYLAND
@@ -297,35 +391,54 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 		struct wlr_xwayland_surface *surface = c->surface.xwayland;
 		struct wlr_surface_state *state = &surface->surface->current;
 
-		if ((int32_t)c->geom.width - 2 * (int32_t)c->bw ==
-				(int32_t)state->width &&
-			(int32_t)c->geom.height - 2 * (int32_t)c->bw ==
-				(int32_t)state->height &&
-			(int32_t)c->surface.xwayland->x ==
-				(int32_t)c->geom.x + (int32_t)c->bw &&
-			(int32_t)c->surface.xwayland->y ==
-				(int32_t)c->geom.y + (int32_t)c->bw) {
+		/* configure 用物理尺寸（逻辑 × xscale），让 X11 按 1:1 渲染 */
+		float xscale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
+		int32_t xw =
+			(int32_t)roundf((c->geom.width - 2 * (int32_t)c->bw) * xscale);
+		int32_t xh =
+			(int32_t)roundf((c->geom.height - 2 * (int32_t)c->bw) * xscale);
+		int32_t xx = (int32_t)roundf((c->geom.x + (int32_t)c->bw) * xscale);
+		int32_t xy = (int32_t)roundf((c->geom.y + (int32_t)c->bw) * xscale);
+
+		if ((int32_t)state->width == xw && (int32_t)state->height == xh &&
+			(int32_t)c->surface.xwayland->x == xx &&
+			(int32_t)c->surface.xwayland->y == xy) {
 			return 0;
 		}
 
-		xcb_size_hints_t *size_hints = surface->size_hints;
-		int32_t width = c->geom.width - 2 * c->bw;
-		int32_t height = c->geom.height - 2 * c->bw;
+		/* 客户端尚未 ack 时 state 不更新，用已请求参数去重，
+		 * 避免重复发相同 configure 导致客户端反复重渲染/上传 */
+		if (c->xwl_req_valid && c->xwl_req_x == xx && c->xwl_req_y == xy &&
+			c->xwl_req_w == xw && c->xwl_req_h == xh) {
+			return 0;
+		}
+		c->xwl_req_valid = true;
+		c->xwl_req_x = xx;
+		c->xwl_req_y = xy;
+		c->xwl_req_w = xw;
+		c->xwl_req_h = xh;
 
-		if (size_hints &&
-			c->geom.width - 2 * (int32_t)c->bw < size_hints->min_width)
+		xcb_size_hints_t *size_hints = surface->size_hints;
+		int32_t width = xw;
+		int32_t height = xh;
+
+		if (size_hints && xw < (int32_t)size_hints->min_width)
 			width = size_hints->min_width;
-		if (size_hints &&
-			c->geom.height - 2 * (int32_t)c->bw < size_hints->min_height)
+		if (size_hints && xh < (int32_t)size_hints->min_height)
 			height = size_hints->min_height;
 
-		wlr_xwayland_surface_configure(c->surface.xwayland, c->geom.x + c->bw,
-									   c->geom.y + c->bw, width, height);
+		wlr_xwayland_surface_configure(c->surface.xwayland, xx, xy, width,
+									   height);
 		return 1;
 	}
 #endif
 	if ((int32_t)width == c->surface.xdg->toplevel->current.width &&
 		(int32_t)height == c->surface.xdg->toplevel->current.height)
+		return 0;
+	/* 客户端尚未 ack 时 current 不更新，用 scheduled（已请求的配置）去重，
+	 * 避免重复发相同尺寸的 configure 导致客户端反复重渲染/上传 */
+	if ((int32_t)width == c->surface.xdg->toplevel->scheduled.width &&
+		(int32_t)height == c->surface.xdg->toplevel->scheduled.height)
 		return 0;
 	return wlr_xdg_toplevel_set_size(c->surface.xdg->toplevel, (int32_t)width,
 									 (int32_t)height);
@@ -504,18 +617,21 @@ static inline void client_set_size_bound(Client *c) {
 		if (!size_hints)
 			return;
 
-		if ((uint32_t)c->geom.width - 2 * c->bw < size_hints->min_width &&
-			size_hints->min_width > 0)
-			c->geom.width = size_hints->min_width + 2 * c->bw;
-		if ((uint32_t)c->geom.height - 2 * c->bw < size_hints->min_height &&
-			size_hints->min_height > 0)
-			c->geom.height = size_hints->min_height + 2 * c->bw;
-		if ((uint32_t)c->geom.width - 2 * c->bw > size_hints->max_width &&
-			size_hints->max_width > 0)
-			c->geom.width = size_hints->max_width + 2 * c->bw;
-		if ((uint32_t)c->geom.height - 2 * c->bw > size_hints->max_height &&
-			size_hints->max_height > 0)
-			c->geom.height = size_hints->max_height + 2 * c->bw;
+		/* size_hints 是 X11 物理尺寸，转回逻辑再比较 */
+		float scale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
+		int32_t min_w = (int32_t)roundf(size_hints->min_width / scale);
+		int32_t min_h = (int32_t)roundf(size_hints->min_height / scale);
+		int32_t max_w = (int32_t)roundf(size_hints->max_width / scale);
+		int32_t max_h = (int32_t)roundf(size_hints->max_height / scale);
+
+		if ((uint32_t)c->geom.width - 2 * c->bw < (uint32_t)min_w && min_w > 0)
+			c->geom.width = min_w + 2 * c->bw;
+		if ((uint32_t)c->geom.height - 2 * c->bw < (uint32_t)min_h && min_h > 0)
+			c->geom.height = min_h + 2 * c->bw;
+		if ((uint32_t)c->geom.width - 2 * c->bw > (uint32_t)max_w && max_w > 0)
+			c->geom.width = max_w + 2 * c->bw;
+		if ((uint32_t)c->geom.height - 2 * c->bw > (uint32_t)max_h && max_h > 0)
+			c->geom.height = max_h + 2 * c->bw;
 		return;
 	}
 #endif

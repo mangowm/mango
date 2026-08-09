@@ -54,7 +54,7 @@ void chvt(const Arg *arg) {
 
 void create_virtual_output(const Arg *arg) {
 	if (!wlr_backend_is_multi(backend)) {
-		wlr_log(WLR_ERROR, "Expected a multi backend");
+		mango_error(true, WLR_ERROR, "Expected a multi backend");
 		return;
 	}
 
@@ -62,17 +62,17 @@ void create_virtual_output(const Arg *arg) {
 	wlr_multi_for_each_backend(backend, create_output, &done);
 
 	if (!done) {
-		wlr_log(WLR_ERROR, "Failed to create virtual output");
+		mango_error(true, WLR_ERROR, "Failed to create virtual output");
 		return;
 	}
 
-	wlr_log(WLR_INFO, "Virtual output created");
+	mango_error(true, WLR_INFO, "Virtual output created");
 	return;
 }
 
 void destroy_all_virtual_output(const Arg *arg) {
 	if (!wlr_backend_is_multi(backend)) {
-		wlr_log(WLR_ERROR, "Expected a multi backend");
+		mango_error(true, WLR_ERROR, "Expected a multi backend");
 		return;
 	}
 
@@ -80,7 +80,7 @@ void destroy_all_virtual_output(const Arg *arg) {
 	wl_list_for_each_safe(m, tmp, &mons, link) {
 		if (wlr_output_is_headless(m->wlr_output)) {
 			wlr_output_destroy(m->wlr_output);
-			wlr_log(WLR_INFO, "Virtual output destroyed");
+			mango_error(true, WLR_INFO, "Virtual output destroyed");
 		}
 	}
 	return;
@@ -129,6 +129,9 @@ void exchange_stack_client(const Arg *arg) {
 	return;
 }
 
+static bool view_shift_tag(const Arg *arg, int dir);
+static bool view_shift_tag_have_client(const Arg *arg, int dir);
+
 void focusdir(const Arg *arg) {
 
 	if (!selmon)
@@ -146,9 +149,9 @@ void focusdir(const Arg *arg) {
 	} else {
 		if (config.focus_cross_tag) {
 			if (arg->i == LEFT || arg->i == UP)
-				viewtoleft_have_client(&(Arg){0});
+				view_shift_tag_have_client(&(Arg){0}, -1);
 			if (arg->i == RIGHT || arg->i == DOWN)
-				viewtoright_have_client(&(Arg){0});
+				view_shift_tag_have_client(&(Arg){0}, 1);
 		} else if (config.focus_cross_monitor) {
 			focusmon(arg);
 		}
@@ -168,7 +171,7 @@ void focus_window_or_workspace(const Arg *arg) {
 	c = direction_select(arg);
 	if (!selmon->isoverview)
 		c = get_focused_stack_client(c, arg->tc);
-	if (c) {
+	if (c && c->mon == selmon) {
 		focusclient(c, 1);
 		if (config.warpcursor)
 			warp_cursor(c);
@@ -178,9 +181,11 @@ void focus_window_or_workspace(const Arg *arg) {
 	int dir = arg->i;
 
 	if (dir == LEFT || dir == UP) {
-		viewtoleft(&(Arg){0});
+		if (!view_shift_tag_have_client(&(Arg){0}, -1))
+			view_shift_tag(&(Arg){0}, -1);
 	} else if (dir == RIGHT || dir == DOWN) {
-		viewtoright(&(Arg){0});
+		if (!view_shift_tag_have_client(&(Arg){0}, 1))
+			view_shift_tag(&(Arg){0}, 1);
 	}
 
 	return;
@@ -1073,11 +1078,17 @@ void spawn_shell(const Arg *arg) {
 	if (!arg->v)
 		return;
 
+	// hand the child an activation token so it can request activation
+	const char *activation_token = xdg_activation_v1_export_token();
+
 	if (fork() == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
 		signal(SIGCHLD, SIG_DFL);
+
+		if (activation_token)
+			setenv("XDG_ACTIVATION_TOKEN", activation_token, 1);
 
 		int fd_max = sysconf(_SC_OPEN_MAX);
 		for (int i = 3; i < fd_max; i++) {
@@ -1090,9 +1101,9 @@ void spawn_shell(const Arg *arg) {
 		execlp("sh", "sh", "-c", arg->v, (char *)NULL);
 		execlp("bash", "bash", "-c", arg->v, (char *)NULL);
 
-		wlr_log(WLR_DEBUG,
-				"mango: failed to execute command '%s' with shell: %s\n",
-				(char *)arg->v, strerror(errno));
+		mango_error(true, WLR_DEBUG,
+					"mango: failed to execute command '%s' with shell: %s\n",
+					(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
 	return;
@@ -1102,11 +1113,17 @@ void spawn(const Arg *arg) {
 	if (!arg->v)
 		return;
 
+	// hand the child an activation token so it can request activation
+	const char *activation_token = xdg_activation_v1_export_token();
+
 	if (fork() == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
 		signal(SIGCHLD, SIG_DFL);
+
+		if (activation_token)
+			setenv("XDG_ACTIVATION_TOKEN", activation_token, 1);
 
 		// close all file descriptors inherited from the parent process to
 		// prevent IPC handle leakage that can block clients
@@ -1120,15 +1137,15 @@ void spawn(const Arg *arg) {
 
 		wordexp_t p;
 		if (wordexp(arg->v, &p, 0) != 0) {
-			wlr_log(WLR_DEBUG, "mango: wordexp failed for '%s'\n",
-					(char *)arg->v);
+			mango_error(true, WLR_DEBUG, "mango: wordexp failed for '%s'\n",
+						(char *)arg->v);
 			_exit(EXIT_FAILURE);
 		}
 
 		execvp(p.we_wordv[0], p.we_wordv);
 
-		wlr_log(WLR_DEBUG, "mango: execvp '%s' failed: %s\n", p.we_wordv[0],
-				strerror(errno));
+		mango_error(true, WLR_DEBUG, "mango: execvp '%s' failed: %s\n",
+					p.we_wordv[0], strerror(errno));
 		wordfree(&p);
 		_exit(EXIT_FAILURE);
 	}
@@ -1157,13 +1174,13 @@ void spawn_on_empty(const Arg *arg) {
 
 void switch_keyboard_layout(const Arg *arg) {
 	if (!kb_group || !kb_group->wlr_group || !seat) {
-		wlr_log(WLR_ERROR, "Invalid keyboard group or seat");
+		mango_error(true, WLR_ERROR, "Invalid keyboard group or seat");
 		return;
 	}
 
 	struct wlr_keyboard *keyboard = &kb_group->wlr_group->keyboard;
 	if (!keyboard || !keyboard->keymap) {
-		wlr_log(WLR_ERROR, "Invalid keyboard or keymap");
+		mango_error(true, WLR_ERROR, "Invalid keyboard or keymap");
 		return;
 	}
 
@@ -1171,7 +1188,7 @@ void switch_keyboard_layout(const Arg *arg) {
 		keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 	const int32_t num_layouts = xkb_keymap_num_layouts(keyboard->keymap);
 	if (num_layouts < 2) {
-		wlr_log(WLR_INFO, "Only one layout available");
+		mango_error(true, WLR_INFO, "Only one layout available");
 		return;
 	}
 
@@ -1640,130 +1657,110 @@ void toggleview(const Arg *arg) {
 	return;
 }
 
-void viewtoleft(const Arg *arg) {
+static bool view_shift_tag(const Arg *arg, int dir) {
 	if (!selmon)
-		return;
+		return false;
 
 	if (selmon->isoverview || selmon->pertag->curtag == 0)
-		return;
+		return false;
 
 	uint32_t target = selmon->tagset[selmon->seltags];
-	target >>= 1;
+	if (dir < 0) {
+		target >>= 1;
 
-	if (target == 0) {
-		if (!config.tag_carousel)
-			return;
-		target = (1 << (config.tag_num - 1)) & TAGMASK;
-		selmon->carousel_anim_dir = -1;
+		if (target == 0) {
+			if (!config.tag_carousel)
+				return false;
+			target = (1 << (config.tag_num - 1)) & TAGMASK;
+			selmon->carousel_anim_dir = -1;
+		}
+	} else {
+		target <<= 1;
+
+		if (!(target & TAGMASK)) {
+			if (!config.tag_carousel)
+				return false;
+			target = 1;
+			selmon->carousel_anim_dir = 1;
+		}
 	}
 
 	if (target == selmon->tagset[selmon->seltags])
-		return;
+		return false;
 
 	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
 	selmon->carousel_anim_dir = 0;
-	return;
+	return true;
 }
 
-void viewtoright(const Arg *arg) {
+static bool view_shift_tag_have_client(const Arg *arg, int dir) {
 	if (!selmon)
-		return;
-
-	if (selmon->isoverview || selmon->pertag->curtag == 0)
-		return;
-
-	uint32_t target = selmon->tagset[selmon->seltags];
-	target <<= 1;
-
-	if (!(target & TAGMASK)) {
-		if (!config.tag_carousel)
-			return;
-		target = 1;
-		selmon->carousel_anim_dir = 1;
-	}
-
-	if (target == selmon->tagset[selmon->seltags])
-		return;
-
-	view(&(Arg){.ui = target & TAGMASK, .i = arg->i}, true);
-	selmon->carousel_anim_dir = 0;
-	return;
-}
-
-void viewtoleft_have_client(const Arg *arg) {
-	if (!selmon)
-		return;
+		return false;
 
 	if (selmon->isoverview)
-		return;
+		return false;
 
 	uint32_t n;
 	uint32_t current = get_tags_first_tag_num(selmon->tagset[selmon->seltags]);
 	bool found = false;
 	bool wrapped = false;
 
-	for (n = current - 1; n >= 1; n--) {
-		if (get_tag_status(n, selmon)) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found && config.tag_carousel) {
-		for (n = (uint32_t)config.tag_num; n > current; n--) {
+	if (dir < 0) {
+		for (n = current - 1; n >= 1; n--) {
 			if (get_tag_status(n, selmon)) {
 				found = true;
-				wrapped = true;
 				break;
+			}
+		}
+
+		if (!found && config.tag_carousel) {
+			for (n = (uint32_t)config.tag_num; n > current; n--) {
+				if (get_tag_status(n, selmon)) {
+					found = true;
+					wrapped = true;
+					break;
+				}
+			}
+		}
+	} else {
+		for (n = current + 1; n <= (uint32_t)config.tag_num; n++) {
+			if (get_tag_status(n, selmon)) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found && config.tag_carousel) {
+			for (n = 1; n < current; n++) {
+				if (get_tag_status(n, selmon)) {
+					found = true;
+					wrapped = true;
+					break;
+				}
 			}
 		}
 	}
 
 	if (found) {
 		if (wrapped)
-			selmon->carousel_anim_dir = -1;
+			selmon->carousel_anim_dir = (dir < 0) ? -1 : 1;
 		view(&(Arg){.ui = (1 << (n - 1)) & TAGMASK, .i = arg->i}, true);
 		selmon->carousel_anim_dir = 0;
+		return true;
 	}
-	return;
+	return false;
+}
+
+void viewtoleft(const Arg *arg) { view_shift_tag(arg, -1); }
+
+void viewtoright(const Arg *arg) { view_shift_tag(arg, 1); }
+
+void viewtoleft_have_client(const Arg *arg) {
+	view_shift_tag_have_client(arg, -1);
 }
 
 void viewtoright_have_client(const Arg *arg) {
-	if (!selmon)
-		return;
-
-	if (selmon->isoverview)
-		return;
-
-	uint32_t n;
-	uint32_t current = get_tags_first_tag_num(selmon->tagset[selmon->seltags]);
-	bool found = false;
-	bool wrapped = false;
-
-	for (n = current + 1; n <= (uint32_t)config.tag_num; n++) {
-		if (get_tag_status(n, selmon)) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found && config.tag_carousel) {
-		for (n = 1; n < current; n++) {
-			if (get_tag_status(n, selmon)) {
-				found = true;
-				wrapped = true;
-				break;
-			}
-		}
-	}
-
-	if (found) {
-		if (wrapped)
-			selmon->carousel_anim_dir = 1;
-		view(&(Arg){.ui = (1 << (n - 1)) & TAGMASK, .i = arg->i}, true);
-		selmon->carousel_anim_dir = 0;
-	}
-	return;
+	view_shift_tag_have_client(arg, 1);
 }
 
 void viewcrossmon(const Arg *arg) {
@@ -1879,8 +1876,9 @@ void toggleoverview(const Arg *arg) {
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
 
 	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
-		arg->i != 1 && sel) {
+		!selmon->ov_normal_mode && arg->i != 1 && sel) {
 		focusstack(&(Arg){.i = 1});
+		arrange(selmon, true, false);
 		return;
 	}
 
@@ -1932,10 +1930,18 @@ void toggleoverview(const Arg *arg) {
 				!client_is_x11_popup(c) && !c->isunglobal && !c->isminimized &&
 				client_surface(c)->mapped) {
 				c->animation.overining = true;
+				if (config.ov_tab_mode && !selmon->is_jump_mode &&
+					!selmon->ov_normal_mode)
+					/* ov_tab：先跳过 view 排布，等 focusstack 后再设 */
+					c->animation.overview_enter_anim_set = true;
+				else
+					/* 其余模式：view 排布时设置放大 */
+					c->animation.overview_enter_anim_set = false;
 				overview_backup(c);
 			}
 		}
 	} else {
+		selmon->ov_normal_mode = 0; /* 退出 overview 清除热区普通模式 */
 
 		selmon->tagset[selmon->seltags] = target;
 		wl_list_for_each(c, &clients, link) {
@@ -1949,8 +1955,17 @@ void toggleoverview(const Arg *arg) {
 
 	view(&(Arg){.ui = target}, false);
 
-	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode) {
+	/* ov_tab：进入后自动切到下一焦点并重排 */
+	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
+		!selmon->ov_normal_mode) {
 		focusstack(&(Arg){.i = 1});
+		Client *cc = NULL;
+		wl_list_for_each(cc, &clients, link) {
+			if (cc && cc->mon == selmon && !client_is_unmanaged(cc) &&
+				!client_is_x11_popup(cc))
+				cc->animation.overview_enter_anim_set = false;
+		}
+		arrange(selmon, true, false);
 	}
 
 	fix_mon_tagset_from_overview(selmon);

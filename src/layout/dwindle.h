@@ -19,23 +19,36 @@ static int count_block_items(DwindleNode *node, bool split_h) {
 
 // 向上查找方向块路径，并计算每个祖先节点的绝对占比
 static int get_block_path_and_ratios(DwindleNode *target, bool split_h,
-									 DwindleNode **path, float *p) {
-	int path_len = 0;
-	path[path_len++] = target;
+									 DwindleNode ***path, float **p) {
+	/* 第一遍统计同方向块深度，据此动态分配 */
+	int depth = 1;
 	DwindleNode *curr = target->parent;
 	while (curr && curr->split_h == split_h) {
-		path[path_len++] = curr;
+		depth++;
 		curr = curr->parent;
 	}
 
-	p[path_len - 1] = 1.0f; // 方向块根节点占比为 100%
+	*path = calloc(depth, sizeof(**path));
+	*p = calloc(depth, sizeof(**p));
+	if (!*path || !*p)
+		return 0;
+
+	int path_len = 0;
+	(*path)[path_len++] = target;
+	curr = target->parent;
+	while (curr && curr->split_h == split_h) {
+		(*path)[path_len++] = curr;
+		curr = curr->parent;
+	}
+
+	(*p)[path_len - 1] = 1.0f; // 方向块根节点占比为 100%
 	for (int i = path_len - 1; i > 0; i--) {
-		DwindleNode *S = path[i];
-		DwindleNode *child = path[i - 1];
+		DwindleNode *S = (*path)[i];
+		DwindleNode *child = (*path)[i - 1];
 		if (S->first == child)
-			p[i - 1] = p[i] * S->ratio;
+			(*p)[i - 1] = (*p)[i] * S->ratio;
 		else
-			p[i - 1] = p[i] * (1.0f - S->ratio);
+			(*p)[i - 1] = (*p)[i] * (1.0f - S->ratio);
 	}
 	return path_len;
 }
@@ -82,36 +95,40 @@ static void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 
 	// ================= 保持其他窗口比例缩减逻辑 =================
 	if (config.dwindle_manual_split) {
-		DwindleNode *path[512];
-		float p[512];
-		int path_len = get_block_path_and_ratios(target, split_h, path, p);
+		DwindleNode **path = NULL;
+		float *p = NULL;
+		int path_len = get_block_path_and_ratios(target, split_h, &path, &p);
 
-		int n_old = 1;
-		if (path_len > 1) {
-			n_old = count_block_items(path[path_len - 1], split_h);
-		}
-		float N = (float)(n_old + 1);
-
-		for (int i = path_len - 1; i > 0; i--) {
-			DwindleNode *S = path[i];
-			DwindleNode *child = path[i - 1];
-			float p_S = p[i];
-			float p_first = p_S * S->ratio;
-
-			if (S->first == child) {
-				float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
-				float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-				S->ratio = p_first_new / p_S_new;
-			} else {
-				float p_first_new = p_first * (N - 1.0f) / N;
-				float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-				S->ratio = p_first_new / p_S_new;
+		if (path && p) {
+			int n_old = 1;
+			if (path_len > 1) {
+				n_old = count_block_items(path[path_len - 1], split_h);
 			}
-			if (S->ratio < 0.001f)
-				S->ratio = 0.001f;
-			if (S->ratio > 0.999f)
-				S->ratio = 0.999f;
+			float N = (float)(n_old + 1);
+
+			for (int i = path_len - 1; i > 0; i--) {
+				DwindleNode *S = path[i];
+				DwindleNode *child = path[i - 1];
+				float p_S = p[i];
+				float p_first = p_S * S->ratio;
+
+				if (S->first == child) {
+					float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
+					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+					S->ratio = p_first_new / p_S_new;
+				} else {
+					float p_first_new = p_first * (N - 1.0f) / N;
+					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+					S->ratio = p_first_new / p_S_new;
+				}
+				if (S->ratio < 0.001f)
+					S->ratio = 0.001f;
+				if (S->ratio > 0.999f)
+					S->ratio = 0.999f;
+			}
 		}
+		free(path);
+		free(p);
 	}
 	// ============================================================
 
@@ -170,55 +187,68 @@ static void dwindle_remove(DwindleNode **root, Client *c) {
 	// 查找连续的同方向块路径
 	if (config.dwindle_manual_split) {
 		bool split_h = parent->split_h;
-		DwindleNode *path[512];
-		int path_len = 0;
-		path[path_len++] = parent;
-		DwindleNode *curr = parent->parent;
-		while (curr && curr->split_h == split_h) {
-			path[path_len++] = curr;
-			curr = curr->parent;
+		/* 第一遍统计同方向块路径长度 */
+		int path_len = 1; /* parent */
+		DwindleNode *cnt = parent->parent;
+		while (cnt && cnt->split_h == split_h) {
+			path_len++;
+			cnt = cnt->parent;
 		}
 
-		// 计算各祖先的旧绝对占比
-		float p[512];
-		p[path_len - 1] = 1.0f;
-		for (int i = path_len - 1; i > 0; i--) {
-			DwindleNode *S = path[i];
-			DwindleNode *child = path[i - 1];
-			if (S->first == child)
-				p[i - 1] = p[i] * S->ratio;
-			else
-				p[i - 1] = p[i] * (1.0f - S->ratio);
-		}
-
-		// 计算即将被删除的叶子节点，在该方向块中所占的绝对面积比例 (P_del)
-		float p_del = p[0] * (parent->first == leaf ? parent->ratio
-													: (1.0f - parent->ratio));
-		if (p_del > 0.999f)
-			p_del = 0.999f; // 兜底
-
-		// 重算祖先比例：将 P_del 空出来的空间，按原定比例无缝分配给其他窗口
-		for (int i = path_len - 1; i > 0; i--) {
-			DwindleNode *S = path[i];
-			DwindleNode *child = path[i - 1];
-			float p_S = p[i];
-			float p_first = p_S * S->ratio;
-
-			float denom = p_S - p_del;
-			if (denom < 0.0001f)
-				denom = 0.0001f;
-
-			if (S->first == child) {
-				S->ratio = (p_first - p_del) / denom;
-			} else {
-				S->ratio = p_first / denom;
+		DwindleNode **path = calloc(path_len, sizeof(*path));
+		float *p = calloc(path_len, sizeof(*p));
+		if (path && p) {
+			path_len = 0;
+			path[path_len++] = parent;
+			DwindleNode *curr = parent->parent;
+			while (curr && curr->split_h == split_h) {
+				path[path_len++] = curr;
+				curr = curr->parent;
 			}
 
-			if (S->ratio < 0.001f)
-				S->ratio = 0.001f;
-			if (S->ratio > 0.999f)
-				S->ratio = 0.999f;
+			// 计算各祖先的旧绝对占比
+			p[path_len - 1] = 1.0f;
+			for (int i = path_len - 1; i > 0; i--) {
+				DwindleNode *S = path[i];
+				DwindleNode *child = path[i - 1];
+				if (S->first == child)
+					p[i - 1] = p[i] * S->ratio;
+				else
+					p[i - 1] = p[i] * (1.0f - S->ratio);
+			}
+
+			// 计算即将被删除的叶子节点，在该方向块中所占的绝对面积比例 (P_del)
+			float p_del =
+				p[0] * (parent->first == leaf ? parent->ratio
+											  : (1.0f - parent->ratio));
+			if (p_del > 0.999f)
+				p_del = 0.999f; // 兜底
+
+			// 重算祖先比例：将 P_del 空出来的空间，按原定比例无缝分配给其他窗口
+			for (int i = path_len - 1; i > 0; i--) {
+				DwindleNode *S = path[i];
+				DwindleNode *child = path[i - 1];
+				float p_S = p[i];
+				float p_first = p_S * S->ratio;
+
+				float denom = p_S - p_del;
+				if (denom < 0.0001f)
+					denom = 0.0001f;
+
+				if (S->first == child) {
+					S->ratio = (p_first - p_del) / denom;
+				} else {
+					S->ratio = p_first / denom;
+				}
+
+				if (S->ratio < 0.001f)
+					S->ratio = 0.001f;
+				if (S->ratio > 0.999f)
+					S->ratio = 0.999f;
+			}
 		}
+		free(path);
+		free(p);
 	}
 
 	// 比例重算结束
@@ -517,29 +547,33 @@ static void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 		as_first = false;
 
 		// ================= 计算新节点的 1/N 比例 =================
-		DwindleNode *path[512];
-		float p[512];
-		int path_len = get_block_path_and_ratios(target, split_h, path, p);
+		DwindleNode **path = NULL;
+		float *p = NULL;
+		int path_len = get_block_path_and_ratios(target, split_h, &path, &p);
 
-		int n_old = 1;
-		if (path_len > 1) {
-			n_old = count_block_items(path[path_len - 1], split_h);
+		if (path && p) {
+			int n_old = 1;
+			if (path_len > 1) {
+				n_old = count_block_items(path[path_len - 1], split_h);
+			}
+			float N = (float)(n_old + 1);
+
+			float p_target_old = p[0];
+			float p_split_new = p_target_old * (N - 1.0f) / N + 1.0f / N;
+
+			if (as_first) {
+				ratio = (1.0f / N) / p_split_new;
+			} else {
+				ratio = (p_target_old * (N - 1.0f) / N) / p_split_new;
+			}
+
+			if (ratio < 0.001f)
+				ratio = 0.001f;
+			if (ratio > 0.999f)
+				ratio = 0.999f;
 		}
-		float N = (float)(n_old + 1);
-
-		float p_target_old = p[0];
-		float p_split_new = p_target_old * (N - 1.0f) / N + 1.0f / N;
-
-		if (as_first) {
-			ratio = (1.0f / N) / p_split_new;
-		} else {
-			ratio = (p_target_old * (N - 1.0f) / N) / p_split_new;
-		}
-
-		if (ratio < 0.001f)
-			ratio = 0.001f;
-		if (ratio > 0.999f)
-			ratio = 0.999f;
+		free(path);
+		free(p);
 		// =========================================================
 	}
 
@@ -556,51 +590,58 @@ void dwindle(Monitor *m) {
 	DwindleNode **root = &m->pertag->dwindle_root[tag];
 	float ratio = config.dwindle_split_ratio;
 
-	Client *vis[512];
-	int32_t count = 0;
+	/* 统计全局客户端总数，作为动态数组的安全容量上界 */
+	int32_t total_clients = 0;
 	Client *c;
+	wl_list_for_each(c, &clients, link) total_clients++;
+
+	Client **vis = calloc(total_clients ? total_clients : 1, sizeof(*vis));
+	DwindleNode **leaves =
+		calloc(total_clients ? total_clients : 1, sizeof(*leaves));
+	DwindleNode **stack = calloc((size_t)total_clients * 2 + 2, sizeof(*stack));
+	if (!vis || !leaves || !stack) {
+		free(vis);
+		free(leaves);
+		free(stack);
+		return;
+	}
+
+	int32_t count = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISTILED(c))
 			vis[count++] = c;
-		if (count >= 512)
-			break;
 	}
 
 	// 清理树中已不存在的客户端
-	{
-		DwindleNode *leaves[512];
-		int32_t lc = 0;
-
-		DwindleNode *stack[1024];
-		int32_t sp = 0;
-		if (*root)
-			stack[sp++] = *root;
-		while (sp > 0) {
-			DwindleNode *nd = stack[--sp];
-			if (!nd->is_split) {
-				leaves[lc++] = nd;
-			} else {
-				if (nd->second)
-					stack[sp++] = nd->second;
-				if (nd->first)
-					stack[sp++] = nd->first;
-			}
+	int32_t lc = 0;
+	int32_t sp = 0;
+	if (*root)
+		stack[sp++] = *root;
+	while (sp > 0) {
+		DwindleNode *nd = stack[--sp];
+		if (!nd->is_split) {
+			leaves[lc++] = nd;
+		} else {
+			if (nd->second)
+				stack[sp++] = nd->second;
+			if (nd->first)
+				stack[sp++] = nd->first;
 		}
+	}
 
-		for (int32_t i = 0; i < lc; i++) {
-			bool found = false;
-			for (int32_t j = 0; j < count; j++)
-				if (vis[j] == leaves[i]->client) {
-					found = true;
-					break;
-				}
-			if (!found) {
-				if (VISIBLEON(leaves[i]->client, m) &&
-					(leaves[i]->client->isfullscreen ||
-					 leaves[i]->client->ismaximizescreen))
-					continue;
-				dwindle_remove(root, leaves[i]->client);
+	for (int32_t i = 0; i < lc; i++) {
+		bool found = false;
+		for (int32_t j = 0; j < count; j++)
+			if (vis[j] == leaves[i]->client) {
+				found = true;
+				break;
 			}
+		if (!found) {
+			if (VISIBLEON(leaves[i]->client, m) &&
+				(leaves[i]->client->isfullscreen ||
+				 leaves[i]->client->ismaximizescreen))
+				continue;
+			dwindle_remove(root, leaves[i]->client);
 		}
 	}
 
@@ -627,6 +668,10 @@ void dwindle(Monitor *m) {
 	dwindle_assign(*root, m->w.x + gap_oh, m->w.y + gap_ov,
 				   m->w.width - 2 * gap_oh, m->w.height - 2 * gap_ov, gap_ih,
 				   gap_iv);
+
+	free(vis);
+	free(leaves);
+	free(stack);
 }
 
 void cleanup_monitor_dwindle(Monitor *m) {

@@ -7,6 +7,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "../src/common/log.h"
+
 static void usage(void) {
 	printf("Usage: mmsg <command> [args...]\n\n");
 	printf("One-shot queries (get):\n");
@@ -79,16 +81,18 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (argc < 2) {
-		fprintf(stderr, "Usage: mmsg <command> [args...]\n");
-		fprintf(stderr, "  get <type> ...      one-shot request\n");
-		fprintf(stderr, "  watch <type> ...    persistent stream\n");
+		mango_error(false, WLR_INFO,
+					"Usage: mmsg <command> [args...]\n"
+					"  get <type> ...      one-shot request\n"
+					"  watch <type> ...    persistent stream\n");
 		return EXIT_FAILURE;
 	}
 
 	const char *socket_path = getenv("MANGO_INSTANCE_SIGNATURE");
 	if (!socket_path) {
-		fprintf(stderr, "Error: MANGO_INSTANCE_SIGNATURE is not set. Did you "
-						"run 'mmsg' in mango?\n");
+		mango_error(false, WLR_ERROR,
+					"MANGO_INSTANCE_SIGNATURE is not set. Did you run "
+					"'mmsg' in mango?\n");
 		return EXIT_FAILURE;
 	}
 
@@ -113,7 +117,7 @@ int main(int argc, char *argv[]) {
 		int n = snprintf(cmd + offset, sizeof(cmd) - offset, "%s%s", argv[i],
 						 (i == argc - 1) ? "" : " ");
 		if (n < 0 || n >= (int)(sizeof(cmd) - offset)) {
-			fprintf(stderr, "Error: command too long.\n");
+			mango_error(false, WLR_ERROR, "command too long.\n");
 			close(sock);
 			return EXIT_FAILURE;
 		}
@@ -122,7 +126,7 @@ int main(int argc, char *argv[]) {
 
 	int n = snprintf(cmd + offset, sizeof(cmd) - offset, "\n");
 	if (n < 0 || n >= (int)(sizeof(cmd) - offset)) {
-		fprintf(stderr, "Error: command too long to append newline.\n");
+		mango_error(false, WLR_ERROR, "command too long to append newline.\n");
 		close(sock);
 		return EXIT_FAILURE;
 	}

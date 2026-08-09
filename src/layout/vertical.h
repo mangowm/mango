@@ -271,8 +271,13 @@ void vertical_grid(Monitor *m) {
 	cols = (rows && (rows - 1) * rows >= n) ? rows - 1 : rows;
 	overrows = n % rows;
 
-	float col_pers[cols];
-	float row_pers[rows];
+	float *col_pers = calloc(cols, sizeof(*col_pers));
+	float *row_pers = calloc(rows, sizeof(*row_pers));
+	if (!col_pers || !row_pers) {
+		free(col_pers);
+		free(row_pers);
+		return;
+	}
 	for (i = 0; i < cols; i++)
 		col_pers[i] = 1.0f;
 	for (i = 0; i < rows; i++)
@@ -356,6 +361,9 @@ void vertical_grid(Monitor *m) {
 			i++;
 		}
 	}
+
+	free(col_pers);
+	free(row_pers);
 }
 
 void vertical_fair(Monitor *m) {
@@ -387,7 +395,28 @@ void vertical_fair(Monitor *m) {
 	int32_t first_group_count = first_group_rows * base_cols;
 	int32_t max_cols = base_cols + (remainder > 0 ? 1 : 0);
 
-	Client *arr[n];
+	Client **arr = calloc(n, sizeof(*arr));
+	float *row_pers = calloc(rows, sizeof(*row_pers));
+	float *col_pers = calloc(max_cols, sizeof(*col_pers));
+	float *row_y = calloc(rows, sizeof(*row_y));
+	float *row_h = calloc(rows, sizeof(*row_h));
+	float *col_x_base = calloc(base_cols, sizeof(*col_x_base));
+	float *col_w_base = calloc(base_cols, sizeof(*col_w_base));
+	float *col_x_max = calloc(max_cols, sizeof(*col_x_max));
+	float *col_w_max = calloc(max_cols, sizeof(*col_w_max));
+	if (!arr || !row_pers || !col_pers || !row_y || !row_h || !col_x_base ||
+		!col_w_base || !col_x_max || !col_w_max) {
+		free(arr);
+		free(row_pers);
+		free(col_pers);
+		free(row_y);
+		free(row_h);
+		free(col_x_base);
+		free(col_w_base);
+		free(col_x_max);
+		free(col_w_max);
+		return;
+	}
 	int32_t arr_idx = 0;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m) && ISFAKETILED(c)) {
@@ -397,8 +426,6 @@ void vertical_fair(Monitor *m) {
 		}
 	}
 
-	float row_pers[rows];
-	float col_pers[max_cols];
 	for (i = 0; i < rows; i++)
 		row_pers[i] = 0.0f;
 	for (i = 0; i < max_cols; i++)
@@ -446,7 +473,6 @@ void vertical_fair(Monitor *m) {
 			col_pers[i] = 1.0f;
 	}
 
-	float row_y[rows], row_h[rows];
 	float avail_h = m->w.height - 2 * cur_gappov - (rows - 1) * cur_gappiv;
 	float next_y = m->w.y + cur_gappov;
 	for (i = 0; i < rows; i++) {
@@ -457,7 +483,6 @@ void vertical_fair(Monitor *m) {
 		next_y += row_h[i] + cur_gappiv;
 	}
 
-	float col_x_base[base_cols], col_w_base[base_cols];
 	float sum_col_base = 0.0f;
 	for (i = 0; i < base_cols; i++)
 		sum_col_base += col_pers[i];
@@ -472,7 +497,6 @@ void vertical_fair(Monitor *m) {
 		next_x += col_w_base[i] + cur_gappih;
 	}
 
-	float col_x_max[max_cols], col_w_max[max_cols];
 	if (remainder > 0) {
 		float sum_col_max = 0.0f;
 		for (i = 0; i < max_cols; i++)
@@ -522,4 +546,14 @@ void vertical_fair(Monitor *m) {
 											.height = (int32_t)fl_ch},
 						   0);
 	}
+
+	free(arr);
+	free(row_pers);
+	free(col_pers);
+	free(row_y);
+	free(row_h);
+	free(col_x_base);
+	free(col_w_base);
+	free(col_x_max);
+	free(col_w_max);
 }

@@ -232,7 +232,14 @@ void overview_scale(Monitor *m) {
 		float base_y = m->w.y + target_gappo + dy;
 
 		// 收集所有客户端的目标几何，最后统一调用 client_tile_resize
-		struct wlr_box overview_boxes[n]; // C99 VLA，n > 0 时有效
+		struct wlr_box *overview_boxes = calloc(n, sizeof(*overview_boxes));
+		if (!overview_boxes) {
+			free(items);
+			free(placed);
+			free(cands);
+			free(feas);
+			return;
+		}
 		for (int k = 0; k < n; k++) {
 			float w = items[k].orig_w * best_s;
 			float h = items[k].orig_h * best_s;
@@ -246,6 +253,7 @@ void overview_scale(Monitor *m) {
 		for (int k = 0; k < n; k++) {
 			client_tile_resize(items[k].c, overview_boxes[k], 0);
 		}
+		free(overview_boxes);
 	}
 
 	free(items);
@@ -254,18 +262,74 @@ void overview_scale(Monitor *m) {
 	free(feas);
 }
 
-void overview_resize(Monitor *m) {
-	int32_t target_gappo = config.overviewgappo;
-	int32_t target_gappi = config.overviewgappi;
-	float single_width_ratio = 0.7f;
-	float single_height_ratio = 0.8f;
-
-	int orig_n = m->visible_clients;
-	if (orig_n == 0)
+// ov_tab_mode 的 overview 布局：聚焦窗口居中（约一半屏宽），其余窗口分列两侧
+static void overview_layout_column(Monitor *m, Client **items, int cnt, float x,
+								   float top, float col_w, float col_h,
+								   float gap) {
+	if (cnt <= 0)
 		return;
 
-	Client **c_arr = malloc(orig_n * sizeof(Client *));
-	if (!c_arr)
+	float *ws = calloc(cnt, sizeof(float));
+	float *hs = calloc(cnt, sizeof(float));
+	if (!ws || !hs) {
+		free(ws);
+		free(hs);
+		return;
+	}
+
+	// 宽度占满列宽，高度按比例
+	float total_h = 0.0f;
+	for (int i = 0; i < cnt; i++) {
+		float ow = items[i]->overview_backup_geom.width;
+		float oh = items[i]->overview_backup_geom.height;
+		if (ow <= 0 || oh <= 0) {
+			ow = 100.0f;
+			oh = 100.0f;
+		}
+		ws[i] = col_w;
+		hs[i] = col_w * (oh / ow);
+		total_h += hs[i];
+	}
+
+	// 超高则整体缩小
+	float gap_total = gap * (cnt - 1);
+	if (total_h + gap_total > col_h) {
+		float s = (col_h - gap_total) / total_h;
+		if (s < 0.0f)
+			s = 0.01f;
+		for (int i = 0; i < cnt; i++) {
+			ws[i] *= s;
+			hs[i] *= s;
+		}
+		total_h *= s;
+	}
+
+	// 不足则垂直居中
+	float y = top;
+	if (total_h + gap_total < col_h)
+		y = top + (col_h - (total_h + gap_total)) / 2.0f;
+
+	for (int i = 0; i < cnt; i++) {
+		int ix = (int)(x + (col_w - ws[i]) / 2.0f + 0.5f);
+		int iy = (int)(y + 0.5f);
+		client_tile_resize(items[i],
+						   (struct wlr_box){ix, iy, (int)ws[i], (int)hs[i]}, 0);
+		y += hs[i] + gap;
+	}
+
+	free(ws);
+	free(hs);
+}
+
+void overview_scale_tab(Monitor *m) {
+	int32_t target_gappo = config.overviewgappo;
+	int32_t target_gappi = config.overviewgappi;
+
+	if (m->visible_clients <= 0)
+		return;
+
+	Client **items = calloc(m->visible_clients, sizeof(Client *));
+	if (!items)
 		return;
 
 	int n = 0;
@@ -274,81 +338,104 @@ void overview_resize(Monitor *m) {
 		if (c->mon != m)
 			continue;
 		if (VISIBLEON(c, m) && !c->isunglobal && !client_is_x11_popup(c)) {
-			c_arr[n++] = c;
+			items[n++] = c;
 		}
 	}
 
 	if (n == 0) {
-		free(c_arr);
+		free(items);
 		return;
 	}
 
-	// 临时存储每个客户端的目标几何
-	struct wlr_box boxes[n]; // C99 VLA
-
-	if (n == 1) {
-		int32_t cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
-		int32_t ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
-		boxes[0].x = m->w.x + (m->w.width - cw) / 2;
-		boxes[0].y = m->w.y + (m->w.height - ch) / 2;
-		boxes[0].width = cw;
-		boxes[0].height = ch;
-	} else if (n == 2) {
-		int32_t cw = (m->w.width - 2 * target_gappo - target_gappi) / 2;
-		int32_t ch = (m->w.height - 2 * target_gappo) * 0.65f;
-
-		boxes[0].x = m->w.x + target_gappo;
-		boxes[0].y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-		boxes[0].width = cw;
-		boxes[0].height = ch;
-
-		boxes[1].x = m->w.x + cw + target_gappo + target_gappi;
-		boxes[1].y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
-		boxes[1].width = cw;
-		boxes[1].height = ch;
-	} else {
-		int32_t cols = 1;
-		while (cols * cols < n)
-			cols++;
-		int32_t rows = (n + cols - 1) / cols;
-
-		int32_t ch =
-			(m->w.height - 2 * target_gappo - (rows - 1) * target_gappi) / rows;
-		int32_t cw =
-			(m->w.width - 2 * target_gappo - (cols - 1) * target_gappi) / cols;
-
-		if (ch < 1)
-			ch = 1;
-		if (cw < 1)
-			cw = 1;
-
-		int32_t overcols = n % cols;
-		int32_t dx = 0;
-		if (overcols) {
-			dx = (m->w.width - overcols * cw - (overcols - 1) * target_gappi) /
-					 2 -
-				 target_gappo;
-		}
-
-		for (int i = 0; i < n; i++) {
-			int32_t cx = m->w.x + (i % cols) * (cw + target_gappi);
-			int32_t cy = m->w.y + (i / cols) * (ch + target_gappi);
-			if (overcols && i >= n - overcols)
-				cx += dx;
-
-			boxes[i].x = cx + target_gappo;
-			boxes[i].y = cy + target_gappo;
-			boxes[i].width = cw;
-			boxes[i].height = ch;
+	// 焦点窗口的下标（无则取第一个）
+	Client *sel = m->sel;
+	int focus_idx = 0;
+	for (int i = 0; i < n; i++) {
+		if (items[i] == sel) {
+			focus_idx = i;
+			break;
 		}
 	}
 
-	// 统一应用所有几何变更，使用 client_tile_resize
-	for (int k = 0; k < n; k++) {
-		client_tile_resize(c_arr[k], boxes[k], 0);
+	// 列间取大 gap，贴边取小 gap
+	float gap_mid = (float)target_gappo;
+	float gap_edge = (float)target_gappi;
+	if (gap_mid < gap_edge) {
+		float tmp = gap_mid;
+		gap_mid = gap_edge;
+		gap_edge = tmp;
+	}
+	gap_mid *= 0.5f; /* 列间间隙减半 */
+
+	float avail_w = fmaxf(1.0f, m->w.width - 2 * gap_edge);
+	float avail_h = fmaxf(1.0f, m->w.height - 2 * gap_edge);
+
+	// 中列 50%，两侧各 25%
+	float center_w = avail_w * 0.5f;
+	float side_w = (avail_w - center_w - 2.0f * gap_mid) * 0.5f;
+	if (side_w < 1.0f)
+		side_w = 1.0f;
+
+	float base_x = m->w.x + gap_edge;
+	float base_y = m->w.y + gap_edge;
+
+	float left_x = base_x;
+	float center_x = base_x + side_w + gap_mid;
+	float right_x = center_x + center_w + gap_mid;
+
+	// 焦点窗口居中
+	Client *focus = items[focus_idx];
+	{
+		float ow = focus->overview_backup_geom.width;
+		float oh = focus->overview_backup_geom.height;
+		if (ow <= 0 || oh <= 0) {
+			ow = 100.0f;
+			oh = 100.0f;
+		}
+		float w = center_w;
+		float h = w * (oh / ow);
+		if (h > avail_h) {
+			float s = avail_h / h;
+			w *= s;
+			h *= s;
+		}
+		int ix = (int)(center_x + (center_w - w) / 2.0f + 0.5f);
+		int iy = (int)(base_y + (avail_h - h) / 2.0f + 0.5f);
+		client_tile_resize(focus, (struct wlr_box){ix, iy, (int)w, (int)h}, 0);
 	}
 
-	free(c_arr);
+	// 其余窗口对半入左右两列，焦点切换时环形流动（转圈）
+	Client **left = calloc(n, sizeof(Client *));
+	Client **right = calloc(n, sizeof(Client *));
+	if (!left || !right) {
+		free(items);
+		free(left);
+		free(right);
+		return;
+	}
+	int rest = n - 1;
+	int right_cnt = (rest + 1) / 2;
+	int left_cnt = rest - right_cnt;
+
+	int nr = 0;
+	for (int k = 0; k < right_cnt; k++) {
+		int idx = (focus_idx + 1 + k) % n;
+		right[nr++] = items[idx];
+	}
+	int nl = 0;
+	for (int k = 0; k < left_cnt; k++) {
+		int idx = (focus_idx - 1 - k + n) % n;
+		left[nl++] = items[idx];
+	}
+
+	overview_layout_column(m, left, nl, left_x, base_y, side_w, avail_h,
+						   gap_edge);
+	overview_layout_column(m, right, nr, right_x, base_y, side_w, avail_h,
+						   gap_edge);
+
+	free(items);
+	free(left);
+	free(right);
 }
 
 void create_jump_hints(Monitor *m) {
@@ -404,8 +491,11 @@ void finish_jump_mode(Monitor *m) {
 }
 
 void overview(Monitor *m) {
-
-	overview_scale(m);
+	if (config.ov_tab_mode && !m->is_jump_mode && !m->ov_normal_mode) {
+		overview_scale_tab(m);
+	} else {
+		overview_scale(m);
+	}
 
 	if (m->is_jump_mode) {
 		create_jump_hints(m);
