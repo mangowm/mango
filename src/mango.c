@@ -804,6 +804,7 @@ static void motionrelative(struct wl_listener *listener, void *data);
 static void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
 static void add_foreign_topleve(Client *c);
 static void exchange_two_client(Client *c1, Client *c2);
+static void move_two_client(Client *c1, Client *c2, int32_t dir);
 static void outputmgrapply(struct wl_listener *listener, void *data);
 static void outputmgrapplyortest(struct wlr_output_configuration_v1 *config,
 								 int32_t test);
@@ -977,8 +978,8 @@ static void client_pending_maximized_state(Client *c, int32_t ismaximized);
 static void client_pending_minimized_state(Client *c, int32_t isminimized);
 static void scroller_insert_stack(Client *c, Client *target_client,
 								  bool insert_before);
-static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-								float ratio, int32_t dir);
+static void dwindle_move_client(Client *c1, Client *c2, float ratio,
+								int32_t dir, bool lock);
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy);
 static void dwindle_resize_client(Monitor *m, Client *c);

@@ -3204,6 +3204,55 @@ void exchange_two_client(Client *c1, Client *c2) {
 	finish_exchange_arrange_and_focus(c1, c2, m1, m2);
 }
 
+void move_two_client(Client *c1, Client *c2, int32_t dir) {
+
+	if (!c1 || c1 == c2) {
+		return;
+	}
+
+	Monitor *c_mon = c1->mon;
+	Monitor *t_mon = ((c2 == NULL) ? dirtomon(dir) : c2->mon);
+
+	uint32_t move_dir =
+		(t_mon->m.x > c_mon->m.x) * RIGHT | (t_mon->m.x < c_mon->m.x) * LEFT |
+		(t_mon->m.y > c_mon->m.y) * UP | (t_mon->m.y < c_mon->m.y) * DOWN;
+
+	if ((!config.exchange_cross_monitor || move_dir != dir) && c_mon != t_mon) {
+		return;
+	}
+
+	if (c_mon != t_mon) {
+		c1->mon = t_mon;
+		t_mon->sel = c1;
+		selmon = t_mon;
+
+		arrange(c_mon, false, false);
+		arrange(t_mon, false, false);
+	}
+
+	if (c2 != NULL) {
+
+		const Layout *layout = c2->mon->pertag->ltidxs[c2->mon->pertag->curtag];
+
+		if (layout->id == SCROLLER) {
+			exchange_two_scroller_clients(c1, c2);
+			return;
+		}
+
+		wl_list_remove(&c1->link);
+
+		if (((dir == LEFT || dir == UP) && c_mon == t_mon) ||
+			((move_dir == RIGHT || move_dir == UP) && c_mon != t_mon)) {
+			wl_list_insert(c2->link.prev, &c1->link);
+		} else {
+			wl_list_insert(&c2->link, &c1->link);
+		}
+	}
+
+	arrange(c_mon, false, false);
+	arrange(t_mon, false, false);
+}
+
 void client_replace(Client *c, Client *w, bool is_group_change_member,
 					bool is_swallow) {
 	c->bw = w->bw;
