@@ -1876,15 +1876,25 @@ void toggleoverview(const Arg *arg) {
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
 
 	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
-		!selmon->ov_normal_mode && arg->i != 1 && sel) {
+		!selmon->ov_normal_mode && arg->i2 != 1 && sel) {
+		Client *prev_sel = selmon->sel;
 		focusstack(&(Arg){.i = 1});
-		arrange(selmon, true, false);
+		/* 焦点未变（如唯一窗口）时不重复排布，避免进入动画反复重启导致摆动 */
+		if (selmon->sel != prev_sel)
+			arrange(selmon, true, false);
 		return;
 	}
 
 	selmon->isoverview ^= 1;
 	uint32_t target;
 	uint32_t visible_client_number = 0;
+
+	/* arg->i: 0=所有tag, -1=active, n=目标tag */
+	uint32_t overview_tags = ~0 & TAGMASK;
+	if (arg->i > 0 && arg->i <= config.tag_num)
+		overview_tags = 1u << (arg->i - 1);
+	else if (arg->i == -1)
+		overview_tags = selmon->tagset[selmon->seltags] & TAGMASK;
 
 	if (!selmon->isoverview && selmon->is_jump_mode) {
 		finish_jump_mode(selmon);
@@ -1895,13 +1905,14 @@ void toggleoverview(const Arg *arg) {
 												!client_is_unmanaged(c) &&
 												!client_is_x11_popup(c) &&
 												!c->isminimized &&
-												!c->isunglobal) {
+												!c->isunglobal &&
+												(c->tags & overview_tags)) {
 			visible_client_number++;
 		}
 		if (visible_client_number > 0) {
 			selmon->ovbk_current_tagset = selmon->tagset[selmon->seltags];
 			selmon->ovbk_prev_tagset = selmon->tagset[selmon->seltags ^ 1];
-			target = ~0 & TAGMASK;
+			target = overview_tags;
 		} else {
 			selmon->isoverview ^= 1;
 			return;
@@ -1928,7 +1939,7 @@ void toggleoverview(const Arg *arg) {
 		wl_list_for_each(c, &clients, link) {
 			if (c && c->mon == selmon && !client_is_unmanaged(c) &&
 				!client_is_x11_popup(c) && !c->isunglobal && !c->isminimized &&
-				client_surface(c)->mapped) {
+				(c->tags & overview_tags) && client_surface(c)->mapped) {
 				c->animation.overining = true;
 				if (config.ov_tab_mode && !selmon->is_jump_mode &&
 					!selmon->ov_normal_mode)

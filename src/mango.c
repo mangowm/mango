@@ -2558,7 +2558,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		// overview模式下鼠标左键跳转，右键关闭窗口
 		if (selmon && selmon->isoverview && event->button == BTN_LEFT && c) {
-			toggleoverview(&(Arg){.i = 1});
+			toggleoverview(&(Arg){.i2 = 1});
 			return true;
 		}
 
@@ -2841,7 +2841,7 @@ void closemon(Monitor *m) {
 	int32_t i = 0, nmons = wl_list_length(&mons);
 
 	if (m->isoverview) {
-		toggleoverview(&(Arg){.i = 1});
+		toggleoverview(&(Arg){.i2 = 1});
 	}
 
 	if (!nmons) {
@@ -4576,7 +4576,7 @@ void keypress(struct wl_listener *listener, void *data) {
 		selmon->isoverview && selmon->sel && !locked && group == kb_group &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
 		ISMODEKEYCODE(keycode)) {
-		toggleoverview(&(Arg){.i = 1});
+		toggleoverview(&(Arg){.i2 = 1});
 	}
 
 	if (config.cursor_hide_on_keypress && !cursor_hidden &&
@@ -4631,7 +4631,7 @@ void keypress(struct wl_listener *listener, void *data) {
 					 toupper((unsigned char)c_char) ==
 						 toupper((unsigned char)c->jump_char))) {
 					focusclient(c, 1);
-					toggleoverview(&(Arg){.i = 1});
+					toggleoverview(&(Arg){.i2 = 1});
 					return;
 				}
 			}
@@ -7337,7 +7337,8 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 				 bool changefocus) {
 	uint32_t i, tmptag;
 
-	if (!m || (arg->ui != (~0 & TAGMASK) && m->isoverview)) {
+	/* overview 模式下允许切换到任意 tag（用于限定 overview 展示的客户端） */
+	if (!m) {
 		return;
 	}
 

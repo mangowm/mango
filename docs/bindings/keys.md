@@ -181,8 +181,8 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `reload_config` | - | Hot-reload configuration. |
 | `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. |
 | `quit` | - | Exit mangowm. |
-| `toggleoverview` | - | Toggle overview mode. |
-| `togglejump` | - | Toggle overview with jump mode. |
+| `toggleoverview` | `active` or `<tag number>` | Toggle overview mode. Argument limits which clients are shown: no argument = all tags, `active` = current tag, a number = the target tag. |
+| `togglejump` | `active` or `<tag number>` | Toggle overview with jump mode. Accepts the same argument as `toggleoverview`. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |
 | `toggleoverlay` | - | Toggle overlay state for the focused window. |

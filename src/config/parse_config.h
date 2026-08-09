@@ -1169,11 +1169,18 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						!(strlen(arg_value2) == 1 && arg_value2[0] == '0');
 		(*arg).v = has_name ? strdup(arg_value2) : NULL;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
+		/* toggleoverview[,active|<tag number>] */
 		func = toggleoverview;
-		(*arg).i = atoi(arg_value);
+		if (arg_value && strcmp(arg_value, "active") == 0)
+			(*arg).i = -1;
+		else
+			(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = togglejump;
-		(*arg).i = atoi(arg_value);
+		if (arg_value && strcmp(arg_value, "active") == 0)
+			(*arg).i = -1;
+		else
+			(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);
