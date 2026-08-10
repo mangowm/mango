@@ -4586,6 +4586,8 @@ void reapply_monitor_rules(void) {
 				output_state_setup_hdr(m, true, &m->pending);
 			}
 		}
+		/* scale/mode 变化后强制调度一帧，确保 wl_output 事件发送 */
+		wlr_output_schedule_frame(m->wlr_output);
 		wlr_output_effective_resolution(m->wlr_output, &m->m.width,
 										&m->m.height);
 	}

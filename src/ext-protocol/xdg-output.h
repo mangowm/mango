@@ -60,20 +60,24 @@ static void xdg_output_get_values(struct MangoXDGOutput *output, int32_t *lx,
 								  int32_t *ly, int32_t *lw, int32_t *lh,
 								  int32_t *px, int32_t *py, int32_t *pw,
 								  int32_t *ph) {
-	int32_t x = 0, y = 0, w = 0, h = 0;
+	int32_t x = 0, y = 0;
 	Monitor *m = output->wlr_output->data;
 	if (m) {
 		x = m->m.x;
 		y = m->m.y;
-		w = m->m.width;
-		h = m->m.height;
 	}
+
+	float scale =
+		output->wlr_output->scale > 0.f ? output->wlr_output->scale : 1.f;
+
+	/* 逻辑尺寸直接取自 wlr_output 当前状态（物理分辨率 ÷ scale），
+	 * 与 wl_output.mode/scale 严格一致，避免依赖 m->m（布局缓存）。 */
+	int32_t w = (int32_t)roundf(output->wlr_output->width / scale);
+	int32_t h = (int32_t)roundf(output->wlr_output->height / scale);
 
 	/* 物理尺寸必须考虑输出旋转，否则旋转 90/270 时宽高未交换 */
 	int32_t tw, th;
 	wlr_output_transformed_resolution(output->wlr_output, &tw, &th);
-	float scale =
-		output->wlr_output->scale > 0.f ? output->wlr_output->scale : 1.f;
 
 	*lx = x;
 	*ly = y;
@@ -134,18 +138,29 @@ static bool xdg_output_logical_changed(struct MangoXDGOutput *output) {
 	int32_t lx, ly, lw, lh, px, py, pw, ph;
 	xdg_output_get_values(output, &lx, &ly, &lw, &lh, &px, &py, &pw, &ph);
 
-	return !output->sent || output->last_lx != lx || output->last_ly != ly ||
+	/* 从未向任何客户端发送过（无 zxdg_output_v1 资源）时无基线，
+	 * 不视为变化，避免无谓调度 wl_output.done */
+	if (!output->sent)
+		return false;
+
+	return output->last_lx != lx || output->last_ly != ly ||
 		   output->last_lw != lw || output->last_lh != lh;
 }
 
-/* XWayland 视角的物理值是否与上次发送时不同 */
+/* XWayland 视角的物理值是否与上次发送时不同。
+ * 独立比较物理值基线并就地更新（X server 通常不绑定 zxdg_output_v1，
+ * 不能依赖 xwl_sent 判断），仅在物理值真正变化时才补发 done。 */
 static bool xdg_output_xwayland_changed(struct MangoXDGOutput *output) {
 	int32_t lx, ly, lw, lh, px, py, pw, ph;
 	xdg_output_get_values(output, &lx, &ly, &lw, &lh, &px, &py, &pw, &ph);
 
-	return !output->xwl_sent || output->last_px != px ||
-		   output->last_py != py || output->last_pw != pw ||
-		   output->last_ph != ph;
+	bool changed = output->last_px != px || output->last_py != py ||
+				   output->last_pw != pw || output->last_ph != ph;
+	output->last_px = px;
+	output->last_py = py;
+	output->last_pw = pw;
+	output->last_ph = ph;
+	return changed;
 }
 
 /* 更新该输出的 xdg-output 详情,XWayland 资源无条件重发（mango 的
