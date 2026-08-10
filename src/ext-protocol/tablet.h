@@ -296,7 +296,7 @@ void tablettoolmotion(struct TabletTool *tool, bool change_x, bool change_y,
 		sy = cursor->y - (l ? l->scene->node.y : w->geom.y);
 	}
 
-	if (config.sloppyfocus && c && c->scene->node.enabled &&
+	if (config.sloppyfocus && c && c->scene && c->scene->node.enabled &&
 		(surface != seat->pointer_state.focused_surface ||
 		 (selmon && selmon->sel && c != selmon->sel)) &&
 		!client_is_unmanaged(c))

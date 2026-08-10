@@ -456,6 +456,8 @@ void create_jump_hints(Monitor *m) {
 			c->jump_char = c_char;
 
 			char label_text[2] = {c_char, '\0'};
+			if (!c->jump_label_node)
+				continue;
 			mango_jump_label_node_update(c->jump_label_node, label_text,
 										 m->wlr_output->scale);
 			wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node,
@@ -480,7 +482,8 @@ void finish_jump_mode(Monitor *m) {
 	Client *c;
 	wl_list_for_each(c, &clients, link) {
 		if (VISIBLEON(c, m)) {
-			if (c->jump_label_node->scene_buffer->node.enabled) {
+			if (c->jump_label_node &&
+				c->jump_label_node->scene_buffer->node.enabled) {
 				c->jump_char = '\0';
 				wlr_scene_node_set_enabled(
 					&c->jump_label_node->scene_buffer->node, false);

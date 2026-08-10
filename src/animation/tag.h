@@ -71,14 +71,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 	c->animation.tag_from_rule = false;
 	c->animation.tagouting = false;
 	c->animation.tagouted = false;
-	/* 预排时几何未变不启动动画，放大初始位置留给真正排布阶段 */
-	bool ov_skip_enter_set = c->mon->isoverview;
-	bool ov_orig_enter_set = c->animation.overview_enter_anim_set;
-	if (ov_skip_enter_set)
-		c->animation.overview_enter_anim_set = true;
-	resize(c, c->geom, 0);
-	if (ov_skip_enter_set)
-		c->animation.overview_enter_anim_set = ov_orig_enter_set;
+	resize_apply(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
 }
 
 void set_tagout_animation(Monitor *m, Client *c) {

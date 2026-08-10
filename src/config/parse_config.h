@@ -4581,11 +4581,13 @@ void reapply_monitor_rules(void) {
 			output_enable_hdr(m, &m->pending, false, false);
 		}
 
-		if (!(mango_scene_output_commit(m->scene_output, &m->pending, false))) {
+		if (!(mango_scene_output_commit(m->scene_output, &m->pending))) {
 			if (m->hdr_enable) {
 				output_state_setup_hdr(m, true, &m->pending);
 			}
 		}
+		/* scale/mode 变化后强制调度一帧，确保 wl_output 事件发送 */
+		wlr_output_schedule_frame(m->wlr_output);
 		wlr_output_effective_resolution(m->wlr_output, &m->m.width,
 										&m->m.height);
 	}
@@ -4871,15 +4873,11 @@ void reset_tag(int old_tag_num) {
 	}
 }
 
-static void xdg_output_update_all(void);
-
 void reload_config(const Arg *arg) {
 	int old_tag_num = config.tag_num;
 	parse_config();
 	reset_tag(old_tag_num);
 	reset_option();
-	/* 配置变化后更新 xdg-output */
-	xdg_output_update_all();
 	printstatus(IPC_WATCH_ARRANGGE);
 	return;
 }

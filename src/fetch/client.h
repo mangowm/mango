@@ -253,7 +253,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 
 			if (step == 0) {
-				if (c->mon != tc->mon)
+				if (!tc->mon || c->mon != tc->mon)
 					continue;
 				if (!tc->mon->isoverview &&
 					!client_is_in_same_stack(tc, c, NULL))
@@ -386,7 +386,7 @@ bool client_only_in_one_tag(Client *c) {
 }
 
 bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
-	if (!sc || !tc)
+	if (!sc || !tc || !sc->mon)
 		return false;
 
 	uint32_t id = sc->mon->pertag->ltidxs[sc->mon->pertag->curtag]->id;

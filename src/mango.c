@@ -445,7 +445,6 @@ struct Client {
 	int32_t isopensilent;
 	int32_t istagsilent;
 	int32_t iskilling;
-	int32_t istagswitching;
 	int32_t isnamedscratchpad;
 	int32_t shield_when_capture;
 	bool is_pending_open_animation;
@@ -995,8 +994,7 @@ static void output_state_setup_hdr(Monitor *m, bool silent,
 static void output_enable_hdr(Monitor *m, struct wlr_output_state *os,
 							  bool enabled, bool silent);
 static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
-									  struct wlr_output_state *state,
-									  bool force);
+									  struct wlr_output_state *state);
 static bool mango_output_commit(Monitor *m);
 static bool check_tearing_frame_allow(Monitor *m);
 static void client_set_group_config(Client *c);
@@ -1499,7 +1497,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		}
 	}
 
-	if (c->is_in_scratchpad && c->is_scratchpad_show &&
+	if (c->is_in_scratchpad && c->is_scratchpad_show && c->mon &&
 		(c->mon->tagset[c->mon->seltags] & c->tags) == 0) {
 		c->tags = c->mon->tagset[c->mon->seltags];
 		arrange(c->mon, false, false);
@@ -2540,7 +2538,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, &gb, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
-			if (c && c->scene->node.enabled &&
+			if (c && c->scene && c->scene->node.enabled &&
 				(!client_is_unmanaged(c) || client_wants_focus(c)))
 				focusclient(c, 1);
 
@@ -2812,8 +2810,9 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	if (m->lock_surface)
 		destroylocksurface(&m->destroy_lock_surface, NULL);
 	m->wlr_output->data = NULL;
-	wlr_output_layout_remove(output_layout, m->wlr_output);
+
 	wlr_scene_output_destroy(m->scene_output);
+	wlr_output_layout_remove(output_layout, m->wlr_output);
 
 	closemon(m);
 	if (m->blur) {
@@ -4784,7 +4783,6 @@ void init_client_properties(Client *c) {
 	c->isfullscreen = 0;
 	c->need_float_size_reduce = 0;
 	c->iskilling = 0;
-	c->istagswitching = 0;
 	c->isglobal = 0;
 	c->isminimized = 0;
 	c->isoverlay = 0;
@@ -5458,7 +5456,7 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 
 	if (config.sloppyfocus && !start_drag_window && c && time && c->scene &&
 		c->scene->node.enabled &&
-		(!c->mon->isoverview || !config.ov_tab_mode) &&
+		(!c->mon || !c->mon->isoverview || !config.ov_tab_mode) &&
 		!c->animation.tagining &&
 		(surface != seat->pointer_state.focused_surface ||
 		 (selmon && selmon->isoverview && selmon->sel != c)) &&
@@ -5691,7 +5689,7 @@ void rendermon(struct wl_listener *listener, void *data) {
 		monitor_stop_skip_frame_timer(m);
 	}
 
-	mango_scene_output_commit(m->scene_output, &m->pending, need_more_frames);
+	mango_scene_output_commit(m->scene_output, &m->pending);
 
 skip:
 	// 发送帧完成通知
@@ -6334,14 +6332,16 @@ void setsel(struct wl_listener *listener, void *data) {
 void show_hide_client(Client *c) {
 	uint32_t target = 1;
 
-	set_size_per(c->mon, c);
+	if (c->mon)
+		set_size_per(c->mon, c);
 	target = get_tags_first_tag(c->oldtags);
 
 	if (!c->is_in_scratchpad) {
 		tag_client(&(Arg){.ui = target}, c);
 	} else {
 		c->tags = c->oldtags;
-		arrange(c->mon, false, false);
+		if (c->mon)
+			arrange(c->mon, false, false);
 	}
 	client_pending_minimized_state(c, 0);
 	focusclient(c, 1);
@@ -6845,7 +6845,6 @@ void tag_client(const Arg *arg, Client *target_client) {
 	if (target_client && arg->ui & TAGMASK) {
 
 		target_client->tags = arg->ui & TAGMASK;
-		target_client->istagswitching = 1;
 
 		wl_list_for_each(fc, &clients, link) {
 			if (fc && fc != target_client && target_client->tags & fc->tags &&

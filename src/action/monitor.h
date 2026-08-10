@@ -1,12 +1,19 @@
 bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
-							   struct wlr_output_state *state, bool force) {
+							   struct wlr_output_state *state) {
 	struct wlr_output *wlr_output = scene_output->output;
 	Monitor *m = wlr_output->data;
 	bool committed = false;
 
 	bool frame_allow_tearing = check_tearing_frame_allow(m);
 
-	if (!force && !wlr_scene_output_needs_frame(scene_output))
+	/* mode/scale/transform 等输出状态变化时必须提交，即使场景无帧
+	 * （needs_frame 只反映场景 damage），否则 wl_output 事件不会发送 */
+	bool state_changed =
+		state->committed &
+		(WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_SCALE |
+		 WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_ENABLED |
+		 WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED);
+	if (!state_changed && !wlr_scene_output_needs_frame(scene_output))
 		return true;
 
 	// build the state, attaching the scene's Buffer to it

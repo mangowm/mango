@@ -7,7 +7,7 @@ uint32_t want_restore_fullscreen(Client *target_client) {
 	Client *c = NULL;
 	wl_list_for_each(c, &clients, link) {
 		if (c && c != target_client && c->tags == target_client->tags &&
-			c == selmon->sel &&
+			c == selmon->sel && c->mon &&
 			c->mon->pertag->ltidxs[get_tags_first_tag_num(c->tags)]->id !=
 				SCROLLER &&
 			c->mon->pertag->ltidxs[get_tags_first_tag_num(c->tags)]->id !=

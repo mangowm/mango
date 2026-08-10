@@ -207,11 +207,7 @@ static bool togglehdr_output(Monitor *target, bool want) {
 	// such a commit unless the disruption is explicitly allowed.
 	target->pending.allow_reconfiguration = true;
 
-	// force = true: mango_scene_output_commit() returns early when
-	// wlr_scene_output_needs_frame() is false, and a still screen would
-	// otherwise swallow the change.
-	if (!mango_scene_output_commit(target->scene_output, &target->pending,
-								   true)) {
+	if (!mango_scene_output_commit(target->scene_output, &target->pending)) {
 		wlr_log(WLR_ERROR, "togglehdr: commit failed on %s, reverting",
 				target->wlr_output->name);
 		target->hdr_enable = prev_enable;

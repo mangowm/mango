@@ -134,6 +134,8 @@ void vertical_scroll_adjust_fullandmax(Client *c, struct wlr_box *target_geom) {
 
 void vertical_check_scroller_root_inside_mon(Client *c,
 											 struct wlr_box *geometry) {
+	if (!c || !c->mon)
+		return;
 	if (!GEOMINSIDEMON(geometry, c->mon)) {
 		geometry->y = c->mon->w.y + (c->mon->w.height - geometry->height) / 2;
 	}
@@ -176,6 +178,8 @@ void horizontal_scroll_adjust_fullandmax(Client *c,
 
 void horizontal_check_scroller_root_inside_mon(Client *c,
 											   struct wlr_box *geometry) {
+	if (!c || !c->mon)
+		return;
 	if (!GEOMINSIDEMON(geometry, c->mon)) {
 		geometry->x = c->mon->w.x + (c->mon->w.width - geometry->width) / 2;
 	}

@@ -1314,11 +1314,6 @@ void client_set_pending_state(Client *c) {
 		c->animation.action == OPEN)
 		c->animation.duration = 0;
 
-	if (c->istagswitching) {
-		c->animation.duration = 0;
-		c->istagswitching = 0;
-	}
-
 	if (start_drag_window) {
 		c->animation.should_animate = false;
 		c->animation.duration = 0;
@@ -1333,7 +1328,12 @@ void client_set_pending_state(Client *c) {
 	c->dirty = true;
 }
 
-void resize(Client *c, struct wlr_box geo, int32_t interact) {
+typedef struct ResizeOpts {
+	bool interact;			 // 交互式 resize（鼠标拖动调整）
+	bool skip_ov_enter_anim; // 预排阶段：跳过 overview 进入放大
+} ResizeOpts;
+
+void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	if (!c || !c->mon || !client_surface(c)->mapped)
 		return;
 
@@ -1343,8 +1343,9 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	c->need_output_flush = true;
 	c->dirty = true;
 
-	struct wlr_box *bbox =
-		(interact || c->isfloating || c->isfullscreen) ? &sgeom : &c->mon->w;
+	struct wlr_box *bbox = (opts.interact || c->isfloating || c->isfullscreen)
+							   ? &sgeom
+							   : &c->mon->w;
 	struct wlr_box clip;
 
 	if (is_scroller_layout(c->mon) && (!c->isfloating || c == grabc)) {
@@ -1449,23 +1450,30 @@ void resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (c->scratchpad_switching_mon && c->isfloating)
 		c->animainit_geom = c->geom;
 
-	/* 清除进入动画标志（含焦点窗口），避免切换焦点时重复放大 */
-	if (config.animations && c->mon->isoverview && c->animation.overining &&
-		!c->animation.overview_enter_anim_set)
-		c->animation.overining = false;
+	if (!opts.skip_ov_enter_anim) {
+		/* 清除进入动画标志（含焦点窗口），避免切换焦点时重复放大 */
+		if (config.animations && c->mon->isoverview && c->animation.overining &&
+			!c->animation.overview_enter_anim_set)
+			c->animation.overining = false;
 
-	/* 设置进入放大动画：ov_tab 所有窗口，其余除 sel 外 */
-	bool is_ov_tab =
-		config.ov_tab_mode && !c->mon->is_jump_mode && !c->mon->ov_normal_mode;
-	if (config.animations && c->mon->isoverview &&
-		(is_ov_tab || c != c->mon->sel) && c->animation.action == OVERVIEW &&
-		!c->animation.overview_enter_anim_set) {
-		c->animation.overview_enter_anim_set = true;
-		set_overview_enter_animation(c);
+		/* 设置进入放大动画：ov_tab 所有窗口，其余除 sel 外 */
+		bool is_ov_tab = config.ov_tab_mode && !c->mon->is_jump_mode &&
+						 !c->mon->ov_normal_mode;
+		if (config.animations && c->mon->isoverview &&
+			(is_ov_tab || c != c->mon->sel) &&
+			c->animation.action == OVERVIEW &&
+			!c->animation.overview_enter_anim_set) {
+			c->animation.overview_enter_anim_set = true;
+			set_overview_enter_animation(c);
+		}
 	}
 
 	client_set_pending_state(c);
 	setborder_color(c);
+}
+
+void resize(Client *c, struct wlr_box geo, int32_t interact) {
+	resize_apply(c, geo, (ResizeOpts){.interact = interact});
 }
 
 bool client_draw_fadeout_frame(Client *c) {
