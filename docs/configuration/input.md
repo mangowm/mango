@@ -82,7 +82,8 @@ emulation so the touchscreen keeps working with non-touch clients.
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `touch_enable` | `1` | Set to `0` to completely disable touchscreen support. |
-| `touch_enable_mouse_emulation` | `1` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+| `touch_enable_mouse_emulation` | `0` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+| `touch_map_to_mon` | *(unset)* | Restrict a touchscreen to one output. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). Leave unset to map the touchscreen to the whole output layout. Useful on multi-monitor setups where the touchscreen would otherwise be stretched across all outputs. |
 
 ---
 

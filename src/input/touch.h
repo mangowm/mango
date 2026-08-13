@@ -40,6 +40,23 @@ static struct wl_listener cursor_touch_cancel = {.notify = touch_cancel};
 static struct wl_listener cursor_touch_motion = {.notify = touch_motion};
 static struct wl_listener cursor_touch_frame = {.notify = touch_frame};
 
+// 将触摸设备映射到 touch_map_to_mon 指定的显示器。
+// 支持热插拔输出和配置重载，每次触摸按下时重新应用。
+static void touch_apply_monitor_mapping(struct wlr_touch *touch) {
+	if (!config.touch_map_to_mon)
+		return;
+
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (match_monitor_spec(config.touch_map_to_mon, m)) {
+			wlr_cursor_map_input_to_output(cursor, &touch->base, m->wlr_output);
+			mango_error(true, WLR_DEBUG, "Mapping touch %s to output %s",
+						touch->base.name, config.touch_map_to_mon);
+			return;
+		}
+	}
+}
+
 void createtouch(struct wlr_touch *touch) {
 	struct libinput_device *device = NULL;
 
@@ -50,6 +67,7 @@ void createtouch(struct wlr_touch *touch) {
 				device, config.send_events_mode);
 	}
 	wlr_cursor_attach_input_device(cursor, &touch->base);
+	touch_apply_monitor_mapping(touch);
 }
 
 void touch_point_surface_destroy(struct wl_listener *listener, void *data) {
@@ -132,6 +150,8 @@ void touch_down(struct wl_listener *listener, void *data) {
 		touch_finish_all();
 		return;
 	}
+
+	touch_apply_monitor_mapping(event->touch);
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 

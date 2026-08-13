@@ -196,6 +196,9 @@ static cJSON *build_monitor_json(Monitor *m) {
 	cJSON_AddStringToObject(resp, "layout_symbol",
 							m->pertag->ltidxs[m->pertag->curtag]->symbol);
 	cJSON_AddStringToObject(resp, "last_open_surface", m->last_open_surface);
+	cJSON_AddItemToObject(resp, "tag_num", cJSON_CreateNumber(config.tag_num));
+	cJSON_AddItemToObject(resp, "hide_clients",
+						  cJSON_CreateNumber(m->hide_clients));
 	cJSON_AddItemToObject(resp, "tags", build_tags_json(m));
 	cJSON_AddItemToObject(resp, "active_tags", monitor_active_tags(m));
 	cJSON_AddItemToObject(resp, "active_client", monitor_active_client(m));
@@ -227,6 +230,19 @@ static cJSON *build_monitor_tags_response(Monitor *m) {
 	cJSON_AddStringToObject(resp, "monitor", m->wlr_output->name);
 	cJSON_AddItemToObject(resp, "tags", build_tags_json(m));
 	cJSON_AddItemToObject(resp, "active_tags", monitor_active_tags(m));
+	return resp;
+}
+
+static cJSON *build_layouts_response(void) {
+	cJSON *arr = cJSON_CreateArray();
+	for (size_t i = 0; i < LENGTH(layouts); i++) {
+		cJSON *entry = cJSON_CreateObject();
+		cJSON_AddStringToObject(entry, "symbol", layouts[i].symbol);
+		cJSON_AddStringToObject(entry, "name", layouts[i].name);
+		cJSON_AddItemToArray(arr, entry);
+	}
+	cJSON *resp = cJSON_CreateObject();
+	cJSON_AddItemToObject(resp, "layouts", arr);
 	return resp;
 }
 
@@ -368,6 +384,8 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_tags_response(m);
+	} else if (strcmp(cmd, "get layouts") == 0) {
+		resp = build_layouts_response();
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;

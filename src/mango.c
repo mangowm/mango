@@ -388,7 +388,6 @@ struct Client {
 	struct wl_listener set_hints;
 	struct wl_listener set_geometry;
 	struct wl_listener commmitx11;
-	struct wl_listener scene_commit; /* scene 处理后强制 dest_size */
 	struct wlr_scene_buffer *xwl_root_buffer;
 	float xwayland_scale;	 /* X11 坐标相对逻辑坐标的缩放 */
 	struct wlr_box xwl_clip; /* XWayland 根 surface 最近一次逻辑裁剪区 */
@@ -613,6 +612,7 @@ struct Monitor {
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
 	uint32_t visible_fake_tiling_clients;
+	uint32_t hide_clients;
 	struct wlr_scene_optimized_blur *blur;
 	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
@@ -803,7 +803,7 @@ static void requestdecorationmode(struct wl_listener *listener, void *data);
 static void requestdrmlease(struct wl_listener *listener, void *data);
 static void requeststartdrag(struct wl_listener *listener, void *data);
 static void resize(Client *c, struct wlr_box geo, int32_t interact);
-static void run(char *startup_cmd);
+static void run(char *startup_cmd, int readiness_fd);
 static void setcursor(struct wl_listener *listener, void *data);
 static void setfloating(Client *c, int32_t floating);
 static void setfakefullscreen(Client *c, int32_t fakefullscreen);
@@ -1195,7 +1195,6 @@ static float xwayland_preferred_scale(Client *c);
 static void xwayland_apply_scale(Client *c);
 static void xwayland_logical_to_x11(struct wlr_box *box, float scale);
 static void xwayland_x11_to_logical(struct wlr_box *box, float scale);
-static void xwayland_scene_commit(struct wl_listener *listener, void *data);
 static void fix_xwayland_coordinate(struct wlr_box *geom);
 static int32_t synckeymap(void *data);
 static void activatex11(struct wl_listener *listener, void *data);
@@ -2992,6 +2991,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	// 刷新布局，让窗口能感应到exclude_zone变化以及设置独占表面
 	arrangelayers(l->mon);
 	reset_exclusive_layers_focus(l->mon);
+	printstatus(IPC_WATCH_LAST_OPEN_SURFACE);
 }
 
 void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
@@ -4473,7 +4473,8 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			k->func(&k->arg);
 
 			// only match the first keybind
-			break;
+			if (!k->isallowconflict)
+				break;
 		}
 	}
 	return handled;
@@ -4891,8 +4892,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 			}
 		}
 		/* scene 处理后强制根 surface 显示逻辑尺寸 */
-		LISTEN(&client_surface(c)->events.commit, &c->scene_commit,
-			   xwayland_scene_commit);
+		LISTEN(&client_surface(c)->events.commit, &c->commmitx11, commitx11);
 	}
 #endif
 
@@ -5820,7 +5820,7 @@ cleanup:
 }
 
 void // 17
-run(char *startup_cmd) {
+run(char *startup_cmd, int readiness_fd) {
 
 	/* Add a Unix socket to the Wayland display. */
 	const char *socket = wl_display_add_socket_auto(dpy);
@@ -5880,6 +5880,15 @@ run(char *startup_cmd) {
 
 	run_exec();
 	run_exec_once();
+
+	/*
+	 * If running inside supervision suite like s6, notify about successfull
+	 * startup by writing \n to the provided file descriptor and closing it
+	 */
+	if (readiness_fd > 2) {
+		write(readiness_fd, "\n", 1);
+		close(readiness_fd);
+	}
 
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
@@ -6340,6 +6349,7 @@ void show_hide_client(Client *c) {
 		tag_client(&(Arg){.ui = target}, c);
 	} else {
 		c->tags = c->oldtags;
+		c->isminimized = 0;
 		if (c->mon)
 			arrange(c->mon, false, false);
 	}
@@ -7059,6 +7069,16 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		}
 	}
 
+#ifdef XWAYLAND
+	if (client_is_x11(c)) {
+		if (c->commmitx11.link.prev && c->commmitx11.link.next &&
+			c->commmitx11.link.prev != &c->commmitx11.link) {
+			wl_list_remove(&c->commmitx11.link);
+			wl_list_init(&c->commmitx11.link);
+		}
+	}
+#endif
+
 	if (client_is_unmanaged(c)) {
 #ifdef XWAYLAND
 		if (client_is_x11(c)) {
@@ -7556,12 +7576,6 @@ static void xwayland_x11_to_logical(struct wlr_box *box, float scale) {
 	box->height = (int32_t)roundf(box->height / scale);
 }
 
-/* scene 处理后强制根 surface 铺满窗口矩形 */
-static void xwayland_scene_commit(struct wl_listener *listener, void *data) {
-	Client *c = wl_container_of(listener, c, scene_commit);
-	client_update_xwayland_dest_size(c);
-}
-
 void fix_xwayland_coordinate(struct wlr_box *geom) {
 	if (!selmon)
 		return;
@@ -7679,7 +7693,6 @@ void createnotifyx11(struct wl_listener *listener, void *data) {
 	c = xsurface->data = ecalloc(1, sizeof(*c));
 	c->surface.xwayland = xsurface;
 	c->type = X11;
-	wl_list_init(&c->scene_commit.link);
 	/* Listen to the various events it can emit */
 	LISTEN(&xsurface->events.associate, &c->associate, associatex11);
 	LISTEN(&xsurface->events.destroy, &c->destroy, destroynotify);
@@ -7714,6 +7727,9 @@ void commitx11(struct wl_listener *listener, void *data) {
 		(int32_t)c->surface.xwayland->y == xy) {
 		c->configure_serial = 0;
 	}
+
+	/* scene 处理后强制根 surface 显示逻辑尺寸 */
+	client_update_xwayland_dest_size(c);
 }
 
 void associatex11(struct wl_listener *listener, void *data) {
@@ -7721,15 +7737,12 @@ void associatex11(struct wl_listener *listener, void *data) {
 
 	LISTEN(&client_surface(c)->events.map, &c->map, mapnotify);
 	LISTEN(&client_surface(c)->events.unmap, &c->unmap, unmapnotify);
-	LISTEN(&client_surface(c)->events.commit, &c->commmitx11, commitx11);
 }
 
 void dissociatex11(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, dissociate);
 	wl_list_remove(&c->map.link);
 	wl_list_remove(&c->unmap.link);
-	wl_list_remove(&c->commmitx11.link);
-	wl_list_remove(&c->scene_commit.link);
 	c->xwl_root_buffer = NULL;
 	c->xwl_clip_active = false;
 }
@@ -7789,8 +7802,9 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 int32_t main(int32_t argc, char *argv[]) {
 	char *startup_cmd = NULL;
 	int32_t c;
+	int readiness_fd = 0;
 
-	while ((c = getopt(argc, argv, "s:c:hdvp")) != -1) {
+	while ((c = getopt(argc, argv, "s:c:r:hdvp")) != -1) {
 		if (c == 's') {
 			startup_cmd = optarg;
 		} else if (c == 'd') {
@@ -7802,6 +7816,11 @@ int32_t main(int32_t argc, char *argv[]) {
 			snprintf(cli_config_path, sizeof(cli_config_path), "%s", optarg);
 		} else if (c == 'p') {
 			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
+		} else if (c == 'r') {
+			readiness_fd = atoi(optarg);
+			if (readiness_fd < 3) {
+				goto usage;
+			}
 		} else {
 			goto usage;
 		}
@@ -7815,7 +7834,7 @@ int32_t main(int32_t argc, char *argv[]) {
 	if (!getenv("XDG_RUNTIME_DIR"))
 		die("XDG_RUNTIME_DIR must be set");
 	setup();
-	run(startup_cmd);
+	run(startup_cmd, readiness_fd);
 	cleanup();
 	return EXIT_SUCCESS;
 usage:
@@ -7826,6 +7845,8 @@ usage:
 		   "  -d             Enable debug log\n"
 		   "  -c <file>      Use custom configuration file\n"
 		   "  -s <command>   Execute startup command\n"
+		   "  -r <fdnum>     When WM is ready, write '\\n' to the given file "
+		   "descriptor and close it. fdnum >= 3\n"
 		   "  -p             Check configuration file error\n");
 	return EXIT_SUCCESS;
 }
