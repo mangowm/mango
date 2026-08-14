@@ -1345,6 +1345,76 @@ void tag_gather_apply(Monitor *m) {
 		tag_gather_reset_slot(m, i);
 }
 
+// Insert an empty tag relative to the current tag: RIGHT places it after
+// curtag, LEFT places it at curtag. Tags at/after that position shift right
+// by one, and the view follows to the freshly inserted empty tag. Returns
+// false when there is no room (last tag in use).
+bool tag_insert_apply(Monitor *m, int32_t dir) {
+	Client *c;
+	uint32_t map[tag_num_MAX + 1] = {0};
+	uint32_t pos, cur, i;
+	uint32_t occupied = 0;
+
+	if (!m || m->iscleanuping)
+		return false;
+	if (dir != LEFT && dir != RIGHT)
+		return false;
+
+	cur = m->pertag->curtag;
+	if (cur == 0 || cur > (uint32_t)config.tag_num)
+		return false;
+
+	pos = (dir == RIGHT) ? cur + 1 : cur;
+	if (pos > (uint32_t)config.tag_num)
+		return false;
+
+	// refuse if the last tag is in use: shifting would drop it and overflow
+	// the per-tag arrays.
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon == m && !c->iskilling && !c->is_logic_hide)
+			occupied |= c->tags & tagmask;
+	}
+	occupied |= m->tagset[0] & tagmask;
+	occupied |= m->tagset[1] & tagmask;
+	if (occupied & (1u << (config.tag_num - 1)))
+		return false;
+
+	// old->new mapping: tags before pos keep their number, the rest shift +1.
+	// The last tag is guaranteed empty, so map[tag_num] stays identity.
+	for (i = 1; i < pos; i++)
+		map[i] = i;
+	for (i = pos; i < (uint32_t)config.tag_num; i++)
+		map[i] = i + 1;
+
+	// remap client tags.
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon != m || c->iskilling || c->is_logic_hide)
+			continue;
+		c->tags = tag_remap_mask(c->tags, map);
+	}
+
+	// remap views (and overview backups).
+	m->tagset[0] = tag_remap_mask(m->tagset[0], map);
+	m->tagset[1] = tag_remap_mask(m->tagset[1], map);
+	m->ovbk_current_tagset = tag_remap_mask(m->ovbk_current_tagset, map);
+	m->ovbk_prev_tagset = tag_remap_mask(m->ovbk_prev_tagset, map);
+
+	// current/previous tag indices shift too.
+	if (m->pertag->curtag >= pos)
+		m->pertag->curtag++;
+	if (m->pertag->prevtag >= pos)
+		m->pertag->prevtag++;
+
+	// move per-tag state right-to-left so sources aren't clobbered; the slot
+	// at `pos` ends up reset to its tag-rule defaults (the new empty tag).
+	for (i = (uint32_t)config.tag_num - 1; i >= pos; i--)
+		tag_gather_move_pertag(m, i + 1, i);
+
+	// jump to the freshly inserted empty tag.
+	view_in_mon(&(Arg){.ui = 1u << (pos - 1), .i = 0}, true, m, true);
+	return true;
+}
+
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
 

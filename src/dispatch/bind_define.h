@@ -1430,6 +1430,14 @@ void tagtoright(const Arg *arg) {
 	return;
 }
 
+void insert_new_tag(const Arg *arg) {
+	if (!selmon)
+		return;
+
+	tag_insert_apply(selmon, arg->i);
+	return;
+}
+
 void toggle_named_scratchpad(const Arg *arg) {
 	Client *target_client = NULL;
 	char *arg_id = arg->v;

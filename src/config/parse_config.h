@@ -486,6 +486,7 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 void sync_workspaces_to_tag_num(Monitor *m);
+bool tag_insert_apply(Monitor *m, int32_t dir);
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -1201,6 +1202,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "tagtoright") == 0) {
 		func = tagtoright;
 		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "insert_new_tag") == 0) {
+		func = insert_new_tag;
+		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
 		(*arg).i = parse_force(arg_value);

@@ -14,6 +14,7 @@ void zoom(const Arg *arg);
 void tagsilent(const Arg *arg);
 void tagtoleft(const Arg *arg);
 void tagtoright(const Arg *arg);
+void insert_new_tag(const Arg *arg);
 void tagcrossmon(const Arg *arg);
 void viewtoleft(const Arg *arg);
 void viewtoright(const Arg *arg);

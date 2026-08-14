@@ -143,6 +143,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `tagsilent` | `mask` | Move window to tag(s) without focusing it. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
 | `tagtoleft` | `[synctag]` | Move window to left tag. Optional `synctag` (0/1). |
 | `tagtoright` | `[synctag]` | Move window to right tag. Optional `synctag` (0/1). |
+| `insert_new_tag` | `left/right` | Insert an empty tag next to the current tag and switch to it. Existing tags from that position shift right by one. |
 | `tagcrossmon` | `mask,monitor_spec` | Move window to tag(s) on specified monitor. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggletag` | `mask` | Toggle tag(s) on window. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). `0` toggles all tags. |
 | `toggleview` | `mask` | Toggle view of tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
