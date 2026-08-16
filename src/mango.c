@@ -1016,6 +1016,7 @@ static const char *xdg_activation_v1_export_token(void);
 /* variables */
 static const char broken[] = "broken";
 static pid_t child_pid = -1;
+static uint32_t startup_time;
 static int32_t locked;
 static uint32_t locked_mods = 0;
 static void *exclusive_focus;
@@ -1847,10 +1848,14 @@ void applyrules(Client *c) {
 		if (!is_window_rule_matches(r, appid, title))
 			continue;
 
+		// rule is after 60s of startup, do not apply
+		if (r->atstartup == 1 && get_now_in_ms() - startup_time > 60 * 1000)
+			continue;
+
 		// set general properties
 		apply_rule_properties(c, r);
 
-		// // set tags
+		// set tags
 		if (r->tags > 0) {
 			newtags |= r->tags;
 		} else if (parent) {
@@ -7181,6 +7186,9 @@ void setup(void) {
 	}
 	sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
 										  synckeymap, NULL);
+
+	// store the startup time for at-startup rules to check against
+	startup_time = get_now_in_ms();
 #endif
 }
 
