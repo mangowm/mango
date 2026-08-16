@@ -1113,6 +1113,7 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 	m->visible_tiling_clients = 0;
 	m->visible_scroll_tiling_clients = 0;
 	m->visible_fake_tiling_clients = 0;
+	m->hide_clients = 0;
 
 	uint32_t tag = m->pertag->curtag;
 	struct TagScrollerState *st = m->pertag->scroller_state[tag];
@@ -1142,6 +1143,10 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 		if (from_view && m->sel == NULL && c->isglobal && VISIBLEON(c, m)) {
 			focusclient(c, 1);
+		}
+
+		if (c->isminimized) {
+			m->hide_clients++;
 		}
 
 		if (VISIBLEON(c, m)) {
@@ -1223,6 +1228,123 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		total_master_inner_percent, master_num, stack_num);
 }
 
+// remap tags through map; unmapped tags stay as-is.
+static uint32_t tag_remap_mask(uint32_t tags, const uint32_t *map) {
+	uint32_t out = tags & ~tagmask;
+	uint32_t i;
+
+	for (i = 1; i <= (uint32_t)config.tag_num; i++) {
+		if (tags & (1u << (i - 1)))
+			out |= map[i] ? (1u << (map[i] - 1)) : (1u << (i - 1));
+	}
+	return out;
+}
+
+// reset a pertag slot to its tagrule state.
+static void tag_gather_reset_slot(Monitor *m, uint32_t tag) {
+	int32_t i;
+
+	tag_slot_set_defaults(m, tag);
+	m->pertag->no_hide[tag] = 0;
+	m->pertag->no_render_border[tag] = 0;
+	m->pertag->open_as_floating[tag] = 0;
+	m->pertag->dwindle_root[tag] = NULL;
+	m->pertag->scroller_state[tag] = NULL;
+
+	for (i = 0; i < config.tag_rules_count; i++) {
+		const ConfigTagRule *tr = &config.tag_rules[i];
+
+		if (tag_rule_matches_monitor(tr, m) &&
+			(tr->id_wildcard || tr->id == (int32_t)tag))
+			tag_rule_apply_to_slot(m, tr, tag);
+	}
+}
+
+// move pertag state from src to dst, then reset src.
+static void tag_gather_move_pertag(Monitor *m, uint32_t dst, uint32_t src) {
+	m->pertag->nmasters[dst] = m->pertag->nmasters[src];
+	m->pertag->mfacts[dst] = m->pertag->mfacts[src];
+	m->pertag->no_hide[dst] = m->pertag->no_hide[src];
+	m->pertag->no_render_border[dst] = m->pertag->no_render_border[src];
+	m->pertag->open_as_floating[dst] = m->pertag->open_as_floating[src];
+	m->pertag->scroller_default_proportion[dst] =
+		m->pertag->scroller_default_proportion[src];
+	m->pertag->scroller_default_proportion_single[dst] =
+		m->pertag->scroller_default_proportion_single[src];
+	m->pertag->scroller_ignore_proportion_single[dst] =
+		m->pertag->scroller_ignore_proportion_single[src];
+	m->pertag->dwindle_root[dst] = m->pertag->dwindle_root[src];
+	m->pertag->ltidxs[dst] = m->pertag->ltidxs[src];
+	m->pertag->scroller_state[dst] = m->pertag->scroller_state[src];
+	tag_gather_reset_slot(m, src);
+}
+
+// Compact occupied tags on this monitor to 1..k (e.g. 1,3,9 -> 1,2,3).
+void tag_gather_apply(Monitor *m) {
+	Client *c;
+	uint32_t occupied = 0;
+	uint32_t map[tag_num_MAX + 1] = {0};
+	uint32_t i, next = 1, k;
+	bool changed = false;
+
+	if (!m || m->iscleanuping)
+		return;
+
+	// collect occupied tags on this monitor.
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon == m && !c->iskilling && !c->is_logic_hide)
+			occupied |= c->tags & tagmask;
+	}
+	// the current view counts as occupied even when empty.
+	occupied |= m->tagset[m->seltags] & tagmask;
+
+	// old->new mapping and detect gaps.
+	for (i = 1; i <= (uint32_t)config.tag_num; i++) {
+		if (occupied & (1u << (i - 1))) {
+			map[i] = next++;
+			if (map[i] != i)
+				changed = true;
+		} else {
+			map[i] = 0;
+		}
+	}
+
+	if (!changed)
+		return;
+
+	// remap client tags.
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon != m || c->iskilling || c->is_logic_hide)
+			continue;
+		c->tags = tag_remap_mask(c->tags, map);
+	}
+
+	// remap current/previous views (and overview backups).
+	m->tagset[m->seltags] = tag_remap_mask(m->tagset[m->seltags], map);
+	m->tagset[m->seltags ^ 1] = tag_remap_mask(m->tagset[m->seltags ^ 1], map);
+	m->ovbk_current_tagset = tag_remap_mask(m->ovbk_current_tagset, map);
+	m->ovbk_prev_tagset = tag_remap_mask(m->ovbk_prev_tagset, map);
+
+	// keep view indices; empty tags stay unchanged.
+	if (m->pertag->curtag <= (uint32_t)config.tag_num && map[m->pertag->curtag])
+		m->pertag->curtag = map[m->pertag->curtag];
+	if (m->pertag->prevtag <= (uint32_t)config.tag_num &&
+		map[m->pertag->prevtag])
+		m->pertag->prevtag = map[m->pertag->prevtag];
+
+	// move per-tag state in ascending order so later moves don't clobber
+	// earlier sources.
+	for (i = 1; i <= (uint32_t)config.tag_num; i++) {
+		if (map[i] && map[i] != i)
+			tag_gather_move_pertag(m, map[i], i);
+	}
+
+	// reset trailing empty slots.
+	k = next - 1;
+	for (i = k + 1; i <= (uint32_t)config.tag_num; i++)
+		tag_gather_reset_slot(m, i);
+}
+
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
 
@@ -1242,6 +1364,11 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		overviewlayout.arrange(m);
 	} else {
 		m->pertag->ltidxs[m->pertag->curtag]->arrange(m);
+	}
+
+	// gather after layout/animation setup so tag-switch animations still play.
+	if (config.tag_gather) {
+		tag_gather_apply(m);
 	}
 
 	if (!start_drag_window) {

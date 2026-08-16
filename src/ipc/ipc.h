@@ -28,6 +28,35 @@ struct ipc_watch_client {
 };
 
 static struct wl_list watch_clients;
+static int device_watch_count;
+
+static const char *ipc_device_type_str(struct wlr_input_device *dev) {
+	if (!dev)
+		return "unknown";
+
+	struct libinput_device *ld = NULL;
+	if (wlr_input_device_is_libinput(dev))
+		ld = wlr_libinput_get_device_handle(dev);
+
+	switch (dev->type) {
+	case WLR_INPUT_DEVICE_KEYBOARD:
+		return "keyboard";
+	case WLR_INPUT_DEVICE_POINTER:
+		return ld && libinput_device_config_tap_get_finger_count(ld) > 0
+				   ? "touchpad"
+				   : "pointer";
+	case WLR_INPUT_DEVICE_TOUCH:
+		return "touch";
+	case WLR_INPUT_DEVICE_SWITCH:
+		return "switch";
+	case WLR_INPUT_DEVICE_TABLET:
+		return "tablet";
+	case WLR_INPUT_DEVICE_TABLET_PAD:
+		return "pad";
+	default:
+		return "unknown";
+	}
+}
 
 struct ipc_client_state {
 	int fd;
@@ -62,7 +91,9 @@ static Client *client_by_id(uint32_t id) {
 }
 
 static const char *ipc_get_layout_str(void) {
-	struct wlr_keyboard *keyboard = &kb_group->wlr_group->keyboard;
+	struct wlr_keyboard *keyboard = kb_group ? kb_group->keyboard : NULL;
+	if (!keyboard || !keyboard->keymap || !keyboard->xkb_state)
+		return "";
 	xkb_layout_index_t current = xkb_state_serialize_layout(
 		keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 	static char layout[32];
@@ -196,6 +227,9 @@ static cJSON *build_monitor_json(Monitor *m) {
 	cJSON_AddStringToObject(resp, "layout_symbol",
 							m->pertag->ltidxs[m->pertag->curtag]->symbol);
 	cJSON_AddStringToObject(resp, "last_open_surface", m->last_open_surface);
+	cJSON_AddItemToObject(resp, "tag_num", cJSON_CreateNumber(config.tag_num));
+	cJSON_AddItemToObject(resp, "hide_clients",
+						  cJSON_CreateNumber(m->hide_clients));
 	cJSON_AddItemToObject(resp, "tags", build_tags_json(m));
 	cJSON_AddItemToObject(resp, "active_tags", monitor_active_tags(m));
 	cJSON_AddItemToObject(resp, "active_client", monitor_active_client(m));
@@ -227,6 +261,19 @@ static cJSON *build_monitor_tags_response(Monitor *m) {
 	cJSON_AddStringToObject(resp, "monitor", m->wlr_output->name);
 	cJSON_AddItemToObject(resp, "tags", build_tags_json(m));
 	cJSON_AddItemToObject(resp, "active_tags", monitor_active_tags(m));
+	return resp;
+}
+
+static cJSON *build_layouts_response(void) {
+	cJSON *arr = cJSON_CreateArray();
+	for (size_t i = 0; i < LENGTH(layouts); i++) {
+		cJSON *entry = cJSON_CreateObject();
+		cJSON_AddStringToObject(entry, "symbol", layouts[i].symbol);
+		cJSON_AddStringToObject(entry, "name", layouts[i].name);
+		cJSON_AddItemToArray(arr, entry);
+	}
+	cJSON *resp = cJSON_CreateObject();
+	cJSON_AddItemToObject(resp, "layouts", arr);
 	return resp;
 }
 
@@ -355,6 +402,95 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			cJSON_AddItemToArray(arr, build_monitor_json(m));
 		resp = cJSON_CreateObject();
 		cJSON_AddItemToObject(resp, "monitors", arr);
+	} else if (strcmp(cmd, "get all-devices") == 0) {
+		/* 按物理设备（libinput device group）聚合列出 */
+		struct ipc_dev_group {
+			struct libinput_device_group *group;
+			char name[256];
+			char types[8][16];
+			int type_count;
+			int vendor, product;
+			int count;
+			ConfigDeviceRule *rule; /* 组内任一接口命中即记录 */
+		} groups[64];
+		int group_count = 0;
+
+		InputDevice *id;
+		wl_list_for_each(id, &inputdevices, link) {
+			struct wlr_input_device *dev = id->wlr_device;
+			struct libinput_device *ld = NULL;
+			struct libinput_device_group *grp = NULL;
+			if (wlr_input_device_is_libinput(dev))
+				ld = wlr_libinput_get_device_handle(dev);
+			if (ld)
+				grp = libinput_device_get_device_group(ld);
+			/* 非 libinput 设备按设备自身聚合 */
+			if (!grp)
+				grp = (struct libinput_device_group *)dev;
+
+			int gi = -1;
+			for (int i = 0; i < group_count; i++) {
+				if (groups[i].group == grp) {
+					gi = i;
+					break;
+				}
+			}
+			if (gi < 0) {
+				gi = group_count++;
+				groups[gi].group = grp;
+				snprintf(groups[gi].name, sizeof(groups[gi].name), "%s",
+						 dev->name ? dev->name : "");
+				groups[gi].type_count = 0;
+				groups[gi].vendor = ld ? libinput_device_get_id_vendor(ld) : 0;
+				groups[gi].product =
+					ld ? libinput_device_get_id_product(ld) : 0;
+				groups[gi].count = 0;
+				groups[gi].rule = NULL;
+			}
+			groups[gi].count++;
+			if (!groups[gi].rule)
+				groups[gi].rule = find_device_rule(dev);
+
+			const char *type = ipc_device_type_str(dev);
+			bool seen = false;
+			for (int t = 0; t < groups[gi].type_count; t++) {
+				if (strcmp(groups[gi].types[t], type) == 0) {
+					seen = true;
+					break;
+				}
+			}
+			if (!seen && groups[gi].type_count < 8)
+				snprintf(groups[gi].types[groups[gi].type_count++], 16, "%s",
+						 type);
+		}
+
+		cJSON *arr = cJSON_CreateArray();
+		for (int i = 0; i < group_count; i++) {
+			cJSON *obj = cJSON_CreateObject();
+			cJSON_AddStringToObject(obj, "name", groups[i].name);
+			cJSON *types = cJSON_CreateArray();
+			for (int t = 0; t < groups[i].type_count; t++)
+				cJSON_AddItemToArray(types,
+									 cJSON_CreateString(groups[i].types[t]));
+			cJSON_AddItemToObject(obj, "types", types);
+			cJSON_AddNumberToObject(obj, "vendor", groups[i].vendor);
+			cJSON_AddNumberToObject(obj, "product", groups[i].product);
+
+			char identifier[512];
+			snprintf(identifier, sizeof(identifier), "%d:%d:%s",
+					 groups[i].vendor, groups[i].product, groups[i].name);
+			cJSON_AddStringToObject(obj, "identifier", identifier);
+			cJSON_AddNumberToObject(obj, "interfaces", groups[i].count);
+
+			ConfigDeviceRule *rule = groups[i].rule;
+			cJSON_AddBoolToObject(obj, "matched", rule != NULL);
+			if (rule)
+				cJSON_AddStringToObject(obj, "matched_rule",
+										rule->name ? rule->name : rule->type);
+			cJSON_AddItemToArray(arr, obj);
+		}
+		resp = cJSON_CreateObject();
+		cJSON_AddItemToObject(resp, "devices", arr);
 	} else if (strcmp(cmd, "get all-tags") == 0) {
 		resp = build_all_tags_response();
 	} else if (strncmp(cmd, "get tags ", 9) == 0) {
@@ -364,6 +500,8 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_tags_response(m);
+	} else if (strcmp(cmd, "get layouts") == 0) {
+		resp = build_layouts_response();
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
@@ -474,7 +612,26 @@ static void ipc_notify_json_to_fd(int fd, cJSON *json) {
 	free(str);
 }
 
+/* 向 watch all-devices 客户端推送最后触发事件的设备 */
+static void ipc_notify_device_event(struct wlr_input_device *dev) {
+	if (!dev || !device_watch_count)
+		return;
+
+	cJSON *json = cJSON_CreateObject();
+	cJSON_AddStringToObject(json, "name", dev->name ? dev->name : "");
+	cJSON_AddStringToObject(json, "type", ipc_device_type_str(dev));
+
+	struct ipc_watch_client *wc, *tmp;
+	wl_list_for_each_safe(wc, tmp, &watch_clients, link) {
+		if (wc->type == IPC_WATCH_DEVICE)
+			ipc_notify_json_to_fd(wc->fd, json);
+	}
+	cJSON_Delete(json);
+}
+
 static void ipc_remove_watch_client(struct ipc_watch_client *wc) {
+	if (wc->type == IPC_WATCH_DEVICE)
+		device_watch_count--;
 	wl_list_remove(&wc->link);
 	wl_event_source_remove(wc->source);
 	close(wc->fd);
@@ -520,6 +677,8 @@ static bool handle_watch_command(int fd, const char *cmd,
 		type = IPC_WATCH_ALL_TAGS;
 	} else if (strcmp(cmd, "watch all-clients") == 0) {
 		type = IPC_WATCH_ALL_CLIENTS;
+	} else if (strcmp(cmd, "watch all-devices") == 0) {
+		type = IPC_WATCH_DEVICE;
 	} else if (strcmp(cmd, "watch keymode") == 0) {
 		type = IPC_WATCH_KEYMODE;
 	} else if (strcmp(cmd, "watch keyboardlayout") == 0) {
@@ -556,6 +715,8 @@ static bool handle_watch_command(int fd, const char *cmd,
 		client->loop, fd, WL_EVENT_READABLE | WL_EVENT_HANGUP | WL_EVENT_ERROR,
 		ipc_watch_data_handler, wc);
 	wl_list_insert(&watch_clients, &wc->link);
+	if (type == IPC_WATCH_DEVICE)
+		device_watch_count++;
 
 	/* 推送初始状态 */
 	cJSON *json = NULL;
@@ -624,6 +785,12 @@ static bool handle_watch_command(int fd, const char *cmd,
 			cJSON_AddItemToArray(arr, build_client_json(c));
 		json = cJSON_CreateObject();
 		cJSON_AddItemToObject(json, "clients", arr);
+		break;
+	}
+	case IPC_WATCH_DEVICE: {
+		json = cJSON_CreateObject();
+		cJSON_AddNullToObject(json, "name");
+		cJSON_AddNullToObject(json, "type");
 		break;
 	}
 	case IPC_WATCH_KEYMODE: {

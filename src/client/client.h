@@ -435,11 +435,7 @@ static inline uint32_t client_set_size(Client *c, uint32_t width,
 	if ((int32_t)width == c->surface.xdg->toplevel->current.width &&
 		(int32_t)height == c->surface.xdg->toplevel->current.height)
 		return 0;
-	/* 客户端尚未 ack 时 current 不更新，用 scheduled（已请求的配置）去重，
-	 * 避免重复发相同尺寸的 configure 导致客户端反复重渲染/上传 */
-	if ((int32_t)width == c->surface.xdg->toplevel->scheduled.width &&
-		(int32_t)height == c->surface.xdg->toplevel->scheduled.height)
-		return 0;
+
 	return wlr_xdg_toplevel_set_size(c->surface.xdg->toplevel, (int32_t)width,
 									 (int32_t)height);
 }

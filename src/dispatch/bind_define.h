@@ -1210,7 +1210,9 @@ void switch_keyboard_layout(const Arg *arg) {
 
 	InputDevice *id;
 	wl_list_for_each(id, &inputdevices, link) {
-		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD) {
+		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD ||
+			id->standalone) {
+			/* 独立键盘保留自己的 keymap/layout，不同步布局切换 */
 			continue;
 		}
 

@@ -115,12 +115,11 @@ bool mango_im_keyboard_grab_forward_modifiers(KeyboardGroup *keyboard) {
 	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab =
 		get_keyboard_grab(keyboard);
 
-	struct wlr_keyboard_modifiers *modifiers =
-		&keyboard->wlr_group->keyboard.modifiers;
+	struct wlr_keyboard_modifiers *modifiers = &keyboard->keyboard->modifiers;
 
 	if (keyboard_grab) {
-		wlr_input_method_keyboard_grab_v2_set_keyboard(
-			keyboard_grab, &keyboard->wlr_group->keyboard);
+		wlr_input_method_keyboard_grab_v2_set_keyboard(keyboard_grab,
+													   keyboard->keyboard);
 		wlr_input_method_keyboard_grab_v2_send_modifiers(keyboard_grab,
 														 modifiers);
 		return true;
@@ -135,8 +134,8 @@ bool mango_im_keyboard_grab_forward_key(KeyboardGroup *keyboard,
 	struct wlr_input_method_keyboard_grab_v2 *keyboard_grab =
 		get_keyboard_grab(keyboard);
 	if (keyboard_grab) {
-		wlr_input_method_keyboard_grab_v2_set_keyboard(
-			keyboard_grab, &keyboard->wlr_group->keyboard);
+		wlr_input_method_keyboard_grab_v2_set_keyboard(keyboard_grab,
+													   keyboard->keyboard);
 		wlr_input_method_keyboard_grab_v2_send_key(
 			keyboard_grab, event->time_msec, event->keycode, event->state);
 		return true;

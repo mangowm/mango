@@ -22,6 +22,7 @@ bind[flags]=MODIFIERS,KEY,COMMAND,PARAMETERS
 - `s`: Uses keysym instead of keycode to bind.
 - `r`: Triggers on key release instead of press.
 - `p`: Pass key event to client.
+- `c`: allow keybind conflict(need set in all conflict key).
 
 **Examples:**
 
@@ -41,6 +42,10 @@ bind=NONE,XF86MonBrightnessUp,spawn,brightnessctl set +5%
 
 # Bind a modifier key itself as the trigger key
 bind=alt,shift_l,switch_keyboard_layout
+
+# Allow keybind conflict
+bindc=SUPER,a,resizewin,+10,0
+bindc=SUPER,a,centerwin
 ```
 
 ## Key Modes (Submaps)

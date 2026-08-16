@@ -70,7 +70,7 @@ gesturebind=MODIFIERS,DIRECTION,FINGERS,COMMAND,PARAMETERS
 - **Direction**: `up`, `down`, `left`, `right`
 - **Fingers**: `3` or `4`
 
-> **Info:** Gestures require proper touchpad configuration. See [Input Devices](/docs/configuration/input) for touchpad settings like `tap_to_click` and `disable_while_typing`.
+> **Info:** Gestures require proper touchpad configuration. See [Input Devices](/docs/configuration/input) for touchpad settings like `tap_to_click` and `trackpad_disable_while_typing`.
 
 ### Examples
 

@@ -5,7 +5,9 @@ description: Configure keyboard layouts, mouse sensitivity, and touchpad gesture
 
 ## Device Configuration
 
-mangowm provides granular control over different input devices.
+The global settings below apply to every device of the corresponding type.
+Per-device overrides are covered in the [Device Rules](#device-rules-advanced)
+section at the end of this page.
 
 ### Keyboard Settings
 
@@ -44,7 +46,12 @@ Configuration for external mice.
 | `mouse_natural_scrolling` | `0` | Invert scrolling direction. |
 | `mouse_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
 | `mouse_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
-| `left_handed` | `0` | Swap left and right buttons. |
+| `mouse_left_handed` | `0` | Swap left and right buttons. |
+| `mouse_middle_button_emulation` | `0` | Emulate middle button. |
+| `mouse_scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
+| `mouse_scroll_button` | `274` | The button used for button scrolling (272–279). |
+| `mouse_click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
+| `mouse_send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
 | `axis_scroll_factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
 ---
 
@@ -60,14 +67,14 @@ Specific settings for laptop touchpads. Some settings may require a relogin to t
 | `trackpad_natural_scrolling` | `0` | Invert scrolling direction (natural scrolling). |
 | `trackpad_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
 | `trackpad_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
-| `scroll_button` | `274` | The mouse button that use for scrolling(272 to 279).
-| `scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
-| `click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
-| `send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
+| `trackpad_scroll_button` | `274` | The button used for button scrolling (272–279). |
+| `trackpad_scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
+| `trackpad_click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
+| `trackpad_send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
 | `drag_lock` | `1` | Lock dragging after tapping. |
-| `disable_while_typing` | `1` | Disable trackpad while typing. |
-| `left_handed` | `0` | Swap left/right buttons. |
-| `middle_button_emulation` | `0` | Emulate middle button. |
+| `trackpad_disable_while_typing` | `1` | Disable trackpad while typing. |
+| `trackpad_left_handed` | `0` | Swap left/right buttons. |
+| `trackpad_middle_button_emulation` | `0` | Emulate middle button. |
 | `swipe_min_threshold` | `1` | Minimum swipe threshold when use gesture. |
 | `button_map` | `0` | `0` (Left/right/middle), `1` (Left/middle/right). |
 | `trackpad_scroll_factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
@@ -82,13 +89,14 @@ emulation so the touchscreen keeps working with non-touch clients.
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `touch_enable` | `1` | Set to `0` to completely disable touchscreen support. |
-| `touch_enable_mouse_emulation` | `1` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+| `touch_enable_mouse_emulation` | `0` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+| `touch_map_to_mon` | *(unset)* | Restrict a touchscreen to one output. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). Leave unset to map the touchscreen to the whole output layout. Useful on multi-monitor setups where the touchscreen would otherwise be stretched across all outputs. |
 
 ---
 
 **Detailed descriptions:**
 
-- `scroll_button` values:
+- `scroll_button` values (use `mouse_scroll_button` / `trackpad_scroll_button`):
   - `272` — Left button.
   - `273` — Right button.
   - `274` — Middle button.
@@ -98,13 +106,13 @@ emulation so the touchscreen keeps working with non-touch clients.
   - `278` — Back button.
   - `279` — Task button.
 
-- `scroll_method` values:
+- `scroll_method` values (use `mouse_scroll_method` / `trackpad_scroll_method`):
   - `0` — Never send scroll events (no scrolling).
   - `1` — Two-finger scrolling: send scroll events when two fingers are logically down on the device.
   - `2` — Edge scrolling: send scroll events when a finger moves along the bottom or right edge.
   - `4` — Button scrolling: send scroll events when a button is held and the device moves along a scroll axis.
 
-- `click_method` values:
+- `click_method` values (use `mouse_click_method` / `trackpad_click_method`):
   - `0` — No software click emulation.
   - `1` — Button areas: use software-defined areas on the touchpad to generate button events.
   - `2` — Clickfinger: the number of fingers determines which button is pressed.
@@ -118,7 +126,7 @@ emulation so the touchscreen keeps working with non-touch clients.
   - `0` — 1/2/3 finger tap maps to left / right / middle.
   - `1` — 1/2/3 finger tap maps to left / middle / right.
 
-- `send_events_mode` values:
+- `send_events_mode` values (use `mouse_send_events_mode` / `trackpad_send_events_mode`):
   - `0` — Send events from this device normally.
   - `1` — Do not send events from this device.
   - `2` — Disable this device when an external pointer device is plugged in.
@@ -172,3 +180,76 @@ env=GTK_IM_MODULE,ibus
 env=QT_IM_MODULE,ibus
 env=XMODIFIERS,@im=ibus
 ```
+
+---
+
+## Device Rules (Advanced)
+
+The global settings above apply to every device of the corresponding type.
+Use `devicerule` to override parameters for a specific device.
+
+**Finding device names:**
+
+The easiest way to get a device's name is to watch for it: run
+
+```bash
+mmsg watch all-devices
+```
+
+then use the device (type on a keyboard, move a mouse, scroll a touchpad).
+Each event prints the name of the device that triggered it, so you can match
+every physical device to its name without guessing. `mmsg get all-devices`
+also lists all connected devices at once if you prefer.
+
+**Syntax:**
+
+```ini
+devicerule=name:<device-name>,option:value,option:value
+devicerule=type:<device-type>,option:value
+```
+
+Put the printed `name` after `name:` (the `identifier` field,
+`vendor:product:name`, also works). Use `type:` to match all devices of a
+type: `keyboard`, `pointer`, `touchpad`, `touch`, `switch`, `tablet`, `pad`.
+
+Exact `name:` matches take priority over `type:` matches; the first matching
+rule wins. A rule with keyboard options (`kb_*`, `repeat_*`) turns that
+keyboard into an independent keyboard with its own keymap and repeat settings;
+unmatched devices stay in the shared, synchronized keyboard group.
+
+**Examples:**
+
+```ini
+devicerule=name:AT Translated Set 2 keyboard,kb_layout:ru
+devicerule=name:A4Tech USB Mouse,natural_scrolling:1,accel_speed:0.1
+devicerule=type:touchpad,tap_to_click:1
+```
+
+Apply changes with `mmsg dispatch reload_config` or restart mango.
+
+### Rule Options
+
+All options are optional; unset options fall back to the global settings.
+
+| Category | Option | Description |
+| :--- | :--- | :--- |
+| Keyboard | `kb_layout` | Layout code, e.g. `us`, `ru`, `de` |
+| Keyboard | `kb_variant` | Layout variant, e.g. `dvorak`, `colemak` |
+| Keyboard | `kb_options` | XKB options, e.g. `caps:escape` |
+| Keyboard | `kb_rules` / `kb_model` | XKB rules file / model |
+| Keyboard | `repeat_rate` / `repeat_delay` | Key repeat rate / delay |
+| Pointer | `accel_speed` | Pointer speed, `-1.0` to `1.0` |
+| Pointer | `accel_profile` | `0` none, `1` flat, `2` adaptive |
+| Pointer | `natural_scrolling` | `1` inverts scroll direction |
+| Pointer | `left_handed` | `1` swaps left/right buttons |
+| Touchpad | `tap_to_click` | `1` enables tap-to-click |
+| Touchpad | `tap_and_drag` | `1` enables tap-and-drag |
+| Touchpad | `scroll_method` | `1` two-finger, `2` edge, `4` button |
+| Touchpad | `disable_while_typing` | `1` disables the touchpad while typing |
+| Common | `middle_button_emulation` | `1` emulates the middle button |
+| Common | `send_events_mode` | `0` enabled, `1` disabled, `2` disabled with external mouse |
+| Common | `scroll_button` / `click_method` / `drag_lock` / `button_map` | libinput settings, see descriptions below |
+
+> **Info:** If a rule's keyboard layout fails to compile (e.g. `kb_layout:ru`
+> with `kb_variant:dvorak`), mango logs an error and falls back to the global
+> layout instead of crashing.

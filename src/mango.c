@@ -8,6 +8,7 @@
 #include <libinput.h>
 #include <limits.h>
 #include <linux/input-event-codes.h>
+#include <math.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
@@ -244,6 +245,7 @@ enum ipc_watch_type {
 	IPC_WATCH_KB_LAYOUT = 1 << 7,
 	IPC_WATCH_LAST_OPEN_SURFACE = 1 << 8,
 	IPC_WATCH_FOCUSING_CLIENT = 1 << 9,
+	IPC_WATCH_DEVICE = 1 << 10,
 };
 
 typedef struct Pertag Pertag;
@@ -282,6 +284,8 @@ typedef struct {
 	struct libinput_device *libinput_device;
 	struct wl_listener destroy_listener;
 	void *device_data;
+	bool standalone;			  /* 命中 devicerule 的键盘，独立于默认键盘组 */
+	struct wl_listener key_watch; /* 记录最后触发按键事件的设备 */
 } InputDevice;
 
 typedef struct {
@@ -388,7 +392,6 @@ struct Client {
 	struct wl_listener set_hints;
 	struct wl_listener set_geometry;
 	struct wl_listener commmitx11;
-	struct wl_listener scene_commit; /* scene 处理后强制 dest_size */
 	struct wlr_scene_buffer *xwl_root_buffer;
 	float xwayland_scale;	 /* X11 坐标相对逻辑坐标的缩放 */
 	struct wlr_box xwl_clip; /* XWayland 根 surface 最近一次逻辑裁剪区 */
@@ -507,6 +510,8 @@ struct Client {
 
 typedef struct {
 	struct wlr_keyboard_group *wlr_group;
+	struct wlr_keyboard
+		*keyboard; /* 实际生效的 wlr_keyboard（group 或独立键盘） */
 	struct wlr_keyboard *virtual_keyboard;
 
 	int32_t nsyms;
@@ -520,6 +525,7 @@ typedef struct {
 	struct wl_listener destroy;
 
 	uint32_t layout_index;
+	struct wl_list link; /* standalone_keyboards */
 } KeyboardGroup;
 
 typedef struct {
@@ -613,6 +619,7 @@ struct Monitor {
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
 	uint32_t visible_fake_tiling_clients;
+	uint32_t hide_clients;
 	struct wlr_scene_optimized_blur *blur;
 	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
@@ -735,7 +742,8 @@ static void createlocksurface(struct wl_listener *listener, void *data);
 static void createmon(struct wl_listener *listener, void *data);
 static void createnotify(struct wl_listener *listener, void *data);
 static void createpointer(struct wlr_pointer *pointer);
-static void configure_pointer(struct libinput_device *device);
+static void configure_pointer(struct wlr_input_device *wlr_device,
+							  struct libinput_device *device);
 static void destroyinputdevice(struct wl_listener *listener, void *data);
 static void createswitch(struct wlr_switch *switch_device);
 static void switch_toggle(struct wl_listener *listener, void *data);
@@ -803,7 +811,7 @@ static void requestdecorationmode(struct wl_listener *listener, void *data);
 static void requestdrmlease(struct wl_listener *listener, void *data);
 static void requeststartdrag(struct wl_listener *listener, void *data);
 static void resize(Client *c, struct wlr_box geo, int32_t interact);
-static void run(char *startup_cmd);
+static void run(char *startup_cmd, int readiness_fd);
 static void setcursor(struct wl_listener *listener, void *data);
 static void setfloating(Client *c, int32_t floating);
 static void setfakefullscreen(Client *c, int32_t fakefullscreen);
@@ -1058,6 +1066,7 @@ static struct wlr_pointer_constraint_v1 *active_constraint;
 static struct wlr_seat *seat;
 static KeyboardGroup *kb_group;
 static struct wl_list inputdevices;
+static struct wl_list standalone_keyboards; /* 独立键盘链表 */
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
 static Client *grabc, *dropc;
@@ -1195,7 +1204,6 @@ static float xwayland_preferred_scale(Client *c);
 static void xwayland_apply_scale(Client *c);
 static void xwayland_logical_to_x11(struct wlr_box *box, float scale);
 static void xwayland_x11_to_logical(struct wlr_box *box, float scale);
-static void xwayland_scene_commit(struct wl_listener *listener, void *data);
 static void fix_xwayland_coordinate(struct wlr_box *geom);
 static int32_t synckeymap(void *data);
 static void activatex11(struct wl_listener *listener, void *data);
@@ -1214,6 +1222,8 @@ static struct wl_event_source *sync_keymap;
 #endif
 
 /* export an activation token for the process we're about to spawn */
+
+static void ipc_notify_device_event(struct wlr_input_device *device);
 
 #include "action/client.h"
 #include "action/monitor.h"
@@ -2182,6 +2192,7 @@ axisnotify(struct wl_listener *listener, void *data) {
 	/* This event is forwarded by the cursor when a pointer emits an axis event,
 	 * for example when you move the scroll wheel. */
 	struct wlr_pointer_axis_event *event = data;
+	ipc_notify_device_event(&event->pointer->base);
 	struct wlr_keyboard *keyboard, *hard_keyboard;
 	uint32_t mods, hard_mods;
 	AxisBinding *a;
@@ -2503,6 +2514,8 @@ bool check_trackpad_disabled(struct wlr_pointer *pointer) {
 void // 鼠标按键事件
 buttonpress(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_button_event *event = data;
+
+	ipc_notify_device_event(&event->pointer->base);
 
 	if (!handle_buttonpress(event))
 		wlr_seat_pointer_notify_button(seat, event->time_msec, event->button,
@@ -2992,6 +3005,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	// 刷新布局，让窗口能感应到exclude_zone变化以及设置独占表面
 	arrangelayers(l->mon);
 	reset_exclusive_layers_focus(l->mon);
+	printstatus(IPC_WATCH_LAST_OPEN_SURFACE);
 }
 
 void commitlayersurfacenotify(struct wl_listener *listener, void *data) {
@@ -3168,6 +3182,7 @@ void destroydecoration(struct wl_listener *listener, void *data) {
 
 	wl_list_remove(&c->destroy_decoration.link);
 	wl_list_remove(&c->set_decoration_mode.link);
+	c->decoration = NULL;
 }
 
 static bool popup_unconstrain(Popup *popup) {
@@ -3301,17 +3316,25 @@ void createidleinhibitor(struct wl_listener *listener, void *data) {
 	checkidleinhibitor(NULL);
 }
 
+static void ipc_key_watch_notify(struct wl_listener *listener, void *data) {
+	InputDevice *id = wl_container_of(listener, id, key_watch);
+	ipc_notify_device_event(id->wlr_device);
+}
+
 void createkeyboard(struct wlr_keyboard *keyboard) {
 
 	struct libinput_device *device = NULL;
+	InputDevice *input_dev = NULL;
 
 	if (wlr_input_device_is_libinput(&keyboard->base) &&
 		(device = wlr_libinput_get_device_handle(&keyboard->base))) {
 
-		InputDevice *input_dev = calloc(1, sizeof(InputDevice));
+		input_dev = calloc(1, sizeof(InputDevice));
 		input_dev->wlr_device = &keyboard->base;
 		input_dev->libinput_device = device;
 		input_dev->device_data = keyboard;
+		input_dev->key_watch.notify = ipc_key_watch_notify;
+		wl_signal_add(&keyboard->events.key, &input_dev->key_watch);
 
 		input_dev->destroy_listener.notify = destroyinputdevice;
 		wl_signal_add(&keyboard->base.events.destroy,
@@ -3320,13 +3343,207 @@ void createkeyboard(struct wlr_keyboard *keyboard) {
 		wl_list_insert(&inputdevices, &input_dev->link);
 	}
 
+	ConfigDeviceRule *rule = find_device_rule(&keyboard->base);
+	if (rule && device_rule_has_keyboard_settings(rule) && input_dev) {
+		/* 命中带键盘参数的 devicerule：独立创建，使用独立 keymap */
+		input_dev->standalone = true;
+		create_standalone_keyboard(input_dev, keyboard, rule);
+		return;
+	}
+
 	/* Set the keymap to match the group keymap */
-	wlr_keyboard_set_keymap(keyboard, kb_group->wlr_group->keyboard.keymap);
+	wlr_keyboard_set_keymap(keyboard, kb_group->keyboard->keymap);
 
 	wlr_keyboard_notify_modifiers(keyboard, 0, 0, locked_mods, 0);
 
 	/* Add the new keyboard to the group */
 	wlr_keyboard_group_add_keyboard(kb_group->wlr_group, keyboard);
+}
+
+/* 设备匹配：优先精确匹配 name / vendor:product:name 标识符，其次匹配类型 */
+static ConfigDeviceRule *find_device_rule(struct wlr_input_device *device) {
+	if (!device || !config.device_rules || config.device_rules_count <= 0)
+		return NULL;
+
+	int32_t vendor = 0, product = 0;
+	if (wlr_input_device_is_libinput(device)) {
+		struct libinput_device *libinput_dev =
+			wlr_libinput_get_device_handle(device);
+		if (libinput_dev) {
+			vendor = libinput_device_get_id_vendor(libinput_dev);
+			product = libinput_device_get_id_product(libinput_dev);
+		}
+	}
+	char identifier[512];
+	snprintf(identifier, sizeof(identifier), "%d:%d:%s", vendor, product,
+			 device->name ? device->name : "");
+
+	const char *type = NULL;
+	ConfigDeviceRule *rule;
+	int32_t i;
+
+	for (i = 0; i < config.device_rules_count; i++) {
+		rule = &config.device_rules[i];
+		if (!rule->name)
+			continue;
+		if (strcmp(rule->name, device->name) == 0 ||
+			strcmp(rule->name, identifier) == 0)
+			return rule;
+	}
+
+	switch (device->type) {
+	case WLR_INPUT_DEVICE_KEYBOARD:
+		type = "keyboard";
+		break;
+	case WLR_INPUT_DEVICE_POINTER:
+		if (wlr_input_device_is_libinput(device)) {
+			struct libinput_device *libinput_dev =
+				wlr_libinput_get_device_handle(device);
+			if (libinput_dev &&
+				libinput_device_config_tap_get_finger_count(libinput_dev) > 0)
+				type = "touchpad";
+			else
+				type = "pointer";
+		} else {
+			type = "pointer";
+		}
+		break;
+	case WLR_INPUT_DEVICE_TOUCH:
+		type = "touch";
+		break;
+	case WLR_INPUT_DEVICE_SWITCH:
+		type = "switch";
+		break;
+	case WLR_INPUT_DEVICE_TABLET:
+		type = "tablet";
+		break;
+	case WLR_INPUT_DEVICE_TABLET_PAD:
+		type = "pad";
+		break;
+	default:
+		return NULL;
+	}
+
+	for (i = 0; i < config.device_rules_count; i++) {
+		rule = &config.device_rules[i];
+		if (rule->type[0] && strcmp(rule->type, type) == 0)
+			return rule;
+	}
+
+	return NULL;
+}
+
+static bool device_rule_has_keyboard_settings(ConfigDeviceRule *rule) {
+	return rule &&
+		   (rule->repeat_rate != -1 || rule->repeat_delay != -1 ||
+			rule->kb_rules[0] || rule->kb_model[0] || rule->kb_layout[0] ||
+			rule->kb_variant[0] || rule->kb_options[0]);
+}
+
+/* 应用独立键盘的 keymap 与重复率，未设置项回退全局默认 */
+static void standalone_keyboard_apply_config(KeyboardGroup *group,
+											 ConfigDeviceRule *rule) {
+	if (!group || !group->keyboard)
+		return;
+
+	wlr_keyboard_set_repeat_info(
+		group->keyboard,
+		rule && rule->repeat_rate != -1 ? rule->repeat_rate
+										: config.repeat_rate,
+		rule && rule->repeat_delay != -1 ? rule->repeat_delay
+										 : config.repeat_delay);
+
+	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_keymap *keymap = NULL;
+	if (context) {
+		struct xkb_rule_names names = config.xkb_rules;
+		bool has_override = false;
+		if (rule) {
+			if (rule->kb_rules[0]) {
+				names.rules = rule->kb_rules;
+				has_override = true;
+			}
+			if (rule->kb_model[0]) {
+				names.model = rule->kb_model;
+				has_override = true;
+			}
+			if (rule->kb_layout[0]) {
+				names.layout = rule->kb_layout;
+				has_override = true;
+			}
+			if (rule->kb_variant[0]) {
+				names.variant = rule->kb_variant;
+				has_override = true;
+			}
+			if (rule->kb_options[0]) {
+				names.options = rule->kb_options;
+				has_override = true;
+			}
+		}
+		keymap = xkb_keymap_new_from_names(context, &names,
+										   XKB_KEYMAP_COMPILE_NO_FLAGS);
+		if (!keymap && has_override) {
+			/* 规则 keymap 编译失败：回退全局默认 */
+			mango_error(false, WLR_ERROR,
+						"Failed to compile devicerule keymap for %s, "
+						"falling back to the global layout",
+						group->keyboard->base.name ? group->keyboard->base.name
+												   : "unknown device");
+			keymap = xkb_keymap_new_from_names(context, &config.xkb_rules,
+											   XKB_KEYMAP_COMPILE_NO_FLAGS);
+		}
+		xkb_context_unref(context);
+	}
+	/* 全局布局也编译失败时，回退到默认键盘组的 keymap */
+	bool borrowed = false;
+	if (!keymap && kb_group && kb_group->keyboard &&
+		kb_group->keyboard->keymap) {
+		keymap = kb_group->keyboard->keymap;
+		borrowed = true;
+	}
+	if (!keymap)
+		return;
+
+	wlr_keyboard_set_keymap(group->keyboard, keymap);
+	if (!borrowed)
+		xkb_keymap_unref(keymap);
+	wlr_keyboard_notify_modifiers(group->keyboard, 0, 0, locked_mods, 0);
+}
+
+static void create_standalone_keyboard(InputDevice *input_dev,
+									   struct wlr_keyboard *keyboard,
+									   ConfigDeviceRule *rule) {
+	KeyboardGroup *group = ecalloc(1, sizeof(*group));
+	group->wlr_group = NULL;
+	group->keyboard = keyboard;
+	group->virtual_keyboard = NULL;
+	wl_list_init(&group->link);
+
+	standalone_keyboard_apply_config(group, rule);
+
+	LISTEN(&keyboard->events.key, &group->key, keypress);
+	LISTEN(&keyboard->events.modifiers, &group->modifiers, keypressmod);
+	LISTEN(&keyboard->base.events.destroy, &group->destroy,
+		   destroy_standalone_keyboard);
+
+	group->key_repeat_source =
+		wl_event_loop_add_timer(event_loop, keyrepeat, group);
+	wl_list_insert(&standalone_keyboards, &group->link);
+
+	input_dev->device_data = group;
+}
+
+void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
+	KeyboardGroup *group = wl_container_of(listener, group, destroy);
+	wl_list_remove(&group->key.link);
+	wl_list_remove(&group->modifiers.link);
+	wl_list_remove(&group->destroy.link);
+	if (group->key_repeat_source) {
+		wl_event_source_remove(group->key_repeat_source);
+		group->key_repeat_source = NULL;
+	}
+	wl_list_remove(&group->link);
+	free(group);
 }
 
 KeyboardGroup *createkeyboardgroup(void) {
@@ -3336,13 +3553,28 @@ KeyboardGroup *createkeyboardgroup(void) {
 
 	group->wlr_group = wlr_keyboard_group_create();
 	group->wlr_group->data = group;
+	group->keyboard = &group->wlr_group->keyboard;
+	wl_list_init(&group->link);
 
 	context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-	if (!(keymap = xkb_keymap_new_from_names(context, &config.xkb_rules,
-											 XKB_KEYMAP_COMPILE_NO_FLAGS)))
-		die("failed to compile keymap");
+	if (!context)
+		die("failed to create xkb context");
+	keymap = xkb_keymap_new_from_names(context, &config.xkb_rules,
+									   XKB_KEYMAP_COMPILE_NO_FLAGS);
+	if (!keymap) {
+		mango_error(false, WLR_ERROR,
+					"Failed to compile keymap (layout=\"%s\" variant=\"%s\" "
+					"options=\"%s\"), falling back to the default layout",
+					config.xkb_rules.layout ? config.xkb_rules.layout : "",
+					config.xkb_rules.variant ? config.xkb_rules.variant : "",
+					config.xkb_rules.options ? config.xkb_rules.options : "");
+		keymap = xkb_keymap_new_from_names(context, &xkb_fallback_rules,
+										   XKB_KEYMAP_COMPILE_NO_FLAGS);
+		if (!keymap)
+			die("failed to compile keymap");
+	}
 
-	wlr_keyboard_set_keymap(&group->wlr_group->keyboard, keymap);
+	wlr_keyboard_set_keymap(group->keyboard, keymap);
 
 	if (config.numlockon) {
 		xkb_mod_index_t mod_index =
@@ -3359,19 +3591,17 @@ KeyboardGroup *createkeyboardgroup(void) {
 	}
 
 	if (locked_mods)
-		wlr_keyboard_notify_modifiers(&group->wlr_group->keyboard, 0, 0,
-									  locked_mods, 0);
+		wlr_keyboard_notify_modifiers(group->keyboard, 0, 0, locked_mods, 0);
 
 	xkb_keymap_unref(keymap);
 	xkb_context_unref(context);
 
-	wlr_keyboard_set_repeat_info(&group->wlr_group->keyboard,
-								 config.repeat_rate, config.repeat_delay);
+	wlr_keyboard_set_repeat_info(group->keyboard, config.repeat_rate,
+								 config.repeat_delay);
 
 	/* Set up listeners for keyboard events */
-	LISTEN(&group->wlr_group->keyboard.events.key, &group->key, keypress);
-	LISTEN(&group->wlr_group->keyboard.events.modifiers, &group->modifiers,
-		   keypressmod);
+	LISTEN(&group->keyboard->events.key, &group->key, keypress);
+	LISTEN(&group->keyboard->events.modifiers, &group->modifiers, keypressmod);
 
 	group->key_repeat_source =
 		wl_event_loop_add_timer(event_loop, keyrepeat, group);
@@ -3381,7 +3611,7 @@ KeyboardGroup *createkeyboardgroup(void) {
 	 * same wlr_keyboard_group, which provides a single wlr_keyboard interface
 	 * for all of them. Set this combined wlr_keyboard as the seat keyboard.
 	 */
-	wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
+	wlr_seat_set_keyboard(seat, group->keyboard);
 	return group;
 }
 
@@ -3806,6 +4036,8 @@ void destroyinputdevice(struct wl_listener *listener, void *data) {
 		input_dev->device_data = NULL;
 	}
 
+	if (input_dev->wlr_device->type == WLR_INPUT_DEVICE_KEYBOARD)
+		wl_list_remove(&input_dev->key_watch.link);
 	wl_list_remove(&input_dev->link);
 	wl_list_remove(&input_dev->destroy_listener.link);
 	free(input_dev);
@@ -3827,47 +4059,96 @@ void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
 	}
 }
 
-void configure_pointer(struct libinput_device *device) {
+void configure_pointer(struct wlr_input_device *wlr_device,
+					   struct libinput_device *device) {
+	ConfigDeviceRule *rule = find_device_rule(wlr_device);
+	bool is_touchpad = libinput_device_config_tap_get_finger_count(device) > 0;
+
+	/* devicerule 优先，未设置回退到全局配置
+	 * （触摸板对应 trackpad_*，鼠标对应 mouse_*） */
+	int32_t tap_to_click = rule && rule->tap_to_click != -1
+							   ? rule->tap_to_click
+							   : config.tap_to_click;
+	int32_t tap_and_drag = rule && rule->tap_and_drag != -1
+							   ? rule->tap_and_drag
+							   : config.tap_and_drag;
+	int32_t drag_lock =
+		rule && rule->drag_lock != -1 ? rule->drag_lock : config.drag_lock;
+	uint32_t button_map = rule && rule->button_map != UINT32_MAX
+							  ? rule->button_map
+							  : config.button_map;
+	int32_t natural_scrolling =
+		rule && rule->natural_scrolling != -1
+			? rule->natural_scrolling
+			: (is_touchpad ? config.trackpad_natural_scrolling
+						   : config.mouse_natural_scrolling);
+	uint32_t accel_profile = rule && rule->accel_profile != -1
+								 ? (uint32_t)rule->accel_profile
+								 : (is_touchpad ? config.trackpad_accel_profile
+												: config.mouse_accel_profile);
+	double accel_speed = rule && !isnan(rule->accel_speed)
+							 ? rule->accel_speed
+							 : (is_touchpad ? config.trackpad_accel_speed
+											: config.mouse_accel_speed);
+	int32_t disable_while_typing = rule && rule->disable_while_typing != -1
+									   ? rule->disable_while_typing
+									   : config.trackpad_disable_while_typing;
+	int32_t left_handed = rule && rule->left_handed != -1 ? rule->left_handed
+						  : is_touchpad ? config.trackpad_left_handed
+										: config.mouse_left_handed;
+	int32_t middle_button_emulation =
+		rule && rule->middle_button_emulation != -1
+			? rule->middle_button_emulation
+		: is_touchpad ? config.trackpad_middle_button_emulation
+					  : config.mouse_middle_button_emulation;
+	uint32_t scroll_method = rule && rule->scroll_method != UINT32_MAX
+								 ? rule->scroll_method
+							 : is_touchpad ? config.trackpad_scroll_method
+										   : config.mouse_scroll_method;
+	uint32_t scroll_button = rule && rule->scroll_button != UINT32_MAX
+								 ? rule->scroll_button
+							 : is_touchpad ? config.trackpad_scroll_button
+										   : config.mouse_scroll_button;
+	uint32_t click_method = rule && rule->click_method != UINT32_MAX
+								? rule->click_method
+							: is_touchpad ? config.trackpad_click_method
+										  : config.mouse_click_method;
+	uint32_t send_events_mode = rule && rule->send_events_mode != UINT32_MAX
+									? rule->send_events_mode
+								: is_touchpad ? config.trackpad_send_events_mode
+											  : config.mouse_send_events_mode;
+
 	if (libinput_device_config_tap_get_finger_count(device)) {
-		libinput_device_config_tap_set_enabled(device, config.tap_to_click);
-		libinput_device_config_tap_set_drag_enabled(device,
-													config.tap_and_drag);
-		libinput_device_config_tap_set_drag_lock_enabled(device,
-														 config.drag_lock);
-		libinput_device_config_tap_set_button_map(device, config.button_map);
-		pointer_set_accel(device, config.trackpad_natural_scrolling,
-						  config.trackpad_accel_profile,
-						  config.trackpad_accel_speed);
-	} else {
-		pointer_set_accel(device, config.mouse_natural_scrolling,
-						  config.mouse_accel_profile, config.mouse_accel_speed);
+		libinput_device_config_tap_set_enabled(device, tap_to_click);
+		libinput_device_config_tap_set_drag_enabled(device, tap_and_drag);
+		libinput_device_config_tap_set_drag_lock_enabled(device, drag_lock);
+		libinput_device_config_tap_set_button_map(device, button_map);
 	}
+	pointer_set_accel(device, natural_scrolling, accel_profile, accel_speed);
 
 	if (libinput_device_config_dwt_is_available(device))
-		libinput_device_config_dwt_set_enabled(device,
-											   config.disable_while_typing);
+		libinput_device_config_dwt_set_enabled(device, disable_while_typing);
 
 	if (libinput_device_config_left_handed_is_available(device))
-		libinput_device_config_left_handed_set(device, config.left_handed);
+		libinput_device_config_left_handed_set(device, left_handed);
 
 	if (libinput_device_config_middle_emulation_is_available(device))
 		libinput_device_config_middle_emulation_set_enabled(
-			device, config.middle_button_emulation);
+			device, middle_button_emulation);
 
 	if (libinput_device_config_scroll_get_methods(device) !=
 		LIBINPUT_CONFIG_SCROLL_NO_SCROLL)
-		libinput_device_config_scroll_set_method(device, config.scroll_method);
+		libinput_device_config_scroll_set_method(device, scroll_method);
 	if (libinput_device_config_scroll_get_methods(device) ==
 		LIBINPUT_CONFIG_SCROLL_ON_BUTTON_DOWN)
-		libinput_device_config_scroll_set_button(device, config.scroll_button);
+		libinput_device_config_scroll_set_button(device, scroll_button);
 
 	if (libinput_device_config_click_get_methods(device) !=
 		LIBINPUT_CONFIG_CLICK_METHOD_NONE)
-		libinput_device_config_click_set_method(device, config.click_method);
+		libinput_device_config_click_set_method(device, click_method);
 
 	if (libinput_device_config_send_events_get_modes(device))
-		libinput_device_config_send_events_set_mode(device,
-													config.send_events_mode);
+		libinput_device_config_send_events_set_mode(device, send_events_mode);
 }
 
 void createpointer(struct wlr_pointer *pointer) {
@@ -3877,7 +4158,7 @@ void createpointer(struct wlr_pointer *pointer) {
 	if (wlr_input_device_is_libinput(&pointer->base) &&
 		(device = wlr_libinput_get_device_handle(&pointer->base))) {
 
-		configure_pointer(device);
+		configure_pointer(&pointer->base, device);
 
 		InputDevice *input_dev = calloc(1, sizeof(InputDevice));
 		input_dev->wlr_device = &pointer->base;
@@ -3900,6 +4181,8 @@ void switch_toggle(struct wl_listener *listener, void *data) {
 	struct wlr_switch_toggle_event *event = data;
 	SwitchBinding *s;
 	int32_t ji;
+
+	ipc_notify_device_event(&sw->wlr_switch->base);
 
 	for (ji = 0; ji < config.switch_bindings_count; ji++) {
 		if (config.switch_bindings_count < 1)
@@ -4111,6 +4394,13 @@ destroynotify(struct wl_listener *listener, void *data) {
 		wl_list_remove(&c->commit.link);
 		wl_list_remove(&c->map.link);
 		wl_list_remove(&c->unmap.link);
+	}
+	/* decoration 监听器挂在 deco->events 上，toplevel 销毁时（wlroots 会
+	 * 同步销毁 decoration 资源并发 destroy 信号）client 可能先被释放，
+	 * 不摘掉会导致 decoration destroy 信号遍历到已释放的监听器而崩溃 */
+	if (c->decoration) {
+		wl_list_remove(&c->destroy_decoration.link);
+		wl_list_remove(&c->set_decoration_mode.link);
 	}
 	free(c);
 }
@@ -4384,7 +4674,8 @@ void inputdevice(struct wl_listener *listener, void *data) {
 	 */
 	/* TODO do we actually require a cursor? */
 	caps = WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_TOUCH;
-	if (!wl_list_empty(&kb_group->wlr_group->devices))
+	if (!wl_list_empty(&kb_group->wlr_group->devices) ||
+		!wl_list_empty(&standalone_keyboards))
 		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
 	wlr_seat_set_capabilities(seat, caps);
 }
@@ -4392,12 +4683,11 @@ void inputdevice(struct wl_listener *listener, void *data) {
 int32_t keyrepeat(void *data) {
 	KeyboardGroup *group = data;
 	int32_t i;
-	if (!group->nsyms || group->wlr_group->keyboard.repeat_info.rate <= 0)
+	if (!group->nsyms || group->keyboard->repeat_info.rate <= 0)
 		return 0;
 
-	wl_event_source_timer_update(
-		group->key_repeat_source,
-		1000 / group->wlr_group->keyboard.repeat_info.rate);
+	wl_event_source_timer_update(group->key_repeat_source,
+								 1000 / group->keyboard->repeat_info.rate);
 
 	for (i = 0; i < group->nsyms; i++)
 		keybinding(WL_KEYBOARD_KEY_STATE_PRESSED, false, group->mods,
@@ -4473,7 +4763,8 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			k->func(&k->arg);
 
 			// only match the first keybind
-			break;
+			if (!k->isallowconflict)
+				break;
 		}
 	}
 	return handled;
@@ -4559,15 +4850,18 @@ void keypress(struct wl_listener *listener, void *data) {
 					 : NULL;
 #endif
 
+	if (!group->keyboard->xkb_state)
+		return;
+
 	/* Translate libinput keycode -> xkbcommon */
 	uint32_t keycode = event->keycode + 8;
 	/* Get a list of keysyms based on the keymap for this keyboard */
 	const xkb_keysym_t *syms;
-	int32_t nsyms = xkb_state_key_get_syms(group->wlr_group->keyboard.xkb_state,
-										   keycode, &syms);
+	int32_t nsyms =
+		xkb_state_key_get_syms(group->keyboard->xkb_state, keycode, &syms);
 
 	int32_t handled = 0;
-	uint32_t mods = wlr_keyboard_get_modifiers(&group->wlr_group->keyboard);
+	uint32_t mods = wlr_keyboard_get_modifiers(group->keyboard);
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
@@ -4594,15 +4888,14 @@ void keypress(struct wl_listener *listener, void *data) {
 		tag_combo = false;
 	}
 
-	if (handled && group->wlr_group->keyboard.repeat_info.delay > 0 &&
+	if (handled && group->keyboard->repeat_info.delay > 0 &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
 		group->keysyms = syms;
 		group->keycode = keycode;
 		group->nsyms = nsyms;
-		wl_event_source_timer_update(
-			group->key_repeat_source,
-			group->wlr_group->keyboard.repeat_info.delay);
+		wl_event_source_timer_update(group->key_repeat_source,
+									 group->keyboard->repeat_info.delay);
 	} else {
 		group->nsyms = 0;
 		wl_event_source_timer_update(group->key_repeat_source, 0);
@@ -4649,14 +4942,14 @@ void keypress(struct wl_listener *listener, void *data) {
 		;
 	/* passed keys don't get repeated */
 	if (pass && syms)
-		hit_global = keypressglobal(last_surface, &group->wlr_group->keyboard,
-									event, mods, syms[0], keycode);
+		hit_global = keypressglobal(last_surface, group->keyboard, event, mods,
+									syms[0], keycode);
 
 	if (hit_global) {
 		return;
 	}
 	if (!mango_im_keyboard_grab_forward_key(group, event)) {
-		wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
+		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Pass unhandled keycodes along to the client. */
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
 									 event->state);
@@ -4668,16 +4961,18 @@ void keypressmod(struct wl_listener *listener, void *data) {
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
 
+	if (!group->keyboard->xkb_state)
+		return;
+
 	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 
-		wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
+		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Send modifiers to the client. */
-		wlr_seat_keyboard_notify_modifiers(
-			seat, &group->wlr_group->keyboard.modifiers);
+		wlr_seat_keyboard_notify_modifiers(seat, &group->keyboard->modifiers);
 	}
 
 	xkb_layout_index_t current = xkb_state_serialize_layout(
-		group->wlr_group->keyboard.xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+		group->keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
 
 	if (current != group->layout_index) {
 		group->layout_index = current;
@@ -4891,8 +5186,7 @@ mapnotify(struct wl_listener *listener, void *data) {
 			}
 		}
 		/* scene 处理后强制根 surface 显示逻辑尺寸 */
-		LISTEN(&client_surface(c)->events.commit, &c->scene_commit,
-			   xwayland_scene_commit);
+		LISTEN(&client_surface(c)->events.commit, &c->commmitx11, commitx11);
 	}
 #endif
 
@@ -5144,6 +5438,8 @@ void motionabsolute(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_motion_absolute_event *event = data;
 	double lx, ly, dx, dy;
 
+	ipc_notify_device_event(&event->pointer->base);
+
 	if (check_trackpad_disabled(event->pointer)) {
 		return;
 	}
@@ -5335,6 +5631,7 @@ void motionrelative(struct wl_listener *listener, void *data) {
 	/* This event is forwarded by the cursor when a pointer emits a
 	 * _relative_ pointer motion event (i.e. a delta) */
 	struct wlr_pointer_motion_event *event = data;
+	ipc_notify_device_event(&event->pointer->base);
 	/* The cursor doesn't move unless we tell it to. The cursor
 	 * automatically handles constraining the motion to the output layout,
 	 * as well as any special configuration applied for the specific input
@@ -5820,7 +6117,7 @@ cleanup:
 }
 
 void // 17
-run(char *startup_cmd) {
+run(char *startup_cmd, int readiness_fd) {
 
 	/* Add a Unix socket to the Wayland display. */
 	const char *socket = wl_display_add_socket_auto(dpy);
@@ -5880,6 +6177,15 @@ run(char *startup_cmd) {
 
 	run_exec();
 	run_exec_once();
+
+	/*
+	 * If running inside supervision suite like s6, notify about successfull
+	 * startup by writing \n to the provided file descriptor and closing it
+	 */
+	if (readiness_fd > 2) {
+		write(readiness_fd, "\n", 1);
+		close(readiness_fd);
+	}
 
 	/* Run the Wayland event loop. This does not return until you exit the
 	 * compositor. Starting the backend rigged up all of the necessary event
@@ -6188,7 +6494,7 @@ void reset_keyboard_layout(void) {
 		return;
 	}
 
-	struct wlr_keyboard *keyboard = &kb_group->wlr_group->keyboard;
+	struct wlr_keyboard *keyboard = kb_group->keyboard;
 	if (!keyboard || !keyboard->keymap) {
 		mango_error(true, WLR_ERROR, "Invalid keyboard or keymap");
 		return;
@@ -6213,9 +6519,9 @@ void reset_keyboard_layout(void) {
 	struct xkb_keymap *new_keymap = xkb_keymap_new_from_names(
 		context, &config.xkb_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
 	if (!new_keymap) {
-		// 理论上这里不应该失败，因为前面已经验证过了
 		mango_error(true, WLR_ERROR,
-					"Unexpected failure to create keymap after validation");
+					"Failed to compile keymap (invalid layout?), keeping the "
+					"current keymap");
 		goto cleanup_context;
 	}
 
@@ -6252,7 +6558,9 @@ void reset_keyboard_layout(void) {
 
 	InputDevice *id;
 	wl_list_for_each(id, &inputdevices, link) {
-		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD) {
+		if (id->wlr_device->type != WLR_INPUT_DEVICE_KEYBOARD ||
+			id->standalone) {
+			/* 独立键盘保留自己的 keymap */
 			continue;
 		}
 
@@ -6340,6 +6648,7 @@ void show_hide_client(Client *c) {
 		tag_client(&(Arg){.ui = target}, c);
 	} else {
 		c->tags = c->oldtags;
+		c->isminimized = 0;
 		if (c->mon)
 			arrange(c->mon, false, false);
 	}
@@ -6730,6 +7039,7 @@ void setup(void) {
 	 * to let us know when new input devices are available on the backend.
 	 */
 	wl_list_init(&inputdevices);
+	wl_list_init(&standalone_keyboards);
 	wl_list_init(&tablets);
 	wl_list_init(&tablet_pads);
 	wl_list_init(&keyboard_shortcut_inhibitors);
@@ -7058,6 +7368,16 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 			toggleoverview(&arg);
 		}
 	}
+
+#ifdef XWAYLAND
+	if (client_is_x11(c)) {
+		if (c->commmitx11.link.prev && c->commmitx11.link.next &&
+			c->commmitx11.link.prev != &c->commmitx11.link) {
+			wl_list_remove(&c->commmitx11.link);
+			wl_list_init(&c->commmitx11.link);
+		}
+	}
+#endif
 
 	if (client_is_unmanaged(c)) {
 #ifdef XWAYLAND
@@ -7465,7 +7785,7 @@ void virtualkeyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = createkeyboardgroup();
 	group->virtual_keyboard = &kb->keyboard;
 	/* Set the keymap to match the group keymap */
-	wlr_keyboard_set_keymap(&kb->keyboard, group->wlr_group->keyboard.keymap);
+	wlr_keyboard_set_keymap(&kb->keyboard, group->keyboard->keymap);
 	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
 		   destroykeyboardgroup);
 
@@ -7554,12 +7874,6 @@ static void xwayland_x11_to_logical(struct wlr_box *box, float scale) {
 	box->y = (int32_t)roundf(box->y / scale);
 	box->width = (int32_t)roundf(box->width / scale);
 	box->height = (int32_t)roundf(box->height / scale);
-}
-
-/* scene 处理后强制根 surface 铺满窗口矩形 */
-static void xwayland_scene_commit(struct wl_listener *listener, void *data) {
-	Client *c = wl_container_of(listener, c, scene_commit);
-	client_update_xwayland_dest_size(c);
 }
 
 void fix_xwayland_coordinate(struct wlr_box *geom) {
@@ -7679,7 +7993,6 @@ void createnotifyx11(struct wl_listener *listener, void *data) {
 	c = xsurface->data = ecalloc(1, sizeof(*c));
 	c->surface.xwayland = xsurface;
 	c->type = X11;
-	wl_list_init(&c->scene_commit.link);
 	/* Listen to the various events it can emit */
 	LISTEN(&xsurface->events.associate, &c->associate, associatex11);
 	LISTEN(&xsurface->events.destroy, &c->destroy, destroynotify);
@@ -7714,6 +8027,9 @@ void commitx11(struct wl_listener *listener, void *data) {
 		(int32_t)c->surface.xwayland->y == xy) {
 		c->configure_serial = 0;
 	}
+
+	/* scene 处理后强制根 surface 显示逻辑尺寸 */
+	client_update_xwayland_dest_size(c);
 }
 
 void associatex11(struct wl_listener *listener, void *data) {
@@ -7721,15 +8037,12 @@ void associatex11(struct wl_listener *listener, void *data) {
 
 	LISTEN(&client_surface(c)->events.map, &c->map, mapnotify);
 	LISTEN(&client_surface(c)->events.unmap, &c->unmap, unmapnotify);
-	LISTEN(&client_surface(c)->events.commit, &c->commmitx11, commitx11);
 }
 
 void dissociatex11(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, dissociate);
 	wl_list_remove(&c->map.link);
 	wl_list_remove(&c->unmap.link);
-	wl_list_remove(&c->commmitx11.link);
-	wl_list_remove(&c->scene_commit.link);
 	c->xwl_root_buffer = NULL;
 	c->xwl_clip_active = false;
 }
@@ -7789,8 +8102,9 @@ static void setgeometrynotify(struct wl_listener *listener, void *data) {
 int32_t main(int32_t argc, char *argv[]) {
 	char *startup_cmd = NULL;
 	int32_t c;
+	int readiness_fd = 0;
 
-	while ((c = getopt(argc, argv, "s:c:hdvp")) != -1) {
+	while ((c = getopt(argc, argv, "s:c:r:hdvp")) != -1) {
 		if (c == 's') {
 			startup_cmd = optarg;
 		} else if (c == 'd') {
@@ -7802,6 +8116,11 @@ int32_t main(int32_t argc, char *argv[]) {
 			snprintf(cli_config_path, sizeof(cli_config_path), "%s", optarg);
 		} else if (c == 'p') {
 			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
+		} else if (c == 'r') {
+			readiness_fd = atoi(optarg);
+			if (readiness_fd < 3) {
+				goto usage;
+			}
 		} else {
 			goto usage;
 		}
@@ -7815,7 +8134,7 @@ int32_t main(int32_t argc, char *argv[]) {
 	if (!getenv("XDG_RUNTIME_DIR"))
 		die("XDG_RUNTIME_DIR must be set");
 	setup();
-	run(startup_cmd);
+	run(startup_cmd, readiness_fd);
 	cleanup();
 	return EXIT_SUCCESS;
 usage:
@@ -7826,6 +8145,8 @@ usage:
 		   "  -d             Enable debug log\n"
 		   "  -c <file>      Use custom configuration file\n"
 		   "  -s <command>   Execute startup command\n"
+		   "  -r <fdnum>     When WM is ready, write '\\n' to the given file "
+		   "descriptor and close it. fdnum >= 3\n"
 		   "  -p             Check configuration file error\n");
 	return EXIT_SUCCESS;
 }

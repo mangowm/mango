@@ -34,6 +34,7 @@ description: Control mangowm programmatically using mmsg.
 | `get tags <mon>` | Returns a JSON object containing the status of all tags on a monitor. |
 | `get all-clients` | Returns a JSON array of all active clients. |
 | `get all-monitors` | Returns a JSON array of all connected monitors. |
+| `get all-devices` | Returns a JSON array of all physical input devices, grouped by libinput device group (`name`, `types`, `identifier`, `vendor`, `product`, `interfaces`, `matched`). |
 | `get all-tags` | Returns a JSON object containing the status of all tags. |
 | `get last_open_surface [<mon>]` | Returns the last focused surface name for a monitor,if the mon not set, it will get current monitor. |
 
@@ -42,6 +43,7 @@ description: Control mangowm programmatically using mmsg.
 mmsg get monitor eDP-1
 mmsg get all-clients
 mmsg get all-monitors
+mmsg get all-devices
 mmsg get cursorpos
 ```
 
@@ -55,6 +57,7 @@ Subscribes the client to real-time updates. When the state changes, the server p
 * `watch all-monitors`
 * `watch all-tags`
 * `watch all-clients`
+* `watch all-devices` — streams the last input device (`name`, `type`) that triggered an event
 * `watch keymode`
 * `watch keyboardlayout`
 * `watch last_open_surface [<mon_name>]`

@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "log.h"
+#include "util.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +25,8 @@ void mango_error_impl(bool log, enum wlr_log_importance verbosity,
 			vfprintf(stderr, fmt, args);
 		}
 	} else {
-		char *prefixed = NULL;
-		if (asprintf(&prefixed, "[%s:%d] %s", file, line, fmt) >= 0) {
+		char *prefixed = string_printf("[%s:%d] %s", file, line, fmt);
+		if (prefixed) {
 			_wlr_vlog(verbosity, prefixed, args);
 			free(prefixed);
 		} else {
