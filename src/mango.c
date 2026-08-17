@@ -4,6 +4,8 @@
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 #include "wlr/util/box.h"
 #include "wlr/util/edges.h"
+#include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <libinput.h>
 #include <limits.h>
@@ -18,6 +20,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -636,6 +639,9 @@ struct Monitor {
 	float hdr_max_avg_lum;
 	// Bypass the EDID-derived capability checks (DisplayID-only panels).
 	bool hdr_force;
+	struct wlr_color_transform
+		*icc_transform; /* 从 icc 加载的 ICC 变换 */
+	char icc_path[PATH_MAX];
 };
 
 typedef struct {
@@ -2886,6 +2892,8 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);
 
+	wlr_color_transform_unref(m->icc_transform);
+	m->icc_transform = NULL;
 	free(m->pertag);
 	free(m);
 }
@@ -3770,6 +3778,72 @@ bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
 	return true;
 }
 
+static struct wlr_color_transform *
+monitor_load_icc_transform(const char *path) {
+	int fd = open(path, O_RDONLY | O_NOCTTY | O_CLOEXEC);
+	if (fd == -1) {
+		mango_error(true, WLR_ERROR, "Failed to open ICC profile %s", path);
+		return NULL;
+	}
+
+	struct stat info;
+	if (fstat(fd, &info) == -1 || !S_ISREG(info.st_mode) || info.st_size <= 0) {
+		close(fd);
+		mango_error(true, WLR_ERROR, "Invalid ICC profile file %s", path);
+		return NULL;
+	}
+
+	size_t size = (size_t)info.st_size;
+	void *data = malloc(size);
+	if (!data) {
+		close(fd);
+		return NULL;
+	}
+
+	size_t nread = 0;
+	while (nread < size) {
+		ssize_t r = read(fd, (char *)data + nread, size - nread);
+		if ((r == -1 && errno != EINTR) || r == 0) {
+			free(data);
+			close(fd);
+			mango_error(true, WLR_ERROR, "Failed to read ICC profile %s", path);
+			return NULL;
+		}
+		if (r > 0)
+			nread += (size_t)r;
+	}
+	close(fd);
+
+	struct wlr_color_transform *tr =
+		wlr_color_transform_init_linear_to_icc(data, size);
+	free(data);
+	if (!tr)
+		mango_error(true, WLR_ERROR, "Failed to parse ICC profile %s", path);
+	return tr;
+}
+
+/* 加载/更新输出的 ICC 变换 */
+static void monitor_set_icc(Monitor *m, const char *path) {
+	if (!path || !path[0]) {
+		wlr_color_transform_unref(m->icc_transform);
+		m->icc_transform = NULL;
+		m->icc_path[0] = '\0';
+		return;
+	}
+	if (m->icc_path[0] && strcmp(m->icc_path, path) == 0)
+		return;
+
+	wlr_color_transform_unref(m->icc_transform);
+	m->icc_transform = NULL;
+	m->icc_path[0] = '\0';
+
+	struct wlr_color_transform *tr = monitor_load_icc_transform(path);
+	if (!tr)
+		return;
+	m->icc_transform = tr;
+	snprintf(m->icc_path, sizeof(m->icc_path), "%s", path);
+}
+
 /* 将规则中的显示参数应用到 wlr_output_state 中，返回是否设置了自定义模式 */
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state) {
@@ -3781,6 +3855,12 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	m->hdr_max_lum = rule->hdr_max_lum;
 	m->hdr_max_avg_lum = rule->hdr_max_avg_lum;
 	m->hdr_force = rule->hdr_force >= 0 ? rule->hdr_force : 0;
+	monitor_set_icc(m, rule->icc);
+
+	if (m->hdr_enable && m->icc_transform)
+		mango_error(true, WLR_ERROR,
+					"ICC profile ignored on output %s: HDR is enabled",
+					m->wlr_output->name);
 
 	if (rule->width > 0 && rule->height > 0 && rule->refresh > 0) {
 		struct wlr_output_mode *internal_mode = get_nearest_output_mode(
@@ -3954,10 +4034,15 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->scene_output = wlr_scene_output_create(scene, wlr_output);
 
 	// 通过 scene 构建最终提交状态（初始化 swapchain）
+	bool has_img_desc =
+		(state.committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) ||
+		wlr_output->image_description != NULL;
 	struct wlr_scene_output_state_options opts = {
 		.swapchain = NULL, // 让 scene 自动创建
 		.color_transform = NULL,
 	};
+	if (m->icc_transform && !has_img_desc)
+		opts.color_transform = m->icc_transform;
 
 	wlr_scene_output_build_state(m->scene_output, &state, &opts);
 

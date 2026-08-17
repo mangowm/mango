@@ -131,6 +131,7 @@ typedef struct {
 	float hdr_max_lum;			 // mastering max luminance / max_cll, cd/m²
 	float hdr_max_avg_lum;		 // max frame-average light level, cd/m²
 	int32_t hdr_force;			 // ignore EDID-derived HDR capability checks
+	char *icc;					 // ICC profile path
 	int32_t disable;			 // prefer disable
 } ConfigMonitorRule;
 
@@ -2378,6 +2379,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->hdr_max_lum = 0.0f;
 		rule->hdr_max_avg_lum = 0.0f;
 		rule->hdr_force = 0;
+		rule->icc = NULL;
 		rule->custom = 0;
 		rule->disable = 0;
 
@@ -2430,6 +2432,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						CLAMP_FLOAT(atof(val), 0.0f, 10000.0f);
 				} else if (strcmp(key, "hdr_force") == 0) {
 					rule->hdr_force = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "icc") == 0) {
+					free(rule->icc);
+					rule->icc = strdup(val);
 				} else if (strcmp(key, "disable") == 0) {
 					rule->disable = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "custom") == 0) {
@@ -4029,6 +4034,8 @@ void free_config(void) {
 				free((void *)config.monitor_rules[i].model);
 			if (config.monitor_rules[i].serial)
 				free((void *)config.monitor_rules[i].serial);
+			if (config.monitor_rules[i].icc)
+				free((void *)config.monitor_rules[i].icc);
 		}
 		free(config.monitor_rules);
 		config.monitor_rules = NULL;
