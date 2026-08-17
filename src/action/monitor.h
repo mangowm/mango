@@ -17,7 +17,13 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 		return true;
 
 	// build the state, attaching the scene's Buffer to it
-	if (!wlr_scene_output_build_state(scene_output, state, NULL))
+	bool has_img_desc =
+		(state->committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) ||
+		scene_output->output->image_description != NULL;
+	struct wlr_scene_output_state_options opts = {0};
+	if (m->icc_transform && !has_img_desc)
+		opts.color_transform = m->icc_transform;
+	if (!wlr_scene_output_build_state(scene_output, state, &opts))
 		return false;
 
 	if (frame_allow_tearing) {
