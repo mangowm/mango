@@ -213,7 +213,14 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 
 	struct wlr_surface *surface = scene_surface->surface;
 
-	if (buffer_data->should_scale) {
+	/* X11 的 dest_size 由 client_update_xwayland_clip/dest_size 按逻辑
+	 * 尺寸管理，这里用 surface->current.width（物理尺寸）会把它重置回
+	 * 物理大小，scale<1 时窗口只剩左上角四分之一 */
+	if (buffer_data->should_scale
+#ifdef XWAYLAND
+		&& !wlr_xwayland_surface_try_from_wlr_surface(surface)
+#endif
+	) {
 		int32_t surface_width = surface->current.width;
 		int32_t surface_height = surface->current.height;
 

@@ -323,6 +323,17 @@ static inline void client_update_xwayland_clip(Client *c,
 		.width = (float)clip->width * scale,
 		.height = (float)clip->height * scale,
 	};
+	/* zoom 类动画（宽高等比小于内容尺寸）时整块内容跟随动画缩放，
+	 * 不能用 clip×scale 采样，否则 scale<1 时只显示 buffer 左上角 */
+	bool zoom_like = clip->x == 0 && clip->y == 0 &&
+					 clip->width < c->geom.width - 2 * (int32_t)c->bw &&
+					 clip->height < c->geom.height - 2 * (int32_t)c->bw;
+	if (zoom_like) {
+		src.x = 0;
+		src.y = 0;
+		src.width = buf->width;
+		src.height = buf->height;
+	}
 	/* clamp 到物理 buffer 范围，防止越界采样 */
 	if (src.x < 0.f)
 		src.x = 0.f;
