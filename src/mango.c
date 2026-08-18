@@ -1923,6 +1923,7 @@ void applyrules(Client *c) {
 	Monitor *m = NULL;
 	Client *fc = NULL;
 	Client *parent = NULL;
+	int32_t ismaximized = -1;
 
 	if (!c)
 		return;
@@ -1950,6 +1951,8 @@ void applyrules(Client *c) {
 
 		// set general properties
 		apply_rule_properties(c, r);
+		if (r->ismaximized >= 0)
+			ismaximized = r->ismaximized;
 
 		// // set tags
 		if (r->tags > 0) {
@@ -2071,6 +2074,9 @@ void applyrules(Client *c) {
 	}
 
 	setfullscreen(c, fullscreen_state_backup, true);
+
+	if (ismaximized >= 0)
+		setmaximizescreen(c, ismaximized, true);
 
 	if (c->isfakefullscreen) {
 		setfakefullscreen(c, 1);
