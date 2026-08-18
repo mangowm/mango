@@ -1285,6 +1285,9 @@ void client_commit(Client *c) {
 		c->animation.time_started = get_now_in_ms();
 		c->animation.running = true;
 		c->animation.should_animate = false;
+	} else {
+		/* 无动画时保持 animation.current 与目标几何同步 */
+		c->animation.current = c->geom;
 	}
 	request_fresh_all_monitors();
 }

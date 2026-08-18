@@ -5289,6 +5289,31 @@ void init_client_properties(Client *c) {
 	wl_list_init(&c->flink);
 }
 
+#ifdef XWAYLAND
+/* X11 窗口以物理尺寸渲染、逻辑尺寸显示，scene 命中检测需先把逻辑
+ * 坐标换算成 X11 surface 坐标再检查输入区域；仅作判断，不改写坐标。 */
+static bool
+xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
+										  double *sx, double *sy) {
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+	if (!scene_surface)
+		return false;
+
+	double tx = *sx, ty = *sy;
+	struct wlr_scene_node *node = &buffer->node;
+	while (node && !node->data)
+		node = node->parent ? &node->parent->node : NULL;
+	Client *c = node ? node->data : NULL;
+	if (c && client_is_x11(c) && config.xwayland_ignore_scale &&
+		c->xwayland_scale > 0.f) {
+		tx *= c->xwayland_scale;
+		ty *= c->xwayland_scale;
+	}
+	return wlr_surface_point_accepts_input(scene_surface->surface, tx, ty);
+}
+#endif
+
 void // old fix to 0.5
 mapnotify(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
@@ -5317,6 +5342,9 @@ mapnotify(struct wl_listener *listener, void *data) {
 			struct wlr_scene_buffer *buffer = wlr_scene_buffer_from_node(child);
 			if (wlr_scene_surface_try_from_buffer(buffer)) {
 				c->xwl_root_buffer = buffer;
+				/* scene 命中检测需要把逻辑坐标换算成 X11 物理坐标 */
+				c->xwl_root_buffer->point_accepts_input =
+					xwayland_scene_buffer_point_accepts_input;
 				break;
 			}
 		}
@@ -5480,6 +5508,11 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+#ifdef XWAYLAND
+	/* 映射时即按逻辑尺寸设置 dest_size，首个提交帧即为正确尺寸 */
+	if (client_is_x11(c))
+		client_update_xwayland_dest_size(c);
+#endif
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 
@@ -6362,23 +6395,9 @@ void setcursor(struct wl_listener *listener, void *data) {
 			wl_signal_add(&event->surface->events.destroy,
 						  &last_cursor_surface_destroy_listener);
 
-		if (!cursor_hidden) {
-#ifdef XWAYLAND
-			/* XWayland 光标按输出 scale 渲染，HiDPI 下 1:1 */
-			if (config.xwayland_ignore_scale && event->surface && xwayland &&
-				xwayland->server &&
-				xwayland->server->client ==
-					wl_resource_get_client(event->surface->resource)) {
-				struct wlr_output *output = wlr_output_layout_output_at(
-					output_layout, cursor->x, cursor->y);
-				float scale =
-					output && output->scale > 0.f ? output->scale : 1.f;
-				wlr_surface_set_preferred_buffer_scale(event->surface, scale);
-			}
-#endif
+		if (!cursor_hidden)
 			wlr_cursor_set_surface(cursor, event->surface, event->hotspot_x,
 								   event->hotspot_y);
-		}
 	}
 }
 
