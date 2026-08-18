@@ -1212,6 +1212,12 @@ static float xwayland_preferred_scale(Client *c);
 static void xwayland_apply_scale(Client *c);
 static void xwayland_logical_to_x11(struct wlr_box *box, float scale);
 static void xwayland_x11_to_logical(struct wlr_box *box, float scale);
+static void xwayland_cursor_clear(void);
+static void xwayland_cursor_update(void);
+static struct wlr_surface *xwl_cursor_surface;
+static int32_t xwl_cursor_hotspot_x, xwl_cursor_hotspot_y;
+static struct wl_listener xwl_cursor_commit_listener;
+static struct wl_listener xwl_cursor_destroy_listener;
 static void fix_xwayland_coordinate(struct wlr_box *geom);
 static int32_t synckeymap(void *data);
 static void activatex11(struct wl_listener *listener, void *data);
@@ -2750,6 +2756,10 @@ void setcursorshape(struct wl_listener *listener, void *data) {
 	 * actually has pointer focus first. If so, we can tell the cursor to
 	 * use the provided cursor shape. */
 	if (event->seat_client == seat->pointer_state.focused_client) {
+#ifdef XWAYLAND
+		/* 形状光标会替换 XWayland 的 surface 光标，清理其监听器 */
+		xwayland_cursor_clear();
+#endif
 		/* Remove surface destroy listener if active */
 		if (last_cursor.surface &&
 			last_cursor_surface_destroy_listener.link.prev != NULL)
@@ -5289,6 +5299,30 @@ void init_client_properties(Client *c) {
 	wl_list_init(&c->flink);
 }
 
+#ifdef XWAYLAND
+/* X11 窗口以物理尺寸渲染、逻辑尺寸显示，scene 命中检测需先把逻辑
+ * 坐标换算成 X11 surface 坐标再检查输入区域；仅作判断，不改写坐标。 */
+static bool xwayland_scene_buffer_point_accepts_input(
+	struct wlr_scene_buffer *buffer, double *sx, double *sy) {
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+	if (!scene_surface)
+		return false;
+
+	double tx = *sx, ty = *sy;
+	struct wlr_scene_node *node = &buffer->node;
+	while (node && !node->data)
+		node = node->parent ? &node->parent->node : NULL;
+	Client *c = node ? node->data : NULL;
+	if (c && client_is_x11(c) && config.xwayland_ignore_scale &&
+		c->xwayland_scale > 0.f) {
+		tx *= c->xwayland_scale;
+		ty *= c->xwayland_scale;
+	}
+	return wlr_surface_point_accepts_input(scene_surface->surface, tx, ty);
+}
+#endif
+
 void // old fix to 0.5
 mapnotify(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
@@ -5317,6 +5351,9 @@ mapnotify(struct wl_listener *listener, void *data) {
 			struct wlr_scene_buffer *buffer = wlr_scene_buffer_from_node(child);
 			if (wlr_scene_surface_try_from_buffer(buffer)) {
 				c->xwl_root_buffer = buffer;
+				/* scene 命中检测需要把逻辑坐标换算成 X11 物理坐标 */
+				c->xwl_root_buffer->point_accepts_input =
+					xwayland_scene_buffer_point_accepts_input;
 				break;
 			}
 		}
@@ -5480,6 +5517,11 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+#ifdef XWAYLAND
+	/* 映射时即按逻辑尺寸设置 dest_size，首个提交帧即为正确尺寸 */
+	if (client_is_x11(c))
+		client_update_xwayland_dest_size(c);
+#endif
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 
@@ -5666,6 +5708,10 @@ void motionnotify(uint32_t time, struct wlr_input_device *device, double dx,
 
 	/* Find the client under the pointer and send the event along. */
 	xytonode(cursor->x, cursor->y, &surface, &c, NULL, NULL, &sx, &sy);
+#ifdef XWAYLAND
+	/* 光标跨输出移动时按新输出 scale 重新应用 XWayland 光标 buffer */
+	xwayland_cursor_update();
+#endif
 
 	if (cursor_mode == CurPressed && !seat->drag &&
 		surface != seat->pointer_state.focused_surface &&
@@ -6127,6 +6173,14 @@ skip:
 	// 发送帧完成通知
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	wlr_scene_output_send_frame_done(m->scene_output, &now);
+#ifdef XWAYLAND
+	/* XWayland 光标以 buffer 渲染时 wlroots 不再给它发帧回调，而
+	 * Xwayland 依赖帧回调延迟提交新的光标形状，这里在光标所在输出上补发 */
+	if (xwl_cursor_surface && !cursor_hidden &&
+		wlr_output_layout_output_at(output_layout, cursor->x, cursor->y) ==
+			m->wlr_output)
+		wlr_surface_send_frame_done(xwl_cursor_surface, &now);
+#endif
 
 	// 如果需要更多帧，确保安排下一帧
 	if (need_more_frames && allow_frame_scheduling) {
@@ -6330,6 +6384,55 @@ run(char *startup_cmd, int readiness_fd) {
 	wl_display_run(dpy);
 }
 
+#ifdef XWAYLAND
+/* XWayland 光标始终按 buffer 原尺寸（物理 1:1）显示，不随输出 scale 缩放 */
+static void xwayland_cursor_update(void) {
+	if (!xwl_cursor_surface || cursor_hidden)
+		return;
+	/* buffer 尚未提交时保留上一帧光标，等 commit 事件再刷新 */
+	if (!xwl_cursor_surface->buffer)
+		return;
+	wlr_log(WLR_INFO, "DBG xwl cursor buffer=%p", (void *)xwl_cursor_surface->buffer);
+	struct wlr_output *output =
+		wlr_output_layout_output_at(output_layout, cursor->x, cursor->y);
+	float scale = output && output->scale > 0.f ? output->scale : 1.f;
+	wlr_cursor_set_buffer(cursor, &xwl_cursor_surface->buffer->base,
+						  xwl_cursor_hotspot_x, xwl_cursor_hotspot_y, scale);
+}
+
+static void xwayland_cursor_commit(struct wl_listener *listener, void *data) {
+	xwayland_cursor_update();
+}
+
+static void xwayland_cursor_destroy(struct wl_listener *listener, void *data) {
+	wlr_cursor_unset_image(cursor);
+	xwl_cursor_surface = NULL;
+	wl_list_remove(&xwl_cursor_destroy_listener.link);
+	wl_list_remove(&xwl_cursor_commit_listener.link);
+}
+
+static void xwayland_cursor_set(struct wlr_surface *surface, int32_t hx,
+								int32_t hy) {
+	xwayland_cursor_clear();
+	xwl_cursor_surface = surface;
+	xwl_cursor_hotspot_x = hx;
+	xwl_cursor_hotspot_y = hy;
+	xwl_cursor_commit_listener.notify = xwayland_cursor_commit;
+	xwl_cursor_destroy_listener.notify = xwayland_cursor_destroy;
+	wl_signal_add(&surface->events.commit, &xwl_cursor_commit_listener);
+	wl_signal_add(&surface->events.destroy, &xwl_cursor_destroy_listener);
+	xwayland_cursor_update();
+}
+
+static void xwayland_cursor_clear(void) {
+	if (!xwl_cursor_surface)
+		return;
+	wl_list_remove(&xwl_cursor_commit_listener.link);
+	wl_list_remove(&xwl_cursor_destroy_listener.link);
+	xwl_cursor_surface = NULL;
+}
+#endif
+
 void setcursor(struct wl_listener *listener, void *data) {
 	/* This event is raised by the seat when a client provides a cursor
 	 * image */
@@ -6347,6 +6450,10 @@ void setcursor(struct wl_listener *listener, void *data) {
 	 * hardware cursor on the output that it's currently on and continue to
 	 * do so as the cursor moves between outputs. */
 	if (event->seat_client == seat->pointer_state.focused_client) {
+#ifdef XWAYLAND
+		/* 新光标请求替换上一枚光标（含 XWayland buffer 光标） */
+		xwayland_cursor_clear();
+#endif
 		/* Clear previous surface destroy listener if any */
 		if (last_cursor.surface &&
 			last_cursor_surface_destroy_listener.link.prev != NULL)
@@ -6364,20 +6471,17 @@ void setcursor(struct wl_listener *listener, void *data) {
 
 		if (!cursor_hidden) {
 #ifdef XWAYLAND
-			/* XWayland 光标按输出 scale 渲染，HiDPI 下 1:1 */
+			/* XWayland 光标按 buffer 原尺寸渲染，物理 1:1 */
 			if (config.xwayland_ignore_scale && event->surface && xwayland &&
 				xwayland->server &&
 				xwayland->server->client ==
-					wl_resource_get_client(event->surface->resource)) {
-				struct wlr_output *output = wlr_output_layout_output_at(
-					output_layout, cursor->x, cursor->y);
-				float scale =
-					output && output->scale > 0.f ? output->scale : 1.f;
-				wlr_surface_set_preferred_buffer_scale(event->surface, scale);
-			}
+					wl_resource_get_client(event->surface->resource))
+				xwayland_cursor_set(event->surface, event->hotspot_x,
+									event->hotspot_y);
+			else
 #endif
-			wlr_cursor_set_surface(cursor, event->surface, event->hotspot_x,
-								   event->hotspot_y);
+				wlr_cursor_set_surface(cursor, event->surface,
+									   event->hotspot_x, event->hotspot_y);
 		}
 	}
 }
@@ -7739,6 +7843,10 @@ void updatemons(struct wl_listener *listener, void *data) {
 
 	/* 布局变化后更新 xdg-output 详情 */
 	xdg_output_update_all();
+#ifdef XWAYLAND
+	/* 输出 scale 变化后按新 scale 重新应用 XWayland 光标 buffer */
+	xwayland_cursor_update();
+#endif
 }
 
 void updatetitle(struct wl_listener *listener, void *data) {

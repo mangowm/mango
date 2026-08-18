@@ -366,6 +366,9 @@ static inline void client_update_xwayland_dest_size(Client *c) {
 		h = (int32_t)roundf(buf->height / scale);
 	} else {
 		struct wlr_box cur = c->animation.current;
+		/* animation.current 未初始化时退回 geom */
+		if (cur.width <= 0 || cur.height <= 0)
+			cur = c->geom;
 		w = cur.width - 2 * (int32_t)c->bw;
 		h = cur.height - 2 * (int32_t)c->bw;
 	}
