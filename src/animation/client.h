@@ -1460,7 +1460,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		bool is_ov_tab = config.ov_tab_mode && !c->mon->is_jump_mode &&
 						 !c->mon->ov_normal_mode;
 		if (config.animations && c->mon->isoverview &&
-			((is_ov_tab && config.ov_tab_mode_launch_next) || c != c->mon->sel) &&
+			((is_ov_tab && config.ov_tab_mode_launch_next) ||
+			 c != c->mon->sel) &&
 			c->animation.action == OVERVIEW &&
 			!c->animation.overview_enter_anim_set) {
 			c->animation.overview_enter_anim_set = true;

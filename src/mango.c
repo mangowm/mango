@@ -639,8 +639,7 @@ struct Monitor {
 	float hdr_max_avg_lum;
 	// Bypass the EDID-derived capability checks (DisplayID-only panels).
 	bool hdr_force;
-	struct wlr_color_transform
-		*icc_transform; /* 从 icc 加载的 ICC 变换 */
+	struct wlr_color_transform *icc_transform; /* 从 icc 加载的 ICC 变换 */
 	char icc_path[PATH_MAX];
 };
 
@@ -1125,6 +1124,8 @@ static bool tag_combo = false;
 static char cli_config_path[1024] = {0};
 static int active_capture_count = 0;
 static bool cli_debug_log = false;
+static uint32_t last_hold_keycode = 0;
+
 static KeyMode keymode = {
 	.mode = {'d', 'e', 'f', 'a', 'u', 'l', 't', '\0'},
 	.isdefault = true,
@@ -4870,6 +4871,11 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 			state != WL_KEYBOARD_KEY_STATE_RELEASED)
 			continue;
 
+		if (state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+			keycode != last_hold_keycode) {
+			continue;
+		}
+
 		k = &config.key_bindings[ji];
 		if ((k->iscommonmode || (k->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, k->mode) == 0)) &&
@@ -5006,15 +5012,16 @@ void keypress(struct wl_listener *listener, void *data) {
 		hidecursor(NULL);
 	}
 
-	/* On _press_ if there is no active screen locker,
-	 * attempt to process a compositor keybinding. */
+	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+		tag_combo = false;
+	} else {
+		// 避免普通绑定影响单独mod键绑定
+		last_hold_keycode = keycode;
+	}
+
 	for (i = 0; i < nsyms; i++)
 		handled =
 			keybinding(event->state, locked, mods, syms[i], keycode) || handled;
-
-	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
-		tag_combo = false;
-	}
 
 	if (handled && group->keyboard->repeat_info.delay > 0 &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
