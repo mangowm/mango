@@ -1074,14 +1074,15 @@ void centerwin(const Arg *arg) {
 	return;
 }
 
-void spawn_shell(const Arg *arg) {
+static pid_t spawn_shell_pid(const Arg *arg) {
 	if (!arg->v)
-		return;
+		return -1;
 
 	// hand the child an activation token so it can request activation
 	const char *activation_token = xdg_activation_v1_export_token();
+	pid_t pid = fork();
 
-	if (fork() == 0) {
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1106,8 +1107,10 @@ void spawn_shell(const Arg *arg) {
 					(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
-	return;
+	return pid;
 }
+
+void spawn_shell(const Arg *arg) { spawn_shell_pid(arg); }
 
 void spawn(const Arg *arg) {
 	if (!arg->v)
@@ -1170,6 +1173,19 @@ void spawn_on_empty(const Arg *arg) {
 		spawn_shell(arg);
 	}
 	return;
+}
+
+void spawn_on_tag(const Arg *arg) {
+	pid_t pid;
+
+	if (!arg->v || !arg->v[0] || !(arg->ui & TAGMASK))
+		return;
+
+	pid = spawn_shell_pid(arg);
+	if (pid < 0)
+		return;
+
+	spawn_on_tag_add(pid, arg->ui & TAGMASK);
 }
 
 void switch_keyboard_layout(const Arg *arg) {

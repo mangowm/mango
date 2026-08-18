@@ -709,6 +709,9 @@ static void applybounds(
 	Client *c,
 	struct wlr_box *bbox); // 设置边界规则,能让一些窗口拥有比较适合的大小
 static void applyrules(Client *c); // 窗口规则应用,应用config.h中定义的窗口规则
+static void spawn_on_tag_add(pid_t pid, uint32_t tags);
+static bool spawn_on_tag_take(pid_t pid, uint32_t *tags);
+static void spawn_on_tag_cleanup(void);
 static void arrange(Monitor *m, bool want_animation,
 					bool from_view); // 布局函数,让窗口俺平铺规则移动和重置大小
 static void arrangelayer(Monitor *m, struct wl_list *list,
@@ -1021,6 +1024,15 @@ static const char *xdg_activation_v1_export_token(void);
 /* variables */
 static const char broken[] = "broken";
 static pid_t child_pid = -1;
+
+struct spawn_on_tag_record {
+	struct wl_list link;
+	pid_t pid;
+	uint32_t tags;
+	uint32_t created;
+};
+
+static struct wl_list spawn_on_tag_records;
 static int32_t locked;
 static uint32_t locked_mods = 0;
 static void *exclusive_focus;
@@ -1915,6 +1927,56 @@ void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	}
 }
 
+static void spawn_on_tag_prune(void) {
+	struct spawn_on_tag_record *record, *tmp;
+	uint32_t now = get_now_in_ms();
+
+	wl_list_for_each_safe(record, tmp, &spawn_on_tag_records, link) {
+		if (now - record->created > 60 * 1000) {
+			wl_list_remove(&record->link);
+			free(record);
+		}
+	}
+}
+
+static void spawn_on_tag_add(pid_t pid, uint32_t tags) {
+	struct spawn_on_tag_record *record;
+
+	spawn_on_tag_prune();
+	record = ecalloc(1, sizeof(*record));
+	record->pid = pid;
+	record->tags = tags;
+	record->created = get_now_in_ms();
+	wl_list_append(&spawn_on_tag_records, &record->link);
+}
+
+static bool spawn_on_tag_take(pid_t pid, uint32_t *tags) {
+	struct spawn_on_tag_record *record;
+
+	if (!pid)
+		return false;
+
+	spawn_on_tag_prune();
+	wl_list_for_each(record, &spawn_on_tag_records, link) {
+		if (isdescprocess(record->pid, pid)) {
+			*tags = record->tags;
+			wl_list_remove(&record->link);
+			free(record);
+			return true;
+		}
+	}
+	return false;
+}
+
+static void spawn_on_tag_cleanup(void) {
+	struct spawn_on_tag_record *record, *tmp;
+
+	wl_list_for_each_safe(record, tmp, &spawn_on_tag_records, link) {
+		wl_list_remove(&record->link);
+		free(record);
+	}
+}
+
 void applyrules(Client *c) {
 	/* rule matching */
 	const char *appid, *title;
@@ -2030,6 +2092,8 @@ void applyrules(Client *c) {
 
 	// apply swallow rule
 	c->pid = client_get_pid(c);
+	uint32_t spawn_tags = 0;
+	bool spawned_on_tag = spawn_on_tag_take(c->pid, &spawn_tags);
 	if (!c->noswallow && !c->isfloating && !client_is_float_type(c) &&
 		!c->surface.xdg->initial_commit) {
 		Client *p = termforwin(c);
@@ -2042,6 +2106,11 @@ void applyrules(Client *c) {
 			mon = p->mon;
 			newtags = p->tags;
 		}
+	}
+	if (spawned_on_tag) {
+		newtags = spawn_tags;
+		c->isopensilent = 1;
+		c->istagsilent = 1;
 	}
 
 	int32_t fullscreen_state_backup =
@@ -2913,6 +2982,7 @@ void cleanup(void) {
 	allow_frame_scheduling = false;
 
 	ipc_cleanup();
+	spawn_on_tag_cleanup();
 	cleanuplisteners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(xwayland);
@@ -7119,6 +7189,7 @@ void setup(void) {
 	 */
 	wl_list_init(&clients);
 	wl_list_init(&fstack);
+	wl_list_init(&spawn_on_tag_records);
 	wl_list_init(&fadeout_clients);
 	wl_list_init(&fadeout_layers);
 

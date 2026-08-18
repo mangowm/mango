@@ -1382,6 +1382,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = spawn_on_empty;
 		(*arg).v = strdup(arg_value);
 		(*arg).ui = parse_tag_mask(arg_value2);
+	} else if (strcmp(func_name, "spawn_on_tag") == 0) {
+		func = spawn_on_tag;
+		(*arg).v = strdup(arg_value);
+		(*arg).ui = parse_tag_mask(arg_value2);
 	} else if (strcmp(func_name, "quit") == 0) {
 		func = quit;
 	} else if (strcmp(func_name, "create_virtual_output") == 0) {
