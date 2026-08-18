@@ -213,9 +213,6 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 
 	struct wlr_surface *surface = scene_surface->surface;
 
-	/* X11 的 dest_size 由 client_update_xwayland_clip/dest_size 按逻辑
-	 * 尺寸管理，这里用 surface->current.width（物理尺寸）会把它重置回
-	 * 物理大小，scale<1 时窗口只剩左上角四分之一 */
 	if (buffer_data->should_scale
 #ifdef XWAYLAND
 		&& !wlr_xwayland_surface_try_from_wlr_surface(surface)
@@ -1293,7 +1290,6 @@ void client_commit(Client *c) {
 		c->animation.running = true;
 		c->animation.should_animate = false;
 	} else {
-		/* 无动画时保持 animation.current 与目标几何同步 */
 		c->animation.current = c->geom;
 	}
 	request_fresh_all_monitors();
