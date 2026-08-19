@@ -553,6 +553,31 @@ void trim_whitespace(char *str) {
 	}
 }
 
+// remove comment, support double quote inside "#xxx" or '#xxx' not be treated
+// as comment
+void remove_comment(char *str) {
+	if (str == NULL || *str == '\0')
+		return;
+
+	char quote_char = '\0';
+
+	for (char *p = str; *p != '\0'; p++) {
+		if (quote_char == '\0') {
+			if (*p == '\'' || *p == '"') {
+				quote_char = *p;
+			} else if (*p == '#' && p > str &&
+					   isspace((unsigned char)*(p - 1))) {
+				*p = '\0';
+				return;
+			}
+		} else {
+			if (*p == quote_char) {
+				quote_char = '\0';
+			}
+		}
+	}
+}
+
 int32_t parse_double_array(const char *input, double *output,
 						   int32_t max_count) {
 	char *dup = strdup(input);
@@ -3425,13 +3450,18 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 }
 
 bool parse_config_line(Config *config, const char *line, int line_number) {
+	char processed_line[512];
+	strncpy(processed_line, line, sizeof(processed_line) - 1);
+	processed_line[sizeof(processed_line) - 1] = '\0';
+
+	remove_comment(processed_line);
+
 	char key[256], value[256];
-	if (sscanf(line, "%255[^=]=%255[^\n]", key, value) != 2) {
+	if (sscanf(processed_line, "%255[^=]=%255[^\n]", key, value) != 2) {
 		mango_error(false, WLR_ERROR, "Invalid line format: %s", line);
 		return false;
 	}
 
-	// Then trim each part separately
 	trim_whitespace(key);
 	trim_whitespace(value);
 
