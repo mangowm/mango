@@ -575,6 +575,25 @@ void trim_whitespace(char *str) {
 	}
 }
 
+// Helper function to strip a trailing comment from a config value.
+void remove_comment(char *str) {
+	if (str == NULL || *str == '\0')
+		return;
+	char *comment = NULL;
+	if (str[0] == '#') {
+		comment = str;
+	} else {
+		for (char *p = str + 1; *p != '\0'; p++) {
+			if (*p == '#' && isspace((unsigned char)p[-1])) {
+				comment = p;
+				break;
+			}
+		}
+	}
+	if (comment != NULL)
+		*comment = '\0';
+}
+
 int32_t parse_double_array(const char *input, double *output,
 						   int32_t max_count) {
 	char *dup = strdup(input);
@@ -3468,6 +3487,7 @@ bool parse_config_line(Config *config, const char *line, int line_number) {
 	}
 
 	// Then trim each part separately
+	remove_comment(value);
 	trim_whitespace(key);
 	trim_whitespace(value);
 
