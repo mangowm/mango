@@ -183,7 +183,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | :--- | :--- | :--- |
 | `spawn` | `cmd` | Execute a command. |
 | `spawn_shell` | `cmd` | Execute shell command (supports pipes `\|`). |
-| `spawn_on_empty` | `cmd, tagmask` | Open command on empty tag.Accepts a cmd string and [tagmask](/docs/bindings/keys#tag-mask-format) |
+| `spawn_on_empty` | `cmd, tagmask[,synctag]` | Open command on empty tag.Accepts a cmd string and [tagmask](/docs/bindings/keys#tag-mask-format) |
 | `reload_config` | - | Hot-reload configuration. |
 | `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. |
 | `quit` | - | Exit mangowm. |
