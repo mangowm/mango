@@ -1250,6 +1250,7 @@ static void ipc_notify_device_event(struct wlr_input_device *device);
 #include "ext-protocol/all.h"
 #include "fetch/fetch.h"
 #include "input/touch.h"
+#include "input/switch.h"
 #include "ipc/ipc.h"
 #include "layout/arrange.h"
 #include "layout/dwindle.h"
