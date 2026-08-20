@@ -12,8 +12,12 @@ Control the sizing of window borders and gaps.
 | `borderpx` | `4` | Border width in pixels. |
 | `gappih` | `5` | Horizontal inner gap (between windows). |
 | `gappiv` | `5` | Vertical inner gap. |
-| `gappoh` | `10` | Horizontal outer gap (between windows and screen edges). |
-| `gappov` | `10` | Vertical outer gap. |
+| `gappot` | `10` | Outer gap, top edge. |
+| `gappor` | `10` | Outer gap, right edge. |
+| `gappob` | `10` | Outer gap, bottom edge. |
+| `gappol` | `10` | Outer gap, left edge. |
+
+> **Tip:** For backward compatibility, `gappoh` sets both `gappol` and `gappor`, and `gappov` sets both `gappot` and `gappob`. If you mix legacy and directional keys, the last one in the file wins.
 
 ## Colors
 

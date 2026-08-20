@@ -16,17 +16,27 @@ void vertical_tile(Monitor *m) {
 
 	int32_t cur_gapih = enablegaps ? m->gappih : 0;
 	int32_t cur_gapiv = enablegaps ? m->gappiv : 0;
-	int32_t cur_gapoh = enablegaps ? m->gappoh : 0;
-	int32_t cur_gapov = enablegaps ? m->gappov : 0;
+	int32_t cur_gappol = enablegaps ? m->gappol : 0;
+	int32_t cur_gappor = enablegaps ? m->gappor : 0;
+	int32_t cur_gappot = enablegaps ? m->gappot : 0;
+	int32_t cur_gappob = enablegaps ? m->gappob : 0;
 
 	cur_gapih =
 		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapih;
 	cur_gapiv =
 		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapiv;
-	cur_gapoh =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapoh;
-	cur_gapov =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapov;
+	cur_gappol = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappol;
+	cur_gappor = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappor;
+	cur_gappot = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappot;
+	cur_gappob = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappob;
 
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
@@ -41,17 +51,17 @@ void vertical_tile(Monitor *m) {
 				 ? (m->w.height + cur_gapiv * ie) * mfact
 				 : 0;
 	else
-		mh = m->w.height - 2 * cur_gapov + cur_gapiv * ie;
+		mh = m->w.height - cur_gappot - cur_gappob + cur_gapiv * ie;
 
 	i = 0;
-	mx = tx = cur_gapoh;
+	mx = tx = cur_gappol;
 
-	int32_t master_surplus_width =
-		(m->w.width - 2 * cur_gapoh - cur_gapih * ie * (master_num - 1));
+	int32_t master_surplus_width = (m->w.width - cur_gappol - cur_gappor -
+									cur_gapih * ie * (master_num - 1));
 	float master_surplus_ratio = 1.0;
 
-	int32_t slave_surplus_width =
-		(m->w.width - 2 * cur_gapoh - cur_gapih * ie * (stack_num - 1));
+	int32_t slave_surplus_width = (m->w.width - cur_gappol - cur_gappor -
+								   cur_gapih * ie * (stack_num - 1));
 	float slave_surplus_ratio = 1.0;
 
 	wl_list_for_each(c, &clients, link) {
@@ -75,7 +85,7 @@ void vertical_tile(Monitor *m) {
 			}
 			client_tile_resize(c,
 							   (struct wlr_box){.x = m->w.x + mx,
-												.y = m->w.y + cur_gapov,
+												.y = m->w.y + cur_gappot,
 												.width = w,
 												.height = mh - cur_gapiv * ie},
 							   0);
@@ -96,13 +106,14 @@ void vertical_tile(Monitor *m) {
 				c->master_mfact_per = mfact;
 			}
 
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + tx,
-								 .y = m->w.y + mh + cur_gapov,
-								 .width = w,
-								 .height = m->w.height - mh - 2 * cur_gapov},
-				0);
+			client_tile_resize(c,
+							   (struct wlr_box){.x = m->w.x + tx,
+												.y = m->w.y + mh + cur_gappot,
+												.width = w,
+												.height = m->w.height - mh -
+														  cur_gappot -
+														  cur_gappob},
+							   0);
 			tx += w + cur_gapih * ie; // 使用理论宽度累加
 		}
 		i++;
@@ -118,18 +129,26 @@ void vertical_deck(Monitor *m) {
 	uint32_t nmasters = m->pertag->nmasters[m->pertag->curtag];
 
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
-	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
-	int32_t cur_gappov = enablegaps ? m->gappov : 0;
+	int32_t cur_gappol = enablegaps ? m->gappol : 0;
+	int32_t cur_gappor = enablegaps ? m->gappor : 0;
+	int32_t cur_gappot = enablegaps ? m->gappot : 0;
+	int32_t cur_gappob = enablegaps ? m->gappob : 0;
 
 	cur_gappiv = config.smartgaps && m->visible_fake_tiling_clients == 1
 					 ? 0
 					 : cur_gappiv;
-	cur_gappoh = config.smartgaps && m->visible_fake_tiling_clients == 1
+	cur_gappol = config.smartgaps && m->visible_fake_tiling_clients == 1
 					 ? 0
-					 : cur_gappoh;
-	cur_gappov = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 : cur_gappol;
+	cur_gappor = config.smartgaps && m->visible_fake_tiling_clients == 1
 					 ? 0
-					 : cur_gappov;
+					 : cur_gappor;
+	cur_gappot = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappot;
+	cur_gappob = config.smartgaps && m->visible_fake_tiling_clients == 1
+					 ? 0
+					 : cur_gappob;
 
 	n = m->visible_fake_tiling_clients;
 
@@ -145,9 +164,10 @@ void vertical_deck(Monitor *m) {
 										: m->pertag->mfacts[m->pertag->curtag];
 
 	if (n > nmasters)
-		mh = nmasters ? round((m->w.height - 2 * cur_gappov) * mfact) : 0;
+		mh = nmasters ? round((m->w.height - cur_gappot - cur_gappob) * mfact)
+					  : 0;
 	else
-		mh = m->w.height - 2 * cur_gappov;
+		mh = m->w.height - cur_gappot - cur_gappob;
 
 	i = mx = 0;
 	wl_list_for_each(c, &clients, link) {
@@ -155,11 +175,11 @@ void vertical_deck(Monitor *m) {
 			continue;
 		if (i < nmasters) {
 			c->master_mfact_per = mfact;
-			int32_t w = (m->w.width - 2 * cur_gappoh - mx) /
+			int32_t w = (m->w.width - cur_gappol - cur_gappor - mx) /
 						(MANGO_MIN(n, nmasters) - i);
 			client_tile_resize(c,
-							   (struct wlr_box){.x = m->w.x + cur_gappoh + mx,
-												.y = m->w.y + cur_gappov,
+							   (struct wlr_box){.x = m->w.x + cur_gappol + mx,
+												.y = m->w.y + cur_gappot,
 												.width = w,
 												.height = mh},
 							   0);
@@ -168,11 +188,11 @@ void vertical_deck(Monitor *m) {
 			c->master_mfact_per = mfact;
 			client_tile_resize(
 				c,
-				(struct wlr_box){.x = m->w.x + cur_gappoh,
-								 .y = m->w.y + mh + cur_gappov + cur_gappiv,
-								 .width = m->w.width - 2 * cur_gappoh,
-								 .height = m->w.height - mh - 2 * cur_gappov -
-										   cur_gappiv},
+				(struct wlr_box){.x = m->w.x + cur_gappol,
+								 .y = m->w.y + mh + cur_gappot + cur_gappiv,
+								 .width = m->w.width - cur_gappol - cur_gappor,
+								 .height = m->w.height - mh - cur_gappot -
+										   cur_gappob - cur_gappiv},
 				0);
 			if (c == focustop(m))
 				wlr_scene_node_raise_to_top(&c->scene->node);
@@ -186,7 +206,10 @@ void vertical_grid(Monitor *m) {
 	int32_t cw, ch;
 	int32_t rows, cols, overrows;
 	Client *c = NULL;
-	int32_t target_gappo = enablegaps ? config.gappov : 0;
+	int32_t target_gappol = enablegaps ? config.gappol : 0;
+	int32_t target_gappor = enablegaps ? config.gappor : 0;
+	int32_t target_gappot = enablegaps ? config.gappot : 0;
+	int32_t target_gappob = enablegaps ? config.gappob : 0;
 	int32_t target_gappi = enablegaps ? config.gappiv : 0;
 	float single_width_ratio = 0.9;
 	float single_height_ratio = 0.9;
@@ -202,8 +225,10 @@ void vertical_grid(Monitor *m) {
 				continue;
 			if (VISIBLEON(c, m) && !c->isunglobal &&
 				(!client_is_x11_popup(c) || ISFAKETILED(c))) {
-				ch = (m->w.height - 2 * target_gappo) * single_height_ratio;
-				cw = (m->w.width - 2 * target_gappo) * single_width_ratio;
+				ch = (m->w.height - target_gappot - target_gappob) *
+					 single_height_ratio;
+				cw = (m->w.width - target_gappol - target_gappor) *
+					 single_width_ratio;
 				target_geom.x = m->w.x + (m->w.width - cw) / 2;
 				target_geom.y = m->w.y + (m->w.height - ch) / 2;
 				target_geom.width = cw;
@@ -231,8 +256,10 @@ void vertical_grid(Monitor *m) {
 		}
 
 		float sum_row = row_pers[0] + row_pers[1];
-		float avail_h = m->w.height - 2 * target_gappo - target_gappi;
-		cw = (m->w.width - 2 * target_gappo) * 0.65; // 依然保持 0.65 的美观宽度
+		float avail_h =
+			m->w.height - target_gappot - target_gappob - target_gappi;
+		cw = (m->w.width - target_gappol - target_gappor) *
+			 0.65; // 依然保持 0.65 的美观宽度
 
 		i = 0;
 		wl_list_for_each(c, &clients, link) {
@@ -248,13 +275,13 @@ void vertical_grid(Monitor *m) {
 				// 根据分配的权重动态计算当前窗口的高度
 				ch = avail_h * (row_pers[i] / sum_row);
 
-				target_geom.x = m->w.x + (m->w.width - cw) / 2 + target_gappo;
+				target_geom.x = m->w.x + (m->w.width - cw) / 2 + target_gappol;
 				if (i == 0) {
-					target_geom.y = m->w.y + target_gappo;
+					target_geom.y = m->w.y + target_gappot;
 				} else if (i == 1) {
 					// 第二个窗口的 Y 坐标紧跟第一个窗口下面
 					float ch0 = avail_h * (row_pers[0] / sum_row);
-					target_geom.y = m->w.y + target_gappo + ch0 + target_gappi;
+					target_geom.y = m->w.y + target_gappot + ch0 + target_gappi;
 				}
 				target_geom.width = cw;
 				target_geom.height = ch;
@@ -307,8 +334,10 @@ void vertical_grid(Monitor *m) {
 	for (i = 0; i < rows; i++)
 		sum_row += row_pers[i];
 
-	float avail_w = m->w.width - 2 * target_gappo - (cols - 1) * target_gappi;
-	float avail_h = m->w.height - 2 * target_gappo - (rows - 1) * target_gappi;
+	float avail_w =
+		m->w.width - target_gappol - target_gappor - (cols - 1) * target_gappi;
+	float avail_h =
+		m->w.height - target_gappot - target_gappob - (rows - 1) * target_gappi;
 
 	i = 0;
 	wl_list_for_each(c, &clients, link) {
@@ -324,7 +353,7 @@ void vertical_grid(Monitor *m) {
 			c->grid_col_idx = c_idx;
 			c->grid_row_idx = r_idx;
 
-			float fl_cy = m->w.y + target_gappo;
+			float fl_cy = m->w.y + target_gappot;
 			float fl_ch = 0.0f;
 
 			if (overrows && i >= n - overrows) {
@@ -332,7 +361,8 @@ void vertical_grid(Monitor *m) {
 				for (int j = 0; j < overrows; j++)
 					over_h += avail_h * (row_pers[j] / sum_row);
 				over_h += (overrows - 1) * target_gappi;
-				float dy = (m->w.height - over_h) / 2.0f - target_gappo;
+				float dy = (m->w.height - over_h) / 2.0f -
+						   (target_gappot + target_gappob) / 2.0f;
 
 				fl_cy += dy;
 				for (int j = 0; j < r_idx; j++)
@@ -342,15 +372,15 @@ void vertical_grid(Monitor *m) {
 				for (int j = 0; j < r_idx; j++)
 					fl_cy += avail_h * (row_pers[j] / sum_row) + target_gappi;
 				fl_ch = (r_idx == rows - 1)
-							? (m->w.y + m->w.height - target_gappo - fl_cy)
+							? (m->w.y + m->w.height - target_gappob - fl_cy)
 							: avail_h * (row_pers[r_idx] / sum_row);
 			}
 
-			float fl_cx = m->w.x + target_gappo;
+			float fl_cx = m->w.x + target_gappol;
 			for (int j = 0; j < c_idx; j++)
 				fl_cx += avail_w * (col_pers[j] / sum_col) + target_gappi;
 			float fl_cw = (c_idx == cols - 1)
-							  ? (m->w.x + m->w.width - target_gappo - fl_cx)
+							  ? (m->w.x + m->w.width - target_gappor - fl_cx)
 							  : avail_w * (col_pers[c_idx] / sum_col);
 
 			target_geom.x = (int32_t)fl_cx;
@@ -376,11 +406,14 @@ void vertical_fair(Monitor *m) {
 
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
 	int32_t cur_gappih = enablegaps ? m->gappih : 0;
-	int32_t cur_gappov = enablegaps ? m->gappov : 0;
-	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
+	int32_t cur_gappol = enablegaps ? m->gappol : 0;
+	int32_t cur_gappor = enablegaps ? m->gappor : 0;
+	int32_t cur_gappot = enablegaps ? m->gappot : 0;
+	int32_t cur_gappob = enablegaps ? m->gappob : 0;
 
 	if (config.smartgaps && n == 1) {
-		cur_gappiv = cur_gappih = cur_gappov = cur_gappoh = 0;
+		cur_gappiv = cur_gappih = cur_gappol = cur_gappor = cur_gappot =
+			cur_gappob = 0;
 	}
 
 	int32_t rows;
@@ -473,12 +506,13 @@ void vertical_fair(Monitor *m) {
 			col_pers[i] = 1.0f;
 	}
 
-	float avail_h = m->w.height - 2 * cur_gappov - (rows - 1) * cur_gappiv;
-	float next_y = m->w.y + cur_gappov;
+	float avail_h =
+		m->w.height - cur_gappot - cur_gappob - (rows - 1) * cur_gappiv;
+	float next_y = m->w.y + cur_gappot;
 	for (i = 0; i < rows; i++) {
 		row_y[i] = next_y;
 		row_h[i] = (i == rows - 1)
-					   ? (m->w.y + m->w.height - cur_gappov - next_y)
+					   ? (m->w.y + m->w.height - cur_gappob - next_y)
 					   : (avail_h * (row_pers[i] / sum_row));
 		next_y += row_h[i] + cur_gappiv;
 	}
@@ -487,12 +521,12 @@ void vertical_fair(Monitor *m) {
 	for (i = 0; i < base_cols; i++)
 		sum_col_base += col_pers[i];
 	float avail_w_base =
-		m->w.width - 2 * cur_gappoh - (base_cols - 1) * cur_gappih;
-	float next_x = m->w.x + cur_gappoh;
+		m->w.width - cur_gappol - cur_gappor - (base_cols - 1) * cur_gappih;
+	float next_x = m->w.x + cur_gappol;
 	for (i = 0; i < base_cols; i++) {
 		col_x_base[i] = next_x;
 		col_w_base[i] = (i == base_cols - 1)
-							? (m->w.x + m->w.width - cur_gappoh - next_x)
+							? (m->w.x + m->w.width - cur_gappor - next_x)
 							: (avail_w_base * (col_pers[i] / sum_col_base));
 		next_x += col_w_base[i] + cur_gappih;
 	}
@@ -502,12 +536,12 @@ void vertical_fair(Monitor *m) {
 		for (i = 0; i < max_cols; i++)
 			sum_col_max += col_pers[i];
 		float avail_w_max =
-			m->w.width - 2 * cur_gappoh - (max_cols - 1) * cur_gappih;
-		next_x = m->w.x + cur_gappoh;
+			m->w.width - cur_gappol - cur_gappor - (max_cols - 1) * cur_gappih;
+		next_x = m->w.x + cur_gappol;
 		for (i = 0; i < max_cols; i++) {
 			col_x_max[i] = next_x;
 			col_w_max[i] = (i == max_cols - 1)
-							   ? (m->w.x + m->w.width - cur_gappoh - next_x)
+							   ? (m->w.x + m->w.width - cur_gappor - next_x)
 							   : (avail_w_max * (col_pers[i] / sum_col_max));
 			next_x += col_w_max[i] + cur_gappih;
 		}

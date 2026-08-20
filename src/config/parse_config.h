@@ -435,8 +435,10 @@ typedef struct {
 	int32_t smartgaps;
 	uint32_t gappih;
 	uint32_t gappiv;
-	uint32_t gappoh;
-	uint32_t gappov;
+	uint32_t gappol;
+	uint32_t gappor;
+	uint32_t gappot;
+	uint32_t gappob;
 	uint32_t borderpx;
 	uint32_t group_bar_height;
 	float scratchpad_width_ratio;
@@ -2209,10 +2211,24 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->gappih = atoi(value);
 	} else if (strcmp(key, "gappiv") == 0) {
 		config->gappiv = atoi(value);
+	} else if (strcmp(key, "gappol") == 0) {
+		config->gappol = atoi(value);
+	} else if (strcmp(key, "gappor") == 0) {
+		config->gappor = atoi(value);
+	} else if (strcmp(key, "gappot") == 0) {
+		config->gappot = atoi(value);
+	} else if (strcmp(key, "gappob") == 0) {
+		config->gappob = atoi(value);
 	} else if (strcmp(key, "gappoh") == 0) {
-		config->gappoh = atoi(value);
+		/* backward compat: sets both left and right outer gaps */
+		int32_t v = atoi(value);
+		config->gappol = v;
+		config->gappor = v;
 	} else if (strcmp(key, "gappov") == 0) {
-		config->gappov = atoi(value);
+		/* backward compat: sets both top and bottom outer gaps */
+		int32_t v = atoi(value);
+		config->gappot = v;
+		config->gappob = v;
 	} else if (strcmp(key, "scratchpad_width_ratio") == 0) {
 		config->scratchpad_width_ratio = atof(value);
 	} else if (strcmp(key, "scratchpad_height_ratio") == 0) {
@@ -4307,8 +4323,10 @@ void override_config(void) {
 		CLAMP_FLOAT(config.trackpad_scroll_factor, 0.1f, 10.0f);
 	config.gappih = CLAMP_INT(config.gappih, 0, 1000);
 	config.gappiv = CLAMP_INT(config.gappiv, 0, 1000);
-	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
-	config.gappov = CLAMP_INT(config.gappov, 0, 1000);
+	config.gappol = CLAMP_INT(config.gappol, 0, 1000);
+	config.gappor = CLAMP_INT(config.gappor, 0, 1000);
+	config.gappot = CLAMP_INT(config.gappot, 0, 1000);
+	config.gappob = CLAMP_INT(config.gappob, 0, 1000);
 	config.scratchpad_width_ratio =
 		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
 	config.scratchpad_height_ratio =
@@ -4411,8 +4429,10 @@ void set_value_default() {
 	config.sloppyfocus = 1;
 	config.gappih = 5;
 	config.gappiv = 5;
-	config.gappoh = 10;
-	config.gappov = 10;
+	config.gappol = 10;
+	config.gappor = 10;
+	config.gappot = 10;
+	config.gappob = 10;
 	config.scratchpad_width_ratio = 0.8f;
 	config.scratchpad_height_ratio = 0.9f;
 
@@ -5001,8 +5021,10 @@ void reapply_master(void) {
 			m->pertag->mfacts[i] = config.default_mfact;
 			m->gappih = config.gappih;
 			m->gappiv = config.gappiv;
-			m->gappoh = config.gappoh;
-			m->gappov = config.gappov;
+			m->gappol = config.gappol;
+			m->gappor = config.gappor;
+			m->gappot = config.gappot;
+			m->gappob = config.gappob;
 		}
 	}
 }

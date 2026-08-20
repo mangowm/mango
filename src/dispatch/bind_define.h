@@ -87,7 +87,8 @@ void destroy_all_virtual_output(const Arg *arg) {
 }
 
 void defaultgaps(const Arg *arg) {
-	setgaps(config.gappoh, config.gappov, config.gappih, config.gappiv);
+	setgaps(config.gappol, config.gappor, config.gappot, config.gappob,
+			config.gappih, config.gappiv);
 	return;
 }
 
@@ -424,7 +425,8 @@ void incnmaster(const Arg *arg) {
 void incgaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh + arg->i, selmon->gappov + arg->i,
+	setgaps(selmon->gappol + arg->i, selmon->gappor + arg->i,
+			selmon->gappot + arg->i, selmon->gappob + arg->i,
 			selmon->gappih + arg->i, selmon->gappiv + arg->i);
 	return;
 }
@@ -432,15 +434,16 @@ void incgaps(const Arg *arg) {
 void incigaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh, selmon->gappov, selmon->gappih + arg->i,
-			selmon->gappiv + arg->i);
+	setgaps(selmon->gappol, selmon->gappor, selmon->gappot, selmon->gappob,
+			selmon->gappih + arg->i, selmon->gappiv + arg->i);
 	return;
 }
 
 void incogaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh + arg->i, selmon->gappov + arg->i, selmon->gappih,
+	setgaps(selmon->gappol + arg->i, selmon->gappor + arg->i,
+			selmon->gappot + arg->i, selmon->gappob + arg->i, selmon->gappih,
 			selmon->gappiv);
 	return;
 }
@@ -448,32 +451,32 @@ void incogaps(const Arg *arg) {
 void incihgaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh, selmon->gappov, selmon->gappih + arg->i,
-			selmon->gappiv);
+	setgaps(selmon->gappol, selmon->gappor, selmon->gappot, selmon->gappob,
+			selmon->gappih + arg->i, selmon->gappiv);
 	return;
 }
 
 void incivgaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh, selmon->gappov, selmon->gappih,
-			selmon->gappiv + arg->i);
+	setgaps(selmon->gappol, selmon->gappor, selmon->gappot, selmon->gappob,
+			selmon->gappih, selmon->gappiv + arg->i);
 	return;
 }
 
 void incohgaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh + arg->i, selmon->gappov, selmon->gappih,
-			selmon->gappiv);
+	setgaps(selmon->gappol + arg->i, selmon->gappor + arg->i, selmon->gappot,
+			selmon->gappob, selmon->gappih, selmon->gappiv);
 	return;
 }
 
 void incovgaps(const Arg *arg) {
 	if (!selmon)
 		return;
-	setgaps(selmon->gappoh, selmon->gappov + arg->i, selmon->gappih,
-			selmon->gappiv);
+	setgaps(selmon->gappol, selmon->gappor, selmon->gappot + arg->i,
+			selmon->gappob + arg->i, selmon->gappih, selmon->gappiv);
 	return;
 }
 
@@ -907,7 +910,7 @@ void smartmovewin(const Arg *arg) {
 		}
 
 		ny = tar == -99999 ? ny : tar;
-		ny = MANGO_MAX(ny, c->mon->w.y + c->mon->gappov);
+		ny = MANGO_MAX(ny, c->mon->w.y + c->mon->gappot);
 		break;
 	case DOWN:
 		tar = 99999;
@@ -927,7 +930,7 @@ void smartmovewin(const Arg *arg) {
 		}
 		ny = tar == 99999 ? ny : tar;
 		ny = MANGO_MIN(ny, c->mon->w.y + c->mon->w.height - c->geom.height -
-							   c->mon->gappov);
+							   c->mon->gappob);
 		break;
 	case LEFT:
 		tar = -99999;
@@ -947,7 +950,7 @@ void smartmovewin(const Arg *arg) {
 		}
 
 		nx = tar == -99999 ? nx : tar;
-		nx = MANGO_MAX(nx, c->mon->w.x + c->mon->gappoh);
+		nx = MANGO_MAX(nx, c->mon->w.x + c->mon->gappol);
 		break;
 	case RIGHT:
 		tar = 99999;
@@ -966,7 +969,7 @@ void smartmovewin(const Arg *arg) {
 		}
 		nx = tar == 99999 ? nx : tar;
 		nx = MANGO_MIN(nx, c->mon->w.x + c->mon->w.width - c->geom.width -
-							   c->mon->gappoh);
+							   c->mon->gappor);
 		break;
 	}
 
@@ -1013,8 +1016,8 @@ void smartresizewin(const Arg *arg) {
 			};
 		}
 		nh = tar == -99999 ? nh : tar;
-		if (c->geom.y + nh + config.gappov > selmon->w.y + selmon->w.height)
-			nh = selmon->w.y + selmon->w.height - c->geom.y - config.gappov;
+		if (c->geom.y + nh + config.gappob > selmon->w.y + selmon->w.height)
+			nh = selmon->w.y + selmon->w.height - c->geom.y - config.gappob;
 		break;
 	case LEFT:
 		nw -= selmon->w.width / 16;
@@ -1037,8 +1040,8 @@ void smartresizewin(const Arg *arg) {
 		}
 
 		nw = tar == 99999 ? nw : tar;
-		if (c->geom.x + nw + config.gappoh > selmon->w.x + selmon->w.width)
-			nw = selmon->w.x + selmon->w.width - c->geom.x - config.gappoh;
+		if (c->geom.x + nw + config.gappor > selmon->w.x + selmon->w.width)
+			nw = selmon->w.x + selmon->w.width - c->geom.x - config.gappor;
 		break;
 	}
 

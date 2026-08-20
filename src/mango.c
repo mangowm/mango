@@ -607,8 +607,10 @@ struct Monitor {
 
 	int32_t gappih; /* horizontal gap between windows */
 	int32_t gappiv; /* vertical gap between windows */
-	int32_t gappoh; /* horizontal outer gaps */
-	int32_t gappov; /* vertical outer gaps */
+	int32_t gappol; /* outer gap left */
+	int32_t gappor; /* outer gap right */
+	int32_t gappot; /* outer gap top */
+	int32_t gappob; /* outer gap bottom */
 	Pertag *pertag;
 	uint32_t ovbk_current_tagset;
 	uint32_t ovbk_prev_tagset;
@@ -824,7 +826,8 @@ static void setfullscreen(Client *c, int32_t fullscreen, bool rearrange);
 static void setmaximizescreen(Client *c, int32_t maximizescreen,
 							  bool rearrange);
 static void reset_maximizescreen_size(Client *c);
-static void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv);
+static void setgaps(int32_t ol, int32_t or_, int32_t ot, int32_t ob, int32_t ih,
+					int32_t iv);
 
 static void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus);
 static void setpsel(struct wl_listener *listener, void *data);
@@ -4030,8 +4033,10 @@ void createmon(struct wl_listener *listener, void *data) {
 
 	m->gappih = config.gappih;
 	m->gappiv = config.gappiv;
-	m->gappoh = config.gappoh;
-	m->gappov = config.gappov;
+	m->gappol = config.gappol;
+	m->gappor = config.gappor;
+	m->gappot = config.gappot;
+	m->gappob = config.gappob;
 	m->isoverview = 0;
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
@@ -6461,13 +6466,14 @@ setfloating(Client *c, int32_t floating) {
 
 		// restore to the memeroy geom
 		if (c->float_geom.width > 0 && c->float_geom.height > 0) {
-			if (c->mon &&
-				c->float_geom.width >= c->mon->w.width - config.gappoh) {
+			if (c->mon && c->float_geom.width >=
+							  c->mon->w.width - config.gappol - config.gappor) {
 				c->float_geom.width = c->mon->w.width * 0.9;
 				window_size_outofrange = true;
 			}
-			if (c->mon &&
-				c->float_geom.height >= c->mon->w.height - config.gappov) {
+			if (c->mon && c->float_geom.height >= c->mon->w.height -
+													  config.gappot -
+													  config.gappob) {
 				c->float_geom.height = c->mon->w.height * 0.9;
 				window_size_outofrange = true;
 			}
@@ -6526,10 +6532,10 @@ setfloating(Client *c, int32_t floating) {
 
 void reset_maximizescreen_size(Client *c) {
 	struct wlr_box geom;
-	geom.x = c->mon->w.x + config.gappoh;
-	geom.y = c->mon->w.y + config.gappov;
-	geom.width = c->mon->w.width - 2 * config.gappoh;
-	geom.height = c->mon->w.height - 2 * config.gappov;
+	geom.x = c->mon->w.x + config.gappol;
+	geom.y = c->mon->w.y + config.gappot;
+	geom.width = c->mon->w.width - config.gappol - config.gappor;
+	geom.height = c->mon->w.height - config.gappot - config.gappob;
 
 	if (c->group_next || c->group_prev) {
 		geom.height -= config.group_bar_height;
@@ -6574,10 +6580,12 @@ void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 
 		exit_scroller_stack(c);
 
-		maximizescreen_box.x = c->mon->w.x + config.gappoh;
-		maximizescreen_box.y = c->mon->w.y + config.gappov;
-		maximizescreen_box.width = c->mon->w.width - 2 * config.gappoh;
-		maximizescreen_box.height = c->mon->w.height - 2 * config.gappov;
+		maximizescreen_box.x = c->mon->w.x + config.gappol;
+		maximizescreen_box.y = c->mon->w.y + config.gappot;
+		maximizescreen_box.width =
+			c->mon->w.width - config.gappol - config.gappor;
+		maximizescreen_box.height =
+			c->mon->w.height - config.gappot - config.gappob;
 
 		if (c->group_next || c->group_prev) {
 			maximizescreen_box.height -= config.group_bar_height;
@@ -6661,9 +6669,12 @@ void setfullscreen(Client *c, int32_t fullscreen,
 		arrange(c->mon, false, false);
 }
 
-void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
-	selmon->gappoh = MANGO_MAX(oh, 0);
-	selmon->gappov = MANGO_MAX(ov, 0);
+void setgaps(int32_t ol, int32_t or_, int32_t ot, int32_t ob, int32_t ih,
+			 int32_t iv) {
+	selmon->gappol = MANGO_MAX(ol, 0);
+	selmon->gappor = MANGO_MAX(or_, 0);
+	selmon->gappot = MANGO_MAX(ot, 0);
+	selmon->gappob = MANGO_MAX(ob, 0);
 	selmon->gappih = MANGO_MAX(ih, 0);
 	selmon->gappiv = MANGO_MAX(iv, 0);
 	arrange(selmon, false, false);

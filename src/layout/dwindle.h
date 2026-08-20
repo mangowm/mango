@@ -423,14 +423,16 @@ static void dwindle_resize_client(Monitor *m, Client *c) {
 	int32_t n = m->visible_tiling_clients;
 	int32_t gap_ih = enablegaps ? m->gappih : 0;
 	int32_t gap_iv = enablegaps ? m->gappiv : 0;
-	int32_t gap_oh = enablegaps ? m->gappoh : 0;
-	int32_t gap_ov = enablegaps ? m->gappov : 0;
+	int32_t gap_ol = enablegaps ? m->gappol : 0;
+	int32_t gap_or = enablegaps ? m->gappor : 0;
+	int32_t gap_ot = enablegaps ? m->gappot : 0;
+	int32_t gap_ob = enablegaps ? m->gappob : 0;
 	if (config.smartgaps && n == 1)
-		gap_ih = gap_iv = gap_oh = gap_ov = 0;
+		gap_ih = gap_iv = gap_ol = gap_or = gap_ot = gap_ob = 0;
 
-	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
-				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
+	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_ol,
+				   m->w.y + gap_ot, m->w.width - gap_ol - gap_or,
+				   m->w.height - gap_ot - gap_ob, gap_ih, gap_iv);
 }
 
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
@@ -472,14 +474,16 @@ static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 	int32_t n_clients = m->visible_tiling_clients;
 	int32_t gap_ih = enablegaps ? m->gappih : 0;
 	int32_t gap_iv = enablegaps ? m->gappiv : 0;
-	int32_t gap_oh = enablegaps ? m->gappoh : 0;
-	int32_t gap_ov = enablegaps ? m->gappov : 0;
+	int32_t gap_ol = enablegaps ? m->gappol : 0;
+	int32_t gap_or = enablegaps ? m->gappor : 0;
+	int32_t gap_ot = enablegaps ? m->gappot : 0;
+	int32_t gap_ob = enablegaps ? m->gappob : 0;
 	if (config.smartgaps && n_clients == 1)
-		gap_ih = gap_iv = gap_oh = gap_ov = 0;
+		gap_ih = gap_iv = gap_ol = gap_or = gap_ot = gap_ob = 0;
 
-	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
-				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
+	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_ol,
+				   m->w.y + gap_ot, m->w.width - gap_ol - gap_or,
+				   m->w.height - gap_ot - gap_ob, gap_ih, gap_iv);
 }
 
 static void dwindle_remove_client(Client *c) {
@@ -660,14 +664,16 @@ void dwindle(Monitor *m) {
 
 	int32_t gap_ih = enablegaps ? m->gappih : 0;
 	int32_t gap_iv = enablegaps ? m->gappiv : 0;
-	int32_t gap_oh = enablegaps ? m->gappoh : 0;
-	int32_t gap_ov = enablegaps ? m->gappov : 0;
+	int32_t gap_ol = enablegaps ? m->gappol : 0;
+	int32_t gap_or = enablegaps ? m->gappor : 0;
+	int32_t gap_ot = enablegaps ? m->gappot : 0;
+	int32_t gap_ob = enablegaps ? m->gappob : 0;
 	if (config.smartgaps && n == 1)
-		gap_ih = gap_iv = gap_oh = gap_ov = 0;
+		gap_ih = gap_iv = gap_ol = gap_or = gap_ot = gap_ob = 0;
 
-	dwindle_assign(*root, m->w.x + gap_oh, m->w.y + gap_ov,
-				   m->w.width - 2 * gap_oh, m->w.height - 2 * gap_ov, gap_ih,
-				   gap_iv);
+	dwindle_assign(*root, m->w.x + gap_ol, m->w.y + gap_ot,
+				   m->w.width - gap_ol - gap_or, m->w.height - gap_ot - gap_ob,
+				   gap_ih, gap_iv);
 
 	free(vis);
 	free(leaves);
