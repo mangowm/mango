@@ -1319,6 +1319,7 @@ static void ipc_notify_device_event(struct wlr_input_device *device);
 #include "layout/scroll.h"
 #include "layout/vertical.h"
 #include "overview/overview.h"
+#include "switcher/switcher.h"
 
 #include "manage/client.h"
 #include "input/keyboard.h"

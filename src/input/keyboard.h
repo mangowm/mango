@@ -508,6 +508,18 @@ void keypress(struct wl_listener *listener, void *data) {
 		toggleoverview(&(Arg){.i = 1});
 	}
 
+	if (switcher_is_active()) {
+		if (locked) {
+			switcher_close();
+		} else if (!group->virtual_keyboard &&
+				   event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+				   ISMODEKEYCODE(keycode)) {
+			switcher_commit();
+			group->nsyms = 0;
+			wl_event_source_timer_update(group->key_repeat_source, 0);
+		}
+	}
+
 	if (config.cursor_hide_on_keypress && !cursor_hidden &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		hidecursor(NULL);

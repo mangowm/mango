@@ -6,6 +6,7 @@ void focus_window_or_workspace(const Arg *arg);
 void groupjoin(const Arg *arg);
 void groupleave(const Arg *arg);
 void toggleoverview(const Arg *arg);
+void switcher(const Arg *arg);
 void togglehdr(const Arg *arg);
 void togglejump(const Arg *arg);
 void set_proportion(const Arg *arg);
