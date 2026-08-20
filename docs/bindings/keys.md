@@ -117,6 +117,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `focusdir` | `left/right/up/down` | Focus window in direction. |
 | `focus_window_or_workspace` | `left/right/up/down` | Focus window in direction; otherwise jump to the nearest adjacent tag that has clients, falling back to the next/previous tag if none. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
+| `focus_first_tiled` | - | Focus the first visible tiled window in layout order. |
 | `focuslast` | - | Focus the previously active window. |
 | `exchange_client` | `left/right/up/down` | Swap window with neighbor in direction. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
