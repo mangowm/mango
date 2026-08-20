@@ -720,6 +720,9 @@ void closemon(Monitor *m) {
 		toggleoverview(&(Arg){.i = 1});
 	}
 
+	/* the panel position and thumbnails may reference the dying output */
+	switcher_cancel();
+
 	if (!nmons) {
 		selmon = NULL;
 	} else if (m == selmon) {

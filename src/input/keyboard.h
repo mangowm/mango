@@ -505,6 +505,14 @@ void keypress(struct wl_listener *listener, void *data) {
 		toggleoverview(&(Arg){.i = 1});
 	}
 
+	// flat switcher commits on mod key release. any keyboard may commit
+	// since any keyboard can open it through a bind
+	if (switcher_is_active() && !locked &&
+		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+		ISMODEKEYCODE(keycode) && switcher_should_commit(keycode, mods)) {
+		switcher_commit();
+	}
+
 	if (config.cursor_hide_on_keypress && !cursor_hidden &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		hidecursor(NULL);
@@ -515,6 +523,21 @@ void keypress(struct wl_listener *listener, void *data) {
 	} else {
 		// 避免普通绑定影响单独mod键绑定
 		last_hold_keycode = keycode;
+	}
+
+	// escape cancels the flat switcher without changing focus
+	if (switcher_is_active() && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		for (i = 0; i < nsyms; i++) {
+			if (syms[i] == XKB_KEY_Escape) {
+				switcher_cancel();
+				// returning skips the repeat bookkeeping below, drop any
+				// armed repeat so a held opener bind cannot refire and
+				// reopen the switcher
+				group->nsyms = 0;
+				wl_event_source_timer_update(group->key_repeat_source, 0);
+				return;
+			}
+		}
 	}
 
 	for (i = 0; i < nsyms; i++)

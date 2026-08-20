@@ -349,6 +349,7 @@ void locksession(struct wl_listener *listener, void *data) {
 		return;
 	}
 	lock = session_lock->data = ecalloc(1, sizeof(*lock));
+	switcher_cancel();
 	focusclient(NULL, 0);
 
 	lock->scene = wlr_scene_tree_create(layers[LyrBlock]);
