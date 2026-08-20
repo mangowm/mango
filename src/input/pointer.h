@@ -441,6 +441,19 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		if (locked)
 			break;
 
+		if (switcher_is_active() &&
+			(event->button == BTN_LEFT || event->button == BTN_RIGHT)) {
+			Client *switcher_c = switcher_client_at(cursor->x, cursor->y);
+			if (!switcher_c)
+				switcher_close();
+			else if (event->button == BTN_LEFT)
+				switcher_commit_client(switcher_c);
+			else
+				pending_kill_client(switcher_c);
+			wlr_seat_pointer_notify_clear_focus(seat);
+			return true;
+		}
+
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, &gb, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene && c->scene->node.enabled &&

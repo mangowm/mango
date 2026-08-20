@@ -702,6 +702,7 @@ static void set_binding_keymode(Config *config, char mode[28],
 
 int32_t parse_circle_direction(const char *str) {
 	// 将输入字符串转换为小写
+
 	char lowerStr[10];
 	int32_t i = 0;
 	while (str[i] && i < 9) {
@@ -1298,6 +1299,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
 		func = focuslast;
+	} else if (strcmp(func_name, "switcher") == 0) {
+		func = switcher;
+		(*arg).i = parse_circle_direction(arg_value);
 	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
 		func = toggle_trackpad_enable;
 	} else if (strcmp(func_name, "setoption") == 0) {
