@@ -1183,6 +1183,65 @@ void ipc_notify_kb_layout(void) {
 		free(json_str);
 }
 
+void printstatus(enum ipc_watch_type type) {
+	wl_signal_emit(&mango_print_status, &type);
+}
+
+void handle_print_status(struct wl_listener *listener, void *data) {
+
+	enum ipc_watch_type type = *(enum ipc_watch_type *)data;
+
+	if (type & IPC_WATCH_KEYMODE) {
+		ipc_notify_keymode();
+	}
+	if (type & IPC_WATCH_KB_LAYOUT) {
+		ipc_notify_kb_layout();
+	}
+	if (type & IPC_WATCH_FOCUSING_CLIENT) {
+		ipc_notify_focusing_client();
+	}
+	if (type & IPC_WATCH_ALL_TAGS) {
+		ipc_notify_all_tags();
+	}
+	if (type & IPC_WATCH_ALL_CLIENTS) {
+		ipc_notify_all_clients();
+	}
+	if (type &
+		(IPC_WATCH_ALL_MONITORS | IPC_WATCH_KEYMODE | IPC_WATCH_KB_LAYOUT |
+		 IPC_WATCH_FOCUSING_CLIENT | IPC_WATCH_TAGS)) {
+		ipc_notify_all_monitors();
+	}
+
+	if (type & IPC_WATCH_CLIENT) {
+		Client *c = NULL;
+		wl_list_for_each(c, &clients, link) {
+			if (c->iskilling)
+				continue;
+			ipc_notify_client(c);
+		}
+	}
+
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (!m->wlr_output->enabled) {
+			continue;
+		}
+
+		if (type & IPC_WATCH_MONITOR) {
+			ipc_notify_monitor(m);
+		}
+		if (type & IPC_WATCH_TAGS) {
+			ipc_notify_tags(m);
+		}
+
+		if (type & IPC_WATCH_LAST_OPEN_SURFACE) {
+			ipc_notify_last_surface_ws_name(m);
+		}
+
+		mango_ext_workspace_printstatus(m);
+	}
+}
+
 /* ---------- 初始化与清理 ---------- */
 static int ipc_sock_fd = -1;
 static struct wl_event_source *ipc_event_source = NULL;
