@@ -1079,6 +1079,7 @@ static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 								   int32_t sy, void *user_data);
 static void unminimize(Client *c);
 Client *termforwin(Client *w);
+Client *get_client_by_id(uint32_t id);
 Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title);
 Client *center_tiled_select(Monitor *m);
 Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating);

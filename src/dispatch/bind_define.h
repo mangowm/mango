@@ -511,6 +511,20 @@ void killclient(const Arg *arg) {
 	return;
 }
 
+void killid(const Arg *arg) {
+	Client *c = get_client_by_id(arg->ui);
+
+	if (c) {
+		if (arg->i == FORCE) {
+			client_pending_force_kill(c);
+		} else {
+			pending_kill_client(c);
+		}
+	}
+
+	return;
+}
+
 void moveresize(const Arg *arg) {
 	const char *cursors[] = {"nw-resize", "ne-resize", "sw-resize",
 							 "se-resize"};
@@ -1293,9 +1307,18 @@ void switch_layout(const Arg *arg) {
 void tag(const Arg *arg) {
 	if (!selmon)
 		return;
+
 	Client *target_client = arg->tc ? arg->tc : selmon->sel;
 	tag_client(arg, target_client);
-	return;
+}
+
+void tagid(const Arg *arg) {
+	if (!selmon)
+		return;
+	
+	Client *c = get_client_by_id(arg->ui2);
+
+	tag_client(arg, c);
 }
 
 void tagmon(const Arg *arg) {
@@ -1501,7 +1524,6 @@ void togglefakefullscreen(const Arg *arg) {
 	Client *sel = arg->tc ? arg->tc : focustop(selmon);
 	if (sel)
 		setfakefullscreen(sel, !sel->isfakefullscreen);
-	return;
 }
 
 void togglefloating(const Arg *arg) {
@@ -1525,7 +1547,29 @@ void togglefloating(const Arg *arg) {
 	}
 
 	setfloating(sel, isfloating);
-	return;
+}
+
+void togglefloatingid(const Arg *arg) {
+	if (!selmon || grabc)
+		return;
+
+	if (selmon && selmon->isoverview)
+		return;
+
+	Client *c = get_client_by_id(arg->ui);
+
+	if (!c)
+		return;
+
+	bool isfloating = c->isfloating;
+
+	if ((c->isfullscreen || c->ismaximizescreen)) {
+		isfloating = 1;
+	} else {
+		isfloating = !c->isfloating;
+	}
+
+	setfloating(c, isfloating);
 }
 
 void togglefullscreen(const Arg *arg) {
@@ -1544,7 +1588,25 @@ void togglefullscreen(const Arg *arg) {
 		setfullscreen(sel, 0, true);
 	else
 		setfullscreen(sel, 1, true);
-	return;
+}
+
+void togglefullscreenid(const Arg *arg) {
+	if (!selmon)
+		return;
+
+	Client *c = get_client_by_id(arg->ui);
+
+	if (!c)
+		return;
+
+	c->is_scratchpad_show = 0;
+	c->is_in_scratchpad = 0;
+	c->isnamedscratchpad = 0;
+
+	if (c->isfullscreen)
+		setfullscreen(c, 0, true);
+	else
+		setfullscreen(c, 1, true);
 }
 
 void toggleglobal(const Arg *arg) {
@@ -2317,10 +2379,10 @@ void dwindle_toggle_current_split(const Arg *arg) {
 }
 
 void focusid(const Arg *arg) {
-	if (!selmon || !arg->tc)
+	if (!selmon)
 		return;
 
-	Client *c = arg->tc;
+	Client *c = get_client_by_id(arg->ui);
 
 	if (c->swallowdby)
 		return;

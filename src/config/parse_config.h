@@ -719,8 +719,12 @@ int32_t parse_direction(const char *str) {
 
 int32_t parse_force(const char *str) {
 	// 将输入字符串转换为小写
+	if (!str)
+		return UNFORCE;
+	
 	char lowerStr[10];
 	int32_t i = 0;
+	
 	while (str[i] && i < 9) {
 		lowerStr[i] = tolower(str[i]);
 		i++;
@@ -1206,6 +1210,7 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = groupleave;
 	} else if (strcmp(func_name, "focusid") == 0) {
 		func = focusid;
+		(*arg).ui = atoi(arg_value);
 	} else if (strcmp(func_name, "incnmaster") == 0) {
 		func = incnmaster;
 		(*arg).i = atoi(arg_value);
@@ -1269,6 +1274,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "killclient") == 0) {
 		func = killclient;
 		(*arg).i = parse_force(arg_value);
+	} else if (strcmp(func_name, "killid") == 0) {
+		func = killid;
+		(*arg).ui = atoi(arg_value);
+		(*arg).i = parse_force(arg_value2);
 	} else if (strcmp(func_name, "centerwin") == 0) {
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
@@ -1332,8 +1341,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = switch_layout;
 	} else if (strcmp(func_name, "togglefloating") == 0) {
 		func = togglefloating;
+	} else if (strcmp(func_name, "togglefloatingid") == 0) {
+		func = togglefloatingid;
+		(*arg).ui = atoi(arg_value);
 	} else if (strcmp(func_name, "togglefullscreen") == 0) {
 		func = togglefullscreen;
+	} else if (strcmp(func_name, "togglefullscreenid") == 0) {
+		func = togglefullscreenid;
+		(*arg).ui = atoi(arg_value);
 	} else if (strcmp(func_name, "togglefakefullscreen") == 0) {
 		func = togglefakefullscreen;
 	} else if (strcmp(func_name, "toggleoverlay") == 0) {
@@ -1408,6 +1423,11 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = tag;
 		(*arg).ui = parse_tag_mask(arg_value);
 		(*arg).i = atoi(arg_value2);
+	} else if (strcmp(func_name, "tagid") == 0) {
+		func = tagid;
+		(*arg).ui2 = atoi(arg_value);  // id
+		(*arg).ui = parse_tag_mask(arg_value2); // tag
+		(*arg).i = atoi(arg_value3);  // synctag
 	} else if (strcmp(func_name, "view") == 0) {
 		func = bind_to_view;
 		(*arg).ui = parse_tag_mask(arg_value);

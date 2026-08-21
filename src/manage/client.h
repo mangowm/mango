@@ -3418,6 +3418,18 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 
 uint32_t generate_client_id(void) { return ++next_client_id; }
 
+Client* get_client_by_id(uint32_t id) 
+{
+	Client *c = NULL;
+
+	wl_list_for_each(c, &clients, link) {
+		if (c->id == id)
+			break;
+	}
+
+	return c;
+}
+
 void client_pending_force_kill(Client *c) {
 	if (!c)
 		return;

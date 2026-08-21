@@ -87,3 +87,7 @@ void dwindle_split_horizontal(const Arg *arg);
 void dwindle_split_vertical(const Arg *arg);
 void dwindle_toggle_current_split(const Arg *arg);
 void focusid(const Arg *arg);
+void killid(const Arg *arg);
+void tagid(const Arg *arg);
+void togglefloatingid(const Arg *arg);
+void togglefullscreenid(const Arg *arg);
