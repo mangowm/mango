@@ -166,6 +166,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 	l->noblur = 0;
 	l->shadow = NULL;
 	l->need_output_flush = true;
+	l->animation_slide_direction = UNDIR;
 
 	// 应用layer规则
 	for (ji = 0; ji < config.layer_rules_count; ji++) {
@@ -179,6 +180,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 			APPLY_INT_PROP(l, r, noshadow);
 			APPLY_STRING_PROP(l, r, animation_type_open);
 			APPLY_STRING_PROP(l, r, animation_type_close);
+			APPLY_INT_PROP(l, r, animation_slide_direction);
 		}
 	}
 

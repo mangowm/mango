@@ -115,19 +115,25 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 	geo->width = l->geom.width;
 	geo->height = l->geom.height;
 
-	center_x = l->geom.x + l->geom.width / 2;
-	center_y = l->geom.y + l->geom.height / 2;
-	horizontal =
-		center_x > usable_area.x + usable_area.width / 2 ? RIGHT : LEFT;
-	horizontal_value = horizontal == LEFT
-						   ? center_x - usable_area.x
-						   : usable_area.x + usable_area.width - center_x;
-	vertical = center_y > usable_area.y + usable_area.height / 2 ? DOWN : UP;
-	vertical_value = vertical == UP
-						 ? center_y - l->mon->w.y
-						 : usable_area.y + usable_area.height - center_y;
-	slide_direction = horizontal_value < vertical_value ? horizontal : vertical;
-
+	if (l->animation_slide_direction != UNDIR) {
+		slide_direction = l->animation_slide_direction;
+	} else {
+		center_x = l->geom.x + l->geom.width / 2;
+		center_y = l->geom.y + l->geom.height / 2;
+		horizontal =
+			center_x > usable_area.x + usable_area.width / 2 ? RIGHT : LEFT;
+		horizontal_value = horizontal == LEFT
+							   ? center_x - usable_area.x
+							   : usable_area.x + usable_area.width - center_x;
+		vertical =
+			center_y > usable_area.y + usable_area.height / 2 ? DOWN : UP;
+		vertical_value = vertical == UP
+							 ? center_y - l->mon->w.y
+							 : usable_area.y + usable_area.height - center_y;
+		slide_direction =
+			horizontal_value < vertical_value ? horizontal : vertical;
+	}
+	
 	switch (slide_direction) {
 	case UP:
 		geo->x = l->geom.x;
