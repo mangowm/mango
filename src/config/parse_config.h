@@ -2956,7 +2956,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		ConfigEnv *env = calloc(1, sizeof(ConfigEnv));
 
 		const char *needle = "~/";
-		
+
 		if (strstr(env_value, needle)) {
 			const char *home = getenv("HOME");
 
@@ -2974,7 +2974,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			size_t len = strlen(env_value) + 1;
 
 			for (char *p = strstr(env_value, needle); p;
-				p = strstr(p + rlen, needle))
+				 p = strstr(p + rlen, needle))
 				len += hlen - rlen;
 
 			env->value = malloc(len);
