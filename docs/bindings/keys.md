@@ -120,6 +120,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `focuslast` | - | Focus the previously active window. |
 | `exchange_client` | `left/right/up/down` | Swap window with neighbor in direction. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
+| `move_client` | `left/right/up/down` | Move window to direction. |
 | `zoom` | - | Swap focused window with Master. |
 
 ### Group
