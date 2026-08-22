@@ -1273,6 +1273,15 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
 		func = focuslast;
+	} else if (strcmp(func_name, "switcher") == 0) {
+		/* switcher[,<direction>|commit|cancel] */
+		func = switcher;
+		if (strcmp(arg_value, "commit") == 0)
+			(*arg).i = SWITCHER_COMMIT;
+		else if (strcmp(arg_value, "cancel") == 0)
+			(*arg).i = SWITCHER_CANCEL;
+		else
+			(*arg).i = atoi(arg_value) < 0 ? -1 : 1;
 	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
 		func = toggle_trackpad_enable;
 	} else if (strcmp(func_name, "setoption") == 0) {

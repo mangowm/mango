@@ -2015,6 +2015,8 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
 	c->iskilling = 1;
+	/* drop the tile before the scene teardown */
+	switcher_drop_client(c);
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(
 					 c->mon->pertag->scroller_state[c->mon->pertag->curtag], c)
@@ -3232,6 +3234,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 
 	/* 若旧窗口处于 overview：销毁其卡片树 */
 	overview_destroy_card(w);
+	switcher_drop_client(w);
 	if (w->overview_scene_surface) {
 		w->overview_scene_surface = NULL;
 	}

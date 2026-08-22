@@ -1920,6 +1920,9 @@ void toggleoverview(const Arg *arg) {
 	if (!selmon || grabc)
 		return;
 
+	/* overview and the flat switcher are mutually exclusive */
+	switcher_cancel();
+
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
 
 	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
