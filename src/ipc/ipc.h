@@ -556,7 +556,8 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		if (client_id > 0) {
 			arg.tc = client_by_id((uint32_t)client_id);
 			if (arg.tc == NULL)
-				return send_static_json(client_fd, "{\"error\":\"no client found\"}\n");
+				return send_static_json(client_fd,
+										"{\"error\":\"no client found\"}\n");
 		}
 
 		if (func) {
