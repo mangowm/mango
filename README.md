@@ -68,12 +68,12 @@ A lightweight, high-performance Wayland tiling compositor featuring **native HDR
 
 ## 🚀 Quick Start & Installation
 
-### Option 1: Arch Linux / CachyOS (Pre-built PKGBUILD)
+### Option 1: Arch Linux / CachyOS (`makepkg`)
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/mangowm-hdr.git
-cd mangowm-hdr
+git clone -b wl-only https://github.com/another-hubgit/mango.git
+cd mango
 
 # Build and install package
 makepkg -si
@@ -89,7 +89,8 @@ makepkg -si
 * `libdrm`, `pixman-1`, `libinput`, `xkbcommon`, `cjson`, `pangocairo`, `pcre2`
 
 ```bash
-cd src
+git clone -b wl-only https://github.com/another-hubgit/mango.git
+cd mango
 meson setup build --prefix=/usr --buildtype=release
 ninja -C build
 sudo ninja -C build install
@@ -135,33 +136,6 @@ monitorrule = name:DP-1,width:5120,height:1440,refresh:144,x:0,y:1080,scale:1,rr
 
 # Shortcut to toggle HDR on/off
 bind = SUPER, h, togglehdr
-```
-
----
-
-## 🧪 Testing & Verification
-
-A lightweight C test tool is included to verify the Wayland protocol handshake:
-
-```bash
-# Compile and run test client
-gcc -I. -Iprotocols test_frog_client.c protocols/frog-color-management-v1-client-protocol.c -lwayland-client -o test_frog_client
-./test_frog_client
-```
-
-**Expected Output:**
-```text
-[TEST] Bound frog_color_management_factory_v1
-[TEST] Received frog preferred_metadata:
-  Transfer Function: 3 (ST2084_PQ)
-  Red Primary: (34000, 16000)
-  Green Primary: (13250, 37250)
-  Blue Primary: (7500, 3000)
-  White Point: (15635, 16450)
-  Max Luminance: 1000 nits
-  Min Luminance: 1 (x0.0001 nits)
-  Max Full Frame: 250 nits
-[TEST SUCCESS] frog-color-management-v1 is fully functional and validated!
 ```
 
 ---
