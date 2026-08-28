@@ -1,5 +1,6 @@
 #include "ext-workspace.h"
 #include "foreign-toplevel.h"
+#include "frog-color.h"
 #include "hdr.h"
 #include "tearing.h"
 #include "text-input.h"
