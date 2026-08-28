@@ -1779,6 +1779,11 @@ void init_client_properties(Client *c) {
 	c->animation.overview_enter_anim_set = false;
 	c->animation.tagouting = false;
 	c->animation.tagouted = false;
+
+	c->image_capture_scene_surface = NULL;
+	c->image_capture_tree = NULL;
+	c->image_capture_source = NULL;
+
 	wl_list_init(&c->link);
 	wl_list_init(&c->flink);
 }
@@ -1837,12 +1842,14 @@ mapnotify(struct wl_listener *listener, void *data) {
 	c->ext_foreign_toplevel = wlr_ext_foreign_toplevel_handle_v1_create(
 		foreign_toplevel_list, &foreign_toplevel_state);
 	c->ext_foreign_toplevel->data = c;
-	c->image_capture_tree =
-		c->type == XDGShell
-			? wlr_scene_xdg_surface_create(&c->image_capture_scene->tree,
-										   c->surface.xdg)
-			: wlr_scene_subsurface_tree_create(&c->image_capture_scene->tree,
-											   client_surface(c));
+
+	if (client_is_x11(c)) {
+		c->image_capture_scene_surface = wlr_scene_surface_create(
+			&c->image_capture_scene->tree, client_surface(c));
+	} else {
+		c->image_capture_tree = wlr_scene_xdg_surface_create(
+			&c->image_capture_scene->tree, c->surface.xdg);
+	}
 
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
@@ -2139,16 +2146,11 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		c->group_bar = NULL;
 	}
 
-	if (c->image_capture_tree) {
-		wlr_scene_node_destroy(&c->image_capture_tree->node);
-		c->image_capture_tree = NULL;
-	}
 	if (c->image_capture_scene) {
 		wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
 		c->image_capture_scene = NULL;
 	}
 
-	c->image_capture_source = NULL;
 	init_client_properties(c);
 
 	wlr_scene_node_destroy(&c->scene->node);

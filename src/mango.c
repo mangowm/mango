@@ -363,7 +363,7 @@ struct Client {
 	struct wlr_scene_tree *image_capture_tree;
 	struct wlr_scene *image_capture_scene;
 	struct wlr_ext_image_capture_source_v1 *image_capture_source;
-
+	struct wlr_scene_surface *image_capture_scene_surface;
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoGroupBar *group_bar;
