@@ -25,7 +25,7 @@ void goto_workspace(struct workspace *target) {
 	uint32_t tag;
 	tag = 1 << (target->tag - 1);
 	if (target->tag == 0) {
-		toggleoverview(&(Arg){.i = -1});
+		toggleoverview(&(Arg){0});
 		return;
 	} else {
 		view(&(Arg){.ui = tag}, true);

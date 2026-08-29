@@ -480,6 +480,9 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
 	m->ov_normal_mode = 0;
+	m->overcicle_clients = NULL;
+	m->overcicle_count = 0;
+	m->overcicle_index = 0;
 	m->m.x = INT32_MAX;
 	m->m.y = INT32_MAX;
 
@@ -666,6 +669,8 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 
 	m->iscleanuping = true;
 
+	overcicle_clear(m);
+
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {
 		wl_list_for_each_safe(l, tmp, &m->layers[i], link)
@@ -717,7 +722,7 @@ void closemon(Monitor *m) {
 	int32_t i = 0, nmons = wl_list_length(&mons);
 
 	if (m->isoverview) {
-		toggleoverview(&(Arg){.i = 1});
+		toggleoverview(&(Arg){0});
 	}
 
 	if (!nmons) {

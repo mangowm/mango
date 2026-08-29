@@ -350,7 +350,6 @@ typedef struct {
 	int32_t hotarea_size;
 	int32_t hotarea_corner;
 	int32_t enable_hotarea;
-	int32_t ov_tab_mode;
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
@@ -1215,6 +1214,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "overcicle") == 0) {
+		func = overcicle;
 	} else if (strcmp(func_name, "groupfocus") == 0) {
 		func = groupfocus;
 		(*arg).i = parse_circle_direction(arg_value);
@@ -1263,10 +1264,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = has_name ? strdup(arg_value2) : NULL;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
-		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = togglejump;
-		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);
@@ -1979,8 +1978,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->hotarea_corner = atoi(value);
 	} else if (strcmp(key, "enable_hotarea") == 0) {
 		config->enable_hotarea = atoi(value);
-	} else if (strcmp(key, "ov_tab_mode") == 0) {
-		config->ov_tab_mode = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
@@ -4285,7 +4282,6 @@ void override_config(void) {
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
-	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
@@ -4479,7 +4475,6 @@ void set_value_default() {
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;
 	config.capslock = 0;
-	config.ov_tab_mode = 1;
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
 	config.enable_hotarea = 0;

@@ -499,13 +499,12 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
-	// ov tab mode detect moe key release
-	if (config.ov_tab_mode && selmon && !selmon->is_jump_mode &&
-		selmon->isoverview && selmon->sel && !locked &&
-		!group->virtual_keyboard &&
+	// overview tab mode detect mod key release
+	if (selmon && !selmon->is_jump_mode && selmon->isoverview && selmon->sel &&
+		!locked && !group->virtual_keyboard &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
 		ISMODEKEYCODE(keycode)) {
-		toggleoverview(&(Arg){.i = 1});
+		toggleoverview(&(Arg){0});
 	}
 
 	if (switcher_is_active()) {
@@ -556,7 +555,7 @@ void keypress(struct wl_listener *listener, void *data) {
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		for (i = 0; i < nsyms; i++) {
 			if (syms[i] == XKB_KEY_Escape) {
-				togglejump(&(Arg){.i = 0});
+				togglejump(&(Arg){0});
 				return;
 			}
 			// keysym 转字符，与 jump_labels 匹配（字母忽略大小写）
@@ -572,7 +571,7 @@ void keypress(struct wl_listener *listener, void *data) {
 					 toupper((unsigned char)c_char) ==
 						 toupper((unsigned char)c->jump_char))) {
 					focusclient(c, 1);
-					toggleoverview(&(Arg){.i = 1});
+					toggleoverview(&(Arg){0});
 					return;
 				}
 			}

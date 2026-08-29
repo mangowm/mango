@@ -2028,6 +2028,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	Client *nextfocus = NULL;
 	c->iskilling = 1;
 	switcher_remove_client(c);
+	overcicle_remove_client(c);
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(
 					 c->mon->pertag->scroller_state[c->mon->pertag->curtag], c)
@@ -2209,6 +2210,7 @@ destroynotify(struct wl_listener *listener, void *data) {
 		wl_list_remove(&c->set_decoration_mode.link);
 	}
 	switcher_remove_client(c);
+	overcicle_remove_client(c);
 	free(c);
 }
 

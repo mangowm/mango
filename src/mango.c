@@ -616,7 +616,10 @@ struct Monitor {
 	int32_t isoverview;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
-	int32_t ov_normal_mode; /* 热区进入时忽略 ov_tab_mode */
+	int32_t ov_normal_mode;		/* 热区进入时使用普通网格布局 */
+	Client **overcicle_clients; /* overcicle 快照：打开时按 flink 排序 */
+	int overcicle_count;
+	int overcicle_index;
 	int32_t only_sleep;
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
