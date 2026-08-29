@@ -39,6 +39,7 @@ static struct {
 	int count;
 	int index;
 	int tile_h;
+	int scope;
 } sw;
 
 static bool switcher_is_active(void) { return sw.tree != NULL; }
@@ -48,6 +49,11 @@ static bool switcher_candidate(Client *c) {
 		c->is_logic_hide || !client_surface(c) || !client_surface(c)->mapped ||
 		client_is_unmanaged(c) || client_is_x11_popup(c))
 		return false;
+
+	if (sw.scope == SW_CURRENT_TAG)
+		return c->mon == sw.mon && VISIBLEON(c, sw.mon);
+	if (sw.scope == SW_ALL_TAG)
+		return c->mon == sw.mon;
 	return (int32_t)c->tags > 0;
 }
 
@@ -381,7 +387,10 @@ static void switcher_remove_client(Client *c) {
 
 static void switcher_commit_client(Client *tc) {
 	switcher_close();
-	if (!switcher_candidate(tc))
+	if (!tc || !tc->mon || tc->iskilling || tc->isminimized || tc->isunglobal ||
+		tc->is_logic_hide || !client_surface(tc) ||
+		!client_surface(tc)->mapped || client_is_unmanaged(tc) ||
+		client_is_x11_popup(tc))
 		return;
 	if (!VISIBLEON(tc, tc->mon))
 		view_in_mon(&(Arg){.ui = get_tags_first_tag(tc->tags)}, true, tc->mon,
@@ -412,7 +421,7 @@ static Client *switcher_client_at(double lx, double ly) {
 	return NULL;
 }
 
-static void switcher_open(void) {
+static void switcher_open(int scope) {
 	Client *c;
 	Monitor *m;
 	int n = 0;
@@ -421,6 +430,10 @@ static void switcher_open(void) {
 		if (m->isoverview)
 			return;
 	}
+
+	sw.mon = selmon;
+	sw.scope = scope;
+
 	wl_list_for_each(c, &fstack, flink) {
 		if (switcher_candidate(c))
 			n++;
@@ -428,7 +441,6 @@ static void switcher_open(void) {
 	if (n == 0)
 		return;
 
-	sw.mon = selmon;
 	int max_row_w = (int)(sw.mon->m.width * SW_PANEL_FRAC) - 2 * SW_MARGIN;
 	int max_panel_h = (int)(sw.mon->m.height * SW_PANEL_FRAC);
 	// size against the widest allowed tile so the panel always fits
@@ -477,10 +489,17 @@ static void switcher_cycle(int dir) {
 
 void switcher(const Arg *arg) {
 	int dir = arg && arg->i == PREV ? -1 : 1;
+	int scope = arg ? arg->i2 : SW_CURRENT_TAG;
 	if (locked || !selmon || selmon->is_jump_mode)
 		return;
-	if (switcher_is_active())
-		switcher_cycle(dir);
-	else
-		switcher_open();
+	if (switcher_is_active()) {
+		if (scope != sw.scope) {
+			switcher_close();
+			switcher_open(scope);
+		} else {
+			switcher_cycle(dir);
+		}
+	} else {
+		switcher_open(scope);
+	}
 }

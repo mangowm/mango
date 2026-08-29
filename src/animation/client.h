@@ -1306,12 +1306,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 			!c->animation.overview_enter_anim_set)
 			c->animation.overining = false;
 
-		/* 设置进入放大动画：ov_tab 所有窗口，其余除 sel 外 */
-		bool is_ov_tab = config.ov_tab_mode && !c->mon->is_jump_mode &&
-						 !c->mon->ov_normal_mode;
-		if (config.animations && c->mon->isoverview &&
-			((is_ov_tab && config.ov_tab_mode_launch_next) ||
-			 c != c->mon->sel) &&
+		/* 设置进入放大动画：除 sel 外的窗口 */
+		if (config.animations && c->mon->isoverview && c != c->mon->sel &&
 			c->animation.action == OVERVIEW &&
 			!c->animation.overview_enter_anim_set) {
 			c->animation.overview_enter_anim_set = true;

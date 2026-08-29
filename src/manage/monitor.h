@@ -480,6 +480,7 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
 	m->ov_normal_mode = 0;
+	m->ov_tab_layout = 0;
 	m->m.x = INT32_MAX;
 	m->m.y = INT32_MAX;
 
@@ -708,7 +709,7 @@ void closemon(Monitor *m) {
 	int32_t i = 0, nmons = wl_list_length(&mons);
 
 	if (m->isoverview) {
-		toggleoverview(&(Arg){.i = 1});
+		toggleoverview(&(Arg){0});
 	}
 
 	if (!nmons) {

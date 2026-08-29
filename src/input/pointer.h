@@ -60,7 +60,7 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 
 	if (config.enable_hotarea == 1 && selmon->is_in_hotarea == 0 &&
 		in_hotarea) {
-		/* 热区进入：忽略 ov_tab_mode */
+		/* 热区进入：使用普通网格布局 */
 		selmon->ov_normal_mode = 1;
 		toggleoverview(&arg);
 		selmon->is_in_hotarea = 1;
@@ -475,7 +475,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		// overview模式下鼠标左键跳转，右键关闭窗口
 		if (selmon && selmon->isoverview && event->button == BTN_LEFT && c) {
-			toggleoverview(&(Arg){.i = 1});
+			toggleoverview(&(Arg){0});
 			return true;
 		}
 
@@ -1027,8 +1027,7 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	struct timespec now;
 
 	if (config.sloppyfocus && !start_drag_window && c && time && c->scene &&
-		c->scene->node.enabled &&
-		(!c->mon || !c->mon->isoverview || !config.ov_tab_mode) &&
+		c->scene->node.enabled && (!c->mon || !c->mon->isoverview) &&
 		!c->animation.tagining &&
 		(surface != seat->pointer_state.focused_surface ||
 		 (selmon && selmon->isoverview && selmon->sel != c)) &&
