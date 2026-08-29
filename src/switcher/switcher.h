@@ -412,7 +412,7 @@ static Client *switcher_client_at(double lx, double ly) {
 	return NULL;
 }
 
-static void switcher_open(int dir) {
+static void switcher_open(void) {
 	Client *c;
 	Monitor *m;
 	int n = 0;
@@ -449,18 +449,16 @@ static void switcher_open(int dir) {
 	sw.tree = wlr_scene_tree_create(layers[LyrOverlay]);
 	sw.bg = wlr_scene_rect_create(sw.tree, 1, 1, switcher_panel_color);
 	sw.tiles = ecalloc(n, sizeof(*sw.tiles));
-	int current_index = -1;
 	wl_list_for_each(c, &fstack, flink) {
 		if (!switcher_candidate(c))
 			continue;
-		if (c == selmon->sel)
-			current_index = sw.count;
 		struct switcher_tile *tile = ecalloc(1, sizeof(*tile));
 		switcher_tile_create(tile, c);
 		sw.tiles[sw.count++] = tile;
 	}
-	sw.index = current_index >= 0 ? (current_index + dir + sw.count) % sw.count
-								  : (dir > 0 ? 0 : sw.count - 1);
+	// 当前窗口位于 fstack 头部（tiles[0]），选中第二个并提交后会被插到
+	// 最前，下次打开时原来的第一个变成第二个，从而在最近两个窗口间往返
+	sw.index = sw.count > 1 ? 1 : 0;
 	switcher_layout();
 	switcher_apply_highlight();
 
@@ -484,5 +482,5 @@ void switcher(const Arg *arg) {
 	if (switcher_is_active())
 		switcher_cycle(dir);
 	else
-		switcher_open(dir);
+		switcher_open();
 }
