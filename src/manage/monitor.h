@@ -480,9 +480,6 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
 	m->ov_normal_mode = 0;
-	m->overcicle_clients = NULL;
-	m->overcicle_count = 0;
-	m->overcicle_index = 0;
 	m->m.x = INT32_MAX;
 	m->m.y = INT32_MAX;
 
@@ -668,8 +665,6 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	uint32_t i;
 
 	m->iscleanuping = true;
-
-	overcicle_clear(m);
 
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {

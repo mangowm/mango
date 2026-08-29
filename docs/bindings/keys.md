@@ -117,9 +117,8 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `focusdir` | `left/right/up/down` | Focus window in direction. |
 | `focus_window_or_workspace` | `left/right/up/down` | Focus window in direction; otherwise jump to the nearest adjacent tag that has clients, falling back to the next/previous tag if none. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
-| `overcicle` | - | Open overview when closed; while it is open, each trigger cycles focus to the next window on the current monitor. |
 | `focuslast` | - | Focus the previously active window. |
-| `switcher` | `next/prev` | Open or cycle the all-tag, all-monitor thumbnail switcher. Releasing any modifier key selects. |
+| `switcher` | `next/prev`, `all_tag_next/all_tag_prev`, `all_next/all_prev` | Open or cycle the thumbnail switcher. `next`/`prev` list the current tag's windows, `all_tag_next`/`all_tag_prev` list all tags on the current monitor, `all_next`/`all_prev` list all monitors and tags. Releasing any modifier key selects. |
 | `exchange_client` | `left/right/up/down` | Swap window with neighbor in direction. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
 | `zoom` | - | Swap focused window with Master. |

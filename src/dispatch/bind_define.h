@@ -384,115 +384,6 @@ void focusstack(const Arg *arg) {
 	return;
 }
 
-static bool overcicle_candidate(Client *c, Monitor *m) {
-	return c && c->mon == m && !c->isunglobal && !c->iskilling &&
-		   !c->isminimized && !client_is_unmanaged(c) &&
-		   !client_is_x11_popup(c) && client_surface(c) &&
-		   client_surface(c)->mapped && VISIBLEON(c, m);
-}
-
-static void overcicle_clear(Monitor *m) {
-	if (!m)
-		return;
-	free(m->overcicle_clients);
-	m->overcicle_clients = NULL;
-	m->overcicle_count = 0;
-	m->overcicle_index = 0;
-}
-
-/* 打开 overview 时按 fstack/flink 顺序建立循环快照：
- * 当前焦点在第 0 位，上一次切换的焦点在第 1 位；
- * 首次触发即切到第 1 位，之后单向遍历全部窗口 */
-static void overcicle_build(Monitor *m) {
-	overcicle_clear(m);
-	if (!m)
-		return;
-
-	Client *c;
-	int n = 0;
-	wl_list_for_each(c, &fstack, flink) {
-		if (overcicle_candidate(c, m))
-			n++;
-	}
-	if (n <= 0)
-		return;
-
-	m->overcicle_clients = ecalloc(n, sizeof(Client *));
-	n = 0;
-	wl_list_for_each(c, &fstack, flink) {
-		if (overcicle_candidate(c, m))
-			m->overcicle_clients[n++] = c;
-	}
-	m->overcicle_count = n;
-	m->overcicle_index = 0;
-}
-
-/* 窗口销毁时从快照中移除，避免悬挂指针 */
-static void overcicle_remove_client(Client *c) {
-	if (!c || !c->mon || !c->mon->overcicle_clients ||
-		c->mon->overcicle_count <= 0)
-		return;
-
-	Monitor *m = c->mon;
-	int i;
-	for (i = 0; i < m->overcicle_count; i++) {
-		if (m->overcicle_clients[i] == c)
-			break;
-	}
-	if (i == m->overcicle_count)
-		return;
-
-	if (m->overcicle_index > i)
-		m->overcicle_index--;
-	memmove(&m->overcicle_clients[i], &m->overcicle_clients[i + 1],
-			(m->overcicle_count - i - 1) * sizeof(Client *));
-	m->overcicle_count--;
-	if (m->overcicle_count <= 0) {
-		overcicle_clear(m);
-		return;
-	}
-	if (m->overcicle_index >= m->overcicle_count)
-		m->overcicle_index = m->overcicle_count - 1;
-}
-
-/* overcicle: 打开/循环 overview（居中 tab 布局）
- * - 未进入 overview：进入 overview，并按 flink 建立循环快照
- * - 已在 overview 中：每次触发单向向前遍历快照（首次切到上一次切换的焦点） */
-void overcicle(const Arg *arg) {
-	if (!selmon || grabc)
-		return;
-
-	Client *sel = arg->tc ? arg->tc : selmon->sel;
-
-	if (selmon->isoverview && !selmon->is_jump_mode &&
-		!selmon->ov_normal_mode && sel) {
-		/* 快照缺失时（如由 toggleoverview 等进入）先按 flink 建立 */
-		if (selmon->overcicle_count <= 0)
-			overcicle_build(selmon);
-		if (selmon->overcicle_count <= 0)
-			return;
-
-		selmon->overcicle_index =
-			(selmon->overcicle_index + 1 + selmon->overcicle_count) %
-			selmon->overcicle_count;
-
-		Client *tc = selmon->overcicle_clients[selmon->overcicle_index];
-		focusclient(tc, 1);
-		if (config.warpcursor)
-			warp_cursor(tc);
-
-		/* 切换焦点后重排，让 tab 布局跟随焦点 */
-		arrange(selmon, true, false);
-		return;
-	}
-
-	/* 未进入 overview：打开（tab 布局），并按 flink 建立循环快照 */
-	toggleoverview(arg);
-
-	if (selmon && selmon->isoverview)
-		overcicle_build(selmon);
-}
-
 void groupfocus(const Arg *arg) {
 	Client *c = arg->tc ? arg->tc : selmon->sel;
 	if (!c || !c->mon)
@@ -2035,10 +1926,8 @@ void toggleoverview(const Arg *arg) {
 	uint32_t target;
 	uint32_t visible_client_number = 0;
 
-	if (!selmon->isoverview) {
-		overcicle_clear(selmon);
-		if (selmon->is_jump_mode)
-			finish_jump_mode(selmon);
+	if (!selmon->isoverview && selmon->is_jump_mode) {
+		finish_jump_mode(selmon);
 	}
 
 	if (selmon->isoverview) {

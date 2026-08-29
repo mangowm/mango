@@ -1214,8 +1214,6 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	if (strcmp(func_name, "focusstack") == 0) {
 		func = focusstack;
 		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "overcicle") == 0) {
-		func = overcicle;
 	} else if (strcmp(func_name, "groupfocus") == 0) {
 		func = groupfocus;
 		(*arg).i = parse_circle_direction(arg_value);
@@ -1299,7 +1297,25 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = focuslast;
 	} else if (strcmp(func_name, "switcher") == 0) {
 		func = switcher;
-		(*arg).i = parse_circle_direction(arg_value);
+		if (strcmp(arg_value, "all_next") == 0) {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_ALL_MON;
+		} else if (strcmp(arg_value, "all_prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_ALL_MON;
+		} else if (strcmp(arg_value, "all_tag_next") == 0) {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_ALL_TAG;
+		} else if (strcmp(arg_value, "all_tag_prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_ALL_TAG;
+		} else if (strcmp(arg_value, "prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_CURRENT_TAG;
+		} else {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_CURRENT_TAG;
+		}
 	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
 		func = toggle_trackpad_enable;
 	} else if (strcmp(func_name, "setoption") == 0) {
