@@ -112,19 +112,29 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t special_direction;
 	int32_t center_x, center_y;
 
-	if ((!c->animation_type_open &&
-		 strcmp(config.animation_type_open, "fade") == 0) ||
-		(c->animation_type_open &&
-		 strcmp(c->animation_type_open, "fade") == 0)) {
+	const char *animation_type = c->animation_type_open
+									 ? c->animation_type_open
+									 : config.animation_type_open;
+
+	if (c->animation.action == UNMINIMIZE)
+		animation_type = c->animation_type_unminimize
+							 ? c->animation_type_unminimize
+							 : config.animation_type_unminimize;
+
+	if (!animation_type || strcmp(animation_type, "none") == 0)
+		c->animation.duration = 0;
+
+	if (animation_type && strcmp(animation_type, "fade") == 0) {
 		c->animainit_geom.width = geo.width;
 		c->animainit_geom.height = geo.height;
 		c->animainit_geom.x = geo.x;
 		c->animainit_geom.y = geo.y;
 		return;
-	} else if ((!c->animation_type_open &&
-				strcmp(config.animation_type_open, "zoom") == 0) ||
-			   (c->animation_type_open &&
-				strcmp(c->animation_type_open, "zoom") == 0)) {
+	} else if ((animation_type && strcmp(animation_type, "zoom") == 0) ||
+			   (c->animation.action == UNMINIMIZE &&
+				strcmp(animation_type, "") ==
+					0)) { // Set as default animation for unminimize, to
+						  // differentiate from opening
 		c->animainit_geom.width = geo.width * config.zoom_initial_ratio;
 		c->animainit_geom.height = geo.height * config.zoom_initial_ratio;
 		c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
@@ -1012,7 +1022,8 @@ void client_apply_clip(Client *c, float factor) {
 	client_draw_groupbar(c, offsets);
 	client_draw_shield(c, surface_clip_offset);
 	client_draw_blur(c, surface_clip_offset);
-	/* 动画时同步 X11 根 surface 的 dest_size / 裁剪（source_box + dest_size）
+	/* 动画时同步 X11 根 surface 的 dest_size / 裁剪（source_box +
+	 * dest_size）
 	 */
 	if (client_is_x11(c))
 		client_update_xwayland_clip(c, &clip_box);
@@ -1156,6 +1167,7 @@ void client_animation_next_tick(Client *c) {
 	};
 
 	c->is_pending_open_animation = false;
+	c->is_pending_unminimize_animation = false;
 	client_apply_clip(c, factor);
 
 	if (animation_passed >= 1.0) {
@@ -1184,8 +1196,8 @@ void client_animation_next_tick(Client *c) {
 	}
 }
 
-void init_fadeout_client(Client *c) {
-	if (!c->mon || client_is_unmanaged(c))
+void init_fadeout_client(Client *c, int32_t minimize) {
+	if (!c->mon || client_is_unmanaged(c) || c->isnoanimation)
 		return;
 
 	if (!c->scene)
@@ -1194,10 +1206,16 @@ void init_fadeout_client(Client *c) {
 	if (c->shield_when_capture && active_capture_count > 0)
 		return;
 
-	if ((c->animation_type_close &&
-		 strcmp(c->animation_type_close, "none") == 0) ||
-		(!c->animation_type_close &&
-		 strcmp(config.animation_type_close, "none") == 0))
+	const char *animation_type = c->animation_type_close
+									 ? c->animation_type_close
+									 : config.animation_type_close;
+
+	if (minimize)
+		animation_type = c->animation_type_minimize
+							 ? c->animation_type_minimize
+							 : config.animation_type_minimize;
+
+	if (!animation_type || strcmp(animation_type, "none") == 0)
 		return;
 
 	Client *fadeout_client = ecalloc(1, sizeof(*fadeout_client));
@@ -1226,31 +1244,30 @@ void init_fadeout_client(Client *c) {
 		return;
 	}
 
-	fadeout_client->animation.duration = config.animation_duration_close;
+	fadeout_client->animation.duration =
+		!minimize ? config.animation_duration_close
+				  : config.animation_duration_minimize;
 	fadeout_client->geom = fadeout_client->current =
 		fadeout_client->animainit_geom = fadeout_client->animation.initial =
 			c->animation.current;
 	fadeout_client->mon = c->mon;
-	fadeout_client->animation_type_close = c->animation_type_close;
-	fadeout_client->animation.action = CLOSE;
+	fadeout_client->animation_type_close = animation_type;
+	fadeout_client->animation.action = minimize ? MINIMIZE : CLOSE;
 	fadeout_client->bw = c->bw;
 	fadeout_client->nofadeout = c->nofadeout;
 
 	fadeout_client->animation.initial.x = 0;
 	fadeout_client->animation.initial.y = 0;
 
-	if ((!c->animation_type_close &&
-		 strcmp(config.animation_type_close, "fade") == 0) ||
-		(c->animation_type_close &&
-		 strcmp(c->animation_type_close, "fade") == 0)) {
+	if ((animation_type && strcmp(animation_type, "fade") == 0) ||
+		(minimize && strcmp(animation_type, "") ==
+						 0)) { // Set as default animation for minimize, to
+							   // differentiate from closing
 		fadeout_client->current.x = 0;
 		fadeout_client->current.y = 0;
 		fadeout_client->current.width = 0;
 		fadeout_client->current.height = 0;
-	} else if ((c->animation_type_close &&
-				strcmp(c->animation_type_close, "slide") == 0) ||
-			   (!c->animation_type_close &&
-				strcmp(config.animation_type_close, "slide") == 0)) {
+	} else if (animation_type && strcmp(animation_type, "slide") == 0) {
 		fadeout_client->current.y =
 			c->geom.y + c->geom.height / 2 > c->mon->m.y + c->mon->m.height / 2
 				? c->mon->m.height - (c->animation.current.y - c->mon->m.y)
@@ -1325,20 +1342,18 @@ void client_set_pending_state(Client *c) {
 		c->animation.should_animate = true;
 	else if (config.animations && c->animation.action == OVERVIEW &&
 			 c->animation.overview_enter_anim_set)
-		/* overview 进入动画：设置放大后强制启动，预排阶段不强制，避免抖动 */
+		/* overview 进入动画：设置放大后强制启动，预排阶段不强制，避免抖动
+		 */
 		c->animation.should_animate = true;
 	else if (c == grabc || (!c->is_pending_open_animation &&
+							!c->is_pending_unminimize_animation &&
 							wlr_box_equal(&c->current, &c->pending)))
 		c->animation.should_animate = false;
 	else
 		c->animation.should_animate = true;
 
-	if (((c->animation_type_open &&
-		  strcmp(c->animation_type_open, "none") == 0) ||
-		 (!c->animation_type_open &&
-		  strcmp(config.animation_type_open, "none") == 0)) &&
-		c->animation.action == OPEN)
-		c->animation.duration = 0;
+	//	   Moved duration=0 for null or none animations to
+	// set_client_open_animation for simplicity
 
 	if (start_drag_window) {
 		c->animation.should_animate = false;
@@ -1387,13 +1402,15 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->isfloating)
 		client_set_size_bound(c);
 
-	if (!c->is_pending_open_animation)
+	if (!c->is_pending_open_animation && !c->is_pending_unminimize_animation)
 		c->animation.begin_fade_in = false;
 
 	if (c->animation.overining)
 		c->animation.action = OVERVIEW;
-	else if (c->animation.action == OPEN && !c->animation.tagining &&
-			 !c->animation.tagouting && wlr_box_equal(&c->geom, &c->current))
+	else if ((c->animation.action == OPEN ||
+			  c->animation.action == UNMINIMIZE) &&
+			 !c->animation.tagining && !c->animation.tagouting &&
+			 wlr_box_equal(&c->geom, &c->current))
 		; /* keep current action */
 	else if (c->animation.tagouting) {
 		c->animation.duration = config.animation_duration_tag;
@@ -1404,6 +1421,9 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	} else if (c->is_pending_open_animation) {
 		c->animation.duration = config.animation_duration_open;
 		c->animation.action = OPEN;
+	} else if (c->is_pending_unminimize_animation) {
+		c->animation.duration = config.animation_duration_unminimize;
+		c->animation.action = UNMINIMIZE;
 	} else {
 		c->animation.duration = config.animation_duration_move;
 		c->animation.action = MOVE;
@@ -1414,7 +1434,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	else if (c->animation.tagining) {
 		c->animainit_geom.height = c->animation.current.height;
 		c->animainit_geom.width = c->animation.current.width;
-	} else if (c->is_pending_open_animation)
+	} else if (c->is_pending_open_animation ||
+			   c->is_pending_unminimize_animation)
 		set_client_open_animation(c, c->geom);
 	else
 		c->animainit_geom = c->animation.current;
@@ -1463,7 +1484,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	if (!c->animation.tagouting && !c->iskilling)
 		c->pending = c->geom;
 
-	if (c->swallowing && c->animation.action == OPEN)
+	if (c->swallowing &&
+		(c->animation.action == OPEN || c->animation.action == UNMINIMIZE))
 		c->animainit_geom = c->swallowing->animation.current;
 
 	if (c->swallowdby)
@@ -1551,7 +1573,7 @@ void client_set_unfocused_opacity_animation(Client *c) {
 bool client_apply_focus_opacity(Client *c) {
 
 	if (config.blur && !c->noblur && c->blur_opacity != 1.0f &&
-		c->animation.action != OPEN) {
+		c->animation.action != OPEN && c->animation.action != UNMINIMIZE) {
 		c->blur_opacity = 1.0f;
 		wlr_scene_blur_set_strength(c->blur, 1.0f);
 		wlr_scene_blur_set_alpha(c->blur, 1.0f);
@@ -1561,7 +1583,8 @@ bool client_apply_focus_opacity(Client *c) {
 	if (c->isfullscreen) {
 		c->opacity_animation.running = false;
 		client_set_opacity(c, 1);
-	} else if (c->animation.running && c->animation.action == OPEN) {
+	} else if (c->animation.running && (c->animation.action == OPEN ||
+										c->animation.action == UNMINIMIZE)) {
 		c->opacity_animation.running = false;
 		struct timespec now;
 		clock_gettime(CLOCK_MONOTONIC, &now);

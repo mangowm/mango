@@ -71,6 +71,8 @@ typedef struct {
 	float scroller_proportion;
 	const char *animation_type_open;
 	const char *animation_type_close;
+	const char *animation_type_unminimize;
+	const char *animation_type_minimize;
 	const char *layer_animation_type_open;
 	const char *layer_animation_type_close;
 	int32_t isnoborder;
@@ -278,6 +280,8 @@ typedef struct {
 	int32_t layer_animations;
 	char animation_type_open[10];
 	char animation_type_close[10];
+	char animation_type_unminimize[10];
+	char animation_type_minimize[10];
 	char layer_animation_type_open[10];
 	char layer_animation_type_close[10];
 	int32_t animation_fade_in;
@@ -292,11 +296,15 @@ typedef struct {
 	uint32_t animation_duration_tag;
 	uint32_t animation_duration_close;
 	uint32_t animation_duration_focus;
+	uint32_t animation_duration_unminimize;
+	uint32_t animation_duration_minimize;
 	double animation_curve_move[4];
 	double animation_curve_open[4];
 	double animation_curve_tag[4];
 	double animation_curve_close[4];
 	double animation_curve_focus[4];
+	double animation_curve_unminimize[4];
+	double animation_curve_minimize[4];
 	double animation_curve_opafadein[4];
 	double animation_curve_opafadeout[4];
 
@@ -1586,6 +1594,14 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		snprintf(config->animation_type_close,
 				 sizeof(config->animation_type_close), "%.9s",
 				 value); // string limit to 9 char
+	} else if (strcmp(key, "animation_type_unminimize") == 0) {
+		snprintf(config->animation_type_unminimize,
+				 sizeof(config->animation_type_unminimize), "%.9s",
+				 value); // string limit to 9 char
+	} else if (strcmp(key, "animation_type_minimize") == 0) {
+		snprintf(config->animation_type_minimize,
+				 sizeof(config->animation_type_minimize), "%.9s",
+				 value); // string limit to 9 char
 	} else if (strcmp(key, "layer_animation_type_open") == 0) {
 		snprintf(config->layer_animation_type_open,
 				 sizeof(config->layer_animation_type_open), "%.9s",
@@ -1612,6 +1628,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->animation_duration_move = atoi(value);
 	} else if (strcmp(key, "animation_duration_open") == 0) {
 		config->animation_duration_open = atoi(value);
+	} else if (strcmp(key, "animation_duration_unminimize") == 0) {
+		config->animation_duration_unminimize = atoi(value);
+	} else if (strcmp(key, "animation_duration_minimize") == 0) {
+		config->animation_duration_minimize = atoi(value);
 	} else if (strcmp(key, "animation_duration_tag") == 0) {
 		config->animation_duration_tag = atoi(value);
 	} else if (strcmp(key, "animation_duration_close") == 0) {
@@ -1664,6 +1684,26 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			mango_error(false, WLR_ERROR,
 						"Failed to parse "
 						"animation_curve_focus: %s\n",
+						value);
+			return false;
+		}
+	} else if (strcmp(key, "animation_curve_unminimize") == 0) {
+		int32_t num =
+			parse_double_array(value, config->animation_curve_unminimize, 4);
+		if (num != 4) {
+			mango_error(false, WLR_ERROR,
+						"Failed to parse "
+						"animation_curve_unminimize: %s\n",
+						value);
+			return false;
+		}
+	} else if (strcmp(key, "animation_curve_minimize") == 0) {
+		int32_t num =
+			parse_double_array(value, config->animation_curve_minimize, 4);
+		if (num != 4) {
+			mango_error(false, WLR_ERROR,
+						"Failed to parse "
+						"animation_curve_minimize: %s\n",
 						value);
 			return false;
 		}
@@ -2716,6 +2756,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		// string rule value, relay to a client property
 		rule->animation_type_open = NULL;
 		rule->animation_type_close = NULL;
+		rule->animation_type_unminimize = NULL;
+		rule->animation_type_minimize = NULL;
 
 		// float rule value, relay to a client property
 		rule->focused_opacity = 0;
@@ -2757,6 +2799,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->animation_type_open = strdup(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
 					rule->animation_type_close = strdup(val);
+				} else if (strcmp(key, "animation_type_unminimize") == 0) {
+					rule->animation_type_unminimize = strdup(val);
+				} else if (strcmp(key, "animation_type_minimize") == 0) {
+					rule->animation_type_minimize = strdup(val);
 				} else if (strcmp(key, "tags") == 0) {
 					rule->tags = parse_tag_mask(val);
 				} else if (strcmp(key, "monitor") == 0) {
@@ -3963,12 +4009,20 @@ void free_config(void) {
 				free((void *)rule->animation_type_open);
 			if (rule->animation_type_close)
 				free((void *)rule->animation_type_close);
+			if (rule->animation_type_unminimize)
+				free((void *)rule->animation_type_unminimize);
+			if (rule->animation_type_minimize)
+				free((void *)rule->animation_type_minimize);
+
 			if (rule->monitor)
 				free((void *)rule->monitor);
 			rule->id = NULL;
 			rule->title = NULL;
 			rule->animation_type_open = NULL;
 			rule->animation_type_close = NULL;
+			rule->animation_type_unminimize = NULL;
+			rule->animation_type_minimize = NULL;
+
 			rule->monitor = NULL;
 			// 释放 globalkeybinding 的 arg.v（如果动态分配）
 			if (rule->globalkeybinding.arg.v) {
@@ -4258,6 +4312,10 @@ void override_config(void) {
 		CLAMP_INT(config.animation_duration_close, 1, 50000);
 	config.animation_duration_focus =
 		CLAMP_INT(config.animation_duration_focus, 1, 50000);
+	config.animation_duration_unminimize =
+		CLAMP_INT(config.animation_duration_unminimize, 1, 50000);
+	config.animation_duration_minimize =
+		CLAMP_INT(config.animation_duration_minimize, 1, 50000);
 	config.scroller_default_proportion =
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
 	config.scroller_default_proportion_single =
@@ -4467,6 +4525,8 @@ void set_value_default() {
 	config.animation_duration_open = 400;
 	config.animation_duration_tag = 300;
 	config.animation_duration_close = 300;
+	config.animation_duration_unminimize = 350;
+	config.animation_duration_minimize = 300;
 	config.animation_duration_focus = 0;
 
 	config.axis_bind_apply_timeout = 100;
@@ -4616,6 +4676,14 @@ void set_value_default() {
 	config.animation_curve_open[1] = 1.0;
 	config.animation_curve_open[2] = 0.29;
 	config.animation_curve_open[3] = 0.99;
+	config.animation_curve_unminimize[0] = 0.46;
+	config.animation_curve_unminimize[1] = 1.0;
+	config.animation_curve_unminimize[2] = 0.29;
+	config.animation_curve_unminimize[3] = 0.99;
+	config.animation_curve_minimize[0] = 0.46;
+	config.animation_curve_minimize[1] = 1.0;
+	config.animation_curve_minimize[2] = 0.29;
+	config.animation_curve_minimize[3] = 0.99;
 	config.animation_curve_tag[0] = 0.46;
 	config.animation_curve_tag[1] = 1.0;
 	config.animation_curve_tag[2] = 0.29;

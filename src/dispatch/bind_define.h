@@ -724,6 +724,7 @@ void restore_minimized(const Arg *arg) {
 				selmon = c->mon;
 			}
 
+			c->is_pending_unminimize_animation = true;
 			show_hide_client(c);
 			setborder_color(c);
 			warp_cursor(c);
