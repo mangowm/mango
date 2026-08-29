@@ -44,6 +44,7 @@ void toggleglobal(const Arg *arg);
 void incnmaster(const Arg *arg);
 void focusmon(const Arg *arg);
 void focusstack(const Arg *arg);
+void focus_first_tiled(const Arg *arg);
 void groupfocus(const Arg *arg);
 void chvt(const Arg *arg);
 void reload_config(const Arg *arg);
