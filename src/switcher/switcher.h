@@ -35,7 +35,7 @@ static struct {
 	Monitor *mon;
 	struct wlr_scene_tree *tree;
 	struct wlr_scene_rect *bg;
-	struct switcher_tile *tiles;
+	struct switcher_tile **tiles;
 	int count;
 	int index;
 	int tile_h;
@@ -280,7 +280,7 @@ static void switcher_layout(void) {
 	int row_w = 0;
 	int content_w = 0;
 	for (int i = 0; i < sw.count; i++) {
-		struct switcher_tile *tile = &sw.tiles[i];
+		struct switcher_tile *tile = sw.tiles[i];
 		int fw = tile->cw + 2 * SW_PAD;
 		if (row_w > 0 && row_w + SW_GAP + fw > maxrow_w) {
 			nrows++;
@@ -294,7 +294,7 @@ static void switcher_layout(void) {
 
 	int *rowsw = ecalloc(nrows, sizeof(*rowsw));
 	for (int i = 0; i < sw.count; i++) {
-		struct switcher_tile *tile = &sw.tiles[i];
+		struct switcher_tile *tile = sw.tiles[i];
 		int fw = tile->cw + 2 * SW_PAD;
 		rowsw[tile->row] += rowsw[tile->row] == 0 ? fw : SW_GAP + fw;
 	}
@@ -309,7 +309,7 @@ static void switcher_layout(void) {
 	int row = -1;
 	int x = 0;
 	for (int i = 0; i < sw.count; i++) {
-		struct switcher_tile *tile = &sw.tiles[i];
+		struct switcher_tile *tile = sw.tiles[i];
 		if (tile->row != row) {
 			row = tile->row;
 			x = SW_MARGIN + (content_w - rowsw[row]) / 2;
@@ -324,9 +324,9 @@ static void switcher_layout(void) {
 
 static void switcher_apply_highlight(void) {
 	for (int i = 0; i < sw.count; i++)
-		wlr_scene_rect_set_color(sw.tiles[i].frame, i == sw.index
-														? config.focuscolor
-														: config.bordercolor);
+		wlr_scene_rect_set_color(sw.tiles[i]->frame, i == sw.index
+														 ? config.focuscolor
+														 : config.bordercolor);
 }
 
 static void switcher_close(void) {
@@ -334,13 +334,49 @@ static void switcher_close(void) {
 		return;
 	for (int i = 0; i < sw.count; i++) {
 		struct switcher_surface *entry, *tmp;
-		wl_list_for_each_safe(entry, tmp, &sw.tiles[i].surfaces, link) {
+		wl_list_for_each_safe(entry, tmp, &sw.tiles[i]->surfaces, link) {
 			switcher_surface_finish(entry);
 		}
 	}
 	wlr_scene_node_destroy(&sw.tree->node);
+	for (int i = 0; i < sw.count; i++)
+		free(sw.tiles[i]);
 	free(sw.tiles);
 	memset(&sw, 0, sizeof(sw));
+}
+
+// remove a single tile while the switcher stays open, then relayout
+static void switcher_remove_client(Client *c) {
+	if (!switcher_is_active())
+		return;
+	int i;
+	for (i = 0; i < sw.count; i++) {
+		if (sw.tiles[i]->c == c)
+			break;
+	}
+	if (i == sw.count)
+		return;
+
+	struct switcher_surface *entry, *tmp;
+	wl_list_for_each_safe(entry, tmp, &sw.tiles[i]->surfaces, link) {
+		switcher_surface_finish(entry);
+	}
+	wlr_scene_node_destroy(&sw.tiles[i]->tree->node);
+	free(sw.tiles[i]);
+
+	if (sw.index > i)
+		sw.index--;
+	memmove(&sw.tiles[i], &sw.tiles[i + 1],
+			(sw.count - i - 1) * sizeof(*sw.tiles));
+	sw.count--;
+	if (sw.count == 0) {
+		switcher_close();
+		return;
+	}
+	if (sw.index >= sw.count)
+		sw.index = sw.count - 1;
+	switcher_layout();
+	switcher_apply_highlight();
 }
 
 static void switcher_commit_client(Client *tc) {
@@ -356,14 +392,14 @@ static void switcher_commit_client(Client *tc) {
 static void switcher_commit(void) {
 	if (!switcher_is_active())
 		return;
-	switcher_commit_client(sw.tiles[sw.index].c);
+	switcher_commit_client(sw.tiles[sw.index]->c);
 }
 
 static Client *switcher_client_at(double lx, double ly) {
 	if (!switcher_is_active())
 		return NULL;
 	for (int i = 0; i < sw.count; i++) {
-		struct switcher_tile *tile = &sw.tiles[i];
+		struct switcher_tile *tile = sw.tiles[i];
 		struct wlr_box box = {
 			.width = tile->cw + 2 * SW_PAD,
 			.height = sw.tile_h + 2 * SW_PAD,
@@ -419,7 +455,9 @@ static void switcher_open(int dir) {
 			continue;
 		if (c == selmon->sel)
 			current_index = sw.count;
-		switcher_tile_create(&sw.tiles[sw.count++], c);
+		struct switcher_tile *tile = ecalloc(1, sizeof(*tile));
+		switcher_tile_create(tile, c);
+		sw.tiles[sw.count++] = tile;
 	}
 	sw.index = current_index >= 0 ? (current_index + dir + sw.count) % sw.count
 								  : (dir > 0 ? 0 : sw.count - 1);
@@ -431,7 +469,7 @@ static void switcher_open(int dir) {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	for (int i = 0; i < sw.count; i++)
-		client_send_frame_done(sw.tiles[i].c, &now);
+		client_send_frame_done(sw.tiles[i]->c, &now);
 }
 
 static void switcher_cycle(int dir) {
