@@ -91,7 +91,9 @@ static Client *client_by_id(uint32_t id) {
 }
 
 static const char *ipc_get_layout_str(void) {
-	struct wlr_keyboard *keyboard = kb_group ? kb_group->keyboard : NULL;
+	struct wlr_keyboard *keyboard =
+		last_active_keyboard ? last_active_keyboard
+							 : (kb_group ? kb_group->keyboard : NULL);
 	if (!keyboard || !keyboard->keymap || !keyboard->xkb_state)
 		return "";
 	xkb_layout_index_t current = xkb_state_serialize_layout(
@@ -489,6 +491,7 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 										rule->name ? rule->name : rule->type);
 			cJSON_AddItemToArray(arr, obj);
 		}
+
 		resp = cJSON_CreateObject();
 		cJSON_AddItemToObject(resp, "devices", arr);
 	} else if (strcmp(cmd, "get all-tags") == 0) {
@@ -506,9 +509,11 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
+
 		while (*ptr) {
 			while (*ptr == ' ' || *ptr == '\t')
 				*out++ = *ptr++;
+
 			if (strncmp(ptr, "client,", 7) == 0) {
 				char *end;
 				long id = strtol(ptr + 7, &end, 10);
@@ -548,8 +553,12 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			token_count > 3 ? tokens[3] : "", token_count > 4 ? tokens[4] : "",
 			token_count > 5 ? tokens[5] : "");
 
-		if (func && client_id > 0)
+		if (client_id > 0) {
 			arg.tc = client_by_id((uint32_t)client_id);
+			if (arg.tc == NULL)
+				return send_static_json(client_fd,
+										"{\"error\":\"no client found\"}\n");
+		}
 
 		if (func) {
 			func(&arg);
@@ -1178,6 +1187,65 @@ void ipc_notify_kb_layout(void) {
 	}
 	if (json_str)
 		free(json_str);
+}
+
+void printstatus(enum ipc_watch_type type) {
+	wl_signal_emit(&mango_print_status, &type);
+}
+
+void handle_print_status(struct wl_listener *listener, void *data) {
+
+	enum ipc_watch_type type = *(enum ipc_watch_type *)data;
+
+	if (type & IPC_WATCH_KEYMODE) {
+		ipc_notify_keymode();
+	}
+	if (type & IPC_WATCH_KB_LAYOUT) {
+		ipc_notify_kb_layout();
+	}
+	if (type & IPC_WATCH_FOCUSING_CLIENT) {
+		ipc_notify_focusing_client();
+	}
+	if (type & IPC_WATCH_ALL_TAGS) {
+		ipc_notify_all_tags();
+	}
+	if (type & IPC_WATCH_ALL_CLIENTS) {
+		ipc_notify_all_clients();
+	}
+	if (type &
+		(IPC_WATCH_ALL_MONITORS | IPC_WATCH_KEYMODE | IPC_WATCH_KB_LAYOUT |
+		 IPC_WATCH_FOCUSING_CLIENT | IPC_WATCH_TAGS)) {
+		ipc_notify_all_monitors();
+	}
+
+	if (type & IPC_WATCH_CLIENT) {
+		Client *c = NULL;
+		wl_list_for_each(c, &clients, link) {
+			if (c->iskilling)
+				continue;
+			ipc_notify_client(c);
+		}
+	}
+
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (!m->wlr_output->enabled) {
+			continue;
+		}
+
+		if (type & IPC_WATCH_MONITOR) {
+			ipc_notify_monitor(m);
+		}
+		if (type & IPC_WATCH_TAGS) {
+			ipc_notify_tags(m);
+		}
+
+		if (type & IPC_WATCH_LAST_OPEN_SURFACE) {
+			ipc_notify_last_surface_ws_name(m);
+		}
+
+		mango_ext_workspace_printstatus(m);
+	}
 }
 
 /* ---------- 初始化与清理 ---------- */

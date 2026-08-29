@@ -1,7 +1,6 @@
 #include "ext-workspace.h"
 #include "foreign-toplevel.h"
 #include "hdr.h"
-#include "tablet.h"
 #include "tearing.h"
 #include "text-input.h"
 #include "xdg-activation.h"

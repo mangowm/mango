@@ -816,8 +816,12 @@ void switch_proportion_preset(const Arg *arg) {
 		return;
 
 	Client *tc = arg->tc ? arg->tc : selmon->sel;
+
 	if (!tc)
 		return;
+
+	if (tc->isfloating)
+		return; // Do not switch scroller proportions for floating windows
 
 	tc = scroll_get_stack_head_client(tc);
 	if (!tc)
@@ -1757,6 +1761,47 @@ void viewtoleft(const Arg *arg) { view_shift_tag(arg, -1); }
 
 void viewtoright(const Arg *arg) { view_shift_tag(arg, 1); }
 
+void view_insert(const Arg *arg) {
+	uint32_t cur, curmask, target;
+
+	if (!selmon || selmon->isoverview)
+		return;
+
+	curmask = selmon->tagset[selmon->seltags] & TAGMASK;
+	if (!curmask || (curmask & (curmask - 1)))
+		return;
+	cur = get_tags_first_tag_num(curmask);
+	if (!cur)
+		return;
+
+	if (arg->i == NEXT) {
+		if (cur >= (uint32_t)config.tag_num)
+			return;
+		target = cur + 1;
+	} else if (cur == 1) {
+		target = cur;
+	} else if (get_tag_status(cur - 1, selmon) == 0) {
+		target = cur - 1;
+	} else {
+		target = cur;
+	}
+
+	if (get_tag_status(target, selmon) == 0) {
+		view(&(Arg){.ui = (1u << (target - 1)) & TAGMASK}, true);
+		return;
+	}
+
+	if (target >= (uint32_t)config.tag_num ||
+		get_tag_status((uint32_t)config.tag_num, selmon))
+		return;
+
+	view_insert_shift_tags(selmon, target);
+	int32_t tag_gather_bak = config.tag_gather;
+	config.tag_gather = 0;
+	view(&(Arg){.ui = (1u << (target - 1)) & TAGMASK}, true);
+	config.tag_gather = tag_gather_bak;
+}
+
 void viewtoleft_have_client(const Arg *arg) {
 	view_shift_tag_have_client(arg, -1);
 }
@@ -1877,13 +1922,6 @@ void toggleoverview(const Arg *arg) {
 
 	Client *sel = arg->tc ? arg->tc : selmon->sel;
 
-	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
-		!selmon->ov_normal_mode && arg->i != 1 && sel) {
-		focusstack(&(Arg){.i = 1});
-		arrange(selmon, true, false);
-		return;
-	}
-
 	selmon->isoverview ^= 1;
 	uint32_t target;
 	uint32_t visible_client_number = 0;
@@ -1932,9 +1970,8 @@ void toggleoverview(const Arg *arg) {
 				!client_is_x11_popup(c) && !c->isunglobal && !c->isminimized &&
 				client_surface(c)->mapped) {
 				c->animation.overining = true;
-				if (config.ov_tab_mode && !selmon->is_jump_mode &&
-					!selmon->ov_normal_mode)
-					/* ov_tab：先跳过 view 排布，等 focusstack 后再设 */
+				if (!selmon->is_jump_mode && !selmon->ov_normal_mode)
+					/* tab 布局：先跳过 view 排布，进入后统一重排时再设 */
 					c->animation.overview_enter_anim_set = true;
 				else
 					/* 其余模式：view 排布时设置放大 */
@@ -1957,10 +1994,10 @@ void toggleoverview(const Arg *arg) {
 
 	view(&(Arg){.ui = target}, false);
 
-	/* ov_tab：进入后自动切到下一焦点并重排 */
-	if (selmon->isoverview && config.ov_tab_mode && !selmon->is_jump_mode &&
+	/* tab 布局：进入后重排 */
+	if (selmon->isoverview && !selmon->is_jump_mode &&
 		!selmon->ov_normal_mode) {
-		focusstack(&(Arg){.i = 1});
+
 		Client *cc = NULL;
 		wl_list_for_each(cc, &clients, link) {
 			if (cc && cc->mon == selmon && !client_is_unmanaged(cc) &&

@@ -38,6 +38,8 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `view_current_to_back` | `0` | Toggling the current tag switches back to the previously viewed tag. |
 | `scratchpad_cross_monitor` | `0` | Share the scratchpad pool across all monitors. |
 | `single_scratchpad` | `1` | Only allow one scratchpad (named or standard) to be visible at a time. |
+| `tag_num` | `9` | Number of tags/workspaces (1–31). On config reload, clients on tags beyond this count are moved to the last tag. |
+| `tag_gather` | `0` | When `1`, occupied tags are compacted to consecutive tags starting at 1, eliminating gaps. For example, with windows on tags 1, 3 and 9, they move to 1, 2 and 3, and the current view follows. |
 
 ## Window Behavior
 
@@ -46,6 +48,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `enable_floating_snap` | `0` | Snap floating windows to edges or other windows. |
 | `snap_distance` | `30` | Max distance (pixels) to trigger floating snap. |
 | `no_border_when_single` | `0` | Remove window borders when only one window is visible on the tag. |
+| `smartgaps` | `0` | Disable gaps when only one window is present. |
 | `idleinhibit_ignore_visible` | `0` | Allow invisible clients (e.g., background audio players) to inhibit idle. |
 | `tag_carousel` | `0` | Enable tag carousel (cycling through tags). |
 | `drag_tile_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh tiled window resize during drag. Too small may cause application lag. |

@@ -783,10 +783,6 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 
 	Client *stack_head_client = headnode->client;
 
-	if (m->visible_scroll_tiling_clients == 1 &&
-		!config.scroller_ignore_proportion_single)
-		return;
-
 	float delta_x, delta_y;
 	float new_scroller_proportion;
 	float new_stack_proportion;
@@ -951,7 +947,11 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		}
 
 		curnode->stack_proportion = new_stack_proportion;
-		headnode->scroller_proportion = new_scroller_proportion;
+
+		if (m->visible_scroll_tiling_clients > 1 ||
+			config.scroller_ignore_proportion_single) {
+			headnode->scroller_proportion = new_scroller_proportion;
+		}
 
 		/* 同步回全局字段 */
 		sync_scroller_state_to_clients(m, tag);

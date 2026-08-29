@@ -230,6 +230,10 @@ Apply changes with `mmsg dispatch reload_config` or restart mango.
 ### Rule Options
 
 All options are optional; unset options fall back to the global settings.
+Keyboard `kb_*` options are independent of the global `xkb_rules_*` settings:
+a rule's keymap is compiled only from the options it sets (unset fields use
+the XKB defaults), so a rule like `kb_layout:pt` is not affected by a global
+`xkb_rules_variant`.
 
 | Category | Option | Description |
 | :--- | :--- | :--- |

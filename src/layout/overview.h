@@ -262,7 +262,7 @@ void overview_scale(Monitor *m) {
 	free(feas);
 }
 
-// ov_tab_mode 的 overview 布局：聚焦窗口居中（约一半屏宽），其余窗口分列两侧
+// overview 布局：聚焦窗口居中（约一半屏宽），其余窗口分列两侧
 static void overview_layout_column(Monitor *m, Client **items, int cnt, float x,
 								   float top, float col_w, float col_h,
 								   float gap) {
@@ -494,7 +494,7 @@ void finish_jump_mode(Monitor *m) {
 }
 
 void overview(Monitor *m) {
-	if (config.ov_tab_mode && !m->is_jump_mode && !m->ov_normal_mode) {
+	if (!m->is_jump_mode && !m->ov_normal_mode) {
 		overview_scale_tab(m);
 	} else {
 		overview_scale(m);

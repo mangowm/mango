@@ -16,6 +16,8 @@
 
 https://github.com/user-attachments/assets/bb83004a-0563-4b48-ad89-6461a9b78b1f
 
+https://github.com/user-attachments/assets/f6af5b70-0f2e-4ef3-ba40-349e8666fc9d
+
 > See all layouts in action at [mangowm.github.io](https://mangowm.github.io/)
 
 ## Why Mango?

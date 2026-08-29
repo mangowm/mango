@@ -131,6 +131,7 @@ typedef struct {
 	float hdr_max_lum;			 // mastering max luminance / max_cll, cd/m²
 	float hdr_max_avg_lum;		 // max frame-average light level, cd/m²
 	int32_t hdr_force;			 // ignore EDID-derived HDR capability checks
+	char *icc;					 // ICC profile path
 	int32_t disable;			 // prefer disable
 } ConfigMonitorRule;
 
@@ -349,7 +350,6 @@ typedef struct {
 	int32_t hotarea_size;
 	int32_t hotarea_corner;
 	int32_t enable_hotarea;
-	int32_t ov_tab_mode;
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
@@ -573,6 +573,31 @@ void trim_whitespace(char *str) {
 	}
 }
 
+// remove comment, support double quote inside "#xxx" or '#xxx' not be treated
+// as comment
+void remove_comment(char *str) {
+	if (str == NULL || *str == '\0')
+		return;
+
+	char quote_char = '\0';
+
+	for (char *p = str; *p != '\0'; p++) {
+		if (quote_char == '\0') {
+			if (*p == '\'' || *p == '"') {
+				quote_char = *p;
+			} else if (*p == '#' && p > str &&
+					   isspace((unsigned char)*(p - 1))) {
+				*p = '\0';
+				return;
+			}
+		} else {
+			if (*p == quote_char) {
+				quote_char = '\0';
+			}
+		}
+	}
+}
+
 int32_t parse_double_array(const char *input, double *output,
 						   int32_t max_count) {
 	char *dup = strdup(input);
@@ -675,6 +700,7 @@ static void set_binding_keymode(Config *config, char mode[28],
 
 int32_t parse_circle_direction(const char *str) {
 	// 将输入字符串转换为小写
+
 	char lowerStr[10];
 	int32_t i = 0;
 	while (str[i] && i < 9) {
@@ -1236,10 +1262,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = has_name ? strdup(arg_value2) : NULL;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
 		func = toggleoverview;
-		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = togglejump;
-		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);
@@ -1252,6 +1276,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "viewtoright") == 0) {
 		func = viewtoright;
 		(*arg).i = atoi(arg_value);
+	} else if (strcmp(func_name, "view_insert") == 0) {
+		func = view_insert;
+		(*arg).i = strcmp(arg_value, "next") == 0 ? NEXT : PREV;
 	} else if (strcmp(func_name, "tagsilent") == 0) {
 		func = tagsilent;
 		(*arg).ui = parse_tag_mask(arg_value);
@@ -1268,6 +1295,27 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = centerwin;
 	} else if (strcmp(func_name, "focuslast") == 0) {
 		func = focuslast;
+	} else if (strcmp(func_name, "switcher") == 0) {
+		func = switcher;
+		if (strcmp(arg_value, "all_next") == 0) {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_ALL_MON;
+		} else if (strcmp(arg_value, "all_prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_ALL_MON;
+		} else if (strcmp(arg_value, "all_tag_next") == 0) {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_ALL_TAG;
+		} else if (strcmp(arg_value, "all_tag_prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_ALL_TAG;
+		} else if (strcmp(arg_value, "prev") == 0) {
+			(*arg).i = PREV;
+			(*arg).i2 = SW_CURRENT_TAG;
+		} else {
+			(*arg).i = NEXT;
+			(*arg).i2 = SW_CURRENT_TAG;
+		}
 	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
 		func = toggle_trackpad_enable;
 	} else if (strcmp(func_name, "setoption") == 0) {
@@ -1947,8 +1995,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->hotarea_corner = atoi(value);
 	} else if (strcmp(key, "enable_hotarea") == 0) {
 		config->enable_hotarea = atoi(value);
-	} else if (strcmp(key, "ov_tab_mode") == 0) {
-		config->ov_tab_mode = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
@@ -2373,6 +2419,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->hdr_max_lum = 0.0f;
 		rule->hdr_max_avg_lum = 0.0f;
 		rule->hdr_force = 0;
+		rule->icc = NULL;
 		rule->custom = 0;
 		rule->disable = 0;
 
@@ -2425,6 +2472,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						CLAMP_FLOAT(atof(val), 0.0f, 10000.0f);
 				} else if (strcmp(key, "hdr_force") == 0) {
 					rule->hdr_force = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "icc") == 0) {
+					free(rule->icc);
+					rule->icc = strdup(val);
 				} else if (strcmp(key, "disable") == 0) {
 					rule->disable = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "custom") == 0) {
@@ -2944,9 +2994,57 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		trim_whitespace(env_value);
 
 		ConfigEnv *env = calloc(1, sizeof(ConfigEnv));
-		env->type = strdup(env_type);
-		env->value = strdup(env_value);
 
+		const char *needle = "~/";
+
+		if (strstr(env_value, needle)) {
+			const char *home = getenv("HOME");
+
+			size_t rlen = 1; // replace only ~
+
+			if (!home) {
+				free(env);
+				mango_error(false, WLR_ERROR,
+							"HOME environment "
+							"variable not set.\n");
+				return false;
+			}
+
+			size_t hlen = strlen(home);
+			size_t len = strlen(env_value) + 1;
+
+			for (char *p = strstr(env_value, needle); p;
+				 p = strstr(p + rlen, needle))
+				len += hlen - rlen;
+
+			env->value = malloc(len);
+			if (!env->value) {
+				free(env);
+				mango_error(false, WLR_ERROR,
+							"Failed to "
+							"allocate memory while expanding $HOME\n");
+				return false;
+			}
+
+			char *substr;
+			char *src = env_value;
+			char *dst = env->value;
+
+			while ((substr = strstr(src, needle))) {
+				size_t n = substr - src;
+				memcpy(dst, src, n);
+				dst += n;
+				memcpy(dst, home, hlen);
+				dst += hlen;
+				src = substr + rlen;
+			}
+
+			strcpy(dst, src);
+		} else {
+			env->value = strdup(env_value);
+		}
+
+		env->type = strdup(env_type);
 		config->env = realloc(config->env,
 							  (config->env_count + 1) * sizeof(*config->env));
 		if (!config->env) {
@@ -3451,13 +3549,18 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 }
 
 bool parse_config_line(Config *config, const char *line, int line_number) {
+	char processed_line[512];
+	strncpy(processed_line, line, sizeof(processed_line) - 1);
+	processed_line[sizeof(processed_line) - 1] = '\0';
+
+	remove_comment(processed_line);
+
 	char key[256], value[256];
-	if (sscanf(line, "%255[^=]=%255[^\n]", key, value) != 2) {
+	if (sscanf(processed_line, "%255[^=]=%255[^\n]", key, value) != 2) {
 		mango_error(false, WLR_ERROR, "Invalid line format: %s", line);
 		return false;
 	}
 
-	// Then trim each part separately
 	trim_whitespace(key);
 	trim_whitespace(value);
 
@@ -4024,6 +4127,8 @@ void free_config(void) {
 				free((void *)config.monitor_rules[i].model);
 			if (config.monitor_rules[i].serial)
 				free((void *)config.monitor_rules[i].serial);
+			if (config.monitor_rules[i].icc)
+				free((void *)config.monitor_rules[i].icc);
 		}
 		free(config.monitor_rules);
 		config.monitor_rules = NULL;
@@ -4194,7 +4299,6 @@ void override_config(void) {
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
-	config.ov_tab_mode = CLAMP_INT(config.ov_tab_mode, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
@@ -4388,7 +4492,6 @@ void set_value_default() {
 	config.log_level = WLR_ERROR;
 	config.numlockon = 0;
 	config.capslock = 0;
-	config.ov_tab_mode = 1;
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
 	config.enable_hotarea = 0;

@@ -213,7 +213,11 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 
 	struct wlr_surface *surface = scene_surface->surface;
 
-	if (buffer_data->should_scale) {
+	if (buffer_data->should_scale
+#ifdef XWAYLAND
+		&& !wlr_xwayland_surface_try_from_wlr_surface(surface)
+#endif
+	) {
 		int32_t surface_width = surface->current.width;
 		int32_t surface_height = surface->current.height;
 
@@ -1274,6 +1278,18 @@ void init_fadeout_client(Client *c) {
 	request_fresh_all_monitors();
 }
 
+/* 无动画时应用窗口最终状态：位置、裁剪/可见性以及几何状态同步 */
+static void client_apply_finish_geometry(Client *c) {
+	if (!c || !c->scene)
+		return;
+
+	wlr_scene_node_set_position(&c->scene->node, c->pending.x, c->pending.y);
+	c->animation.current = c->animainit_geom = c->animation.initial =
+		c->pending = c->current = c->geom;
+	client_apply_clip(c, 1.0);
+	c->need_output_flush = false;
+}
+
 void client_commit(Client *c) {
 	c->current = c->pending;
 
@@ -1285,7 +1301,17 @@ void client_commit(Client *c) {
 		c->animation.time_started = get_now_in_ms();
 		c->animation.running = true;
 		c->animation.should_animate = false;
+	} else {
+		if (!c->animation.running) {
+			c->animation.current = c->geom;
+		}
 	}
+
+	// 禁用动画后提前设置surface位置和大小，
+	// 避免motionnotify 的指针聚焦在上一帧的surface上
+	if (!config.animations)
+		client_apply_finish_geometry(c);
+
 	request_fresh_all_monitors();
 }
 
@@ -1456,11 +1482,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 			!c->animation.overview_enter_anim_set)
 			c->animation.overining = false;
 
-		/* 设置进入放大动画：ov_tab 所有窗口，其余除 sel 外 */
-		bool is_ov_tab = config.ov_tab_mode && !c->mon->is_jump_mode &&
-						 !c->mon->ov_normal_mode;
-		if (config.animations && c->mon->isoverview &&
-			(is_ov_tab || c != c->mon->sel) &&
+		/* 设置进入放大动画：除 sel 外的窗口 */
+		if (config.animations && c->mon->isoverview && c != c->mon->sel &&
 			c->animation.action == OVERVIEW &&
 			!c->animation.overview_enter_anim_set) {
 			c->animation.overview_enter_anim_set = true;
@@ -1645,12 +1668,7 @@ bool client_draw_frame(Client *c) {
 		need_next_tick = true;
 		client_animation_next_tick(c);
 	} else {
-		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
-									c->pending.y);
-		c->animation.current = c->animainit_geom = c->animation.initial =
-			c->pending = c->current = c->geom;
-		client_apply_clip(c, 1.0);
-		c->need_output_flush = false;
+		client_apply_finish_geometry(c);
 	}
 
 	bool need_fade_focus = client_apply_focus_opacity(c);
