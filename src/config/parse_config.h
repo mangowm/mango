@@ -1796,10 +1796,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		size_t app_len, title_len = 0, cmd_len;
 
 		if (!first_sep) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid session_launch "
-					"format. Expected app_id|command or "
-					"app_id|title|command\033[0m\n");
+			mango_error(
+				false, WLR_ERROR,
+				"Invalid session_launch format. Expected app_id|command or "
+				"app_id|title|command\n");
 			return false;
 		}
 
@@ -1815,9 +1815,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		if (app_len == 0 || cmd_len == 0 || app_len >= sizeof(rule.app_id) ||
 			cmd_len >= sizeof(rule.command) ||
 			title_len >= sizeof(rule.title)) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Invalid session_launch "
-					"entry length\033[0m\n");
+			mango_error(false, WLR_ERROR,
+						"Invalid session_launch entry length\n");
 			return false;
 		}
 
@@ -1834,9 +1833,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		trim_whitespace(rule.title);
 		trim_whitespace(rule.command);
 		if (rule.app_id[0] == '\0' || rule.command[0] == '\0') {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m session_launch requires "
-					"both app_id and command\033[0m\n");
+			mango_error(false, WLR_ERROR,
+						"session_launch requires both app_id and command\n");
 			return false;
 		}
 
@@ -1844,13 +1842,13 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 							sizeof(*config->session_launch_rules) *
 								(config->session_launch_rules_count + 1));
 		if (!new_rules) {
-			fprintf(stderr,
-					"\033[1m\033[31m[ERROR]:\033[33m Failed to allocate "
-					"session_launch rules\033[0m\n");
+			mango_error(false, WLR_ERROR,
+						"Failed to allocate session_launch rules\n");
 			return false;
 		}
 		config->session_launch_rules = new_rules;
-		config->session_launch_rules[config->session_launch_rules_count++] = rule;
+		config->session_launch_rules[config->session_launch_rules_count++] =
+			rule;
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
