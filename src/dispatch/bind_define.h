@@ -402,8 +402,6 @@ void overcircle(const Arg *arg) {
 			return;
 
 		focusclient(tc, 1);
-		if (config.warpcursor)
-			warp_cursor(tc);
 
 		/* 切换焦点后重排，让 tab 布局跟随焦点 */
 		arrange(selmon, true, false);
