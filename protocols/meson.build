@@ -24,6 +24,7 @@ wl_protocol_dir + '/staging/cursor-shape/cursor-shape-v1.xml',
 	'wlr-foreign-toplevel-management-unstable-v1.xml',
 	'wlr-layer-shell-unstable-v1.xml',
 	'wlr-output-power-management-unstable-v1.xml',
+	'frog-color-management-v1.xml',
 ]
 wayland_sources = [
 	wayland_scanner_code.process(wayland_xmls),

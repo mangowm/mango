@@ -1733,6 +1733,8 @@ void setup(void) {
 	tearing_new_object.notify = handle_tearing_new_object;
 	wl_signal_add(&tearing_control->events.new_object, &tearing_new_object);
 
+	init_frog_color_management(dpy);
+
 	/* Creates an output layout, which a wlroots utility for working with an
 	 * arrangement of screens in a physical layout. */
 	output_layout = wlr_output_layout_create(dpy);

@@ -1,4 +1,6 @@
 #include <drm_fourcc.h>
+#include <libdisplay-info/info.h>
+#include <libdisplay-info/cta.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -69,6 +71,51 @@ static bool output_supports_hdr(const Monitor *m, const char **reason) {
 	return !r;
 }
 
+static void output_detect_hdr_luminance(Monitor *m) {
+	if (!m || !m->wlr_output)
+		return;
+
+	if (m->hdr_max_lum > 0)
+		return;
+
+	char path[256];
+	for (int card = 0; card < 4; card++) {
+		snprintf(path, sizeof(path), "/sys/class/drm/card%d-%s/edid", card, m->wlr_output->name);
+		FILE *f = fopen(path, "rb");
+		if (!f)
+			continue;
+		uint8_t edid_data[1024];
+		size_t n = fread(edid_data, 1, sizeof(edid_data), f);
+		fclose(f);
+		if (n >= 128) {
+			struct di_info *info = di_info_parse_edid(edid_data, n);
+			if (info) {
+				const struct di_hdr_static_metadata *hdr = di_info_get_hdr_static_metadata(info);
+				if (hdr && hdr->desired_content_max_luminance > 0) {
+					m->hdr_max_lum = hdr->desired_content_max_luminance;
+					m->hdr_min_lum = hdr->desired_content_min_luminance;
+					m->hdr_max_avg_lum = hdr->desired_content_max_frame_avg_luminance;
+					mango_error(true, WLR_INFO,
+						"EDID HDR on %s: Max=%.1f cd/m2, Min=%.4f cd/m2, Avg=%.1f cd/m2",
+						m->wlr_output->name, m->hdr_max_lum, m->hdr_min_lum, m->hdr_max_avg_lum);
+				}
+				di_info_destroy(info);
+			}
+			if (m->hdr_max_lum > 0)
+				break;
+		}
+	}
+
+	if (m->hdr_max_lum <= 0 && output_supports_hdr(m, NULL)) {
+		m->hdr_max_lum = 1000.0f;
+		m->hdr_min_lum = 0.0001f;
+		m->hdr_max_avg_lum = 250.0f;
+		mango_error(true, WLR_INFO,
+			"HDR default mastering on %s: Max=1000.0 cd/m2, Min=0.0001 cd/m2, Avg=250.0 cd/m2",
+			m->wlr_output->name);
+	}
+}
+
 void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 					   bool silent) {
 
@@ -95,21 +142,21 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 	if (!silent)
 		mango_error(true, WLR_DEBUG, "Enabling HDR on output %s",
 					m->wlr_output->name);
+
+	output_detect_hdr_luminance(m);
+
 	struct wlr_output_image_description desc = {
 		.primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
 		.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
 	};
 
-	// Mastering display metadata, from the monitorrule: wlroots does not expose
-	// the EDID luminances. Values are in cd/m²; 0 means unset and leaves the
-	// field zero, which is the previous behaviour.
 	if (m->hdr_max_lum > 0) {
 		wlr_color_primaries_from_named(&desc.mastering_display_primaries,
 									   WLR_COLOR_NAMED_PRIMARIES_BT2020);
 		desc.mastering_luminance.min = m->hdr_min_lum;
 		desc.mastering_luminance.max = m->hdr_max_lum;
 		desc.max_cll = m->hdr_max_lum;
-		desc.max_fall = m->hdr_max_avg_lum;
+		desc.max_fall = m->hdr_max_avg_lum > 0 ? m->hdr_max_avg_lum : m->hdr_max_lum;
 	}
 
 	m->is_hdr_enabling = true;
@@ -220,6 +267,7 @@ static bool togglehdr_output(Monitor *target, bool want) {
 
 	wlr_output_effective_resolution(target->wlr_output, &target->m.width,
 									&target->m.height);
+	frog_color_update_all_surfaces(target);
 	return true;
 }
 
