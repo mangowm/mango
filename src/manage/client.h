@@ -929,9 +929,10 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			if (!match_dir)
 				continue;
 
-			/* 方向聚焦要求在正交坐标轴上有重叠区域，
+			/* focusdir_only_zone_overlap 开启时，方向聚焦要求
+			 * 目标窗口在正交坐标轴上与当前窗口有重叠区域，
 			 * 否则该窗口不作为候选，直接返回空 */
-			if (orth_dist != 0)
+			if (config.focusdir_only_zone_overlap && orth_dist != 0)
 				continue;
 
 			if (step == 0) {
