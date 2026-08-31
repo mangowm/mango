@@ -948,9 +948,8 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				main_dist = -main_dist;
 			}
 
-			int64_t tmp_distance = penalty +
-								   (main_dist * main_dist) +
-								   (orth_dist * orth_dist);
+			int64_t tmp_distance =
+				penalty + (main_dist * main_dist) + (orth_dist * orth_dist);
 
 			if (tmp_distance < distance) {
 				distance = tmp_distance;
@@ -1442,7 +1441,7 @@ void apply_window_snap(Client *c) {
 	int32_t snap_up_mon = 0, snap_down_mon = 0, snap_left_mon = 0,
 			snap_right_mon = 0;
 
-	uint32_t cbw = !render_border || c->fake_no_border ? config.borderpx : 0;
+	uint32_t cbw = !render_border || c->fake_no_border ? c->bw : 0;
 	uint32_t tcbw;
 	uint32_t cx, cy, cw, ch, tcx, tcy, tcw, tch;
 	cx = c->geom.x + cbw;
@@ -1461,7 +1460,7 @@ void apply_window_snap(Client *c) {
 		if (tc && tc->isfloating && !tc->iskilling &&
 			client_surface(tc)->mapped && VISIBLEON(tc, c->mon)) {
 
-			tcbw = !render_border || tc->fake_no_border ? config.borderpx : 0;
+			tcbw = !render_border || tc->fake_no_border ? tc->bw : 0;
 			tcx = tc->geom.x + tcbw;
 			tcy = tc->geom.y + tcbw;
 			tcw = tc->geom.width - 2 * tcbw;

@@ -456,17 +456,9 @@ void client_draw_border(Client *c, struct ivec2 offsets) {
 	bool hit_no_border = check_hit_no_border(c);
 	client_draw_split_border(c, hit_no_border, offsets);
 
-	if (hit_no_border && config.smartgaps) {
+	if (hit_no_border) {
 		c->bw = 0;
 		c->fake_no_border = true;
-	} else if (hit_no_border && !config.smartgaps) {
-		set_rect_size(c->border[0], 0, 0);
-		set_rect_size(c->border[1], 0, 0);
-		set_rect_size(c->border[2], 0, 0);
-		set_rect_size(c->border[3], 0, 0);
-		wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
-		c->fake_no_border = true;
-		return;
 	} else if (!c->isfullscreen && VISIBLEON(c, c->mon)) {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 		c->fake_no_border = false;
@@ -1249,7 +1241,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->bw = 0;
 
 	bool hit_no_border = check_hit_no_border(c);
-	if (hit_no_border && config.smartgaps) {
+	if (hit_no_border) {
 		c->bw = 0;
 		c->fake_no_border = true;
 	}
