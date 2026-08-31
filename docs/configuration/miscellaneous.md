@@ -33,6 +33,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `focus_cross_monitor` | `0` | Allow directional focus to cross monitor boundaries. |
+| `focus_cross_monitor_mru` | `0` | When moving focus to another monitor, focus its most recently used window rather than the geometrically closest one. |
 | `exchange_cross_monitor` | `0` | Allow exchanging clients across monitor boundaries. |
 | `focus_cross_tag` | `0` | Allow directional focus to cross into other tags. |
 | `view_current_to_back` | `0` | Toggling the current tag switches back to the previously viewed tag. |

@@ -310,6 +310,7 @@ typedef struct {
 	int32_t edge_scroller_pointer_focus;
 	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;
+	int32_t focus_cross_monitor_mru;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
 	int32_t focus_cross_tag;
@@ -1711,6 +1712,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->edge_scroller_focus_allow_speed = atof(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
+	} else if (strcmp(key, "focus_cross_monitor_mru") == 0) {
+		config->focus_cross_monitor_mru = atoi(value);
 	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
 		config->exchange_cross_monitor = atoi(value);
 	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
@@ -4334,6 +4337,8 @@ void override_config(void) {
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
+	config.focus_cross_monitor_mru =
+		CLAMP_INT(config.focus_cross_monitor_mru, 0, 1);
 	config.exchange_cross_monitor =
 		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
 	config.scratchpad_cross_monitor =
@@ -4521,6 +4526,7 @@ void set_value_default() {
 	config.edge_scroller_pointer_focus = 1;
 	config.edge_scroller_focus_allow_speed = 0.0f;
 	config.focus_cross_monitor = 0;
+	config.focus_cross_monitor_mru = 0;
 	config.exchange_cross_monitor = 0;
 	config.scratchpad_cross_monitor = 0;
 	config.focus_cross_tag = 0;
