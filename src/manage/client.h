@@ -929,13 +929,16 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 			if (!match_dir)
 				continue;
 
+			/* 方向聚焦要求在正交坐标轴上有重叠区域，
+			 * 否则该窗口不作为候选，直接返回空 */
+			if (orth_dist != 0)
+				continue;
+
 			if (step == 0) {
 				if (!tc->mon || c->mon != tc->mon)
 					continue;
 				if (!tc->mon->isoverview &&
 					!client_is_in_same_stack(tc, c, NULL))
-					continue;
-				if (orth_dist != 0)
 					continue;
 			}
 
@@ -945,12 +948,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				main_dist = -main_dist;
 			}
 
-			int64_t no_overlap_penalty = 0;
-			if (orth_dist > 0) {
-				no_overlap_penalty = 10000000LL;
-			}
-
-			int64_t tmp_distance = penalty + no_overlap_penalty +
+			int64_t tmp_distance = penalty +
 								   (main_dist * main_dist) +
 								   (orth_dist * orth_dist);
 
