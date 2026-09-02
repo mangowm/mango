@@ -295,8 +295,12 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 	for (char *p = cmd; *p; p++)
 		if (*p == ',')
 			*p = ' ';
-
-	if (strcmp(cmd, "get version") == 0) {
+	if (strcmp(cmd, "get wmlayout") == 0) {
+		resp = cJSON_CreateObject();
+		cJSON_AddStringToObject(
+			resp, "wmlayout",
+			selmon->pertag->ltidxs[selmon->pertag->curtag]->name);
+	} else if (strcmp(cmd, "get version") == 0) {
 		resp = cJSON_CreateObject();
 		cJSON_AddStringToObject(resp, "version", VERSION);
 	} else if (strcmp(cmd, "get cursorpos") == 0) {
