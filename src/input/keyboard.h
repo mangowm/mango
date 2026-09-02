@@ -221,6 +221,9 @@ static void create_standalone_keyboard(InputDevice *input_dev,
 	input_dev->device_data = group;
 }
 
+/* Run after all keyboard destroy listeners. Restore the persistent group only
+ * if no other keyboard became active during destruction.
+ */
 static void restore_default_seat_keyboard(void *data) {
 	if (seat && kb_group && !wlr_seat_get_keyboard(seat))
 		wlr_seat_set_keyboard(seat, kb_group->keyboard);
@@ -230,6 +233,9 @@ void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	/* A standalone keyboard is not part of kb_group. If it owns the seat when
+	 * removed, restore the persistent group after its destruction.
+	 */
 	bool restore_keyboard = wlr_seat_get_keyboard(seat) == group->keyboard;
 	if (restore_keyboard)
 		wlr_seat_set_keyboard(seat, NULL);
@@ -319,6 +325,9 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	/* Destroying a non-active group must not change the seat. An active virtual
+	 * group needs the persistent group as a fallback after destruction.
+	 */
 	bool restore_keyboard = group->virtual_keyboard &&
 							wlr_seat_get_keyboard(seat) == group->keyboard;
 	if (wlr_seat_get_keyboard(seat) == group->keyboard)
