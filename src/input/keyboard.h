@@ -628,8 +628,13 @@ void keypress(struct wl_listener *listener, void *data) {
 		return;
 	}
 	if (!mango_im_keyboard_grab_forward_key(group, event)) {
-		if (wlr_seat_get_keyboard(seat) != group->keyboard)
-			group->prev_seat_keyboard = wlr_seat_get_keyboard(seat);
+		// prev_seat_keyboard 记的是“这把键盘接管 seat 之前”seat 上的键盘，
+		// 这把键盘销毁时靠它把 seat 还回去。所以只有 seat 还不是本键盘时
+		// 才算接管、才需要更新；要是无条件赋值，同一把键盘连按第二次就会
+		// 把 prev 覆盖成自己，销毁时“恢复”到的就是正在销毁的这把键盘
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (active != group->keyboard)
+			group->prev_seat_keyboard = active;
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Pass unhandled keycodes along to the client. */
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
@@ -647,8 +652,13 @@ void keypressmod(struct wl_listener *listener, void *data) {
 
 	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 
-		if (wlr_seat_get_keyboard(seat) != group->keyboard)
-			group->prev_seat_keyboard = wlr_seat_get_keyboard(seat);
+		// prev_seat_keyboard 记的是“这把键盘接管 seat 之前”seat 上的键盘，
+		// 这把键盘销毁时靠它把 seat 还回去。所以只有 seat 还不是本键盘时
+		// 才算接管、才需要更新；要是无条件赋值，同一把键盘连按第二次就会
+		// 把 prev 覆盖成自己，销毁时“恢复”到的就是正在销毁的这把键盘
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (active != group->keyboard)
+			group->prev_seat_keyboard = active;
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Send modifiers to the client. */
 		wlr_seat_keyboard_notify_modifiers(seat, &group->keyboard->modifiers);
