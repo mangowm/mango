@@ -2683,6 +2683,10 @@ void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 
 	if (focus && !client_is_x11_popup(c)) {
 		focusclient(focustop(selmon), 1);
+
+		if (config.warpcursor && selmon && selmon->sel == c) {
+			warp_cursor(c);
+		}
 	}
 }
 
