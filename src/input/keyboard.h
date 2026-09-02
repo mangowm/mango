@@ -218,6 +218,13 @@ void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	// devicerule 的独立键盘不进 kb_group，拔掉后 seat 没键盘就回退到
+	// kb_group，新绑定的客户端才能拿到 keymap
+	if (kb_group && kb_group->keyboard) {
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (!active || active == group->keyboard)
+			wlr_seat_set_keyboard(seat, kb_group->keyboard);
+	}
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
@@ -304,11 +311,20 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	// 组键盘销毁后 seat 就空了，回退到常驻的 kb_group，
+	// 让新绑定的客户端能拿到 keymap
+	if (group != kb_group && kb_group && kb_group->keyboard) {
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (!active || active == group->keyboard)
+			wlr_seat_set_keyboard(seat, kb_group->keyboard);
+	}
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
 	wlr_keyboard_group_destroy(group->wlr_group);
+	if (group == kb_group)
+		kb_group = NULL;
 	free(group);
 }
 
