@@ -35,22 +35,24 @@ enum {
 	VERTICAL_FAIR,
 };
 
+char monocle_symbol[16] = "[M]";
+
 Layout layouts[] = {
 	// 最少两个,不能删除少于两个
 	/* symbol     arrange function   name */
-	{"T", tile, "tile", TILE},						 // 平铺布局
-	{"S", scroller, "scroller", SCROLLER},			 // 滚动布局
-	{"G", grid, "grid", GRID},						 // 格子布局
-	{"M", monocle, "monocle", MONOCLE},				 // 单屏布局
-	{"K", deck, "deck", DECK},						 // 卡片布局
-	{"CT", center_tile, "center_tile", CENTER_TILE}, // 居中布局
-	{"RT", right_tile, "right_tile", RIGHT_TILE},	 // 右布局
-	{"VS", vertical_scroller, "vertical_scroller",
-	 VERTICAL_SCROLLER},								   // 垂直滚动布局
-	{"VT", vertical_tile, "vertical_tile", VERTICAL_TILE}, // 垂直平铺布局
-	{"VG", vertical_grid, "vertical_grid", VERTICAL_GRID}, // 垂直格子布局
-	{"VK", vertical_deck, "vertical_deck", VERTICAL_DECK}, // 垂直卡片布局
-	{"DW", dwindle, "dwindle", DWINDLE},
+	{"::", tile, "tile", TILE},
+	{"==", scroller, "scroller", SCROLLER},
+	{"HHH", grid, "grid", GRID},
+	{monocle_symbol, monocle, "monocle",
+	 MONOCLE}, // <-- Use the variable here (no quotes)
+	{"H[]", deck, "deck", DECK},
+	{"|M|", center_tile, "center_tile", CENTER_TILE},
+	{"RT", right_tile, "right_tile", RIGHT_TILE},
+	{"VS", vertical_scroller, "vertical_scroller", VERTICAL_SCROLLER},
+	{"VT", vertical_tile, "vertical_tile", VERTICAL_TILE},
+	{"VG", vertical_grid, "vertical_grid", VERTICAL_GRID},
+	{"VK", vertical_deck, "vertical_deck", VERTICAL_DECK},
+	{"[\\]", dwindle, "dwindle", DWINDLE},
 	{"F", fair, "fair", FAIR},
 	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
 };
