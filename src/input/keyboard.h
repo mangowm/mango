@@ -214,10 +214,38 @@ static void create_standalone_keyboard(InputDevice *input_dev,
 	input_dev->device_data = group;
 }
 
+// 让所有保存了该键盘的组失效，避免恢复时用到已销毁的键盘
+static void invalidate_saved_seat_keyboard(struct wlr_keyboard *keyboard) {
+	KeyboardGroup *group;
+	wl_list_for_each(group, &virtual_keyboards, link) {
+		if (group->prev_seat_keyboard == keyboard)
+			group->prev_seat_keyboard = NULL;
+	}
+	wl_list_for_each(group, &standalone_keyboards, link) {
+		if (group->prev_seat_keyboard == keyboard)
+			group->prev_seat_keyboard = NULL;
+	}
+}
+
+// 被销毁的键盘正占着 seat（或 seat 已经没键盘）时，恢复它接管前生效的
+// 键盘——可能是 kb_group，也可能是 devicerule 的独立键盘
+static void restore_seat_keyboard(KeyboardGroup *group) {
+	struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+	if (active && active != group->keyboard)
+		return;
+	struct wlr_keyboard *fallback = group->prev_seat_keyboard;
+	if (!fallback && kb_group)
+		fallback = kb_group->keyboard;
+	if (fallback)
+		wlr_seat_set_keyboard(seat, fallback);
+}
+
 void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	invalidate_saved_seat_keyboard(group->keyboard);
+	restore_seat_keyboard(group);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
@@ -304,11 +332,14 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	wl_list_remove(&group->link);
+	invalidate_saved_seat_keyboard(group->keyboard);
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
 	wlr_keyboard_group_destroy(group->wlr_group);
+	kb_group = NULL;
 	free(group);
 }
 
@@ -597,6 +628,8 @@ void keypress(struct wl_listener *listener, void *data) {
 		return;
 	}
 	if (!mango_im_keyboard_grab_forward_key(group, event)) {
+		if (wlr_seat_get_keyboard(seat) != group->keyboard)
+			group->prev_seat_keyboard = wlr_seat_get_keyboard(seat);
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Pass unhandled keycodes along to the client. */
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
@@ -614,6 +647,8 @@ void keypressmod(struct wl_listener *listener, void *data) {
 
 	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 
+		if (wlr_seat_get_keyboard(seat) != group->keyboard)
+			group->prev_seat_keyboard = wlr_seat_get_keyboard(seat);
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Send modifiers to the client. */
 		wlr_seat_keyboard_notify_modifiers(seat, &group->keyboard->modifiers);
@@ -774,33 +809,52 @@ void handle_keyboard_shortcuts_inhibit_new_inhibitor(
 
 void virtualkeyboard(struct wl_listener *listener, void *data) {
 	struct wlr_virtual_keyboard_v1 *kb = data;
-	/* virtual keyboards shouldn't share keyboard group */
+	// 虚拟键盘不进物理键盘组，单把键盘也没必要套 wlr group，
+	// 直接按独立键盘处理，用 virtual_keyboard 字段区分
 	wlr_seat_set_capabilities(seat,
 							  seat->capabilities | WL_SEAT_CAPABILITY_KEYBOARD);
-	KeyboardGroup *group = createkeyboardgroup();
-	group->virtual_keyboard = &kb->keyboard;
-	/* 虚拟键盘也应用 devicerule 的独立 keymap/重复率 */
-	ConfigDeviceRule *rule = find_device_rule(&kb->keyboard.base);
-	if (rule && device_rule_has_keyboard_settings(rule)) {
-		struct xkb_keymap *keymap = compile_rule_keymap(rule);
-		if (keymap) {
-			wlr_keyboard_set_keymap(group->keyboard, keymap);
-			xkb_keymap_unref(keymap);
-			wlr_keyboard_set_repeat_info(
-				group->keyboard,
-				rule->repeat_rate != -1 ? rule->repeat_rate
-										: config.repeat_rate,
-				rule->repeat_delay != -1 ? rule->repeat_delay
-										 : config.repeat_delay);
-		}
-	}
-	/* Set the keymap to match the group keymap */
-	wlr_keyboard_set_keymap(&kb->keyboard, group->keyboard->keymap);
-	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
-		   destroykeyboardgroup);
+	struct wlr_keyboard *prev = wlr_seat_get_keyboard(seat);
 
-	/* Add the new keyboard to the group */
-	wlr_keyboard_group_add_keyboard(group->wlr_group, &kb->keyboard);
+	KeyboardGroup *group = ecalloc(1, sizeof(*group));
+	group->wlr_group = NULL;
+	group->keyboard = &kb->keyboard;
+	group->virtual_keyboard = &kb->keyboard;
+	group->prev_seat_keyboard = prev;
+	wl_list_init(&group->link);
+	wl_list_insert(&virtual_keyboards, &group->link);
+
+	// keymap/重复率：命中 devicerule 用规则里的，否则用全局配置；
+	// 客户端之后发来的 keymap 会覆盖这里设的默认值
+	ConfigDeviceRule *rule = find_device_rule(&kb->keyboard.base);
+	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_keymap *keymap =
+		(rule && device_rule_has_keyboard_settings(rule))
+			? compile_rule_keymap(rule)
+			: (context ? xkb_keymap_new_from_names(context, &config.xkb_rules,
+												   XKB_KEYMAP_COMPILE_NO_FLAGS)
+					   : NULL);
+	if (keymap) {
+		wlr_keyboard_set_keymap(&kb->keyboard, keymap);
+		xkb_keymap_unref(keymap);
+	}
+	if (context)
+		xkb_context_unref(context);
+	wlr_keyboard_set_repeat_info(
+		&kb->keyboard,
+		rule && rule->repeat_rate != -1 ? rule->repeat_rate
+										: config.repeat_rate,
+		rule && rule->repeat_delay != -1 ? rule->repeat_delay
+										 : config.repeat_delay);
+
+	LISTEN(&kb->keyboard.events.key, &group->key, keypress);
+	LISTEN(&kb->keyboard.events.modifiers, &group->modifiers, keypressmod);
+	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
+		   destroy_standalone_keyboard);
+
+	group->key_repeat_source =
+		wl_event_loop_add_timer(event_loop, keyrepeat, group);
+
+	wlr_seat_set_keyboard(seat, &kb->keyboard);
 }
 
 #ifdef XWAYLAND
