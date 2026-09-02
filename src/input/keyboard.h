@@ -221,13 +221,17 @@ static void create_standalone_keyboard(InputDevice *input_dev,
 	input_dev->device_data = group;
 }
 
+static void restore_default_seat_keyboard(void *data) {
+	if (seat && kb_group && !wlr_seat_get_keyboard(seat))
+		wlr_seat_set_keyboard(seat, kb_group->keyboard);
+}
+
 void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
-	// devicerule 的键盘不在 kb_group 里，拔掉时要是正占着 seat 就悬空，
-	// 反正下一次按键会重新设置
-	if (wlr_seat_get_keyboard(seat) == group->keyboard)
+	bool restore_keyboard = wlr_seat_get_keyboard(seat) == group->keyboard;
+	if (restore_keyboard)
 		wlr_seat_set_keyboard(seat, NULL);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
@@ -238,6 +242,8 @@ void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	}
 	wl_list_remove(&group->link);
 	free(group);
+	if (restore_keyboard)
+		wl_event_loop_add_idle(event_loop, restore_default_seat_keyboard, NULL);
 }
 
 KeyboardGroup *createkeyboardgroup(void) {
@@ -313,8 +319,8 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
-	// 销毁的是整个组，组的键盘也跟着没了。它要是正占着 seat 就悬空，
-	// 后面按键会重新设置
+	bool restore_keyboard = group->virtual_keyboard &&
+							wlr_seat_get_keyboard(seat) == group->keyboard;
 	if (wlr_seat_get_keyboard(seat) == group->keyboard)
 		wlr_seat_set_keyboard(seat, NULL);
 	wl_event_source_remove(group->key_repeat_source);
@@ -323,6 +329,8 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	wl_list_remove(&group->destroy.link);
 	wlr_keyboard_group_destroy(group->wlr_group);
 	free(group);
+	if (restore_keyboard)
+		wl_event_loop_add_idle(event_loop, restore_default_seat_keyboard, NULL);
 }
 
 int32_t keyrepeat(void *data) {
