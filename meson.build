@@ -98,6 +98,7 @@ executable('mango',
   'src/common/log.c',
   'src/common/util.c',
   'src/draw/text-node.c',
+  'src/session/session.c',
 
   wayland_sources,
   dependencies : [

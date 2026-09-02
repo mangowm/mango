@@ -1947,6 +1947,9 @@ mapnotify(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, 0);
+	mango_session_attach_spawn_command(c);
+	mango_session_attach_process_command(c);
+	session_handle_client_mapped(c);
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 

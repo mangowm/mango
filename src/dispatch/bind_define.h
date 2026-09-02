@@ -1110,13 +1110,16 @@ void centerwin(const Arg *arg) {
 }
 
 void spawn_shell(const Arg *arg) {
+	pid_t pid;
+
 	if (!arg->v)
 		return;
 
 	// hand the child an activation token so it can request activation
 	const char *activation_token = xdg_activation_v1_export_token();
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1141,17 +1144,22 @@ void spawn_shell(const Arg *arg) {
 					(char *)arg->v, strerror(errno));
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return;
 }
 
 void spawn(const Arg *arg) {
+	pid_t pid;
+
 	if (!arg->v)
 		return;
 
 	// hand the child an activation token so it can request activation
 	const char *activation_token = xdg_activation_v1_export_token();
 
-	if (fork() == 0) {
+	pid = fork();
+	if (pid == 0) {
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1184,6 +1192,8 @@ void spawn(const Arg *arg) {
 		wordfree(&p);
 		_exit(EXIT_FAILURE);
 	}
+	if (pid > 0)
+		mango_session_track_spawned_command(pid, arg->v);
 	return;
 }
 
