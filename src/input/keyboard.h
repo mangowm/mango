@@ -27,19 +27,26 @@ void createkeyboard(struct wlr_keyboard *keyboard) {
 
 	ConfigDeviceRule *rule = find_device_rule(&keyboard->base);
 	if (rule && device_rule_has_keyboard_settings(rule) && input_dev) {
-		/* 命中带键盘参数的 devicerule：独立创建，使用独立 keymap */
+		// 命中带键盘参数的 devicerule：独立创建，使用独立 keymap
 		input_dev->standalone = true;
 		create_standalone_keyboard(input_dev, keyboard, rule);
+		// seat 空着的话就让新键盘接管
+		if (!wlr_seat_get_keyboard(seat))
+			wlr_seat_set_keyboard(seat, keyboard);
 		return;
 	}
 
-	/* Set the keymap to match the group keymap */
+	// keymap 先跟组保持一致
 	wlr_keyboard_set_keymap(keyboard, kb_group->keyboard->keymap);
 
 	wlr_keyboard_notify_modifiers(keyboard, 0, 0, locked_mods, 0);
 
-	/* Add the new keyboard to the group */
+	// 把新键盘加进组里
 	wlr_keyboard_group_add_keyboard(kb_group->wlr_group, keyboard);
+
+	// seat 空着的话就让组键盘顶上
+	if (!wlr_seat_get_keyboard(seat))
+		wlr_seat_set_keyboard(seat, kb_group->keyboard);
 }
 
 /* 设备匹配：优先精确匹配 name / vendor:product:name 标识符，其次匹配类型 */
@@ -218,6 +225,10 @@ void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	// devicerule 的键盘不在 kb_group 里，拔掉时要是正占着 seat 就悬空，
+	// 反正下一次按键会重新设置
+	if (wlr_seat_get_keyboard(seat) == group->keyboard)
+		wlr_seat_set_keyboard(seat, NULL);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
@@ -284,19 +295,17 @@ KeyboardGroup *createkeyboardgroup(void) {
 	wlr_keyboard_set_repeat_info(group->keyboard, config.repeat_rate,
 								 config.repeat_delay);
 
-	/* Set up listeners for keyboard events */
+	// 挂上按键和修饰键的监听
 	LISTEN(&group->keyboard->events.key, &group->key, keypress);
 	LISTEN(&group->keyboard->events.modifiers, &group->modifiers, keypressmod);
 
 	group->key_repeat_source =
 		wl_event_loop_add_timer(event_loop, keyrepeat, group);
 
-	/* A seat can only have one keyboard, but this is a limitation of the
-	 * Wayland protocol - not wlroots. We assign all connected keyboards to the
-	 * same wlr_keyboard_group, which provides a single wlr_keyboard interface
-	 * for all of them. Set this combined wlr_keyboard as the seat keyboard.
-	 */
-	wlr_seat_set_keyboard(seat, group->keyboard);
+	// seat 只能有一个键盘，物理键盘都合进这个组，对外只暴露组的键盘。
+	// seat 空着才设置，免得虚拟键盘一创建就把物理键盘顶掉
+	if (!wlr_seat_get_keyboard(seat))
+		wlr_seat_set_keyboard(seat, group->keyboard);
 	return group;
 }
 
@@ -304,6 +313,10 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	// 销毁的是整个组，组的键盘也跟着没了。它要是正占着 seat 就悬空，
+	// 后面按键会重新设置
+	if (wlr_seat_get_keyboard(seat) == group->keyboard)
+		wlr_seat_set_keyboard(seat, NULL);
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
@@ -774,12 +787,12 @@ void handle_keyboard_shortcuts_inhibit_new_inhibitor(
 
 void virtualkeyboard(struct wl_listener *listener, void *data) {
 	struct wlr_virtual_keyboard_v1 *kb = data;
-	/* virtual keyboards shouldn't share keyboard group */
+	// 虚拟键盘不跟物理键盘合组
 	wlr_seat_set_capabilities(seat,
 							  seat->capabilities | WL_SEAT_CAPABILITY_KEYBOARD);
 	KeyboardGroup *group = createkeyboardgroup();
 	group->virtual_keyboard = &kb->keyboard;
-	/* 虚拟键盘也应用 devicerule 的独立 keymap/重复率 */
+	// 虚拟键盘也应用 devicerule 的独立 keymap/重复率
 	ConfigDeviceRule *rule = find_device_rule(&kb->keyboard.base);
 	if (rule && device_rule_has_keyboard_settings(rule)) {
 		struct xkb_keymap *keymap = compile_rule_keymap(rule);
@@ -794,12 +807,12 @@ void virtualkeyboard(struct wl_listener *listener, void *data) {
 										 : config.repeat_delay);
 		}
 	}
-	/* Set the keymap to match the group keymap */
+	// keymap 跟组保持一致
 	wlr_keyboard_set_keymap(&kb->keyboard, group->keyboard->keymap);
 	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
 		   destroykeyboardgroup);
 
-	/* Add the new keyboard to the group */
+	// 把虚拟键盘加进组里
 	wlr_keyboard_group_add_keyboard(group->wlr_group, &kb->keyboard);
 }
 
