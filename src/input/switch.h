@@ -10,8 +10,6 @@ void switch_toggle(struct wl_listener *listener, void *data) {
 	ipc_notify_device_event(&sw->wlr_switch->base);
 
 	for (ji = 0; ji < config.switch_bindings_count; ji++) {
-		if (config.switch_bindings_count < 1)
-			break;
 		s = &config.switch_bindings[ji];
 		if ((s->iscommonmode || (s->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, s->mode) == 0)) &&

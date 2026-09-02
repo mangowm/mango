@@ -60,7 +60,7 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 
 	if (config.enable_hotarea == 1 && selmon->is_in_hotarea == 0 &&
 		in_hotarea) {
-		/* 热区进入：忽略 ov_tab_mode */
+		/* 热区进入：使用普通网格布局 */
 		selmon->ov_normal_mode = 1;
 		toggleoverview(&arg);
 		selmon->is_in_hotarea = 1;
@@ -117,8 +117,6 @@ axisnotify(struct wl_listener *listener, void *data) {
 		adir = event->delta > 0 ? AxisRight : AxisLeft;
 
 	for (ji = 0; ji < config.axis_bindings_count; ji++) {
-		if (config.axis_bindings_count < 1)
-			break;
 		a = &config.axis_bindings[ji];
 		if ((a->iscommonmode || (a->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, a->mode) == 0)) &&
@@ -191,8 +189,6 @@ int32_t ongesture(struct wlr_pointer_swipe_end_event *event) {
 	mods = mods | hard_mods;
 
 	for (ji = 0; ji < config.gesture_bindings_count; ji++) {
-		if (config.gesture_bindings_count < 1)
-			break;
 		g = &config.gesture_bindings[ji];
 		if ((g->iscommonmode || (g->isdefaultmode && keymode.isdefault) ||
 			 (strcmp(keymode.mode, g->mode) == 0)) &&
@@ -445,6 +441,19 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		if (locked)
 			break;
 
+		if (switcher_is_active() &&
+			(event->button == BTN_LEFT || event->button == BTN_RIGHT)) {
+			Client *switcher_c = switcher_client_at(cursor->x, cursor->y);
+			if (!switcher_c)
+				switcher_close();
+			else if (event->button == BTN_LEFT)
+				switcher_commit_client(switcher_c);
+			else
+				pending_kill_client(switcher_c);
+			wlr_seat_pointer_notify_clear_focus(seat);
+			return true;
+		}
+
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, &gb, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene && c->scene->node.enabled &&
@@ -466,7 +475,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		// overview模式下鼠标左键跳转，右键关闭窗口
 		if (selmon && selmon->isoverview && event->button == BTN_LEFT && c) {
-			toggleoverview(&(Arg){.i = 1});
+			toggleoverview(&(Arg){0});
 			return true;
 		}
 
@@ -490,8 +499,6 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		mods = mods | hard_mods;
 
 		for (ji = 0; ji < config.mouse_bindings_count; ji++) {
-			if (config.mouse_bindings_count < 1)
-				break;
 			m = &config.mouse_bindings[ji];
 
 			if ((m->iscommonmode || (m->isdefaultmode && keymode.isdefault) ||
@@ -1020,8 +1027,7 @@ void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	struct timespec now;
 
 	if (config.sloppyfocus && !start_drag_window && c && time && c->scene &&
-		c->scene->node.enabled &&
-		(!c->mon || !c->mon->isoverview || !config.ov_tab_mode) &&
+		c->scene->node.enabled && (!c->mon || !c->mon->isoverview) &&
 		!c->animation.tagining &&
 		(surface != seat->pointer_state.focused_surface ||
 		 (selmon && selmon->isoverview && selmon->sel != c)) &&

@@ -631,14 +631,9 @@ void client_draw_border(Client *c, struct ivec2 offsets) {
 			? corner_radii_none()
 			: set_client_corner_location(c);
 
-	if (hit_no_border && config.smartgaps) {
+	if (hit_no_border) {
 		c->bw = 0;
 		c->fake_no_border = true;
-	} else if (hit_no_border && !config.smartgaps) {
-		wlr_scene_rect_set_size(c->border, 0, 0);
-		wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
-		c->fake_no_border = true;
-		return;
 	} else if (!c->isfullscreen && VISIBLEON(c, c->mon)) {
 		c->bw = c->isnoborder ? 0 : config.borderpx;
 		c->fake_no_border = false;
@@ -1278,6 +1273,18 @@ void init_fadeout_client(Client *c) {
 	request_fresh_all_monitors();
 }
 
+/* 无动画时应用窗口最终状态：位置、裁剪/可见性以及几何状态同步 */
+static void client_apply_finish_geometry(Client *c) {
+	if (!c || !c->scene)
+		return;
+
+	wlr_scene_node_set_position(&c->scene->node, c->pending.x, c->pending.y);
+	c->animation.current = c->animainit_geom = c->animation.initial =
+		c->pending = c->current = c->geom;
+	client_apply_clip(c, 1.0);
+	c->need_output_flush = false;
+}
+
 void client_commit(Client *c) {
 	c->current = c->pending;
 
@@ -1294,6 +1301,12 @@ void client_commit(Client *c) {
 			c->animation.current = c->geom;
 		}
 	}
+
+	// 禁用动画后提前设置surface位置和大小，
+	// 避免motionnotify 的指针聚焦在上一帧的surface上
+	if (!config.animations)
+		client_apply_finish_geometry(c);
+
 	request_fresh_all_monitors();
 }
 
@@ -1405,7 +1418,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->bw = 0;
 
 	bool hit_no_border = check_hit_no_border(c);
-	if (hit_no_border && config.smartgaps) {
+	if (hit_no_border) {
 		c->bw = 0;
 		c->fake_no_border = true;
 	}
@@ -1464,12 +1477,8 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 			!c->animation.overview_enter_anim_set)
 			c->animation.overining = false;
 
-		/* 设置进入放大动画：ov_tab 所有窗口，其余除 sel 外 */
-		bool is_ov_tab = config.ov_tab_mode && !c->mon->is_jump_mode &&
-						 !c->mon->ov_normal_mode;
-		if (config.animations && c->mon->isoverview &&
-			((is_ov_tab && config.ov_tab_mode_launch_next) ||
-			 c != c->mon->sel) &&
+		/* 设置进入放大动画：除 sel 外的窗口 */
+		if (config.animations && c->mon->isoverview && c != c->mon->sel &&
 			c->animation.action == OVERVIEW &&
 			!c->animation.overview_enter_anim_set) {
 			c->animation.overview_enter_anim_set = true;
@@ -1654,12 +1663,7 @@ bool client_draw_frame(Client *c) {
 		need_next_tick = true;
 		client_animation_next_tick(c);
 	} else {
-		wlr_scene_node_set_position(&c->scene->node, c->pending.x,
-									c->pending.y);
-		c->animation.current = c->animainit_geom = c->animation.initial =
-			c->pending = c->current = c->geom;
-		client_apply_clip(c, 1.0);
-		c->need_output_flush = false;
+		client_apply_finish_geometry(c);
 	}
 
 	bool need_fade_focus = client_apply_focus_opacity(c);

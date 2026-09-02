@@ -222,6 +222,7 @@ enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
 enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT, OVERVIEW };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { PREV, NEXT };
+enum { SW_CURRENT_TAG, SW_ALL_TAG, SW_ALL_MON }; /* switcher 候选范围 */
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
 enum { FORCE, UNFORCE };
 
@@ -516,6 +517,8 @@ typedef struct {
 	struct wlr_keyboard
 		*keyboard; /* 实际生效的 wlr_keyboard（group 或独立键盘） */
 	struct wlr_keyboard *virtual_keyboard;
+	struct wlr_keyboard
+		*prev_seat_keyboard; /* 接管 seat 前生效的键盘，销毁时恢复用 */
 
 	int32_t nsyms;
 	const xkb_keysym_t *keysyms; /* invalid if nsyms == 0 */
@@ -616,7 +619,8 @@ struct Monitor {
 	int32_t isoverview;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
-	int32_t ov_normal_mode; /* 热区进入时忽略 ov_tab_mode */
+	int32_t ov_normal_mode; /* 热区进入时使用普通网格布局 */
+	int32_t ov_tab_layout;	/* overcircle 进入时使用居中 tab 布局 */
 	int32_t only_sleep;
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
@@ -1154,6 +1158,7 @@ static struct wlr_keyboard
 	*last_active_keyboard; /* 最后按键的键盘，get keyboardlayout 用 */
 static struct wl_list inputdevices;
 static struct wl_list standalone_keyboards; /* 独立键盘链表 */
+static struct wl_list virtual_keyboards;	/* 虚拟键盘组链表 */
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
 static Client *grabc, *dropc;
@@ -1333,6 +1338,7 @@ static void ipc_notify_device_event(struct wlr_input_device *device);
 #include "layout/scroll.h"
 #include "layout/vertical.h"
 #include "overview/overview.h"
+#include "switcher/switcher.h"
 
 #include "manage/client.h"
 #include "input/keyboard.h"
@@ -1858,6 +1864,7 @@ void setup(void) {
 	 */
 	wl_list_init(&inputdevices);
 	wl_list_init(&standalone_keyboards);
+	wl_list_init(&virtual_keyboards);
 	wl_list_init(&tablets);
 	wl_list_init(&tablet_pads);
 	wl_list_init(&keyboard_shortcut_inhibitors);

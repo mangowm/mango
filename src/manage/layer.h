@@ -169,8 +169,6 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 
 	// 应用layer规则
 	for (ji = 0; ji < config.layer_rules_count; ji++) {
-		if (config.layer_rules_count < 1)
-			break;
 		if (regex_match(config.layer_rules[ji].layer_name,
 						l->layer_surface->namespace)) {
 

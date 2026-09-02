@@ -509,9 +509,11 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
+
 		while (*ptr) {
 			while (*ptr == ' ' || *ptr == '\t')
 				*out++ = *ptr++;
+
 			if (strncmp(ptr, "client,", 7) == 0) {
 				char *end;
 				long id = strtol(ptr + 7, &end, 10);
@@ -551,8 +553,12 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 			token_count > 3 ? tokens[3] : "", token_count > 4 ? tokens[4] : "",
 			token_count > 5 ? tokens[5] : "");
 
-		if (func && client_id > 0)
+		if (client_id > 0) {
 			arg.tc = client_by_id((uint32_t)client_id);
+			if (arg.tc == NULL)
+				return send_static_json(client_fd,
+										"{\"error\":\"no client found\"}\n");
+		}
 
 		if (func) {
 			func(&arg);
