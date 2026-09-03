@@ -591,6 +591,8 @@ void sync_workspaces_to_tag_num(Monitor *m);
 
 void trim_whitespace(char *str);
 
+void strip_quotes(char *str);
+
 void remove_comment(char *str);
 
 int32_t parse_double_array(const char *input, double *output,

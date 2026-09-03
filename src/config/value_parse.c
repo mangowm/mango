@@ -39,6 +39,19 @@ void trim_whitespace(char *str) {
 	}
 }
 
+void strip_quotes(char *str) {
+	if (str == NULL || *str == '\0')
+		return;
+
+	size_t len = strlen(str);
+	if (len >= 2 && ((str[0] == '"' && str[len - 1] == '"') ||
+					 (str[0] == '\'' && str[len - 1] == '\''))) {
+		str[len - 1] = '\0';
+		memmove(str, str + 1, len - 1);
+		trim_whitespace(str);
+	}
+}
+
 // remove comment, support double quote inside "#xxx" or '#xxx' not be treated
 // as comment
 void remove_comment(char *str) {

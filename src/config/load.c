@@ -93,6 +93,7 @@ bool parse_config_line(Config *config, const char *line, int line_number) {
 
 	trim_whitespace(key);
 	trim_whitespace(value);
+	strip_quotes(value);
 
 	return apply_option_expanded(config, key, value, line_number);
 }
