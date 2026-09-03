@@ -3552,10 +3552,11 @@ void client_reparent_group(Client *c) {
 	if (!c || !c->mon)
 		return;
 
-	int32_t layer = c->isoverlay					   ? LyrOverlay
-					: c->isfloating || c->isfullscreen ? LyrTop
-					: c->ismaximizescreen			   ? LyrMaximize
-													   : LyrTile;
+	int32_t layer = c->isoverlay	      ? LyrOverlay
+					: c->isfullscreen     ? LyrTop
+					: c->isfloating       ? LyrFloating
+					: c->ismaximizescreen ? LyrMaximize
+										  : LyrTile;
 
 	Client *head = c;
 	while (head->group_prev)

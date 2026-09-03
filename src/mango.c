@@ -201,6 +201,7 @@ enum {
 	LyrBottom,
 	LyrTile,
 	LyrMaximize,
+	LyrFloating,
 	LyrTop,
 	LyrFadeOut,
 	LyrOverlay,
