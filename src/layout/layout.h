@@ -35,13 +35,16 @@ enum {
 	VERTICAL_FAIR,
 };
 
+// client count in monocle layout
+char monocle_symbol[16] = "[M]";
+
 Layout layouts[] = {
 	// 最少两个,不能删除少于两个
 	/* symbol     arrange function   name */
 	{"T", tile, "tile", TILE},						 // 平铺布局
 	{"S", scroller, "scroller", SCROLLER},			 // 滚动布局
 	{"G", grid, "grid", GRID},						 // 格子布局
-	{"M", monocle, "monocle", MONOCLE},				 // 单屏布局
+	{monocle_symbol, monocle, "monocle", MONOCLE},	 // 单屏布局
 	{"K", deck, "deck", DECK},						 // 卡片布局
 	{"CT", center_tile, "center_tile", CENTER_TILE}, // 居中布局
 	{"RT", right_tile, "right_tile", RIGHT_TILE},	 // 右布局
