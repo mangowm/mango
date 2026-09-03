@@ -11,12 +11,14 @@
 #include <limits.h>
 #include <linux/input-event-codes.h>
 #include <math.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -1342,6 +1344,16 @@ void handlesig(int32_t signo) {
 		quit(NULL);
 }
 
+static void restore_child_signals(void) {
+	sigset_t set;
+	sigemptyset(&set);
+	sigprocmask(SIG_SETMASK, &set, NULL);
+
+	struct sigaction sa_dfl = {.sa_flags = 0, .sa_handler = SIG_DFL};
+	sigaction(SIGCHLD, &sa_dfl, NULL);
+	sigaction(SIGPIPE, &sa_dfl, NULL);
+}
+
 void cleanuplisteners(void) {
 	wl_list_remove(&ext_manager_commit_listener.link); // 0.7
 	wl_list_remove(&print_status_listener.link);
@@ -1574,6 +1586,8 @@ void setup(void) {
 	struct sigaction sa_pipe = {.sa_flags = 0, .sa_handler = SIG_IGN};
 	sigemptyset(&sa_pipe.sa_mask);
 	sigaction(SIGPIPE, &sa_pipe, NULL);
+
+	pthread_atfork(NULL, NULL, restore_child_signals);
 
 	wlr_log_init(config.log_level, NULL);
 
