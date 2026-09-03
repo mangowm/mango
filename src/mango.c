@@ -1103,6 +1103,7 @@ Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 /* variables */
 static const char broken[] = "broken";
 static pid_t child_pid = -1;
+static uint32_t startup_time;
 static int32_t locked;
 static uint32_t locked_mods = 0;
 static void *exclusive_focus;
@@ -1963,6 +1964,9 @@ void setup(void) {
 	}
 	sync_keymap = wl_event_loop_add_timer(wl_display_get_event_loop(dpy),
 										  synckeymap, NULL);
+
+	// store the startup time for at-startup rules to check against
+	startup_time = get_now_in_ms();
 #endif
 }
 

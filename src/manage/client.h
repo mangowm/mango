@@ -1276,10 +1276,14 @@ void applyrules(Client *c) {
 		if (!is_window_rule_matches(r, appid, title))
 			continue;
 
+		// rule is after 60s of startup, do not apply
+		if (r->atstartup == 1 && get_now_in_ms() - startup_time > 60 * 1000)
+			continue;
+
 		// set general properties
 		apply_rule_properties(c, r);
 
-		// // set tags
+		// set tags
 		if (r->tags > 0) {
 			newtags |= r->tags;
 		} else if (parent) {
