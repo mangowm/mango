@@ -619,7 +619,7 @@ void keypress(struct wl_listener *listener, void *data) {
 					 toupper((unsigned char)c_char) ==
 						 toupper((unsigned char)c->jump_char))) {
 					focusclient(c, 1);
-					toggleoverview(&(Arg){0});
+					toggleoverview(&(Arg){.tc = c});
 					return;
 				}
 			}
