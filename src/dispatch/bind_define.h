@@ -1117,6 +1117,11 @@ void spawn_shell(const Arg *arg) {
 	const char *activation_token = xdg_activation_v1_export_token();
 
 	if (fork() == 0) {
+		// fix: Explicitly unblock all signals inherited from wlroots
+		sigset_t set;
+		sigemptyset(&set);
+		sigprocmask(SIG_SETMASK, &set, NULL);
+
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1125,7 +1130,10 @@ void spawn_shell(const Arg *arg) {
 		if (activation_token)
 			setenv("XDG_ACTIVATION_TOKEN", activation_token, 1);
 
+		// close all file descriptors inherited from the parent process
 		int fd_max = sysconf(_SC_OPEN_MAX);
+		if (fd_max > 1024)
+			fd_max = 1024; // Prevent massive syscall delay
 		for (int i = 3; i < fd_max; i++) {
 			close(i);
 		}
@@ -1152,6 +1160,11 @@ void spawn(const Arg *arg) {
 	const char *activation_token = xdg_activation_v1_export_token();
 
 	if (fork() == 0) {
+		// fix: Explicitly unblock all signals inherited from wlroots
+		sigset_t set;
+		sigemptyset(&set);
+		sigprocmask(SIG_SETMASK, &set, NULL);
+
 		signal(SIGSEGV, SIG_DFL);
 		signal(SIGABRT, SIG_DFL);
 		signal(SIGILL, SIG_DFL);
@@ -1163,6 +1176,8 @@ void spawn(const Arg *arg) {
 		// close all file descriptors inherited from the parent process to
 		// prevent IPC handle leakage that can block clients
 		int fd_max = sysconf(_SC_OPEN_MAX);
+		if (fd_max > 1024)
+			fd_max = 1024; // Prevent massive syscall delay
 		for (int i = 3; i < fd_max; i++) {
 			close(i);
 		}
