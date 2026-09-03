@@ -118,20 +118,17 @@ static cJSON *build_tags_json(Monitor *m) {
 
 	for (int tag = 1; tag <= config.tag_num; tag++) {
 		int numclients = 0;
-		uint32_t client_status = 0;
 		bool is_active = false, is_urgent = false;
 		uint32_t tagmask = 1 << (tag - 1);
 		if (tagmask & m->tagset[m->seltags])
 			is_active = true;
 		wl_list_for_each(c, &clients, link) {
-			client_status = get_tag_status(tag, m);
-
-			if (!client_status)
+			if (c->mon != m || c->is_logic_hide)
 				continue;
-
-			if (client_status == 2)
+			if (!(c->tags & tagmask & TAGMASK))
+				continue;
+			if (c->isurgent)
 				is_urgent = true;
-
 			numclients++;
 		}
 		cJSON *tag_obj = cJSON_CreateObject();
@@ -375,7 +372,7 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 
 		Client *c, *focused = focustop(m);
 		wl_list_for_each(c, &clients, link) {
-			if (c->mon != m || !(c->tags & tagmask))
+			if (c->mon != m || c->is_logic_hide || !(c->tags & tagmask))
 				continue;
 			if (c == focused)
 				focused_client = 1;
