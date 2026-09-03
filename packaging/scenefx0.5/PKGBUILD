@@ -1,0 +1,21 @@
+pkgname=scenefx0.5
+pkgver=0.5
+pkgrel=4
+pkgdesc="wlroots effects library: Vulkan renderer with blur, rounded corners, box shadows and HDR output color transforms"
+arch=(x86_64)
+url="https://github.com/m8l8th814n-eng/scenefx"
+license=(MIT)
+depends=(glibc 'libwlroots-vkfx-0.20.so' pixman libdrm wayland libglvnd libxkbcommon)
+makedepends=(git meson ninja wayland-protocols)
+provides=(libscenefx-0.5.so)
+source=("git+https://github.com/m8l8th814n-eng/scenefx.git#branch=vulkan-hdr")
+sha256sums=('SKIP')
+
+build() {
+  arch-meson scenefx build
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

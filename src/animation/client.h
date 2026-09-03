@@ -310,7 +310,8 @@ void client_draw_shadow(Client *c, struct ivec2 offsets) {
 	int32_t width, height;
 	client_actual_size(c, &width, &height);
 
-	int32_t delta = config.shadows_size + bw - bwoffset;
+	int32_t tail = (int32_t)ceilf(config.shadows_blur * 1.5f);
+	int32_t spread = (int32_t)config.shadows_size;
 
 	struct wlr_box client_box = {
 		.x = bwoffset,
@@ -319,58 +320,39 @@ void client_draw_shadow(Client *c, struct ivec2 offsets) {
 		.height = height + 2 * bw - 2 * bwoffset,
 	};
 
+	// scenefx insets the node box by 1.5 * blur_sigma to get the casting rect,
+	// so the node box is the window grown by the spread and then by the tail.
 	struct wlr_box shadow_box = {
-		.x = config.shadows_position_x + bwoffset,
-		.y = config.shadows_position_y + bwoffset,
-		.width = width + 2 * delta,
-		.height = height + 2 * delta,
+		.x = client_box.x + config.shadows_position_x - spread - tail,
+		.y = client_box.y + config.shadows_position_y - spread - tail,
+		.width = client_box.width + 2 * (spread + tail),
+		.height = client_box.height + 2 * (spread + tail),
 	};
 
-	struct wlr_box intersection_box;
-	wlr_box_intersection(&intersection_box, &client_box, &shadow_box);
-	intersection_box.x -= config.shadows_position_x + bwoffset;
-	intersection_box.y -= config.shadows_position_y + bwoffset;
+	struct wlr_box intersection_box = {
+		.x = client_box.x - shadow_box.x,
+		.y = client_box.y - shadow_box.y,
+		.width = client_box.width,
+		.height = client_box.height,
+	};
 
 	struct clipped_region clipped_region = {
 		.area = intersection_box,
 		.corners = current_corner_location,
 	};
 
-	struct wlr_box cur = c->animation.current;
-	struct wlr_box absolute_shadow_box = {
-		.x = shadow_box.x + cur.x,
-		.y = shadow_box.y + cur.y,
-		.width = shadow_box.width,
-		.height = shadow_box.height,
-	};
+	bool has_radius = current_corner_location.top_left ||
+					  current_corner_location.top_right ||
+					  current_corner_location.bottom_left ||
+					  current_corner_location.bottom_right;
 
-	int32_t left, right, top, bottom;
-	if (client_is_ignore_output_clip(c)) {
-		left = right = top = bottom = 0;
-	} else {
-		right = GEZERO(absolute_shadow_box.x + absolute_shadow_box.width -
-					   c->mon->m.x - c->mon->m.width);
-		bottom = GEZERO(absolute_shadow_box.y + absolute_shadow_box.height -
-						c->mon->m.y - c->mon->m.height);
-		left = GEZERO(c->mon->m.x - absolute_shadow_box.x);
-		top = GEZERO(c->mon->m.y - absolute_shadow_box.y);
-	}
+	wlr_scene_node_set_position(&c->shadow->node, shadow_box.x, shadow_box.y);
 
-	left = MANGO_MIN(left, shadow_box.width);
-	right = MANGO_MIN(right, shadow_box.width);
-	top = MANGO_MIN(top, shadow_box.height);
-	bottom = MANGO_MIN(bottom, shadow_box.height);
-
-	wlr_scene_node_set_position(&c->shadow->node, shadow_box.x + left,
-								shadow_box.y + top);
-
-	wlr_scene_shadow_set_size(c->shadow,
-							  GEZERO(shadow_box.width - left - right),
-							  GEZERO(shadow_box.height - top - bottom));
-
-	clipped_region.area.x = clipped_region.area.x - left;
-	clipped_region.area.y = clipped_region.area.y - top;
-
+	wlr_scene_shadow_set_size(c->shadow, shadow_box.width, shadow_box.height);
+	wlr_scene_shadow_set_corner_radius(
+		c->shadow, has_radius ? config.border_radius + spread : 0);
+	wlr_scene_shadow_set_blur_sigma(c->shadow, config.shadows_blur);
+	wlr_scene_shadow_set_color(c->shadow, config.shadowscolor);
 	wlr_scene_shadow_set_clipped_region(c->shadow, clipped_region);
 }
 
@@ -1505,6 +1487,12 @@ bool client_draw_fadeout_frame(Client *c) {
 void client_set_focused_opacity_animation(Client *c) {
 	float *border_color = get_border_color(c);
 	wlr_scene_node_lower_to_bottom(&c->border->node);
+	// Lowering the border puts it below the blur node, so the blur samples a
+	// blend image that already contains the border ring and composites a
+	// blurred copy of it back over the window's edges. Keep the blur beneath
+	// the border.
+	if (config.blur && !c->noblur)
+		wlr_scene_node_lower_to_bottom(&c->blur->node);
 
 	if (!config.animations) {
 		setborder_color(c);

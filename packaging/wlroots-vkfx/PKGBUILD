@@ -1,0 +1,23 @@
+pkgname=wlroots-vkfx
+pkgver=0.20.0
+pkgrel=4
+pkgdesc="wlroots fork with split scene/output Vulkan render passes for scenefx blur, installs alongside wlroots0.20"
+arch=(x86_64)
+url="https://github.com/m8l8th814n-eng/wlroots-vkfx"
+license=(MIT)
+depends=(glibc libdisplay-info libinput libliftoff libudev.so libxcb libxkbcommon
+         opengl-driver pixman seatd vulkan-icd-loader wayland xcb-util-errors
+         xcb-util-renderutil xcb-util-wm lcms2)
+makedepends=(git meson ninja glslang vulkan-headers wayland-protocols xorg-xwayland)
+provides=(libwlroots-vkfx-0.20.so)
+source=("git+https://github.com/m8l8th814n-eng/wlroots-vkfx.git#branch=vulkan-effects")
+sha256sums=('SKIP')
+
+build() {
+  arch-meson wlroots-vkfx build -Dexamples=false
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

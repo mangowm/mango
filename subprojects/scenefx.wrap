@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/m8l8th814n-eng/scenefx.git
+revision = vulkan-hdr
+depth = 1
+
+[provide]
+dependency_names = scenefx-0.5

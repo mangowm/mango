@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/m8l8th814n-eng/wlroots-vkfx.git
+revision = vulkan-effects
+depth = 1
+
+[provide]
+dependency_names = wlroots-vkfx-0.20

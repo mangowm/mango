@@ -523,6 +523,13 @@ typedef struct {
 	DecorateDrawData groupbardata;
 
 	int32_t hdr_depth;
+	float hdr_sdr_nits;
+	float color_gamma;
+	float color_contrast;
+	float color_red;
+	float color_green;
+	float color_blue;
+	float color_yellow;
 } Config;
 
 typedef struct {
@@ -1774,6 +1781,20 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "hdr_depth") == 0) {
 		config->hdr_depth = atoi(value);
+	} else if (strcmp(key, "hdr_sdr_nits") == 0) {
+		config->hdr_sdr_nits = atof(value);
+	} else if (strcmp(key, "color_gamma") == 0) {
+		config->color_gamma = atof(value);
+	} else if (strcmp(key, "color_contrast") == 0) {
+		config->color_contrast = atof(value);
+	} else if (strcmp(key, "color_red") == 0) {
+		config->color_red = atof(value);
+	} else if (strcmp(key, "color_green") == 0) {
+		config->color_green = atof(value);
+	} else if (strcmp(key, "color_blue") == 0) {
+		config->color_blue = atof(value);
+	} else if (strcmp(key, "color_yellow") == 0) {
+		config->color_yellow = atof(value);
 	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
 		config->allow_shortcuts_inhibit = atoi(value);
 	} else if (strcmp(key, "allow_lock_transparent") == 0) {
@@ -2468,7 +2489,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				} else if (strcmp(key, "vrr") == 0) {
 					rule->vrr = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "hdr") == 0) {
-					rule->hdr = CLAMP_INT(atoi(val), 0, 1);
+					rule->hdr = CLAMP_INT(atoi(val), 0, 2);
 				} else if (strcmp(key, "hdr_min_lum") == 0) {
 					// cd/m². OLED blacks sit well below 0.01, so the floor has
 					// to allow small fractions -- do not clamp to >= 1.
@@ -4243,6 +4264,65 @@ void free_config(void) {
 
 void update_global_var(void) { tagmask = ((uint32_t)1 << config.tag_num) - 1; }
 
+/* Post-blend LUT for gamma, contrast and per-channel gain. It goes into the
+ * same output state slot as a gamma ramp, so it also applies while the output
+ * carries an HDR image description — there it operates on PQ-encoded values.
+ * The DRM backend only takes 3x1D LUTs sized to the CRTC's gamma table. */
+static bool color_adjust_enabled(void) {
+	return config.color_gamma != 1.0f || config.color_contrast != 1.0f ||
+		   config.color_red != 1.0f || config.color_green != 1.0f ||
+		   config.color_blue != 1.0f || config.color_yellow != 0.0f;
+}
+
+static struct wlr_color_transform *color_adjust_build(size_t dim) {
+	uint16_t *lut = calloc(dim * 3, sizeof(*lut));
+	if (!lut) {
+		return NULL;
+	}
+	uint16_t *r = lut, *g = lut + dim, *b = lut + 2 * dim;
+
+	float gain[3] = {config.color_red, config.color_green,
+					 config.color_blue * (1.0f - config.color_yellow)};
+
+	for (size_t i = 0; i < dim; i++) {
+		float v = (float)i / (float)(dim - 1);
+		v = (v - 0.5f) * config.color_contrast + 0.5f;
+		v = CLAMP_FLOAT(v, 0.0f, 1.0f);
+		v = powf(v, 1.0f / config.color_gamma);
+		r[i] = (uint16_t)lroundf(CLAMP_FLOAT(v * gain[0], 0.0f, 1.0f) * 65535.0f);
+		g[i] = (uint16_t)lroundf(CLAMP_FLOAT(v * gain[1], 0.0f, 1.0f) * 65535.0f);
+		b[i] = (uint16_t)lroundf(CLAMP_FLOAT(v * gain[2], 0.0f, 1.0f) * 65535.0f);
+	}
+
+	struct wlr_color_transform *tr = wlr_color_transform_init_lut_3x1d(dim, r, g, b);
+	free(lut);
+	return tr;
+}
+
+static void color_adjust_apply(Monitor *m) {
+	struct wlr_color_transform *tr = NULL;
+	if (color_adjust_enabled()) {
+		size_t dim = wlr_output_get_gamma_size(m->wlr_output);
+		tr = color_adjust_build(dim ? dim : 256);
+		if (!tr) {
+			wlr_log(WLR_ERROR, "color adjust: could not build the LUT");
+			return;
+		}
+	}
+
+	struct wlr_output_state state;
+	wlr_output_state_init(&state);
+	wlr_output_state_set_color_transform(&state, tr);
+	if (wlr_output_test_state(m->wlr_output, &state)) {
+		wlr_output_commit_state(m->wlr_output, &state);
+	} else {
+		wlr_log(WLR_ERROR, "color adjust: %s rejected the LUT",
+				m->wlr_output->name);
+	}
+	wlr_output_state_finish(&state);
+	wlr_color_transform_unref(tr);
+}
+
 void override_config(void) {
 	config.animations = CLAMP_INT(config.animations, 0, 1);
 	config.layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
@@ -4323,6 +4403,20 @@ void override_config(void) {
 	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
 	config.hdr_depth = CLAMP_INT(config.hdr_depth, 0, 2);
+	config.hdr_sdr_nits = CLAMP_FLOAT(config.hdr_sdr_nits, 50.0f, 10000.0f);
+	scenefx_set_sdr_reference_luminance(config.hdr_sdr_nits);
+	config.color_gamma = CLAMP_FLOAT(config.color_gamma, 0.1f, 10.0f);
+	config.color_contrast = CLAMP_FLOAT(config.color_contrast, 0.1f, 10.0f);
+	config.color_red = CLAMP_FLOAT(config.color_red, 0.0f, 4.0f);
+	config.color_green = CLAMP_FLOAT(config.color_green, 0.0f, 4.0f);
+	config.color_blue = CLAMP_FLOAT(config.color_blue, 0.0f, 4.0f);
+	config.color_yellow = CLAMP_FLOAT(config.color_yellow, 0.0f, 1.0f);
+	if (mons.next) {
+		Monitor *color_adjust_mon;
+		wl_list_for_each(color_adjust_mon, &mons, link) {
+			color_adjust_apply(color_adjust_mon);
+		}
+	}
 	config.allow_shortcuts_inhibit =
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	config.allow_lock_transparent =
@@ -4542,6 +4636,13 @@ void set_value_default() {
 	config.drag_floating_refresh_interval = 8.0f;
 	config.allow_tearing = TEARING_DISABLED;
 	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_10;
+	config.hdr_sdr_nits = 203;
+	config.color_gamma = 1.0f;
+	config.color_contrast = 1.0f;
+	config.color_red = 1.0f;
+	config.color_green = 1.0f;
+	config.color_blue = 1.0f;
+	config.color_yellow = 0.0f;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	config.allow_lock_transparent = 0;
 	config.no_border_when_single = 0;

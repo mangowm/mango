@@ -1,0 +1,22 @@
+pkgname=mangowm-ng
+pkgver=0.16.1
+pkgrel=4
+pkgdesc="mango compositor with HDR, blur, rounded corners and shadows on the Vulkan renderer"
+arch=(x86_64)
+url="https://github.com/m8l8th814n-eng/mango/tree/mangowm-ng"
+license=(MIT)
+depends=(glibc 'wayland>=1.23.1' 'libinput>=1.27.1' libdrm pixman libxkbcommon pcre2 'libwlroots-vkfx-0.20.so' scenefx0.5 cjson pango libdisplay-info)
+makedepends=(git meson ninja wayland-protocols)
+provides=(wayland-compositor mangowc mangowm)
+conflicts=(mangowm mangowc)
+source=("git+https://github.com/m8l8th814n-eng/mango.git#branch=mangowm-ng")
+sha256sums=('SKIP')
+
+build() {
+  arch-meson mango build
+  meson compile -C build
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

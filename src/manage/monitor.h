@@ -591,6 +591,10 @@ void createmon(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&state);
 	wlr_output_state_finish(&pending);
 
+	if (color_adjust_enabled()) {
+		color_adjust_apply(m);
+	}
+
 	// 加入布局
 	struct wlr_output_layout_output *layout_output;
 	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
@@ -1202,7 +1206,7 @@ void gpureset(struct wl_listener *listener, void *data) {
 
 	mango_error(true, WLR_DEBUG, "gpu reset");
 
-	if (!(drw = fx_renderer_create(backend)))
+	if (!(drw = scenefx_init(scene, backend)))
 		die("couldn't recreate renderer");
 
 	if (!(alloc = wlr_allocator_autocreate(backend, drw)))

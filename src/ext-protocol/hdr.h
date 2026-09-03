@@ -1,4 +1,6 @@
 #include <drm_fourcc.h>
+#include <glob.h>
+#include <libdisplay-info/info.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -69,6 +71,61 @@ static bool output_supports_hdr(const Monitor *m, const char **reason) {
 	return !r;
 }
 
+/* hdr:2 — wlroots does not expose the EDID luminances, so read the panel's
+ * mastering data straight from sysfs and tone-map against its real limits
+ * instead of the generic defaults. */
+static bool output_fill_edid_hdr_caps(Monitor *m,
+									  struct wlr_output_image_description *desc) {
+	char pattern[128];
+	snprintf(pattern, sizeof(pattern), "/sys/class/drm/card*-%s/edid",
+			 m->wlr_output->name);
+	glob_t g;
+	if (glob(pattern, 0, NULL, &g) != 0 || g.gl_pathc == 0) {
+		globfree(&g);
+		return false;
+	}
+	FILE *f = fopen(g.gl_pathv[0], "rb");
+	globfree(&g);
+	if (!f)
+		return false;
+	uint8_t edid[4096];
+	size_t len = fread(edid, 1, sizeof(edid), f);
+	fclose(f);
+	if (len < 128)
+		return false;
+
+	struct di_info *info = di_info_parse_edid(edid, len);
+	if (!info)
+		return false;
+
+	bool filled = false;
+	const struct di_hdr_static_metadata *hsm =
+		di_info_get_hdr_static_metadata(info);
+	if (hsm && hsm->desired_content_max_luminance > 0) {
+		desc->mastering_luminance.min = hsm->desired_content_min_luminance;
+		desc->mastering_luminance.max = hsm->desired_content_max_luminance;
+		desc->max_cll = hsm->desired_content_max_luminance;
+		desc->max_fall = hsm->desired_content_max_frame_avg_luminance > 0
+							 ? hsm->desired_content_max_frame_avg_luminance
+							 : hsm->desired_content_max_luminance;
+		filled = true;
+	}
+
+	const struct di_color_primaries *cp =
+		di_info_get_default_color_primaries(info);
+	if (cp && cp->has_primaries) {
+		desc->mastering_display_primaries = (struct wlr_color_primaries){
+			.red = {cp->primary[0].x, cp->primary[0].y},
+			.green = {cp->primary[1].x, cp->primary[1].y},
+			.blue = {cp->primary[2].x, cp->primary[2].y},
+			.white = {cp->default_white.x, cp->default_white.y},
+		};
+		filled = true;
+	}
+	di_info_destroy(info);
+	return filled;
+}
+
 void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 					   bool silent) {
 
@@ -100,12 +157,20 @@ void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
 		.transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
 	};
 
-	// Mastering display metadata, from the monitorrule: wlroots does not expose
-	// the EDID luminances. Values are in cd/m²; 0 means unset and leaves the
-	// field zero, which is the previous behaviour.
+	// hdr:2 reads the mastering metadata from the panel's own EDID.
+	bool from_edid = m->hdr_enable >= 2 && output_fill_edid_hdr_caps(m, &desc);
+	if (from_edid && !silent)
+		mango_error(true, WLR_DEBUG,
+					"HDR mastering data from EDID for %s: max %.0f avg %.0f min %.4f",
+					m->wlr_output->name, desc.mastering_luminance.max,
+					desc.max_fall, desc.mastering_luminance.min);
+
+	// Mastering display metadata from the monitorrule overrides the EDID.
+	// Values are in cd/m²; 0 means unset and leaves the field as it was.
 	if (m->hdr_max_lum > 0) {
-		wlr_color_primaries_from_named(&desc.mastering_display_primaries,
-									   WLR_COLOR_NAMED_PRIMARIES_BT2020);
+		if (!from_edid)
+			wlr_color_primaries_from_named(&desc.mastering_display_primaries,
+										   WLR_COLOR_NAMED_PRIMARIES_BT2020);
 		desc.mastering_luminance.min = m->hdr_min_lum;
 		desc.mastering_luminance.max = m->hdr_max_lum;
 		desc.max_cll = m->hdr_max_lum;

@@ -30,7 +30,7 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 | `y` | integer | 0-99999 | Y position |
 | `scale` | float | 0.01-100.0 | Monitor scale |
 | `vrr` | integer | 0, 1 | Enable variable refresh rate |
-| `hdr` | integer | 0, 1 | Enable hdr support |
+| `hdr` | integer | 0, 1, 2 | Enable hdr support. `2` additionally reads the panel's mastering luminance and color primaries from its EDID, so tone mapping targets the display's real limits instead of generic defaults. `hdr_min_lum`/`hdr_max_lum`/`hdr_max_avg_lum` still override it. |
 | `hdr_min_lum` | float | 0.0-10000.0 | Mastering display minimum luminance, cd/m² (0 = unset) |
 | `hdr_max_lum` | float | 0.0-10000.0 | Mastering display peak luminance, also sent as max_cll, cd/m² (0 = unset) |
 | `hdr_max_avg_lum` | float | 0.0-10000.0 | Max frame-average light level (max_fall), cd/m² (0 = unset) |
@@ -115,6 +115,25 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
+| `hdr_sdr_nits` | `203` | SDR white level in nits on PQ outputs, 50-10000. `203` is the BT.2408 reference; higher values are panel- and taste-specific. `reload_config` applies it live. |
+
+## Color Adjustment
+
+Post-blend look-up table applied to every output, in the same state slot as a
+gamma ramp. It works with HDR on, where it operates on PQ-encoded values.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `color_gamma` | `1.0` | Gamma, 0.1-10. Above 1 brightens midtones, same direction as `xrandr --gamma`. |
+| `color_contrast` | `1.0` | Contrast around mid grey, 0.1-10. |
+| `color_red` | `1.0` | Red channel gain, 0-4. |
+| `color_green` | `1.0` | Green channel gain, 0-4. |
+| `color_blue` | `1.0` | Blue channel gain, 0-4. |
+| `color_yellow` | `0.0` | Warmth, 0-1. Scales blue down on top of `color_blue`; `1.0` removes blue entirely. |
+
+Left at the defaults no table is built and the output keeps its untouched
+pipeline. `reload_config` and `setoption` apply changes live. A gamma-control
+client such as wlsunset writes to the same slot and will fight these values.
 
 - you should enable HDR in monitorrule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
 - you must set `env=WLR_RENDERER,vulkan` before mango starts.

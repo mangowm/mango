@@ -192,7 +192,8 @@ void layer_draw_shadow(LayerSurface *l) {
 	int32_t width, height;
 	layer_actual_size(l, &width, &height);
 
-	int32_t delta = config.shadows_size;
+	int32_t tail = (int32_t)ceilf(config.shadows_blur * 1.5f);
+	int32_t spread = (int32_t)config.shadows_size;
 
 	struct wlr_box layer_box = {
 		.x = 0,
@@ -202,16 +203,18 @@ void layer_draw_shadow(LayerSurface *l) {
 	};
 
 	struct wlr_box shadow_box = {
-		.x = config.shadows_position_x,
-		.y = config.shadows_position_y,
-		.width = width + 2 * delta,
-		.height = height + 2 * delta,
+		.x = config.shadows_position_x - spread - tail,
+		.y = config.shadows_position_y - spread - tail,
+		.width = width + 2 * (spread + tail),
+		.height = height + 2 * (spread + tail),
 	};
 
-	struct wlr_box intersection_box;
-	wlr_box_intersection(&intersection_box, &layer_box, &shadow_box);
-	intersection_box.x -= config.shadows_position_x;
-	intersection_box.y -= config.shadows_position_y;
+	struct wlr_box intersection_box = {
+		.x = layer_box.x - shadow_box.x,
+		.y = layer_box.y - shadow_box.y,
+		.width = layer_box.width,
+		.height = layer_box.height,
+	};
 
 	struct clipped_region clipped_region = {
 		.area = intersection_box,
@@ -221,6 +224,10 @@ void layer_draw_shadow(LayerSurface *l) {
 	wlr_scene_node_set_position(&l->shadow->node, shadow_box.x, shadow_box.y);
 
 	wlr_scene_shadow_set_size(l->shadow, shadow_box.width, shadow_box.height);
+	wlr_scene_shadow_set_corner_radius(l->shadow,
+									   config.border_radius + spread);
+	wlr_scene_shadow_set_blur_sigma(l->shadow, config.shadows_blur);
+	wlr_scene_shadow_set_color(l->shadow, config.shadowscolor);
 	wlr_scene_shadow_set_clipped_region(l->shadow, clipped_region);
 }
 

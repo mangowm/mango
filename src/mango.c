@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <linux/input-event-codes.h>
 #include <math.h>
-#include <scenefx/render/fx_renderer/fx_renderer.h>
+#include <scenefx/scenefx.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
 #include <scenefx/types/wlr_scene.h>
@@ -634,7 +634,7 @@ struct Monitor {
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
 	bool is_vrr_enabling;
-	bool hdr_enable;
+	int32_t hdr_enable;
 	bool prefer_disable;
 	bool is_hdr_enabling;
 	// Mastering display metadata, in cd/m². 0 = unset, see output_enable_hdr().
@@ -1627,7 +1627,7 @@ void setup(void) {
 	wlr_scene_node_place_below(&drag_icon->node, &layers[LyrBlock]->node);
 
 	/* Create a renderer with the default implementation */
-	if (!(drw = fx_renderer_create(backend)))
+	if (!(drw = scenefx_init(scene, backend)))
 		die("couldn't create renderer");
 
 	if (drw->features.input_color_transform) {
