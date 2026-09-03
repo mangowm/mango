@@ -1,4 +1,4 @@
-.TH "mmsg" "1" "2026-05-31" "mmsg 0.14.0" "mmsg manual"
+.TH "mmsg" "1" "2026-05-31" "mmsg @VERSION@" "mmsg manual"
 .SH NAME
 mmsg \- send commands to the mango Wayland compositor and receive JSON responses
 .SH SYNOPSIS
@@ -53,8 +53,15 @@ List all clients.
 \fBget all\-monitors\fR
 List all monitors.
 .TP
+\fBget all\-devices\fR
+List physical input devices, grouped by device, with their types,
+vendor/product IDs, interface count and matched device rule, if any.
+.TP
 \fBget all\-tags\fR
 List tags for all monitors.
+.TP
+\fBget layouts\fR
+List all available window layouts (\fBsymbol\fR and \fBname\fR).
 .TP
 \fBget tags\fR <monitor>
 List tags for a specific monitor.
@@ -99,6 +106,9 @@ Stream updates for all tags.
 .TP
 \fBwatch all\-clients\fR
 Stream updates for all clients.
+.TP
+\fBwatch all\-devices\fR
+Stream the last input device that triggered an event.
 .TP
 \fBwatch keymode\fR
 Stream keymode changes.
