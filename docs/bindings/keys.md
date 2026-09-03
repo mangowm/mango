@@ -129,7 +129,11 @@ bindr=Super,Super_L,spawn,rofi -show run
 | :--- | :--- | :--- |
 | `groupjoin` | `left/right/up/down`  | Join group by direction. |
 | `groupfocus` | `prev/next`  | Focus group member by direction. |
+| `groupmerge` | `left/right/up/down` | merges window in given direction into focused window |
 | `groupleave` | -  | Leave group. |
+| `groupinit` | - | initialize a group with only the focused member as its only member (benefits group_spawn_capture) |
+| `groupall` | - | group all currently visible clients on the monitor | 
+| `groupdisband` | - | disband a group, returning all contained clients to individual |
 
 ### Tags & Monitors
 

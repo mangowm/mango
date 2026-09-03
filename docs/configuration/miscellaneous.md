@@ -54,3 +54,4 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `tag_carousel` | `0` | Enable tag carousel (cycling through tags). |
 | `drag_tile_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh tiled window resize during drag. Too small may cause application lag. |
 | `drag_floating_refresh_interval` | `8.0` | Interval (1.0–16.0) to refresh floating window resize during drag. Too small may cause application lag. |
+| `group_spawn_capture` | `0` | whether or not to add new spawned windows to a group automatically if a group is focused when the window is spawned |

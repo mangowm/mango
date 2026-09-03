@@ -1900,6 +1900,12 @@ mapnotify(struct wl_listener *listener, void *data) {
 	wlr_scene_node_lower_to_bottom(&c->shield->node);
 	wlr_scene_node_set_enabled(&c->shield->node, false);
 
+	Client *group_parent = NULL;
+	if (config.group_capture_spawn && selmon && selmon->sel &&
+		(selmon->sel->group_prev || selmon->sel->group_next ||
+		 selmon->sel->isgroupfocusing))
+		group_parent = selmon->sel;
+
 	if (config.new_is_master && selmon && !is_scroller_layout(selmon))
 		// tile at the top
 		wl_list_insert(&clients, &c->link); // 新窗口是master,头部入栈
@@ -1931,6 +1937,24 @@ mapnotify(struct wl_listener *listener, void *data) {
 		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
 								WLR_EDGE_RIGHT);
 	}
+	// handle auto-join group if group_capture_spawn is set
+	if (config.group_capture_spawn && group_parent && c->mon &&
+		c->mon == group_parent->mon &&
+		(group_parent->group_prev || group_parent->group_next ||
+		 group_parent->isgroupfocusing)) {
+		c->group_prev = group_parent->group_prev;
+		if (group_parent->group_prev)
+			group_parent->group_prev->group_next = c;
+		c->group_next = group_parent;
+		group_parent->group_prev = c;
+		c->is_pending_open_animation = false;
+		client_focus_group_member(c);
+		
+		
+	} else {
+		// make sure the animation is open type
+		c->is_pending_open_animation = true;
+	}
 
 	// apply buffer effects of client
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
@@ -1944,8 +1968,8 @@ mapnotify(struct wl_listener *listener, void *data) {
 		overview_backup_surface(c);
 	}
 
-	// make sure the animation is open type
-	c->is_pending_open_animation = true;
+	
+	
 	resize(c, c->geom, 0);
 	printstatus(IPC_WATCH_ARRANGGE);
 }
@@ -2913,7 +2937,7 @@ void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange) {
 		maximizescreen_box.width = c->mon->w.width - 2 * config.gappoh;
 		maximizescreen_box.height = c->mon->w.height - 2 * config.gappov;
 
-		if (c->group_next || c->group_prev) {
+		if (c->group_next || c->group_prev || c->isgroupfocusing) {
 			maximizescreen_box.height -= config.group_bar_height;
 			maximizescreen_box.y += config.group_bar_height;
 		}
@@ -2946,7 +2970,7 @@ void reset_maximizescreen_size(Client *c) {
 	geom.width = c->mon->w.width - 2 * config.gappoh;
 	geom.height = c->mon->w.height - 2 * config.gappov;
 
-	if (c->group_next || c->group_prev) {
+	if (c->group_next || c->group_prev || c->isgroupfocusing) {
 		geom.height -= config.group_bar_height;
 		geom.y += config.group_bar_height;
 	}
@@ -3412,7 +3436,7 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 		return;
 
 	if (!c->mon->isoverview && !c->isfullscreen &&
-		(c->group_next || c->group_prev)) {
+		(c->group_next || c->group_prev || c->isgroupfocusing)) {
 		geo.y = geo.y + config.group_bar_height;
 		geo.height -= config.group_bar_height;
 	}
@@ -3468,8 +3492,10 @@ void client_add_group_bar(Client *c) {
 void client_focus_group_member(Client *c) {
 	if (!c->group_prev && !c->group_next)
 		return;
+	if (c->group_prev == c || c->group_next == c)
+		return;
 
-	if (c->isgroupfocusing)
+	if (c->isgroupfocusing && (c->group_prev || c->group_next))
 		return;
 
 	Client *head = c;
@@ -3518,8 +3544,8 @@ void client_check_tab_node_visible(Client *c) {
 	Client *cur = head;
 	while (cur) {
 		if (!c->mon->isoverview && cur->group_bar &&
-			(cur->group_next || cur->group_prev) && TAGMATCH(c, c->mon) &&
-			ISNORMAL(c) && !c->isfullscreen) {
+			(cur->group_next || cur->group_prev || cur->isgroupfocusing) &&
+			TAGMATCH(c, c->mon) && ISNORMAL(c) && !c->isfullscreen) {
 			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
 									   true);
 		} else {
@@ -3614,9 +3640,9 @@ void client_set_group_config(Client *c) {
 }
 
 void client_group_detach(Client *c) {
-	if (c->group_prev)
+	if (c->group_prev && c->group_prev != c)
 		c->group_prev->group_next = c->group_next;
-	if (c->group_next)
+	if (c->group_next && c->group_next != c)
 		c->group_next->group_prev = c->group_prev;
 	c->group_prev = NULL;
 	c->group_next = NULL;

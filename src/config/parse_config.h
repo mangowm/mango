@@ -439,6 +439,7 @@ typedef struct {
 	uint32_t gappov;
 	uint32_t borderpx;
 	uint32_t group_bar_height;
+	int32_t group_capture_spawn;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float rootcolor[4];
@@ -1233,6 +1234,15 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "groupleave") == 0) {
 		func = groupleave;
+	} else if (strcmp(func_name, "groupmerge") == 0) {
+		func = groupmerge;
+		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "groupinit") == 0) {
+		func = groupinit;
+	} else if (strcmp(func_name, "groupall") == 0) {
+		func = groupall;
+	} else if (strcmp(func_name, "groupdisband") == 0) {
+		func = groupdisband;
 	} else if (strcmp(func_name, "focusid") == 0) {
 		func = focusid;
 	} else if (strcmp(func_name, "incnmaster") == 0) {
@@ -2269,6 +2279,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->borderpx = atoi(value);
 	} else if (strcmp(key, "group_bar_height") == 0) {
 		config->group_bar_height = atoi(value);
+	} else if (strcmp(key, "group_capture_spawn") == 0) {
+		config->group_capture_spawn = atoi(value);
 	} else if (strcmp(key, "rootcolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -4417,6 +4429,7 @@ void override_config(void) {
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
 	config.group_bar_height = CLAMP_INT(config.group_bar_height, 0, 500);
+	config.group_capture_spawn = CLAMP_INT(config.group_capture_spawn, 0, 1);
 	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
 	config.blur = CLAMP_INT(config.blur, 0, 1);
 	config.blur_layer = CLAMP_INT(config.blur_layer, 0, 1);
@@ -4556,6 +4569,7 @@ void set_value_default() {
 
 	config.borderpx = 4;
 	config.group_bar_height = 50;
+	config.group_capture_spawn = 0;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
 	config.overcircle_center_ratio = 0.5f;

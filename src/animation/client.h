@@ -378,7 +378,7 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 	if (!c || !c->group_bar)
 		return;
 
-	if (!c->group_next && !c->group_prev &&
+	if (!c->group_next && !c->group_prev && !c->isgroupfocusing &&
 		c->group_bar->scene_buffer->node.enabled) {
 		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
 		return;
@@ -387,7 +387,7 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 	if (c->is_logic_hide)
 		return;
 
-	if (!c->group_next && !c->group_prev)
+	if (!c->group_next && !c->group_prev && !c->isgroupfocusing)
 		return;
 
 	Client *head = c;

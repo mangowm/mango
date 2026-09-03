@@ -214,7 +214,8 @@ void groupjoin(const Arg *arg) {
 	if (need_join_client == need_replace_client)
 		return;
 
-	if (need_join_client->group_next || need_join_client->group_prev) {
+	if (need_join_client->group_next || need_join_client->group_prev ||
+		need_join_client->isgroupfocusing) {
 		groupleave(&(Arg){.tc = need_join_client});
 	}
 
@@ -248,6 +249,45 @@ void groupjoin(const Arg *arg) {
 	return;
 }
 
+void groupmerge(const Arg *arg) {
+	if (!selmon)
+		return;
+	if (selmon->isoverview)
+		return;
+
+	Client *group = selmon->sel;
+	if (!group || !group->mon)
+		return;
+
+	Client *target = direction_select(arg);
+	if (!target || target == group)
+		return;
+	Monitor *oldmon = NULL;
+
+	if (target->group_next || target->group_prev)
+		groupleave(&(Arg){.tc = target});
+
+	if (target->mon != group->mon) {
+		oldmon = target->mon;
+		target->mon = group->mon;
+	}
+
+	if (!group->group_prev && !group->group_next)
+		group->isgroupfocusing = true;
+
+	target->group_next = group;
+	if (group->group_prev)
+		group->group_prev->group_next = target;
+	target->group_prev = group->group_prev;
+	group->group_prev = target;
+
+	client_focus_group_member(target);
+	arrange(target->mon, false, false);
+
+	if (oldmon)
+		arrange(oldmon, false, false);
+}
+
 void groupleave(const Arg *arg) {
 
 	if (!selmon)
@@ -256,6 +296,7 @@ void groupleave(const Arg *arg) {
 	if (!tc || !tc->mon || !tc->isgroupfocusing)
 		return;
 	if (!tc->group_next && !tc->group_prev) {
+		tc->isgroupfocusing = false;
 		return;
 	}
 
@@ -277,6 +318,108 @@ void groupleave(const Arg *arg) {
 	arrange(tc->mon, false, false);
 
 	return;
+}
+
+void groupinit(const Arg *arg) {
+	if (!selmon)
+		return;
+	if (selmon->isoverview)
+		return;
+
+	Client *target = arg->tc ? arg->tc : selmon->sel;
+	if (!target || !target->mon)
+		return;
+	if (target->group_prev || target->group_next || target->isgroupfocusing)
+		return;
+
+	target->isgroupfocusing = true;
+	client_add_group_bar(target);
+	focusclient(target, 1);
+	arrange(target->mon, false, false);
+}
+
+void groupall(const Arg *arg) {
+	(void)arg;
+	if (!selmon)
+		return;
+	if (selmon->isoverview)
+		return;
+
+	Client *visible[256];
+	int count = 0;
+
+	Client *client;
+	wl_list_for_each(client, &clients, link) {
+		if (VISIBLEON(client, selmon) && count < 256)
+			visible[count++] = client;
+	}
+
+	if (count < 2)
+		return;
+
+	for (int index = 0; index < count; index++) {
+		if (visible[index]->group_next || visible[index]->group_prev)
+			client_group_detach(visible[index]);
+	}
+	Client *target = visible[0];
+
+	target->isgroupfocusing = true;
+
+	for (int index = 1; index < count; index++) {
+		visible[index]->group_next = target;
+		if (target->group_prev)
+			target->group_prev->group_next = visible[index];
+		visible[index]->group_prev = target->group_prev;
+		target->group_prev = visible[index];
+		visible[index]->is_logic_hide = true;
+		wlr_scene_node_set_enabled(&visible[index]->scene->node, false);
+		wlr_scene_node_set_enabled(
+			&visible[index]->group_bar->scene_buffer->node, false);
+	}
+	focusclient(target, 1);
+	arrange(target->mon, false, false);
+}
+
+void groupdisband(const Arg *arg) {
+	if (!selmon)
+		return;
+
+	Client *target = arg->tc ? arg->tc : selmon->sel;
+
+	if (!target || !target->mon)
+		return;
+
+	if (!target->group_prev && !target->group_next) {
+		if (target->isgroupfocusing) {
+			target->isgroupfocusing = false;
+			focusclient(target, 1);
+			arrange(target->mon, false, false);
+		}
+		return;
+	}
+
+	if (target->mon->isoverview)
+		return;
+
+	Client *head = target;
+	while (head->group_prev && head->group_prev != head)
+		head = head->group_prev;
+
+	Client *members[256];
+	int membercount = 0;
+
+	Client *current = head;
+	while (current && membercount < 256) {
+		members[membercount++] = current;
+		current = current->group_next;
+	}
+	for (int index = 0; index < membercount; index++) {
+		client_group_detach(members[index]);
+		members[index]->is_logic_hide = false;
+		wlr_scene_node_set_enabled(&members[index]->scene->node, true);
+	}
+	focusclient(target, 1);
+	arrange(target->mon, false, false);
 }
 
 void focuslast(const Arg *arg) {
