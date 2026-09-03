@@ -327,7 +327,7 @@ void place_drag_tile_client(Client *c) {
 
 	if (closest && closest->mon) {
 		const Layout *layout =
-			closest->mon->pertag->ltidxs[closest->mon->pertag->curtag];
+			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
 
 		if (closest->drop_direction == UNDIR) {
 			setfloating(c, 0);
@@ -345,7 +345,7 @@ void place_drag_tile_client(Client *c) {
 			return;
 		}
 		if (layout->id == DWINDLE) {
-			uint32_t tag = c->mon->pertag->curtag;
+			uint32_t tag = get_client_tag_idx(c);
 			bool insert_before = (closest->drop_direction == LEFT ||
 								  closest->drop_direction == UP);
 			bool split_h = (closest->drop_direction == LEFT ||
@@ -442,6 +442,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 		xytonode(cursor->x, cursor->y, &surface, NULL, NULL, &gb, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene && c->scene->node.enabled &&
+				VISIBLEON(c, c->mon) &&
 				(!client_is_unmanaged(c) || client_wants_focus(c)))
 				focusclient(c, 1);
 
@@ -460,7 +461,7 @@ bool handle_buttonpress(struct wlr_pointer_button_event *event) {
 
 		// overview模式下鼠标左键跳转，右键关闭窗口
 		if (selmon && selmon->isoverview && event->button == BTN_LEFT && c) {
-			toggleoverview(&(Arg){0});
+			toggleoverview(&(Arg){.tc = c});
 			return true;
 		}
 

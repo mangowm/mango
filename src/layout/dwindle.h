@@ -336,9 +336,9 @@ static void dwindle_swap_clients(Client *c1, Client *c2) {
 	Monitor *m1 = c1->mon;
 	Monitor *m2 = c2->mon;
 
-	DwindleNode **c1_root = &m1->pertag->dwindle_root[m1->pertag->curtag];
+	DwindleNode **c1_root = &m1->pertag->dwindle_root[get_mon_curtag(m1)];
 	DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
-	DwindleNode **c2_root = &m2->pertag->dwindle_root[m2->pertag->curtag];
+	DwindleNode **c2_root = &m2->pertag->dwindle_root[get_mon_curtag(m2)];
 	DwindleNode *c2node = dwindle_find_leaf(*c2_root, c2);
 
 	client_swap_layout_properties(c1, c2);
@@ -357,7 +357,7 @@ static void dwindle_swap_clients(Client *c1, Client *c2) {
 }
 
 static void dwindle_resize_client(Monitor *m, Client *c) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
 	if (!leaf)
 		return;
@@ -435,7 +435,7 @@ static void dwindle_resize_client(Monitor *m, Client *c) {
 
 static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 									   int32_t dy) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
 	if (!leaf)
 		return;
@@ -485,7 +485,7 @@ static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
 static void dwindle_remove_client(Client *c) {
 	Monitor *m;
 	wl_list_for_each(m, &mons, link) {
-		for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++)
+		for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 			dwindle_remove(&m->pertag->dwindle_root[t], c);
 	}
 }
@@ -586,7 +586,7 @@ void dwindle(Monitor *m) {
 	if (n == 0)
 		return;
 
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode **root = &m->pertag->dwindle_root[tag];
 	float ratio = config.dwindle_split_ratio;
 
@@ -675,6 +675,6 @@ void dwindle(Monitor *m) {
 }
 
 void cleanup_monitor_dwindle(Monitor *m) {
-	for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++)
+	for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
 }

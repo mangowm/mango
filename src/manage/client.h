@@ -686,7 +686,7 @@ bool check_hit_no_border(Client *c) {
 	}
 
 	if (c->mon && !c->mon->isoverview &&
-		c->mon->pertag->no_render_border[get_tags_first_tag_num(c->tags)]) {
+		c->mon->pertag->no_render_border[get_client_tag_idx(c)]) {
 		hit_no_border = true;
 	}
 
@@ -871,7 +871,7 @@ Client *find_client_by_direction(Client *tc, const Arg *arg,
 				continue;
 			if (!config.focus_cross_monitor && c->mon != tc->mon)
 				continue;
-			if (!(c->tags & c->mon->tagset[c->mon->seltags]))
+			if (!(c->tags & c->mon->tagset[c->mon->seltags]) && !c->isglobal)
 				continue;
 
 			int32_t c_l = c->geom.x;
@@ -1052,6 +1052,8 @@ float *get_border_color(Client *c) {
 int32_t is_single_bit_set(uint32_t x) { return x && !(x & (x - 1)); }
 
 bool client_only_in_one_tag(Client *c) {
+	if (c && (c->tags & TAG0_MASK))
+		return true;
 	uint32_t masked = c->tags & TAGMASK;
 	if (is_single_bit_set(masked)) {
 		return true;
@@ -1064,7 +1066,7 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 	if (!sc || !tc || !sc->mon)
 		return false;
 
-	uint32_t id = sc->mon->pertag->ltidxs[sc->mon->pertag->curtag]->id;
+	uint32_t id = sc->mon->pertag->ltidxs[get_client_tag_idx(sc)]->id;
 
 	if ((id != SCROLLER && id != VERTICAL_SCROLLER) && tc->mon != selmon &&
 		(tc->isfullscreen || tc->ismaximizescreen))
@@ -1228,7 +1230,8 @@ void client_reset_mon_tags(Client *c, Monitor *mon, uint32_t newtags) {
 	} else if (!newtags && mon && mon->isoverview) {
 		c->tags = mon->ovbk_current_tagset;
 	} else if (newtags) {
-		uint32_t masked = newtags & TAGMASK;
+		uint32_t masked =
+			(newtags & TAG0_MASK) ? TAG0_MASK : (newtags & TAGMASK);
 		c->tags = masked ? masked : mon->tagset[mon->seltags];
 	} else {
 		c->tags = mon->tagset[mon->seltags];
@@ -1279,7 +1282,7 @@ void applyrules(Client *c) {
 		apply_rule_properties(c, r);
 
 		// // set tags
-		if (r->tags > 0) {
+		if (r->tags) {
 			newtags |= r->tags;
 		} else if (parent) {
 			newtags = parent->tags;
@@ -1333,6 +1336,12 @@ void applyrules(Client *c) {
 		}
 	}
 
+	if (newtags == 0 && parent && (parent->tags & TAG0_MASK)) {
+		newtags = TAG0_MASK;
+	} else if (newtags == 0 && is_special_active(mon)) {
+		newtags = TAG0_MASK;
+	}
+
 	if (mon)
 		set_size_per(mon, c);
 
@@ -1377,13 +1386,14 @@ void applyrules(Client *c) {
 	bool should_init_get_focus =
 		!c->isopensilent &&
 		!(client_is_x11_popup(c) && client_should_ignore_focus(c)) && mon &&
-		(!c->istagsilent || !newtags || newtags & mon->tagset[mon->seltags]);
+		(!c->istagsilent || !newtags || (newtags & mon->tagset[mon->seltags]));
 
 	if (!should_init_get_focus) {
 		wl_list_safe_reinsert_prev(&fstack, &c->flink);
 	}
 
 	setmon(c, mon, newtags, should_init_get_focus);
+	client_reparent_group(c);
 
 	if (!c->isfloating) {
 		c->old_stack_inner_per = c->stack_inner_per;
@@ -2009,7 +2019,7 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 	switcher_remove_client(c);
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(
-					 c->mon->pertag->scroller_state[c->mon->pertag->curtag], c)
+					 c->mon->pertag->scroller_state[get_client_tag_idx(c)], c)
 			   : NULL;
 	struct ScrollerStackNode *prev_node =
 		target_node ? target_node->prev_in_stack : NULL;
@@ -2067,6 +2077,10 @@ void unmapnotify(struct wl_listener *listener, void *data) {
 		} else if (prev_node && !c->swallowing) {
 			nextfocus = prev_node->client;
 		} else {
+			nextfocus = focustop(selmon);
+		}
+
+		if (nextfocus && !VISIBLEON(nextfocus, selmon)) {
 			nextfocus = focustop(selmon);
 		}
 
@@ -2362,9 +2376,8 @@ void focusclient(Client *c, int32_t lift) {
 		wl_list_remove(&c->flink);
 		wl_list_insert(&fstack, &c->flink);
 
-		if (c && selmon->prevsel &&
-			(selmon->prevsel->tags & selmon->tagset[selmon->seltags]) &&
-			(c->tags & selmon->tagset[selmon->seltags]) && !c->isfloating &&
+		if (c && selmon->prevsel && TAGMATCH(selmon->prevsel, selmon) &&
+			TAGMATCH(c, selmon) && !c->isfloating &&
 			(is_scroller_layout(selmon) || is_monocle_layout(selmon))) {
 			arrange(selmon, false, false);
 		}
@@ -2422,8 +2435,11 @@ void focusclient(Client *c, int32_t lift) {
 
 		if (selmon && selmon->sel &&
 			(!VISIBLEON(selmon->sel, selmon) || selmon->sel->iskilling ||
-			 !client_surface(selmon->sel)->mapped))
+			 !client_surface(selmon->sel)->mapped)) {
+			selmon->sel->isfocusing = false;
+			client_set_unfocused_opacity_animation(selmon->sel);
 			selmon->sel = NULL;
+		}
 
 		// clear text input focus state
 		mango_im_relay_set_focus(mango_input_method_relay, NULL);
@@ -2511,17 +2527,19 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 		}
 	}
 
-	if ((m->tagset[m->seltags] & arg->ui & TAGMASK) != 0) {
+	if ((m->tagset[m->seltags] & arg->ui & (TAGMASK | TAG0_MASK)) != 0) {
 		want_animation = false;
 	}
 
 	m->seltags ^= 1; /* toggle sel tagset */
 
-	if (arg->ui & TAGMASK) {
-		m->tagset[m->seltags] = arg->ui & TAGMASK;
+	if (arg->ui & (TAGMASK | TAG0_MASK)) {
+		m->tagset[m->seltags] = arg->ui & (TAGMASK | TAG0_MASK);
 		tmptag = m->pertag->curtag;
 
-		if (arg->ui == (~0 & TAGMASK))
+		if (arg->ui & TAG0_MASK)
+			m->pertag->curtag = 0;
+		else if (arg->ui == (~0 & TAGMASK))
 			m->pertag->curtag = 0;
 		else {
 			for (i = 0; !(arg->ui & 1 << i) && i < (uint32_t)config.tag_num &&
@@ -2566,15 +2584,20 @@ void view(const Arg *arg, bool want_animation) {
 
 void tag_client(const Arg *arg, Client *target_client) {
 	Client *fc = NULL;
-	if (target_client && arg->ui & TAGMASK) {
+	if (target_client && (arg->ui & (TAGMASK | TAG0_MASK))) {
 
-		target_client->tags = arg->ui & TAGMASK;
+		target_client->tags =
+			(arg->ui & TAG0_MASK) ? TAG0_MASK : (arg->ui & TAGMASK);
+		client_reparent_group(target_client);
 
 		wl_list_for_each(fc, &clients, link) {
 			if (fc && fc != target_client && target_client->tags & fc->tags &&
 				ISFULLSCREEN(fc) && !target_client->isfloating) {
 				clear_fullscreen_flag(fc);
 			}
+		}
+		if (arg->ui & TAG0_MASK) {
+			arrange(target_client->mon, false, false);
 		}
 		view(&(Arg){.ui = arg->ui, .i = arg->i}, true);
 
@@ -2596,7 +2619,7 @@ void show_hide_client(Client *c) {
 	if (!c->is_in_scratchpad) {
 		tag_client(&(Arg){.ui = target}, c);
 	} else {
-		c->tags = c->oldtags;
+		c->tags = c->mini_restore_tag ? c->mini_restore_tag : c->oldtags;
 		c->isminimized = 0;
 		if (c->mon)
 			arrange(c->mon, false, false);
@@ -2917,12 +2940,15 @@ void set_minimized(Client *c) {
 		return;
 
 	c->isglobal = 0;
+
 	c->oldtags = c->mon->tagset[c->mon->seltags];
 	c->mini_restore_tag = c->tags;
 	c->tags = 0;
 	client_pending_minimized_state(c, 1);
 	c->is_in_scratchpad = 1;
 	c->is_scratchpad_show = 0;
+	client_reparent_group(c);
+
 	focusclient(focustop(selmon), 1);
 	arrange(c->mon, false, false);
 
@@ -2940,6 +2966,7 @@ void unminimize(Client *c) {
 		c->is_scratchpad_show = 0;
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
+		client_reparent_group(c);
 		setborder_color(c);
 		return;
 	}
@@ -2949,6 +2976,7 @@ void unminimize(Client *c) {
 		c->is_scratchpad_show = 0;
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
+		client_reparent_group(c);
 		setborder_color(c);
 		arrange(c->mon, false, false);
 		return;
@@ -2959,7 +2987,7 @@ void exit_scroller_stack(Client *c) {
 	if (!c || !c->mon)
 		return;
 
-	uint32_t tag = c->mon->pertag->curtag;
+	uint32_t tag = get_client_tag_idx(c);
 	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
 	if (st) {
 		struct ScrollerStackNode *n = find_scroller_node(st, c);
@@ -2982,9 +3010,8 @@ void clear_fullscreen_and_maximized_state(Monitor *m) {
 /*清除全屏标志,还原全屏时清0的border*/
 void clear_fullscreen_flag(Client *c) {
 
-	if ((c->mon->pertag->ltidxs[get_tags_first_tag_num(c->tags)]->id ==
-			 SCROLLER ||
-		 c->mon->pertag->ltidxs[get_tags_first_tag_num(c->tags)]->id ==
+	if ((c->mon->pertag->ltidxs[get_client_tag_idx(c)]->id == SCROLLER ||
+		 c->mon->pertag->ltidxs[get_client_tag_idx(c)]->id ==
 			 VERTICAL_SCROLLER) &&
 		!c->isfloating) {
 		return;
@@ -3045,6 +3072,7 @@ void show_scratchpad(Client *c) {
 		resize(c, c->geom, 0);
 	}
 
+	client_reparent_group(c);
 	c->oldtags = c->mon->tagset[c->mon->seltags];
 	wl_list_safe_reinsert_next(&clients, &c->link);
 	show_hide_client(c);
@@ -3085,18 +3113,22 @@ bool switch_scratchpad_client_state(Client *c) {
 		}
 	}
 
+	// visible on this tag -> hide
 	if (c->is_in_scratchpad && c->is_scratchpad_show && c->mon &&
-		(c->mon->tagset[c->mon->seltags] & c->tags) == 0) {
-		c->tags = c->mon->tagset[c->mon->seltags];
-		arrange(c->mon, false, false);
-		focusclient(c, 1);
-		return true;
-	} else if (c->is_in_scratchpad && c->is_scratchpad_show &&
-			   (c->mon->tagset[c->mon->seltags] & c->tags) != 0) {
+		(c->mon->tagset[c->mon->seltags] & c->tags)) {
 		set_minimized(c);
 		return true;
-	} else if (c && c->is_in_scratchpad && !c->is_scratchpad_show) {
-		show_scratchpad(c);
+	} else if (c->is_in_scratchpad && c->mon) {
+		// not visible on this tag: move the scratchpad here and show it
+		c->tags = c->mon->tagset[c->mon->seltags];
+		c->oldtags = c->tags;
+		c->mini_restore_tag = c->tags;
+		if (c->is_scratchpad_show) {
+			arrange(c->mon, false, false);
+			focusclient(c, 1);
+		} else {
+			show_scratchpad(c);
+		}
 		return true;
 	}
 
@@ -3142,8 +3174,8 @@ void exchange_two_client(Client *c1, Client *c2) {
 
 	Monitor *m1 = c1->mon;
 	Monitor *m2 = c2->mon;
-	const Layout *layout1 = m1->pertag->ltidxs[m1->pertag->curtag];
-	const Layout *layout2 = m2->pertag->ltidxs[m2->pertag->curtag];
+	const Layout *layout1 = m1->pertag->ltidxs[get_client_tag_idx(c1)];
+	const Layout *layout2 = m2->pertag->ltidxs[get_client_tag_idx(c2)];
 
 	if (layout1->id == SCROLLER || layout2->id == SCROLLER ||
 		layout1->id == VERTICAL_SCROLLER || layout2->id == VERTICAL_SCROLLER) {
@@ -3245,12 +3277,12 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	if (!w->mon)
 		return;
 
-	const Layout *layout = w->mon->pertag->ltidxs[w->mon->pertag->curtag];
+	const Layout *layout = w->mon->pertag->ltidxs[get_client_tag_idx(w)];
 
 	if (layout->id == DWINDLE || layout->id == SCROLLER ||
 		layout->id == VERTICAL_SCROLLER) {
 
-		for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++) {
+		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
 			/* dwindle */
 
 			if (layout->id == DWINDLE) {
@@ -3280,7 +3312,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 
 	/* 同步当前活动 tag 的全局客户端字段 */
 	if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER) {
-		sync_scroller_state_to_clients(w->mon, w->mon->pertag->curtag);
+		sync_scroller_state_to_clients(w->mon, get_client_tag_idx(w));
 	}
 }
 
@@ -3401,16 +3433,41 @@ void client_add_jump_label_node(Client *c) {
 	wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, false);
 }
 
+// scene layer a client belongs to; shown scratchpads join the special
+// layers while the special workspace is active
+uint32_t client_target_layer(Client *c) {
+	if (c->isoverlay)
+		return LyrOverlay;
+
+	bool special_overlay = (c->tags & TAG0_MASK) ||
+						   (is_special_active(c->mon) && c->is_in_scratchpad &&
+							c->is_scratchpad_show && !c->isminimized);
+
+	if (special_overlay)
+		return c->isfloating || c->isfullscreen ? LyrSpecialTop
+			   : c->ismaximizescreen			? LyrSpecialMaximize
+												: LyrSpecialTile;
+
+	return c->isfloating || c->isfullscreen ? LyrTop
+		   : c->ismaximizescreen			? LyrMaximize
+											: LyrTile;
+}
+
+// sync client scene to its target layer
+void client_sync_layer(Client *c) {
+	if (!c || !c->scene || !c->mon)
+		return;
+	if (c->scene->node.parent != layers[client_target_layer(c)])
+		client_reparent_group(c);
+}
+
 void client_add_group_bar(Client *c) {
 
 	if (config.group_bar_height <= 0) {
 		return;
 	}
 
-	uint32_t layer = c->isoverlay						? LyrOverlay
-					 : c->isfloating || c->isfullscreen ? LyrTop
-					 : c->ismaximizescreen				? LyrMaximize
-														: LyrTile;
+	uint32_t layer = client_target_layer(c);
 
 	c->group_bar = mango_group_bar_create(c, GroupBar, layers[layer],
 										  config.groupbardata, 0, 0);
@@ -3509,10 +3566,7 @@ void client_reparent_group(Client *c) {
 	if (!c || !c->mon)
 		return;
 
-	int32_t layer = c->isoverlay					   ? LyrOverlay
-					: c->isfloating || c->isfullscreen ? LyrTop
-					: c->ismaximizescreen			   ? LyrMaximize
-													   : LyrTile;
+	int32_t layer = client_target_layer(c);
 
 	Client *head = c;
 	while (head->group_prev)

@@ -132,11 +132,13 @@
 	 !(A)->isunglobal)
 #define VISIBLEON(C, M)                                                        \
 	((C) && (M) && (C)->mon == (M) && !(C)->is_logic_hide &&                   \
+	 !(C)->isminimized &&                                                      \
 	 (((C)->tags & (M)->tagset[(M)->seltags] || (C)->isglobal ||               \
 	   (C)->isunglobal)))
 
 #define TAGMATCH(C, M)                                                         \
-	((C) && (M) && (C)->mon == (M) && (((C)->tags & (M)->tagset[(M)->seltags])))
+	((C) && (M) && (C)->mon == (M) && !(C)->is_logic_hide &&                   \
+	 !(C)->isminimized && (((C)->tags & (M)->tagset[(M)->seltags])))
 
 #define ISMODEKEYCODE(KEY)                                                     \
 	((KEY) == 133 || (KEY) == 37 || (KEY) == 64 || (KEY) == 50 ||              \
@@ -147,6 +149,7 @@
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 
 #define TAGMASK (tagmask)
+#define TAG0_MASK (1U << 31)
 uint32_t tagmask = ((1u << 9) - 1); // 默认 9 个 tag
 
 #define ISFULLSCREEN(A)                                                        \
@@ -200,6 +203,12 @@ enum {
 	LyrTile,
 	LyrMaximize,
 	LyrTop,
+	// special workspace layers: above LyrTop; dim at the bottom, then
+	// tiled / maximized / floating+fullscreen
+	LyrSpecialDim,
+	LyrSpecialTile,
+	LyrSpecialMaximize,
+	LyrSpecialTop,
 	LyrFadeOut,
 	LyrOverlay,
 	LyrIMPopup, // text-input layer
@@ -602,6 +611,11 @@ struct Monitor {
 	int32_t gappiv; /* vertical gap between windows */
 	int32_t gappoh; /* horizontal outer gaps */
 	int32_t gappov; /* vertical outer gaps */
+	// special workspace gaps, per monitor
+	int32_t special_gappih;
+	int32_t special_gappiv;
+	int32_t special_gappoh;
+	int32_t special_gappov;
 	Pertag *pertag;
 	uint32_t ovbk_current_tagset;
 	uint32_t ovbk_prev_tagset;
@@ -612,11 +626,13 @@ struct Monitor {
 	int32_t ov_normal_mode; /* 热区进入时使用普通网格布局 */
 	int32_t ov_tab_layout;	/* overcircle 进入时使用居中 tab 布局 */
 	int32_t only_sleep;
+	bool special_empty_view; // user intentionally opened the empty special view
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
 	uint32_t visible_fake_tiling_clients;
 	uint32_t hide_clients;
+	struct wlr_scene_rect *special_dim_rect;
 	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
@@ -912,6 +928,12 @@ static void reset_keyboard_layout(void);
 static void client_update_oldmonname_record(Client *c, Monitor *m);
 static void pending_kill_client(Client *c);
 static uint32_t get_tags_first_tag_num(uint32_t source_tags);
+static inline uint32_t get_mon_curtag(const Monitor *m);
+static inline uint32_t get_client_tag_idx(const Client *c);
+static inline bool is_special_active(const Monitor *m);
+static uint32_t client_target_layer(Client *c);
+static void client_sync_layer(Client *c);
+static void special_update_dim(Monitor *m);
 static void set_layer_open_animaiton(LayerSurface *l, struct wlr_box geo);
 static void init_fadeout_layers(LayerSurface *l);
 static void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height);
@@ -1221,20 +1243,66 @@ static struct {
 } last_cursor;
 
 #include "config/preset.h"
+// slots: 1..tag_num are normal tags, slot 0 is special tag0,
+// tag_num_MAX + 1 is the all-tags view
+#define PERTAG_ALL_TAGS_IDX (tag_num_MAX + 1)
+#define PERTAG_SLOTS (tag_num_MAX + 2)
 struct Pertag {
 	uint32_t curtag, prevtag;
-	int32_t nmasters[LENGTH(tags) + 1];
-	float mfacts[LENGTH(tags) + 1];
-	int32_t no_hide[LENGTH(tags) + 1];
-	int32_t no_render_border[LENGTH(tags) + 1];
-	int32_t open_as_floating[LENGTH(tags) + 1];
-	float scroller_default_proportion[LENGTH(tags) + 1];
-	float scroller_default_proportion_single[LENGTH(tags) + 1];
-	int32_t scroller_ignore_proportion_single[LENGTH(tags) + 1];
-	struct DwindleNode *dwindle_root[LENGTH(tags) + 1];
-	const Layout *ltidxs[LENGTH(tags) + 1];
-	struct TagScrollerState *scroller_state[LENGTH(tags) + 1];
+	int32_t nmasters[PERTAG_SLOTS];
+	float mfacts[PERTAG_SLOTS];
+	int32_t no_hide[PERTAG_SLOTS];
+	int32_t no_render_border[PERTAG_SLOTS];
+	int32_t open_as_floating[PERTAG_SLOTS];
+	float scroller_default_proportion[PERTAG_SLOTS];
+	float scroller_default_proportion_single[PERTAG_SLOTS];
+	int32_t scroller_ignore_proportion_single[PERTAG_SLOTS];
+	struct DwindleNode *dwindle_root[PERTAG_SLOTS];
+	const Layout *ltidxs[PERTAG_SLOTS];
+	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
 };
+
+static inline uint32_t get_mon_curtag(const Monitor *m) {
+	if (!m || !m->pertag)
+		return 0;
+	// special workspace uses slot 0; all-tags view (curtag==0) uses its own
+	// slot
+	if (is_special_active(m))
+		return 0;
+	return m->pertag->curtag ? m->pertag->curtag : PERTAG_ALL_TAGS_IDX;
+}
+static inline uint32_t get_client_tag_idx(const Client *c) {
+	if (!c || (c->tags & TAG0_MASK))
+		return 0;
+	return get_tags_first_tag_num(c->tags);
+}
+static inline bool is_special_active(const Monitor *m) {
+	return m && !m->isoverview && (m->tagset[m->seltags] & TAG0_MASK);
+}
+// true if m still has a live (not minimized/destroyed) special window
+static inline bool special_has_clients(const Monitor *m) {
+	Client *c;
+	if (!m)
+		return false;
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon == m && !c->iskilling && !c->isminimized &&
+			(c->tags & TAG0_MASK)) {
+			return true;
+		}
+	}
+	return false;
+}
+static inline uint32_t get_monitor_active_tagset(const Monitor *m) {
+	if (!m)
+		return 0;
+	if (is_special_active(m) && m->pertag) {
+		uint32_t prev_set = m->tagset[m->seltags ^ 1] & TAGMASK;
+		return prev_set ? prev_set
+						: (m->pertag->prevtag ? (1U << (m->pertag->prevtag - 1))
+											  : 1);
+	}
+	return m->tagset[m->seltags];
+}
 #include "common/log.h"
 #include "config/parse_config.h"
 

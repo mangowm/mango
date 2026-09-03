@@ -77,7 +77,7 @@ static void clear_scroller_state(struct TagScrollerState *st) {
 
 /* 在 Monitor 销毁时清理所有 tag 的 scroller 状态 */
 static void cleanup_monitor_scroller(Monitor *m) {
-	for (int t = 0; t < config.tag_num + 1; t++) {
+	for (int t = 0; t < PERTAG_SLOTS; t++) {
 		if (m->pertag->scroller_state[t]) {
 			clear_scroller_state(m->pertag->scroller_state[t]);
 			m->pertag->scroller_state[t] = NULL;
@@ -284,7 +284,7 @@ void arrange_stack_vertical_node(struct ScrollerStackNode *head,
 }
 
 void scroller(Monitor *m) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
 	float scroller_default_proportion_single =
@@ -527,7 +527,7 @@ void scroller(Monitor *m) {
 }
 
 void vertical_scroller(Monitor *m) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	int32_t bar_height = 0;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
@@ -781,7 +781,7 @@ void vertical_scroller(Monitor *m) {
 void scroller_remove_client(Client *c) {
 	Monitor *m;
 	wl_list_for_each(m, &mons, link) {
-		for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++) {
+		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
 			struct TagScrollerState *st = m->pertag->scroller_state[t];
 			if (!st)
 				continue;
@@ -804,7 +804,7 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		setmaximizescreen(c, 0, true);
 
 	Monitor *m = c->mon;
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 
 	struct ScrollerStackNode *cnode = find_scroller_node(st, c);
@@ -902,7 +902,7 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 Client *scroll_get_stack_head_client(Client *c) {
 	if (!c || !c->mon)
 		return c;
-	uint32_t tag = c->mon->pertag->curtag;
+	uint32_t tag = get_client_tag_idx(c);
 	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
 	if (st) {
 		struct ScrollerStackNode *n = find_scroller_node(st, c);
@@ -918,7 +918,7 @@ Client *scroll_get_stack_head_client(Client *c) {
 Client *scroll_get_stack_tail_client(Client *c) {
 	if (!c || !c->mon)
 		return c;
-	uint32_t tag = c->mon->pertag->curtag;
+	uint32_t tag = get_client_tag_idx(c);
 	struct TagScrollerState *st = c->mon->pertag->scroller_state[tag];
 	if (st) {
 		struct ScrollerStackNode *n = find_scroller_node(st, c);
@@ -932,7 +932,7 @@ Client *scroll_get_stack_tail_client(Client *c) {
 }
 
 static void update_scroller_state(Monitor *m) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 
 	/* 收集当前可见的所有 scroller 平铺窗口 */
@@ -1073,8 +1073,8 @@ void exchange_two_scroller_clients(Client *c1, Client *c2) {
 	struct ScrollerStackNode *n2 = NULL;
 	Monitor *m1 = c1->mon;
 	Monitor *m2 = c2->mon;
-	uint32_t tag1 = m1->pertag->curtag;
-	uint32_t tag2 = m2->pertag->curtag;
+	uint32_t tag1 = get_mon_curtag(m1);
+	uint32_t tag2 = get_mon_curtag(m2);
 
 	struct TagScrollerState *st1 = ensure_scroller_state(m1, tag1);
 	n1 = find_scroller_node(st1, c1);
