@@ -240,6 +240,22 @@ static void restore_seat_keyboard(KeyboardGroup *group) {
 		wlr_seat_set_keyboard(seat, fallback);
 }
 
+// 物理键盘（kb_group + devicerule 独立键盘）当前的修饰键并集，
+// 供鼠标绑定这类需要看硬件按键状态的地方使用。虚拟键盘（比如输入法
+// 的）不算在内，它的修饰状态可能残留或锁死，不该触发鼠标绑定
+uint32_t keyboard_hard_modifiers(void) {
+	uint32_t mods = 0;
+	KeyboardGroup *group;
+
+	if (kb_group && kb_group->keyboard)
+		mods |= wlr_keyboard_get_modifiers(kb_group->keyboard);
+	wl_list_for_each(group, &standalone_keyboards, link) {
+		if (group->keyboard)
+			mods |= wlr_keyboard_get_modifiers(group->keyboard);
+	}
+	return mods;
+}
+
 void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
