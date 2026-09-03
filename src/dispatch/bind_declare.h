@@ -89,3 +89,6 @@ void dwindle_split_horizontal(const Arg *arg);
 void dwindle_split_vertical(const Arg *arg);
 void dwindle_toggle_current_split(const Arg *arg);
 void focusid(const Arg *arg);
+void toggle_special_tag(const Arg *arg);
+void tag_special_tag(const Arg *arg);
+void tag_special_silent(const Arg *arg);

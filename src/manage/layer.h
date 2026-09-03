@@ -160,6 +160,7 @@ void maplayersurfacenotify(struct wl_listener *listener, void *data) {
 		l->animainit_geom = l->animation.current = l->current = l->pending =
 			l->geom;
 	}
+
 	// 刷新布局，让窗口能感应到exclude_zone变化以及设置独占表面
 	arrangelayers(l->mon);
 	reset_exclusive_layers_focus(l->mon);
