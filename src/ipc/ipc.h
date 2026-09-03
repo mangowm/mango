@@ -106,6 +106,8 @@ static const char *ipc_get_layout_str(void) {
 
 static cJSON *tags_mask_to_array(uint32_t tagmask) {
 	cJSON *arr = cJSON_CreateArray();
+	if (tagmask & TAG0_MASK)
+		cJSON_AddItemToArray(arr, cJSON_CreateNumber(0));
 	for (int i = 0; i < config.tag_num; i++)
 		if (tagmask & (1 << i))
 			cJSON_AddItemToArray(arr, cJSON_CreateNumber(i + 1));
@@ -116,11 +118,12 @@ static cJSON *build_tags_json(Monitor *m) {
 	cJSON *tags_array = cJSON_CreateArray();
 	Client *c = NULL;
 
+	uint32_t active_tagset = get_monitor_active_tagset(m);
 	for (int tag = 1; tag <= config.tag_num; tag++) {
 		int numclients = 0;
 		bool is_active = false, is_urgent = false;
 		uint32_t tagmask = 1 << (tag - 1);
-		if (tagmask & m->tagset[m->seltags])
+		if (tagmask & active_tagset)
 			is_active = true;
 		wl_list_for_each(c, &clients, link) {
 			if (c->mon != m || c->is_logic_hide)
@@ -165,7 +168,7 @@ static cJSON *monitor_active_tags(Monitor *m) {
 		cJSON_AddItemToArray(arr, cJSON_CreateNumber(0));
 		return arr;
 	}
-	tagset = m->tagset[m->seltags];
+	tagset = get_monitor_active_tagset(m);
 	for (int i = 0; i < config.tag_num; i++)
 		if (tagset & (1 << i))
 			cJSON_AddItemToArray(arr, cJSON_CreateNumber(i + 1));
@@ -222,9 +225,9 @@ static cJSON *build_monitor_json(Monitor *m) {
 	cJSON_AddNumberToObject(resp, "height", m->m.height);
 	cJSON_AddNumberToObject(resp, "scale", m->wlr_output->scale);
 	cJSON_AddNumberToObject(resp, "layout_index",
-							m->pertag->ltidxs[m->pertag->curtag] - layouts);
+							m->pertag->ltidxs[get_mon_curtag(m)] - layouts);
 	cJSON_AddStringToObject(resp, "layout_symbol",
-							m->pertag->ltidxs[m->pertag->curtag]->symbol);
+							m->pertag->ltidxs[get_mon_curtag(m)]->symbol);
 	cJSON_AddStringToObject(resp, "last_open_surface", m->last_open_surface);
 	cJSON_AddItemToObject(resp, "tag_num", cJSON_CreateNumber(config.tag_num));
 	cJSON_AddItemToObject(resp, "hide_clients",
@@ -367,7 +370,7 @@ static void handle_command(int client_fd, const char *cmd_raw) {
 		uint32_t tagmask = 1 << tag_idx;
 		int numclients = 0, focused_client = 0;
 		bool is_active = false, is_urgent = false;
-		if (tagmask & m->tagset[m->seltags])
+		if (tagmask & get_monitor_active_tagset(m))
 			is_active = true;
 
 		Client *c, *focused = focustop(m);

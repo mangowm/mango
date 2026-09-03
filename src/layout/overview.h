@@ -481,7 +481,7 @@ void finish_jump_mode(Monitor *m) {
 
 	Client *c;
 	wl_list_for_each(c, &clients, link) {
-		if (VISIBLEON(c, m)) {
+		if (c->mon == m) {
 			if (c->jump_label_node &&
 				c->jump_label_node->scene_buffer->node.enabled) {
 				c->jump_char = '\0';

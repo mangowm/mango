@@ -5,7 +5,8 @@ void set_size_per(Monitor *m, Client *c) {
 	if (!m || !c)
 		return;
 
-	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+	uint32_t tag = get_mon_curtag(m);
+	const Layout *current_layout = m->pertag->ltidxs[tag];
 
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c) {
@@ -21,19 +22,18 @@ void set_size_per(Monitor *m, Client *c) {
 	}
 
 	if (!found || c->isfloating) {
-		c->master_mfact_per = m->pertag->mfacts[m->pertag->curtag];
+		c->master_mfact_per = m->pertag->mfacts[tag];
 		c->master_inner_per = 1.0f;
 		c->stack_inner_per = 1.0f;
 	}
 
 	if (!c->iscustom_scroller_proportion) {
-		c->scroller_proportion =
-			m->pertag->scroller_default_proportion[m->pertag->curtag];
+		c->scroller_proportion = m->pertag->scroller_default_proportion[tag];
 	}
 
 	if (!c->iscustom_scroller_proportion_single) {
 		c->scroller_proportion_single =
-			m->pertag->scroller_default_proportion_single[m->pertag->curtag];
+			m->pertag->scroller_default_proportion_single[tag];
 	}
 }
 
@@ -475,7 +475,7 @@ void resize_tile_grid_fair(Client *grabc, bool isdrag, int32_t offsetx,
 		return;
 
 	// 获取当前布局 ID
-	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+	const Layout *current_layout = m->pertag->ltidxs[get_mon_curtag(m)];
 
 	if (!start_drag_window && isdrag) {
 		drag_begin_cursorx = cursor->x;
@@ -768,7 +768,7 @@ void resize_tile_scroller(Client *grabc, bool isdrag, int32_t offsetx,
 		return;
 
 	Monitor *m = grabc->mon;
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_client_tag_idx(grabc);
 	struct TagScrollerState *st = m->pertag->scroller_state[tag];
 	if (!st)
 		return;
@@ -979,7 +979,7 @@ void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
 		return;
 
 	const Layout *current_layout =
-		grabc->mon->pertag->ltidxs[grabc->mon->pertag->curtag];
+		grabc->mon->pertag->ltidxs[get_client_tag_idx(grabc)];
 	if (current_layout->id == TILE || current_layout->id == DECK ||
 		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE
 
@@ -1025,9 +1025,10 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 	Client *c = NULL;
 	int32_t i = 0;
 	uint32_t stack_index = 0;
-	uint32_t nmasters = m->pertag->nmasters[m->pertag->curtag];
+	uint32_t tag = get_mon_curtag(m);
+	uint32_t nmasters = m->pertag->nmasters[tag];
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id != CENTER_TILE) {
+	if (m->pertag->ltidxs[tag]->id != CENTER_TILE) {
 
 		wl_list_for_each(c, &clients, link) {
 			if (VISIBLEON(c, m) && ISFAKETILED(c)) {
@@ -1096,6 +1097,14 @@ void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 	}
 }
 
+// normal-tag client kept visible as background under the special overlay
+static bool special_keep_bg_client(Monitor *m, Client *c) {
+	return is_special_active(m) && !c->is_logic_hide && !c->isminimized &&
+		   ((m->pertag->prevtag > 0 &&
+			 (c->tags & (1 << (m->pertag->prevtag - 1)))) ||
+			(c->tags & (m->tagset[m->seltags ^ 1] & ~TAG0_MASK)));
+}
+
 void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 								  bool from_view, bool only_calculate) {
 	Client *c = NULL;
@@ -1115,10 +1124,10 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 	m->visible_fake_tiling_clients = 0;
 	m->hide_clients = 0;
 
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = m->pertag->scroller_state[tag];
 
-	const Layout *cur_layout = m->pertag->ltidxs[m->pertag->curtag];
+	const Layout *cur_layout = m->pertag->ltidxs[tag];
 	if (cur_layout->id == SCROLLER || cur_layout->id == VERTICAL_SCROLLER) {
 		update_scroller_state(m);
 	}
@@ -1176,7 +1185,7 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		}
 	}
 
-	nmasters = m->pertag->nmasters[m->pertag->curtag];
+	nmasters = m->pertag->nmasters[get_mon_curtag(m)];
 
 	wl_list_for_each(c, &clients, link) {
 		if (c->iskilling)
@@ -1208,10 +1217,13 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 				if (!only_calculate)
 					set_arrange_visible(m, c, want_animation);
-			} else {
-				/* keep the dragged client visible across view switches */
-				if (!only_calculate && c != grabc)
-					set_arrange_hidden(m, c, want_animation);
+				if (!only_calculate)
+					client_sync_layer(c);
+			} else if (special_keep_bg_client(m, c)) {
+				wlr_scene_node_set_enabled(&c->scene->node, true);
+				c->animation.running = false;
+			} else if (!only_calculate && c != grabc) {
+				set_arrange_hidden(m, c, want_animation);
 			}
 		}
 
@@ -1226,6 +1238,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		m, m->visible_tiling_clients, total_left_stack_hight_percent,
 		total_right_stack_hight_percent, total_stack_inner_percent,
 		total_master_inner_percent, master_num, stack_num);
+
+	special_update_dim(m);
 }
 
 // remap tags through map; unmapped tags stay as-is.
@@ -1292,7 +1306,8 @@ void tag_gather_apply(Monitor *m) {
 
 	// collect occupied tags on this monitor.
 	wl_list_for_each(c, &clients, link) {
-		if (c->mon == m && !c->iskilling && !c->is_logic_hide)
+		if (c->mon == m && !c->iskilling && !c->is_logic_hide &&
+			!(c->tags & TAG0_MASK))
 			occupied |= c->tags & tagmask;
 	}
 	// the current view counts as occupied even when empty.
@@ -1314,7 +1329,8 @@ void tag_gather_apply(Monitor *m) {
 
 	// remap client tags.
 	wl_list_for_each(c, &clients, link) {
-		if (c->mon != m || c->iskilling || c->is_logic_hide)
+		if (c->mon != m || c->iskilling || c->is_logic_hide ||
+			(c->tags & TAG0_MASK))
 			continue;
 		c->tags = tag_remap_mask(c->tags, map);
 	}
@@ -1345,6 +1361,28 @@ void tag_gather_apply(Monitor *m) {
 		tag_gather_reset_slot(m, i);
 }
 
+// empty special view: keep it when entered via a view switch, exit otherwise.
+// returns true when arrange should stop because the view was closed
+static bool special_handle_empty_view(Monitor *m, bool from_view) {
+	if (!is_special_active(m)) {
+		m->special_empty_view = false;
+		return false;
+	}
+	if (special_has_clients(m)) {
+		m->special_empty_view = false;
+		return false;
+	}
+	if (from_view) {
+		m->special_empty_view = true;
+		return false;
+	}
+	if (!m->special_empty_view) {
+		toggle_special_tag_mon(m);
+		return true;
+	}
+	return false;
+}
+
 void // 17
 arrange(Monitor *m, bool want_animation, bool from_view) {
 
@@ -1358,12 +1396,33 @@ arrange(Monitor *m, bool want_animation, bool from_view) {
 		m->sel = focustop(m);
 	}
 
+	if (special_handle_empty_view(m, from_view))
+		return;
+
 	pre_calculate_before_arrange(m, want_animation, from_view, false);
+
+	bool is_tag0 = is_special_active(m);
+	int32_t saved_oh = m->gappoh, saved_ov = m->gappov;
+	int32_t saved_ih = m->gappih, saved_iv = m->gappiv;
+
+	if (is_tag0) {
+		m->gappoh = m->special_gappoh;
+		m->gappov = m->special_gappov;
+		m->gappih = m->special_gappih;
+		m->gappiv = m->special_gappiv;
+	}
 
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
 	} else {
-		m->pertag->ltidxs[m->pertag->curtag]->arrange(m);
+		m->pertag->ltidxs[get_mon_curtag(m)]->arrange(m);
+	}
+
+	if (is_tag0) {
+		m->gappoh = saved_oh;
+		m->gappov = saved_ov;
+		m->gappih = saved_ih;
+		m->gappiv = saved_iv;
 	}
 
 	// gather after layout/animation setup so tag-switch animations still play.

@@ -28,8 +28,14 @@ stdenv.mkDerivation {
   pname = "mango";
   version = "nightly";
 
-  src = builtins.path {
-    path = ../.;
+  src = lib.cleanSourceWith {
+    src = ../.;
+    filter =
+      path: type:
+      let
+        base = baseNameOf (toString path);
+      in
+      (lib.cleanSourceFilter path type) && base != "build" && base != "result";
     name = "source";
   };
 

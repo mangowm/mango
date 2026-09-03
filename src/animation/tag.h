@@ -49,6 +49,8 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 	if (c->is_logic_hide)
 		return;
 
+	bool was_enabled = c->scene->node.enabled;
+
 	if (!ISTILED(c) || (!c->is_clip_to_hide || !is_scroller_layout(c->mon))) {
 		c->is_clip_to_hide = false;
 		c->is_logic_hide = false;
@@ -58,7 +60,25 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 			wlr_scene_node_set_enabled(&c->scene_surface->node, true);
 	}
 
-	if (!c->animation.tag_from_rule && want_animation &&
+	/* Special workspace clients slide in from above the monitor */
+	if (c->tags & TAG0_MASK) {
+		c->animation.tag_from_rule = false;
+		c->animation.tagouting = false;
+		c->animation.tagouted = false;
+		client_raise_group(c);
+		if (want_animation && config.animations) {
+			c->animation.tagining = true;
+			c->animainit_geom = c->geom;
+			c->animainit_geom.y = c->mon->m.y - c->geom.height;
+		} else {
+			c->animainit_geom.x = c->animation.current.x;
+			c->animainit_geom.y = c->animation.current.y;
+		}
+		resize_apply(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
+		return;
+	}
+
+	if (!was_enabled && !c->animation.tag_from_rule && want_animation &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
 		config.animations) {
 		c->animation.tagining = true;
@@ -129,6 +149,28 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		c->is_clip_to_hide = false;
 		wlr_scene_node_set_enabled(&c->scene->node, true);
 		c->animation.running = false;
+		return;
+	}
+
+	/* Special workspace windows should animate out or hide when special
+	 * workspace is not active */
+	if (c->tags & TAG0_MASK) {
+		if (want_animation && config.animations && !c->animation.tagouted &&
+			c->scene->node.enabled) {
+			c->animation.tagouting = true;
+			c->animation.tagining = false;
+			c->pending = c->geom;
+			c->pending.y = c->mon->m.y - c->geom.height;
+			client_raise_group(c);
+			resize(c, c->geom, 0);
+		} else {
+			c->animation.running = false;
+			c->animation.tagouting = false;
+			c->animation.tagining = false;
+			wlr_scene_node_set_enabled(&c->scene->node, false);
+			c->animainit_geom = c->current = c->pending = c->animation.current =
+				c->geom;
+		}
 		return;
 	}
 

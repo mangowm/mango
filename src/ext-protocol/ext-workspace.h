@@ -177,7 +177,8 @@ void mango_ext_workspace_printstatus(Monitor *m) {
 				}
 			}
 
-			if ((m->tagset[m->seltags] & (1 << (w->tag - 1)) & TAGMASK) ||
+			uint32_t active_tagset = get_monitor_active_tagset(m);
+			if ((active_tagset & (1 << (w->tag - 1)) & TAGMASK) ||
 				m->isoverview) {
 				wlr_ext_workspace_handle_v1_set_hidden(w->ext_workspace, false);
 				wlr_ext_workspace_handle_v1_set_active(w->ext_workspace, true);

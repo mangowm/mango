@@ -60,18 +60,14 @@ struct fx_corner_radii set_client_corner_location(Client *c) {
 }
 
 bool is_horizontal_stack_layout(Monitor *m) {
-	if (m->pertag->curtag &&
-		(m->pertag->ltidxs[m->pertag->curtag]->id == TILE ||
-		 m->pertag->ltidxs[m->pertag->curtag]->id == DECK))
-		return true;
-	return false;
+	uint32_t tag = get_mon_curtag(m);
+	return m->pertag->ltidxs[tag]->id == TILE ||
+		   m->pertag->ltidxs[tag]->id == DECK;
 }
 
 bool is_horizontal_right_stack_layout(Monitor *m) {
-	if (m->pertag->curtag &&
-		m->pertag->ltidxs[m->pertag->curtag]->id == RIGHT_TILE)
-		return true;
-	return false;
+	uint32_t tag = get_mon_curtag(m);
+	return m->pertag->ltidxs[tag]->id == RIGHT_TILE;
 }
 
 int32_t is_special_animation_rule(Client *c) {
@@ -542,7 +538,8 @@ void client_draw_split_border(Client *c, bool hit_no_border,
 	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
 		return;
 
-	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+	uint32_t tag = get_client_tag_idx(c);
+	const Layout *layout = c->mon->pertag->ltidxs[tag];
 
 	if (hit_no_border || !ISTILED(c) || layout->id != DWINDLE ||
 		!config.dwindle_manual_split || c->isfullscreen) {
@@ -553,7 +550,7 @@ void client_draw_split_border(Client *c, bool hit_no_border,
 		return;
 	}
 
-	DwindleNode **root = &c->mon->pertag->dwindle_root[c->mon->pertag->curtag];
+	DwindleNode **root = &c->mon->pertag->dwindle_root[tag];
 	DwindleNode *dnode = dwindle_find_leaf(*root, c);
 	if (!dnode) {
 		wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
@@ -748,7 +745,7 @@ void client_set_drop_area(Client *c) {
 	double rel_y = cursor->y - c->geom.y - bw;
 
 	struct wlr_box drop_box;
-	const Layout *cur_layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+	const Layout *cur_layout = c->mon->pertag->ltidxs[get_client_tag_idx(c)];
 	bool dwindle_familiar =
 		cur_layout->id == DWINDLE && config.dwindle_drop_simple_split;
 
