@@ -7,7 +7,7 @@ void tile(Monitor *m) {
 	int32_t stack_num = 0;
 
 	n = m->visible_fake_tiling_clients;
-	master_num = m->pertag->nmasters[m->pertag->curtag];
+	master_num = m->pertag->nmasters[get_mon_curtag(m)];
 	master_num = n > master_num ? master_num : n;
 	stack_num = n - master_num;
 
@@ -38,10 +38,10 @@ void tile(Monitor *m) {
 	}
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[m->pertag->curtag];
+										: m->pertag->mfacts[get_mon_curtag(m)];
 
-	if (n > m->pertag->nmasters[m->pertag->curtag])
-		mw = m->pertag->nmasters[m->pertag->curtag]
+	if (n > m->pertag->nmasters[get_mon_curtag(m)])
+		mw = m->pertag->nmasters[get_mon_curtag(m)]
 				 ? (m->w.width + cur_gappih * ie) * mfact
 				 : 0;
 	else
@@ -61,8 +61,8 @@ void tile(Monitor *m) {
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
-		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+		if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
+			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -124,7 +124,7 @@ void right_tile(Monitor *m) {
 	int32_t stack_num = 0;
 
 	n = m->visible_fake_tiling_clients;
-	master_num = m->pertag->nmasters[m->pertag->curtag];
+	master_num = m->pertag->nmasters[get_mon_curtag(m)];
 	master_num = n > master_num ? master_num : n;
 	stack_num = n - master_num;
 
@@ -155,10 +155,10 @@ void right_tile(Monitor *m) {
 	}
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[m->pertag->curtag];
+										: m->pertag->mfacts[get_mon_curtag(m)];
 
-	if (n > m->pertag->nmasters[m->pertag->curtag])
-		mw = m->pertag->nmasters[m->pertag->curtag]
+	if (n > m->pertag->nmasters[get_mon_curtag(m)])
+		mw = m->pertag->nmasters[get_mon_curtag(m)]
 				 ? (m->w.width + cur_gappih * ie) * mfact
 				 : 0;
 	else
@@ -178,8 +178,8 @@ void right_tile(Monitor *m) {
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
-		if (i < m->pertag->nmasters[m->pertag->curtag]) {
-			r = MANGO_MIN(n, m->pertag->nmasters[m->pertag->curtag]) - i;
+		if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
+			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
 					master_surplus_ratio;
@@ -243,7 +243,7 @@ void center_tile(Monitor *m) {
 	int32_t stack_num = 0;
 
 	n = m->visible_fake_tiling_clients;
-	master_num = m->pertag->nmasters[m->pertag->curtag];
+	master_num = m->pertag->nmasters[get_mon_curtag(m)];
 	master_num = n > master_num ? master_num : n;
 	stack_num = n - master_num;
 
@@ -276,9 +276,9 @@ void center_tile(Monitor *m) {
 					 ? 0
 					 : cur_gappoh;
 
-	int32_t nmasters = m->pertag->nmasters[m->pertag->curtag];
+	int32_t nmasters = m->pertag->nmasters[get_mon_curtag(m)];
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[m->pertag->curtag];
+										: m->pertag->mfacts[get_mon_curtag(m)];
 
 	// 初始化区域
 	mw = m->w.width;
@@ -517,7 +517,7 @@ void deck(Monitor *m) {
 	Client *c = NULL;
 	Client *fc = NULL;
 	float mfact;
-	uint32_t nmasters = m->pertag->nmasters[m->pertag->curtag];
+	uint32_t nmasters = m->pertag->nmasters[get_mon_curtag(m)];
 
 	int32_t cur_gappih = enablegaps ? m->gappih : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -544,7 +544,7 @@ void deck(Monitor *m) {
 	}
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[m->pertag->curtag];
+										: m->pertag->mfacts[get_mon_curtag(m)];
 
 	if (n > nmasters)
 		mw = nmasters ? round((m->w.width - 2 * cur_gappoh) * mfact) : 0;

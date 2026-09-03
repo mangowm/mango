@@ -1,6 +1,7 @@
 /.cache
 /.vscode
 /result
+/build
 /mango-wlonly
 config.h
 mango

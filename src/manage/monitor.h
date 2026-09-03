@@ -17,10 +17,10 @@ Monitor *dirtomon(enum wlr_direction dir) {
 
 bool is_scroller_layout(Monitor *m) {
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == SCROLLER)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == SCROLLER)
 		return true;
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == VERTICAL_SCROLLER)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == VERTICAL_SCROLLER)
 		return true;
 
 	return false;
@@ -28,7 +28,7 @@ bool is_scroller_layout(Monitor *m) {
 
 bool is_monocle_layout(Monitor *m) {
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == MONOCLE)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == MONOCLE)
 		return true;
 
 	return false;
@@ -36,10 +36,26 @@ bool is_monocle_layout(Monitor *m) {
 
 bool is_centertile_layout(Monitor *m) {
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == CENTER_TILE)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == CENTER_TILE)
 		return true;
 
 	return false;
+}
+
+// sync the special overlay dim layer to the monitor and view state
+void special_update_dim(Monitor *m) {
+	if (!m || !m->special_dim_rect)
+		return;
+	wlr_scene_rect_set_size(m->special_dim_rect, m->m.width, m->m.height);
+	wlr_scene_node_set_position(&m->special_dim_rect->node, m->m.x, m->m.y);
+	if (is_special_active(m)) {
+		wlr_scene_rect_set_color(
+			m->special_dim_rect,
+			(float[4]){0.0f, 0.0f, 0.0f, config.special_dim});
+		wlr_scene_node_set_enabled(&m->special_dim_rect->node, true);
+	} else {
+		wlr_scene_node_set_enabled(&m->special_dim_rect->node, false);
+	}
 }
 
 uint32_t get_tag_status(uint32_t tag, Monitor *m) {
@@ -66,6 +82,10 @@ uint32_t get_tags_first_tag_num(uint32_t source_tags) {
 		return 0;
 	}
 
+	if (source_tags & TAG0_MASK) {
+		return 0;
+	}
+
 	for (i = 0; !(tag & 1) && source_tags != 0 && i < (uint32_t)config.tag_num;
 		 i++) {
 		tag = source_tags >> i;
@@ -86,7 +106,16 @@ uint32_t get_tags_first_tag(uint32_t source_tags) {
 	tag = 0;
 
 	if (!source_tags) {
-		return selmon->pertag->curtag;
+		return is_special_active(selmon)
+				   ? TAG0_MASK
+				   : (selmon ? (1 << (selmon->pertag->curtag
+										  ? selmon->pertag->curtag - 1
+										  : 0))
+							 : 1);
+	}
+
+	if (source_tags & TAG0_MASK) {
+		return TAG0_MASK;
 	}
 
 	for (i = 0; !(tag & 1) && source_tags != 0 && i < (uint32_t)config.tag_num;
@@ -476,6 +505,10 @@ void createmon(struct wl_listener *listener, void *data) {
 	m->gappiv = config.gappiv;
 	m->gappoh = config.gappoh;
 	m->gappov = config.gappov;
+	m->special_gappih = config.special_gappih;
+	m->special_gappiv = config.special_gappiv;
+	m->special_gappoh = config.special_gappoh;
+	m->special_gappov = config.special_gappov;
 	m->isoverview = 0;
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
@@ -610,7 +643,7 @@ void createmon(struct wl_listener *listener, void *data) {
 
 	// 初始化 Pertag 等
 	m->pertag = calloc(1, sizeof(Pertag));
-	for (int i = 0; i < config.tag_num + 1; i++)
+	for (int i = 0; i < PERTAG_SLOTS; i++)
 		m->pertag->scroller_state[i] = NULL;
 
 	if (chvt_backup_tag &&
@@ -639,6 +672,11 @@ void createmon(struct wl_listener *listener, void *data) {
 		wlr_scene_node_reparent(&m->blur->node, layers[LyrBlur]);
 		wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 	}
+
+	m->special_dim_rect =
+		wlr_scene_rect_create(layers[LyrSpecialDim], m->m.width, m->m.height,
+							  (float[4]){0.0f, 0.0f, 0.0f, config.special_dim});
+	special_update_dim(m);
 
 	// ext workspace group
 	m->ext_group = wlr_ext_workspace_group_handle_v1_create(
@@ -693,6 +731,10 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	if (m->blur) {
 		wlr_scene_node_destroy(&m->blur->node);
 		m->blur = NULL;
+	}
+	if (m->special_dim_rect) {
+		wlr_scene_node_destroy(&m->special_dim_rect->node);
+		m->special_dim_rect = NULL;
 	}
 	if (m->skip_frame_timeout) {
 		monitor_stop_skip_frame_timer(m);
@@ -909,6 +951,8 @@ void updatemons(struct wl_listener *listener, void *data) {
 			wlr_scene_node_set_position(&m->blur->node, m->m.x, m->m.y);
 			wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 		}
+
+		special_update_dim(m);
 
 		if (m->lock_surface) {
 			struct wlr_scene_tree *scene_tree = m->lock_surface->surface->data;
@@ -1222,9 +1266,18 @@ void gpureset(struct wl_listener *listener, void *data) {
 }
 
 void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
-	selmon->gappoh = MANGO_MAX(oh, 0);
-	selmon->gappov = MANGO_MAX(ov, 0);
-	selmon->gappih = MANGO_MAX(ih, 0);
-	selmon->gappiv = MANGO_MAX(iv, 0);
+	if (!selmon)
+		return;
+	if (selmon->pertag && is_special_active(selmon)) {
+		selmon->special_gappoh = MANGO_MAX(oh, 0);
+		selmon->special_gappov = MANGO_MAX(ov, 0);
+		selmon->special_gappih = MANGO_MAX(ih, 0);
+		selmon->special_gappiv = MANGO_MAX(iv, 0);
+	} else {
+		selmon->gappoh = MANGO_MAX(oh, 0);
+		selmon->gappov = MANGO_MAX(ov, 0);
+		selmon->gappih = MANGO_MAX(ih, 0);
+		selmon->gappiv = MANGO_MAX(iv, 0);
+	}
 	arrange(selmon, false, false);
 }

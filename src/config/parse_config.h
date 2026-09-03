@@ -437,10 +437,15 @@ typedef struct {
 	uint32_t gappiv;
 	uint32_t gappoh;
 	uint32_t gappov;
+	uint32_t special_gappih;
+	uint32_t special_gappiv;
+	uint32_t special_gappoh;
+	uint32_t special_gappov;
 	uint32_t borderpx;
 	uint32_t group_bar_height;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
+	float special_dim;
 	float rootcolor[4];
 	float bordercolor[4];
 	float dropcolor[4];
@@ -1177,8 +1182,11 @@ uint32_t parse_tag_mask(char *str) {
 		token = strtok_r(arg_copy, "|", &saveptr);
 
 		while (token != NULL) {
+			trim_whitespace(token);
 			int32_t num = atoi(token);
-			if (num > 0 && num <= tag_num_MAX) {
+			if (num == 0 && strcmp(token, "0") == 0) {
+				mask |= TAG0_MASK;
+			} else if (num > 0 && num <= tag_num_MAX) {
 				mask |= (1 << (num - 1));
 			}
 			token = strtok_r(NULL, "|", &saveptr);
@@ -1186,6 +1194,10 @@ uint32_t parse_tag_mask(char *str) {
 
 		free(arg_copy);
 	}
+
+	// tag0 and normal tags are exclusive; keep tag0 when mixed
+	if ((mask & TAG0_MASK) && (mask & TAGMASK))
+		mask = TAG0_MASK;
 
 	uint32_t result = 0;
 
@@ -1390,7 +1402,6 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = minimized;
 	} else if (strcmp(func_name, "restore_minimized") == 0) {
 		func = restore_minimized;
-		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "toggle_scratchpad") == 0) {
 		func = toggle_scratchpad;
 	} else if (strcmp(func_name, "toggle_render_border") == 0) {
@@ -1504,6 +1515,12 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).v = strdup(arg_value);
 		(*arg).v2 = strdup(arg_value2);
 		(*arg).v3 = strdup(arg_value3);
+	} else if (strcmp(func_name, "toggle_special_tag") == 0) {
+		func = toggle_special_tag;
+	} else if (strcmp(func_name, "tag_special_tag") == 0) {
+		func = tag_special_tag;
+	} else if (strcmp(func_name, "tag_special_silent") == 0) {
+		func = tag_special_silent;
 	} else if (strcmp(func_name, "disable_monitor") == 0) {
 		func = disable_monitor;
 		(*arg).v = strdup(arg_value);
@@ -2265,6 +2282,16 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->scratchpad_width_ratio = atof(value);
 	} else if (strcmp(key, "scratchpad_height_ratio") == 0) {
 		config->scratchpad_height_ratio = atof(value);
+	} else if (strcmp(key, "special_dim") == 0) {
+		config->special_dim = atof(value);
+	} else if (strcmp(key, "special_gappih") == 0) {
+		config->special_gappih = atoi(value);
+	} else if (strcmp(key, "special_gappiv") == 0) {
+		config->special_gappiv = atoi(value);
+	} else if (strcmp(key, "special_gappoh") == 0) {
+		config->special_gappoh = atoi(value);
+	} else if (strcmp(key, "special_gappov") == 0) {
+		config->special_gappov = atoi(value);
 	} else if (strcmp(key, "borderpx") == 0) {
 		config->borderpx = atoi(value);
 	} else if (strcmp(key, "group_bar_height") == 0) {
@@ -4415,6 +4442,11 @@ void override_config(void) {
 		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
 	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
+	config.special_dim = CLAMP_FLOAT(config.special_dim, 0.0f, 1.0f);
+	config.special_gappih = CLAMP_INT(config.special_gappih, 0, 1000);
+	config.special_gappiv = CLAMP_INT(config.special_gappiv, 0, 1000);
+	config.special_gappoh = CLAMP_INT(config.special_gappoh, 0, 1000);
+	config.special_gappov = CLAMP_INT(config.special_gappov, 0, 1000);
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
 	config.group_bar_height = CLAMP_INT(config.group_bar_height, 0, 500);
 	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
@@ -4515,6 +4547,11 @@ void set_value_default() {
 	config.gappov = 10;
 	config.scratchpad_width_ratio = 0.8f;
 	config.scratchpad_height_ratio = 0.9f;
+	config.special_dim = 0.5f;
+	config.special_gappih = 10;
+	config.special_gappiv = 10;
+	config.special_gappoh = 20;
+	config.special_gappov = 20;
 
 	config.scroller_structs = 20;
 	config.scroller_default_proportion = 0.9f;
@@ -5094,7 +5131,7 @@ void reapply_master(void) {
 
 	int32_t i;
 	Monitor *m = NULL;
-	for (i = 0; i <= config.tag_num; i++) {
+	for (i = 0; i < PERTAG_SLOTS; i++) {
 		wl_list_for_each(m, &mons, link) {
 			if (!m->wlr_output->enabled) {
 				continue;
@@ -5105,6 +5142,10 @@ void reapply_master(void) {
 			m->gappiv = config.gappiv;
 			m->gappoh = config.gappoh;
 			m->gappov = config.gappov;
+			m->special_gappih = config.special_gappih;
+			m->special_gappiv = config.special_gappiv;
+			m->special_gappoh = config.special_gappoh;
+			m->special_gappov = config.special_gappov;
 		}
 	}
 }
@@ -5180,6 +5221,8 @@ void parse_tagrule(Monitor *m) {
 	// Set defaults for every tag.
 	for (i = 0; i <= config.tag_num; i++)
 		tag_slot_set_defaults(m, i);
+	// dedicated state slot for the all-tags view
+	tag_slot_set_defaults(m, PERTAG_ALL_TAGS_IDX);
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 		const ConfigTagRule *tr = &config.tag_rules[i];
