@@ -1553,6 +1553,10 @@ run(char *startup_cmd, int readiness_fd) {
 	run_exec();
 	run_exec_once();
 
+	const char *initlayout = selmon->pertag->ltidxs[selmon->pertag->curtag]->name;
+	run_layout_binds(initlayout, LAYOUT_BIND_ENTRY);
+	run_layout_binds(initlayout, LAYOUT_BIND_ON);
+
 	/*
 	 * If running inside supervision suite like s6, notify about successfull
 	 * startup by writing \n to the provided file descriptor and closing it

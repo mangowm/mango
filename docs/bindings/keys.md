@@ -89,6 +89,8 @@ bind=none,Super_L,spawn,rofi -show run
 bindr=Super,Super_L,spawn,rofi -show run
 ```
 
+
+
 ## Dispatchers List
 
 ### Window Management
@@ -204,6 +206,34 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `disable_monitor` | `monitor_spec` | remove monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `enable_monitor` | `monitor_spec` | add monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggle_monitor` | `monitor_spec` | Toggle monitor add/remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
+
+### Layout Binds
+
+you can bind dispatcher actions to trigger on various layout events:
+```ini
+layoutbind=scroller,switchto,setkeymode,scroller
+layoutbind=dwindle,switchto,setkeymode,dwindle
+layoutbind=dwindle,switchfrom,toggle_all_floating
+```
+the format is `layoutname,event,dispatcher,args`
+
+event options:
+|event|description|
+|:---|:---|
+|switchto | triggers when explicitly switching to this layout (layout_cycle and setlayout dispatchers)|
+|switchfrom | triggers when explicitly switching away from this layout (layout_cycle and setlayout dispatchers)|
+|entry | triggers whenever the layout is updated to this layout (includes tag switch and monitor change)|
+|exit | triggers whenever the layout is updated away from this layout (includes tag switch and monitor change)|
+
+explicit switches:
+ - setlayout dispatcher (all 4 trigger, same-layout retriggers)
+ - cyclelayout dispatcher (all 4 trigger, same-layout retriggers)
+ - compositor start (switchto and entry trigger)
+other switches:
+ - changing tag (entry/exit trigger, only if tags differ)
+ - moving focus between monitor (entry/exit trigger, only if tags of focused clients differ)
+
+
 
 ### Media Controls
 

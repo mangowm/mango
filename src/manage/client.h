@@ -2380,10 +2380,18 @@ void focusclient(Client *c, int32_t lift) {
 			selmon->sel->foreign_toplevel, false);
 	}
 
+	
+
 	if (c && !c->iskilling && !client_is_unmanaged(c) && c->mon) {
 
 		last_focus_client = selmon ? selmon->sel : NULL;
+		const Layout *prev_layout = selmon ? selmon->pertag->ltidxs[selmon->pertag->curtag]: NULL;
 		selmon = c->mon;
+		const Layout *new_layout = selmon->pertag->ltidxs[selmon->pertag->curtag];
+		if (prev_layout && strcmp(prev_layout->name, new_layout->name) !=0) {
+			run_layout_binds(prev_layout->name, LAYOUT_BIND_EXIT);
+			run_layout_binds(new_layout->name, LAYOUT_BIND_ENTRY);
+		}
 		selmon->prevsel = selmon->sel;
 		selmon->sel = c;
 		c->isfocusing = true;
@@ -2534,6 +2542,7 @@ void client_active(Client *c) {
 void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 				 bool changefocus) {
 	uint32_t i, tmptag;
+	
 
 	if (!m || (arg->ui != (~0 & TAGMASK) && m->isoverview)) {
 		return;
@@ -2542,6 +2551,7 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	if (arg->ui == 0) {
 		return;
 	}
+	const Layout *oldlayout = m->pertag->ltidxs[m->pertag->curtag];
 
 	if (arg->ui == UINT32_MAX) {
 		if (m->tagset[0] != m->tagset[1]) {
@@ -2585,6 +2595,12 @@ void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
 	}
 
 toggleseltags:
+	const Layout *newlayout = m->pertag->ltidxs[m->pertag->curtag];
+
+	if (strcmp (oldlayout->name, newlayout->name) != 0) {
+		run_layout_binds(oldlayout->name, LAYOUT_BIND_EXIT);
+		run_layout_binds(newlayout->name, LAYOUT_BIND_ENTRY);
+	}
 
 	if (changefocus)
 		focusclient(focustop(m), 1);

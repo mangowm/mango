@@ -764,6 +764,24 @@ void restore_minimized(const Arg *arg) {
 	return;
 }
 
+static void run_layout_binds(const char *layout_name, LayoutBindEvent event) {
+	int32_t index;
+
+	if (!selmon)
+		return;
+
+	for (index = 0; index < config.layout_bindings_count; index++) {
+		LayoutBinding *bind = &config.layout_bindings[index];
+		if (bind->event == event &&
+			bind->layout_name &&
+			strcmp(bind->layout_name, layout_name) == 0 &&
+			bind->func) {
+				bind->func(&bind->arg);
+			}
+	}
+}
+
+
 void setlayout(const Arg *arg) {
 	int32_t jk;
 	if (!selmon)
@@ -771,10 +789,20 @@ void setlayout(const Arg *arg) {
 
 	for (jk = 0; jk < LENGTH(layouts); jk++) {
 		if (strcmp(layouts[jk].name, arg->v) == 0) {
+			const Layout *oldlayout = selmon->pertag->ltidxs[selmon->pertag->curtag];
+			
+
 			selmon->pertag->ltidxs[selmon->pertag->curtag] = &layouts[jk];
 			clear_fullscreen_and_maximized_state(selmon);
 			arrange(selmon, false, false);
 			printstatus(IPC_WATCH_ARRANGGE);
+			
+			run_layout_binds(oldlayout->name, LAYOUT_BIND_EXIT);
+			run_layout_binds(oldlayout->name, LAYOUT_BIND_OFF);
+			run_layout_binds(arg->v, LAYOUT_BIND_ENTRY);
+			run_layout_binds(arg->v, LAYOUT_BIND_ON);
+		
+			
 			return;
 		}
 	}
@@ -1265,6 +1293,8 @@ void switch_layout(const Arg *arg) {
 	if (!selmon)
 		return;
 
+	const Layout *oldlayout = selmon->pertag->ltidxs[selmon->pertag->curtag];
+
 	if (config.circle_layout_count != 0) {
 		for (jk = 0; jk < config.circle_layout_count; jk++) {
 
@@ -1298,6 +1328,13 @@ void switch_layout(const Arg *arg) {
 		clear_fullscreen_and_maximized_state(selmon);
 		arrange(selmon, false, false);
 		printstatus(IPC_WATCH_ARRANGGE);
+		const Layout *newlayout = selmon->pertag->ltidxs[selmon->pertag->curtag];
+		run_layout_binds(oldlayout->name, LAYOUT_BIND_EXIT);
+		run_layout_binds(oldlayout->name, LAYOUT_BIND_OFF);
+		run_layout_binds(newlayout->name, LAYOUT_BIND_ENTRY);
+		run_layout_binds(newlayout->name, LAYOUT_BIND_ON);
+		
+		
 		return;
 	}
 
@@ -1309,6 +1346,11 @@ void switch_layout(const Arg *arg) {
 			clear_fullscreen_and_maximized_state(selmon);
 			arrange(selmon, false, false);
 			printstatus(IPC_WATCH_ARRANGGE);
+			const Layout *newlayout = selmon->pertag->ltidxs[selmon->pertag->curtag];
+			run_layout_binds(oldlayout->name, LAYOUT_BIND_EXIT);
+			run_layout_binds(oldlayout->name, LAYOUT_BIND_OFF);
+			run_layout_binds(newlayout->name, LAYOUT_BIND_ENTRY);
+			run_layout_binds(newlayout->name, LAYOUT_BIND_ON);
 			return;
 		}
 	}

@@ -56,6 +56,22 @@ typedef struct {
 	int file_index;
 } KeyBinding;
 
+typedef enum {
+	LAYOUT_BIND_ON,
+	LAYOUT_BIND_OFF,
+	LAYOUT_BIND_ENTRY,
+	LAYOUT_BIND_EXIT,
+} LayoutBindEvent;
+
+typedef struct {
+	char *layout_name;
+	LayoutBindEvent event;
+	void (*func)(const Arg *);
+	Arg arg;
+	int line_number;
+	int file_index;
+} LayoutBinding;
+
 typedef struct {
 	char *type;
 	char *value;
@@ -472,6 +488,9 @@ typedef struct {
 
 	KeyBinding *key_bindings;
 	int32_t key_bindings_count;
+
+	LayoutBinding *layout_bindings;
+	int32_t layout_bindings_count;
 
 	MouseBinding *mouse_bindings;
 	int32_t mouse_bindings_count;
@@ -3206,6 +3225,109 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			config->key_bindings_count++;
 		}
+	} else if (strcmp(key, "layoutbind") == 0){
+		config->layout_bindings = 
+			realloc(config->layout_bindings,
+				(config->layout_bindings_count + 1) * sizeof(LayoutBinding));
+		if (!config->layout_bindings) {
+			mango_error(false, WLR_ERROR, "Failed to allocate " "memory for layout bindings\n");
+			return false;
+		}
+
+		LayoutBinding *binding = 
+			&config->layout_bindings[config->layout_bindings_count];
+		memset(binding, 0, sizeof(LayoutBinding));
+		binding->line_number = line_number;
+		binding->file_index = current_file_index;
+		char layout_str[256], event_str[256], func_name[256], 
+			arg_value[256] = "0\0", arg_value2[256] = "0\0",
+			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
+			arg_value5[256] = "0\0";
+		if (sscanf(value,
+				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+				   ",],%255["
+				   "^,],%255[^\n]",
+				   layout_str, event_str, func_name, arg_value, arg_value2,
+				   arg_value3, arg_value4, arg_value5) < 3) {
+			mango_error(false, WLR_ERROR,
+						"Invalid layoutbind "
+						"format: "
+						"%s\n",
+						value);
+			return false;
+		}
+		trim_whitespace(layout_str);
+		trim_whitespace(event_str);
+		trim_whitespace(func_name);
+		trim_whitespace(arg_value);
+		trim_whitespace(arg_value2);
+		trim_whitespace(arg_value3);
+		trim_whitespace(arg_value4);
+		trim_whitespace(arg_value5);
+		int32_t check_index;
+		bool layout_found = false;
+		for (check_index = 0; check_index < LENGTH(layouts); check_index++) {
+			if (strcmp(layouts[check_index].name, layout_str) == 0) {
+				layout_found = true;
+				break;
+			}
+		}
+		if (!layout_found) {
+			mango_error(false, WLR_ERROR, "unknown layout in layoutbind: %s", layout_str);
+			return false;
+		}
+
+		
+
+		if (strcmp(event_str, "switchto") == 0) {
+			binding->event = LAYOUT_BIND_ON;
+		} else if (strcmp(event_str, "switchfrom") == 0) {
+			binding->event = LAYOUT_BIND_OFF;
+		} else if (strcmp(event_str, "entry") == 0) {
+			binding->event = LAYOUT_BIND_ENTRY;
+		} else if (strcmp(event_str, "exit") == 0) {
+			binding->event = LAYOUT_BIND_EXIT;
+		} else {
+			mango_error(false, WLR_ERROR,"Invalid layoutbind event: %s", event_str);
+			return false;
+
+		}
+
+		binding->arg.i = 0;
+		binding->arg.i2 = 0;
+		binding->arg.f = 0.0f;
+		binding->arg.f2 = 0.0f;
+		binding->arg.ui = 0;
+		binding->arg.ui2 = 0;
+		binding->arg.v = NULL;
+		binding->arg.v2 = NULL;
+		binding->arg.v3 = NULL;
+		binding->arg.tc = NULL;
+		binding->func = parse_func_name(func_name, &binding->arg, arg_value, arg_value2, arg_value3, arg_value4, arg_value5);
+
+		if (!binding->func) {
+			if (binding->arg.v) {
+				free(binding->arg.v);
+				binding->arg.v = NULL;
+			}
+			if (binding->arg.v2) {
+				free(binding->arg.v2);
+				binding->arg.v2 = NULL;
+			}
+			if (binding->arg.v3) {
+				free(binding->arg.v3);
+				binding->arg.v3 = NULL;
+			}
+			mango_error(false, WLR_ERROR, "Unknown dispatch in layoutbind: %s", func_name);
+			return false;
+		} else {
+			binding->layout_name = strdup(layout_str);
+			config->layout_bindings_count++;
+		}
+
+		
+		
+
 
 	} else if (strncmp(key, "mousebind", 9) == 0) {
 		config->mouse_bindings =
@@ -4020,6 +4142,30 @@ void free_config(void) {
 		config.key_bindings = NULL;
 		config.key_bindings_count = 0;
 	}
+	if (config.layout_bindings) {
+		for (i = 0; i < config.layout_bindings_count; i++) {
+			if (config.layout_bindings[i].arg.v) {
+				free((void *)config.layout_bindings[i].arg.v);
+				config.layout_bindings[i].arg.v = NULL;
+			}
+			if (config.layout_bindings[i].arg.v2) {
+				free((void *)config.layout_bindings[i].arg.v2);
+				config.layout_bindings[i].arg.v2 = NULL;
+			}
+			if (config.layout_bindings[i].arg.v3) {
+				free((void *)config.layout_bindings[i].arg.v3);
+				config.layout_bindings[i].arg.v3 = NULL;
+			}
+			if (config.layout_bindings[i].layout_name) {
+				free(config.layout_bindings[i].layout_name);
+				config.layout_bindings[i].layout_name = NULL;
+			}
+		}
+		
+		free(config.layout_bindings);
+		config.layout_bindings = NULL;
+		config.layout_bindings_count = 0;
+	}
 
 	// 释放 mouse_bindings
 	if (config.mouse_bindings) {
@@ -4799,6 +4945,8 @@ bool parse_config(void) {
 	config.device_rules_count = 0;
 	config.key_bindings = NULL;
 	config.key_bindings_count = 0;
+	config.layout_bindings = NULL;
+	config.layout_bindings_count = 0;
 	config.mouse_bindings = NULL;
 	config.mouse_bindings_count = 0;
 	config.axis_bindings = NULL;
