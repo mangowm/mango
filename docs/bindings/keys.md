@@ -103,6 +103,12 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `togglemaximizescreen` | - | Maximize window (keep decoration/bar). |
 | `toggleglobal` | - | Pin window to all tags. |
 | `toggle_render_border` | - | Toggle border rendering. |
+| `setbordercolor` | `0x000000FF` | sets both border colors |
+| `setactiveborder` | `0x000000FF` | sets focused border color |
+| `setinactiveborder` | `0x000000FF` | sets unfocused border color |
+| `resetbordercolor` | - | resets both border colors to the defaults |
+| `resetactiveborder` | - | resets active border color to default (focuscolor)|
+| `resetinactiveborder`| - | resets inactive border color to default (bordercolor)|
 | `centerwin` | - | Center the floating window. |
 | `minimized` | - | Minimize window to scratchpad. |
 | `restore_minimized` | `0/1` | Restore minimized window to its previous state.(`1` means keep previous tags, `0` means restore to current tags.) |

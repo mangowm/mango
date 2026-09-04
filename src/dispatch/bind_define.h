@@ -31,6 +31,59 @@ void bind_to_view(const Arg *arg) {
 	return;
 }
 
+void set_active_border(const Arg *arg) {
+	if (!selmon || !selmon->sel || !arg || !arg->v)
+		return;
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	int64_t color = parse_color(arg->v);
+	if (color == -1) {
+		mango_error(false, WLR_ERROR, "Invalid border color: %s\n", arg->v);
+		return;
+	}
+	convert_hex_to_rgba(c->border_color_active, (uint32_t)color);
+	c->has_custom_active_border = true;
+	setborder_color(c);
+}
+void set_inactive_border(const Arg *arg) {
+	if (!selmon || !selmon->sel || !arg || !arg->v)
+		return;
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	int64_t color = parse_color(arg->v);
+	if (color == -1) {
+		mango_error(false, WLR_ERROR, "Invalid border color: %s\n", arg->v);
+		return;
+	}
+	convert_hex_to_rgba(c->border_color_inactive, (uint32_t)color);
+	c->has_custom_inactive_border = true;
+	setborder_color(c);
+}
+
+void set_border_color(const Arg *arg) {
+	set_active_border(arg);
+	set_inactive_border(arg);
+}
+
+void reset_active_border(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return;
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	c->has_custom_active_border = false;
+	setborder_color(c);
+}
+
+void reset_inactive_border(const Arg *arg) {
+	if (!selmon || !selmon->sel)
+		return;
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+	c->has_custom_inactive_border = false;
+	setborder_color(c);
+}
+
+void reset_border_color(const Arg *arg) {
+	reset_active_border(arg);
+	reset_inactive_border(arg);
+}
+
 void chvt(const Arg *arg) {
 	struct timespec ts;
 

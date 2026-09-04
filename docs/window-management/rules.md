@@ -66,6 +66,8 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `focused_opacity` | integer | `0` / `1` | Window focused opacity |
 | `unfocused_opacity` | integer | `0` / `1` | Window unfocused opacity |
 | `allow_csd` | integer | `0` / `1` | Allow client side decoration |
+| `activeborder` | hex color | `0x000000FF` | Set focused border color | 
+| `inactiveborder` | hex color | `0x000000FF` | Set focused border color | 
 
 > **Tip:** For detailed visual effects configuration, see the [Window Effects](/docs/visuals/effects) page for blur, shadows, and opacity settings.
 

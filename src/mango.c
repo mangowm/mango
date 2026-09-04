@@ -112,6 +112,7 @@
 /* macros */
 #define MANGO_MAX(A, B) ((A) > (B) ? (A) : (B))
 #define MANGO_MIN(A, B) ((A) < (B) ? (A) : (B))
+#define COLOR_RGBA_SIZE 4
 #define GEZERO(A) ((A) >= 0 ? (A) : 0)
 #define CLEANMASK(mask) (mask & ~WLR_MODIFIER_CAPS)
 #define INSIDEMON(A)                                                           \
@@ -325,9 +326,9 @@ struct mango_opacity_animation {
 	float initial_opacity;
 	uint32_t time_started;
 	uint32_t duration;
-	float current_border_color[4];
-	float target_border_color[4];
-	float initial_border_color[4];
+	float current_border_color[COLOR_RGBA_SIZE];
+	float target_border_color[COLOR_RGBA_SIZE];
+	float initial_border_color[COLOR_RGBA_SIZE];
 };
 
 typedef struct {
@@ -458,6 +459,10 @@ struct Client {
 	int32_t shield_when_capture;
 	bool is_pending_open_animation;
 	bool is_restoring_from_ov;
+	float border_color_active[COLOR_RGBA_SIZE];
+	float border_color_inactive[COLOR_RGBA_SIZE];
+	bool has_custom_active_border;
+	bool has_custom_inactive_border;
 	float scroller_proportion;
 	float stack_proportion;
 	float old_stack_proportion;
@@ -1039,7 +1044,8 @@ static int32_t client_is_rendered_on_mon(Client *c, Monitor *m);
 static int32_t client_is_unmanaged(Client *c);
 static void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb);
 static void client_send_close(Client *c);
-static void client_set_border_color(Client *c, const float color[static 4]);
+static void client_set_border_color(Client *c,
+									const float color[static COLOR_RGBA_SIZE]);
 static void client_set_fullscreen(Client *c, int32_t fullscreen);
 static void client_set_scale(struct wlr_surface *s, float scale);
 static void client_update_xwayland_clip(Client *c, struct wlr_box *clip);

@@ -73,6 +73,8 @@ typedef struct {
 	const char *animation_type_close;
 	const char *layer_animation_type_open;
 	const char *layer_animation_type_close;
+	int32_t border_color_active;
+	int32_t border_color_inactive;
 	int32_t isnoborder;
 	int32_t isnoshadow;
 	int32_t isnoradius;
@@ -1222,6 +1224,21 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 	} else if (strcmp(func_name, "groupfocus") == 0) {
 		func = groupfocus;
 		(*arg).i = parse_circle_direction(arg_value);
+	} else if (strcmp(func_name, "setbordercolor") == 0) {
+		func = set_border_color;
+		(*arg).v = arg_value ? strdup(arg_value) : NULL;
+	} else if (strcmp(func_name, "setactiveborder") == 0) {
+		func = set_active_border;
+		(*arg).v = arg_value ? strdup(arg_value) : NULL;
+	} else if (strcmp(func_name, "setinactiveborder") == 0) {
+		func = set_inactive_border;
+		(*arg).v = arg_value ? strdup(arg_value) : NULL;
+	} else if (strcmp(func_name, "resetbordercolor") == 0) {
+		func = reset_border_color;
+	} else if (strcmp(func_name, "resetactiveborder") == 0) {
+		func = reset_active_border;
+	} else if (strcmp(func_name, "resetinactiveborder") == 0) {
+		func = reset_inactive_border;
 	} else if (strcmp(func_name, "focusdir") == 0) {
 		func = focusdir;
 		(*arg).i = parse_direction(arg_value);
@@ -2741,6 +2758,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->monitor = NULL;
 		rule->id = NULL;
 		rule->title = NULL;
+		rule->border_color_active = 0;
+		rule->border_color_inactive = 0;
 
 		rule->globalkeybinding = (KeyBinding){0};
 
@@ -2850,6 +2869,26 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->isfullscreen = atoi(val);
 				} else if (strcmp(key, "isfakefullscreen") == 0) {
 					rule->isfakefullscreen = atoi(val);
+				} else if (strcmp(key, "activeborder") == 0) {
+					int64_t color = parse_color(val);
+					if (color == -1) {
+						mango_error(false, WLR_ERROR,
+									"Invalid activeborder hex format: %s\n",
+									val);
+						parse_error = true;
+					} else {
+						rule->border_color_active = color;
+					}
+				} else if (strcmp(key, "inactiveborder") == 0) {
+					int64_t color = parse_color(val);
+					if (color == -1) {
+						mango_error(false, WLR_ERROR,
+									"Invalid inactiveborder hex format: %s\n",
+									val);
+						parse_error = true;
+					} else {
+						rule->border_color_inactive = parse_color(val);
+					}
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
 					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);

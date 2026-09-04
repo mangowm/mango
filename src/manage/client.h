@@ -3,6 +3,7 @@ static void client_init_xwayland(Client *c);
 static bool client_init_unmanaged(Client *c);
 static void client_apply_xwayland(Client *c);
 static void apply_rule_properties(Client *c, const ConfigWinRule *r);
+static void setborder_color(Client *c);
 static bool is_window_rule_matches(const ConfigWinRule *r, const char *appid,
 								   const char *title);
 static void client_swap_layout_properties(Client *c1, Client *c2);
@@ -1027,7 +1028,11 @@ Client *get_next_stack_client(Client *c, bool reverse) {
 }
 
 float *get_border_color(Client *c) {
-
+	if (selmon && c == selmon->sel && c->has_custom_active_border) {
+		return c->border_color_active;
+	} else if (selmon && c != selmon->sel && c->has_custom_inactive_border) {
+		return c->border_color_inactive;
+	}
 	if (c->mon != selmon) {
 		return config.bordercolor;
 	} else if (c->isurgent) {
@@ -1176,6 +1181,16 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 
 	APPLY_STRING_PROP(c, r, animation_type_open);
 	APPLY_STRING_PROP(c, r, animation_type_close);
+
+	if (r->border_color_active != 0) {
+		convert_hex_to_rgba(c->border_color_active, r->border_color_active);
+		c->has_custom_active_border = true;
+		setborder_color(c);
+	} else if (r->border_color_inactive != 0) {
+		convert_hex_to_rgba(c->border_color_inactive, r->border_color_inactive);
+		c->has_custom_inactive_border = true;
+		setborder_color(c);
+	}
 }
 
 void set_float_malposition(Client *tc) {
@@ -1682,6 +1697,11 @@ void init_client_properties(Client *c) {
 	c->group_next = NULL;
 	c->grid_col_per = 1.0f;
 	c->grid_row_per = 1.0f;
+	memset(c->border_color_active, 0, sizeof(c->border_color_active));
+	memset(c->border_color_inactive, 0, sizeof(c->border_color_inactive));
+	c->has_custom_active_border = false;
+	c->has_custom_inactive_border = false;
+
 	c->jump_label_node = NULL;
 	c->group_bar = NULL;
 	c->overview_scene_surface = NULL;
