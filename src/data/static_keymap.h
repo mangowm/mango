@@ -1,3 +1,4 @@
+#include <stdio.h>
 #ifndef __DATA_STATIC_KEYMAP_H__
 #define __DATA_STATIC_KEYMAP_H__ 1
 
