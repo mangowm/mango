@@ -584,10 +584,25 @@ void deck(Monitor *m) {
 	}
 }
 
+extern char monocle_symbol[16];
+
 void // 17
 monocle(Monitor *m) {
 	Client *c = NULL;
 	struct wlr_box geom;
+	int n = 0;
+
+	// count visible clients
+	wl_list_for_each(c, &clients, link) {
+		if (VISIBLEON(c, m) && ISFAKETILED(c))
+			n++;
+	}
+
+	// dynamically update the global monocle symbol buffer
+	if (n > 0)
+		snprintf(monocle_symbol, sizeof(monocle_symbol), "[%d]", n);
+	else
+		snprintf(monocle_symbol, sizeof(monocle_symbol), "[M]");
 
 	int32_t cur_gappov = enablegaps ? m->gappov : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
