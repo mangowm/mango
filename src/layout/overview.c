@@ -15,9 +15,12 @@ int compare_layout_items(const void *a, const void *b) {
 	return 0;
 }
 
+void begin_jump_mode(Monitor *m) { m->is_jump_mode = 1; }
+
+
 bool try_place(OvPlacedRect *placed, int placed_cnt, float w, float h,
-			   float gap, float avail_w, float avail_h, OvPlacedRect *out,
-			   OvPoint *cands, OvPoint *feas) {
+					  float gap, float avail_w, float avail_h,
+					  OvPlacedRect *out, OvPoint *cands, OvPoint *feas) {
 	int cand_cnt = 0;
 	cands[cand_cnt++] = (OvPoint){0.0f, 0.0f};
 
@@ -83,6 +86,7 @@ bool try_place(OvPlacedRect *placed, int placed_cnt, float w, float h,
 	out->h = h;
 	return true;
 }
+
 void overview_scale(Monitor *m) {
 	int32_t target_gappo = config.overviewgappo;
 	int32_t target_gappi = config.overviewgappi;
@@ -252,9 +256,11 @@ void overview_scale(Monitor *m) {
 	free(cands);
 	free(feas);
 }
+
 // overview 布局：聚焦窗口居中（约一半屏宽），其余窗口分列两侧
 void overview_layout_column(Monitor *m, Client **items, int cnt, float x,
-							float top, float col_w, float col_h, float gap) {
+								   float top, float col_w, float col_h,
+								   float gap) {
 	if (cnt <= 0)
 		return;
 
@@ -359,8 +365,8 @@ void overview_scale_tab(Monitor *m) {
 	float avail_w = fmaxf(1.0f, m->w.width - 2 * gap_edge);
 	float avail_h = fmaxf(1.0f, m->w.height - 2 * gap_edge);
 
-	// 中列 50%，两侧各 25%
-	float center_w = avail_w * 0.5f;
+	// 中列占比可配置，两侧平分剩余空间
+	float center_w = avail_w * config.overcircle_center_ratio;
 	float side_w = (avail_w - center_w - 2.0f * gap_mid) * 0.5f;
 	if (side_w < 1.0f)
 		side_w = 1.0f;
@@ -462,15 +468,13 @@ void create_jump_hints(Monitor *m) {
 	}
 }
 
-void begin_jump_mode(Monitor *m) { m->is_jump_mode = 1; }
-
 void finish_jump_mode(Monitor *m) {
 	if (!m->is_jump_mode)
 		return;
 
 	Client *c;
 	wl_list_for_each(c, &clients, link) {
-		if (VISIBLEON(c, m)) {
+		if (c->mon == m) {
 			if (c->jump_label_node &&
 				c->jump_label_node->scene_buffer->node.enabled) {
 				c->jump_char = '\0';
@@ -483,7 +487,7 @@ void finish_jump_mode(Monitor *m) {
 }
 
 void overview(Monitor *m) {
-	if (!m->is_jump_mode && !m->ov_normal_mode) {
+	if (m->ov_tab_layout && !m->is_jump_mode && !m->ov_normal_mode) {
 		overview_scale_tab(m);
 	} else {
 		overview_scale(m);
@@ -493,3 +497,4 @@ void overview(Monitor *m) {
 		create_jump_hints(m);
 	}
 }
+

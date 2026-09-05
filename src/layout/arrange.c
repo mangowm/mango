@@ -1,12 +1,15 @@
 #include "arrange.h"
 #include "../common/globals.h"
 #include "layout.h"
+#include "../manage/monitor.h"
 #include "dwindle.h"
 #include "scroll.h"
 #include "../manage/client.h"
 #include "../animation/tag.h"
 #include "../input/pointer.h"
 #include "../manage/misc.h"
+#include "../dispatch/bind.h"
+#include "vertical.h"
 #include <assert.h>
 #include "../ipc/ipc.h"
 
@@ -17,7 +20,8 @@ void set_size_per(Monitor *m, Client *c) {
 	if (!m || !c)
 		return;
 
-	const Layout *current_layout = m->pertag->ltidxs[m->pertag->curtag];
+	uint32_t tag = get_mon_curtag(m);
+	const Layout *current_layout = m->pertag->ltidxs[tag];
 
 	wl_list_for_each(fc, &clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c) {
@@ -33,19 +37,18 @@ void set_size_per(Monitor *m, Client *c) {
 	}
 
 	if (!found || c->isfloating) {
-		c->master_mfact_per = m->pertag->mfacts[m->pertag->curtag];
+		c->master_mfact_per = m->pertag->mfacts[tag];
 		c->master_inner_per = 1.0f;
 		c->stack_inner_per = 1.0f;
 	}
 
 	if (!c->iscustom_scroller_proportion) {
-		c->scroller_proportion =
-			m->pertag->scroller_default_proportion[m->pertag->curtag];
+		c->scroller_proportion = m->pertag->scroller_default_proportion[tag];
 	}
 
 	if (!c->iscustom_scroller_proportion_single) {
 		c->scroller_proportion_single =
-			m->pertag->scroller_default_proportion_single[m->pertag->curtag];
+			m->pertag->scroller_default_proportion_single[tag];
 	}
 }
 
@@ -1029,6 +1032,12 @@ void check_size_per_valid(Client *c) {
 	}
 }
 
+bool special_keep_bg_client(Monitor *m, Client *c) {
+	return is_special_active(m) && !c->is_logic_hide && !c->isminimized &&
+		   ((m->pertag->prevtag > 0 &&
+			 (c->tags & (1 << (m->pertag->prevtag - 1)))) ||
+			(c->tags & (m->tagset[m->seltags ^ 1] & ~TAG0_MASK)));
+}
 void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
 		double total_left_stack_hight_percent,
 		double total_right_stack_hight_percent,
@@ -1366,40 +1375,6 @@ void tag_gather_apply(Monitor *m) {
 		tag_gather_reset_slot(m, i);
 }
 
-void // 17
-arrange(Monitor *m, bool want_animation, bool from_view) {
-
-	if (!m || m->iscleanuping)
-		return;
-
-	if (!m->wlr_output->enabled)
-		return;
-
-	if (!m->sel) {
-		m->sel = focustop(m);
-	}
-
-	pre_calculate_before_arrange(m, want_animation, from_view, false);
-
-	if (m->isoverview) {
-		overviewlayout.arrange(m);
-	} else {
-		m->pertag->ltidxs[m->pertag->curtag]->arrange(m);
-	}
-
-	// gather after layout/animation setup so tag-switch animations0 still play.
-	if (config.tag_gather) {
-		tag_gather_apply(m);
-	}
-
-	if (!start_drag_window) {
-		motionnotify(0, NULL, 0, 0, 0, 0);
-		checkidleinhibitor(NULL);
-	}
-
-	printstatus(IPC_WATCH_ARRANGGE);
-}
-
 Layout overviewlayout = {"󰃇", overview, "overview"};
 
 Layout layouts[] = {
@@ -1421,3 +1396,78 @@ Layout layouts[] = {
 	{"F", fair, "fair", FAIR},
 	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
 };
+
+bool special_handle_empty_view(Monitor *m, bool from_view) {
+	if (!is_special_active(m)) {
+		m->special_empty_view = false;
+		return false;
+	}
+	if (special_has_clients(m)) {
+		m->special_empty_view = false;
+		return false;
+	}
+	if (from_view) {
+		m->special_empty_view = true;
+		return false;
+	}
+	if (!m->special_empty_view) {
+		toggle_special_tag_mon(m);
+		return true;
+	}
+	return false;
+}
+void // 17
+arrange(Monitor *m, bool want_animation, bool from_view) {
+
+	if (!m || m->iscleanuping)
+		return;
+
+	if (!m->wlr_output->enabled)
+		return;
+
+	if (!m->sel) {
+		m->sel = focustop(m);
+	}
+
+	if (special_handle_empty_view(m, from_view))
+		return;
+
+	pre_calculate_before_arrange(m, want_animation, from_view, false);
+
+	bool is_tag0 = is_special_active(m);
+	int32_t saved_oh = m->gappoh, saved_ov = m->gappov;
+	int32_t saved_ih = m->gappih, saved_iv = m->gappiv;
+
+	if (is_tag0) {
+		m->gappoh = m->special_gappoh;
+		m->gappov = m->special_gappov;
+		m->gappih = m->special_gappih;
+		m->gappiv = m->special_gappiv;
+	}
+
+	if (m->isoverview) {
+		overviewlayout.arrange(m);
+	} else {
+		m->pertag->ltidxs[get_mon_curtag(m)]->arrange(m);
+	}
+
+	if (is_tag0) {
+		m->gappoh = saved_oh;
+		m->gappov = saved_ov;
+		m->gappih = saved_ih;
+		m->gappiv = saved_iv;
+	}
+
+	// gather after layout/animation setup so tag-switch animations still play.
+	if (config.tag_gather) {
+		tag_gather_apply(m);
+	}
+
+	if (!start_drag_window) {
+		motionnotify(0, NULL, 0, 0, 0, 0);
+		checkidleinhibitor(NULL);
+	}
+
+	printstatus(IPC_WATCH_ARRANGGE);
+}
+

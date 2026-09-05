@@ -41,9 +41,6 @@ KeyBinding default_key_bindings[] = {CHVT(1), CHVT(2),	CHVT(3),  CHVT(4),
 									 CHVT(5), CHVT(6),	CHVT(7),  CHVT(8),
 									 CHVT(9), CHVT(10), CHVT(11), CHVT(12)};
 
-typedef void (*BindingMetaFunc)(const void *elem, BindingConflictMeta *meta);
-
-bool parse_config_file(Config *config, const char *file_path, bool must_exist);
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
@@ -242,45 +239,6 @@ int32_t parse_direction(const char *str) {
 	}
 }
 
-int32_t parse_force(const char *str) {
-	// 将输入字符串转换为小写
-	char lowerStr[10];
-	int32_t i = 0;
-	while (str[i] && i < 9) {
-		lowerStr[i] = tolower(str[i]);
-		i++;
-	}
-	lowerStr[i] = '\0';
-
-	// 根据转换后的小写字符串返回对应的枚举值
-	if (strcmp(lowerStr, "unforce") == 0) {
-		return UNFORCE;
-	} else if (strcmp(lowerStr, "force") == 0) {
-		return FORCE;
-	} else {
-		return UNFORCE;
-	}
-}
-
-int32_t parse_fold_state(const char *str) {
-	// 将输入字符串转换为小写
-	char lowerStr[10];
-	int32_t i = 0;
-	while (str[i] && i < 9) {
-		lowerStr[i] = tolower(str[i]);
-		i++;
-	}
-	lowerStr[i] = '\0';
-
-	// 根据转换后的小写字符串返回对应的枚举值
-	if (strcmp(lowerStr, "fold") == 0) {
-		return FOLD;
-	} else if (strcmp(lowerStr, "unfold") == 0) {
-		return UNFOLD;
-	} else {
-		return INVALIDFOLD;
-	}
-}
 int64_t parse_color(const char *hex_str) {
 	char *endptr;
 	int64_t hex_num = strtol(hex_str, &endptr, 16);
@@ -302,194 +260,7 @@ bool starts_with_ignore_case(const char *str, const char *prefix) {
 	return true;
 }
 
-char *combine_args_until_empty(char *values[], int count) {
-	// find the first empty string
-	int first_empty = count;
-	for (int i = 0; i < count; i++) {
-		// check if it's empty: empty string or only contains "0" (initialized)
-		if (values[i][0] == '\0' ||
-			(strlen(values[i]) == 1 && values[i][0] == '0')) {
-			first_empty = i;
-			break;
-		}
-	}
-
-	// 	if there are no valid parameters, return an empty string
-	if (first_empty == 0) {
-		return strdup("");
-	}
-
-	// 	calculate the total length
-	size_t total_len = 0;
-	for (int i = 0; i < first_empty; i++) {
-		total_len += strlen(values[i]);
-	}
-	// 	plus the number of commas (first_empty-1 commas)
-	total_len += (first_empty - 1);
-
-	// 	allocate memory and concatenate
-	char *combined = malloc(total_len + 1);
-	if (combined == NULL) {
-		return strdup("");
-	}
-
-	combined[0] = '\0';
-	for (int i = 0; i < first_empty; i++) {
-		if (i > 0) {
-			strcat(combined, ",");
-		}
-		strcat(combined, values[i]);
-	}
-
-	return combined;
-}
-
-uint32_t parse_mod(const char *mod_str) {
-	if (!mod_str || !*mod_str) {
-		return UINT32_MAX;
-	}
-
-	uint32_t mod = 0;
-	char input_copy[256];
-	char *token;
-	char *saveptr = NULL;
-	bool match_success = false;
-
-	// 复制并转换为小写
-	strncpy(input_copy, mod_str, sizeof(input_copy) - 1);
-	input_copy[sizeof(input_copy) - 1] = '\0';
-	for (char *p = input_copy; *p; p++) {
-		*p = tolower(*p);
-	}
-
-	// 分割处理每个部分
-	token = strtok_r(input_copy, "+", &saveptr);
-	while (token != NULL) {
-		// 去除前后空白
-		trim_whitespace(token);
-
-		// 如果 token 变成空字符串则跳过
-		if (*token == '\0') {
-			token = strtok_r(NULL, "+", &saveptr);
-			continue;
-		}
-
-		if (strncmp(token, "code:", 5) == 0) {
-			// 处理 code: 形式
-			char *endptr;
-			long keycode = strtol(token + 5, &endptr, 10);
-			if (endptr != token + 5 && (*endptr == '\0' || *endptr == ' ')) {
-				switch (keycode) {
-				case 133:
-				case 134:
-					mod |= WLR_MODIFIER_LOGO;
-					break;
-				case 37:
-				case 105:
-					mod |= WLR_MODIFIER_CTRL;
-					break;
-				case 50:
-				case 62:
-					mod |= WLR_MODIFIER_SHIFT;
-					break;
-				case 64:
-				case 108:
-					mod |= WLR_MODIFIER_ALT;
-					break;
-				default:
-					mango_error(false, WLR_ERROR,
-								"unknown modifier keycode: "
-								"\033[1m\033[31m%s\033[0m\n",
-								token);
-					break;
-				}
-			}
-		} else {
-			if (!strcmp(token, "super") || !strcmp(token, "super_l") ||
-				!strcmp(token, "super_r")) {
-				mod |= WLR_MODIFIER_LOGO;
-				match_success = true;
-			}
-			if (!strcmp(token, "ctrl") || !strcmp(token, "ctrl_l") ||
-				!strcmp(token, "ctrl_r")) {
-				mod |= WLR_MODIFIER_CTRL;
-				match_success = true;
-			}
-			if (!strcmp(token, "shift") || !strcmp(token, "shift_l") ||
-				!strcmp(token, "shift_r")) {
-				mod |= WLR_MODIFIER_SHIFT;
-				match_success = true;
-			}
-			if (!strcmp(token, "alt") || !strcmp(token, "alt_l") ||
-				!strcmp(token, "alt_r")) {
-				mod |= WLR_MODIFIER_ALT;
-				match_success = true;
-			}
-			if (!strcmp(token, "hyper") || !strcmp(token, "hyper_l") ||
-				!strcmp(token, "hyper_r")) {
-				mod |= WLR_MODIFIER_MOD3;
-				match_success = true;
-			}
-			if (!strcmp(token, "none")) {
-				match_success = true;
-			}
-		}
-
-		token = strtok_r(NULL, "+", &saveptr);
-	}
-
-	if (!match_success) {
-		mod = UINT32_MAX;
-		mango_error(false, WLR_ERROR,
-					"Unknown modifier: "
-					"\033[1m\033[31m%s\033[0m\n",
-					mod_str);
-	}
-
-	return mod;
-}
-
 // 定义辅助函数：在 keymap 中查找 keysym 对应的多个 keycode
-int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
-								 MultiKeycode *multi_kc) {
-	xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
-	xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
-
-	multi_kc->keycode1 = 0;
-	multi_kc->keycode2 = 0;
-	multi_kc->keycode3 = 0;
-
-	int32_t found_count = 0;
-
-	for (xkb_keycode_t keycode = min_keycode;
-		 keycode <= max_keycode && found_count < 3; keycode++) {
-		// 使用布局0和层级0
-		const xkb_keysym_t *syms;
-		int32_t num_syms =
-			xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
-
-		for (int32_t i = 0; i < num_syms; i++) {
-			if (syms[i] == sym) {
-				switch (found_count) {
-				case 0:
-					multi_kc->keycode1 = keycode;
-					break;
-				case 1:
-					multi_kc->keycode2 = keycode;
-					break;
-				case 2:
-					multi_kc->keycode3 = keycode;
-					break;
-				}
-				found_count++;
-				break;
-			}
-		}
-	}
-
-	return found_count;
-}
-
 void cleanup_config_keymap(void) {
 	if (config.keymap != NULL) {
 		xkb_keymap_unref(config.keymap);
@@ -514,138 +285,6 @@ void create_config_keymap(void) {
 	}
 }
 
-KeySymCode parse_key(const char *key_str, bool isbindsym) {
-	KeySymCode kc = {0}; // 初始化为0
-
-	if (config.keymap == NULL || config.ctx == NULL) {
-		// 处理错误
-		kc.type = KEY_TYPE_SYM;
-		kc.keysym = XKB_KEY_NoSymbol;
-		return kc;
-	}
-
-	// 处理 code: 前缀的情况
-	if (strncmp(key_str, "code:", 5) == 0) {
-		char *endptr;
-		xkb_keycode_t keycode = (xkb_keycode_t)strtol(key_str + 5, &endptr, 10);
-		kc.type = KEY_TYPE_CODE;
-		kc.keycode.keycode1 = keycode; // 只设置第一个
-		kc.keycode.keycode2 = 0;
-		kc.keycode.keycode3 = 0;
-		return kc;
-	}
-
-	// change key string to keysym, case insensitive
-	xkb_keysym_t sym =
-		xkb_keysym_from_name(key_str, XKB_KEYSYM_CASE_INSENSITIVE);
-
-	if (isbindsym) {
-		kc.type = KEY_TYPE_SYM;
-		kc.keysym = sym;
-		return kc;
-	}
-
-	if (sym != XKB_KEY_NoSymbol) {
-		// 尝试找到对应的多个 keycode
-		int32_t found_count =
-			find_keycodes_for_keysym(config.keymap, sym, &kc.keycode);
-		if (found_count > 0) {
-			kc.type = KEY_TYPE_CODE;
-			kc.keysym = sym; // 仍然保存 keysym 供参考
-		} else {
-			kc.type = KEY_TYPE_SYM;
-			kc.keysym = sym;
-			// keycode 字段保持为0
-		}
-	} else {
-		// 无法解析的键名
-		kc.type = KEY_TYPE_SYM;
-		kc.keysym = XKB_KEY_NoSymbol;
-		mango_error(false, WLR_ERROR, "Unknown key: \033[1m\033[31m%s\033[0m\n",
-					key_str);
-		// keycode 字段保持为0
-	}
-
-	return kc;
-}
-
-uint32_t parse_button(const char *str) {
-	// 将输入字符串转换为小写
-	char lowerStr[20];
-	int32_t i = 0;
-	while (str[i] && i < 19) {
-		lowerStr[i] = tolower(str[i]);
-		i++;
-	}
-	lowerStr[i] = '\0'; // 确保字符串正确终止
-
-	// 解析 "code:数字" 格式
-	if (strncmp(lowerStr, "code:", 5) == 0) {
-		const char *numStart = lowerStr + 5; // 跳过 "code:"
-		char *endptr;
-		unsigned long val = strtoul(numStart, &endptr, 10);
-
-		// 检查是否成功转换且无多余字符，且值未溢出（在 uint32_t 范围内）
-		if (endptr != numStart && *endptr == '\0' && val <= UINT32_MAX) {
-			return (uint32_t)val;
-		} else {
-			mango_error(false, WLR_ERROR,
-						"Invalid code format: "
-						"\033[1m\033[31m%s\033[0m\n",
-						str);
-			return UINT32_MAX;
-		}
-	}
-
-	// 根据转换后的小写字符串返回对应的按钮编号
-	if (strcmp(lowerStr, "btn_left") == 0) {
-		return BTN_LEFT;
-	} else if (strcmp(lowerStr, "btn_right") == 0) {
-		return BTN_RIGHT;
-	} else if (strcmp(lowerStr, "btn_middle") == 0) {
-		return BTN_MIDDLE;
-	} else if (strcmp(lowerStr, "btn_side") == 0) {
-		return BTN_SIDE;
-	} else if (strcmp(lowerStr, "btn_extra") == 0) {
-		return BTN_EXTRA;
-	} else if (strcmp(lowerStr, "btn_forward") == 0) {
-		return BTN_FORWARD;
-	} else if (strcmp(lowerStr, "btn_back") == 0) {
-		return BTN_BACK;
-	} else if (strcmp(lowerStr, "btn_task") == 0) {
-		return BTN_TASK;
-	} else {
-		mango_error(false, WLR_ERROR,
-					"Unknown button: "
-					"\033[1m\033[31m%s\033[0m\n",
-					str);
-		return UINT32_MAX;
-	}
-}
-
-int32_t parse_mouse_action(const char *str) {
-	// 将输入字符串转换为小写
-	char lowerStr[20];
-	int32_t i = 0;
-	while (str[i] && i < 19) {
-		lowerStr[i] = tolower(str[i]);
-		i++;
-	}
-	lowerStr[i] = '\0'; // 确保字符串正确终止
-
-	// 根据转换后的小写字符串返回对应的按钮编号
-	if (strcmp(lowerStr, "curmove") == 0) {
-		return CurMove;
-	} else if (strcmp(lowerStr, "curresize") == 0) {
-		return CurResize;
-	} else if (strcmp(lowerStr, "curnormal") == 0) {
-		return CurNormal;
-	} else if (strcmp(lowerStr, "curpressed") == 0) {
-		return CurPressed;
-	} else {
-		return 0;
-	}
-}
 
 void convert_hex_to_rgba(float *color, uint32_t hex) {
 	color[0] = ((hex >> 24) & 0xFF) / 255.0f;
@@ -663,377 +302,6 @@ uint32_t parse_num_type(char *str) {
 	default:
 		return NUM_TYPE_DEFAULT;
 	}
-}
-
-uint32_t parse_tag_mask(char *str) {
-	uint32_t mask = 0;
-	char *token;
-	char *arg_copy = strdup(str);
-
-	if (arg_copy != NULL) {
-		char *saveptr = NULL;
-		token = strtok_r(arg_copy, "|", &saveptr);
-
-		while (token != NULL) {
-			int32_t num = atoi(token);
-			if (num > 0 && num <= tag_num_MAX) {
-				mask |= (1 << (num - 1));
-			}
-			token = strtok_r(NULL, "|", &saveptr);
-		}
-
-		free(arg_copy);
-	}
-
-	uint32_t result = 0;
-
-	if (mask) {
-		result = mask;
-	} else {
-		result = atoi(str);
-	}
-
-	return result;
-}
-
-FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
-						 char *arg_value2, char *arg_value3, char *arg_value4,
-						 char *arg_value5) {
-
-	FuncType func = NULL;
-	(*arg).i = 0;
-	(*arg).i2 = 0;
-	(*arg).f = 0.0f;
-	(*arg).f2 = 0.0f;
-	(*arg).ui = 0;
-	(*arg).ui2 = 0;
-	(*arg).v = NULL;
-	(*arg).v2 = NULL;
-	(*arg).v3 = NULL;
-
-	if (strcmp(func_name, "focusstack") == 0) {
-		func = focusstack;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "groupfocus") == 0) {
-		func = groupfocus;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "focusdir") == 0) {
-		func = focusdir;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "focus_window_or_workspace") == 0) {
-		func = focus_window_or_workspace;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "groupjoin") == 0) {
-		func = groupjoin;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "groupleave") == 0) {
-		func = groupleave;
-	} else if (strcmp(func_name, "focusid") == 0) {
-		func = focusid;
-	} else if (strcmp(func_name, "incnmaster") == 0) {
-		func = incnmaster;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "setmfact") == 0) {
-		func = setmfact;
-		(*arg).f = atof(arg_value);
-	} else if (strcmp(func_name, "zoom") == 0) {
-		func = zoom;
-	} else if (strcmp(func_name, "exchange_client") == 0) {
-		func = exchange_client;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "exchange_stack_client") == 0) {
-		func = exchange_stack_client;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "toggleglobal") == 0) {
-		func = toggleglobal;
-	} else if (strcmp(func_name, "togglehdr") == 0) {
-		/* togglehdr[,on|off|toggle][,<monitor name>|all] */
-		func = togglehdr;
-		if (strcmp(arg_value, "on") == 0)
-			(*arg).i = 1;
-		else if (strcmp(arg_value, "off") == 0)
-			(*arg).i = 0;
-		else
-			(*arg).i = -1; // toggle, and the default for an empty argument
-		// "not given" is "" from the IPC path and "0" from the keybinding
-		// parser -- same rule as combine_args_until_empty().
-		bool has_name = arg_value2 && arg_value2[0] != '\0' &&
-						!(strlen(arg_value2) == 1 && arg_value2[0] == '0');
-		(*arg).v = has_name ? strdup(arg_value2) : NULL;
-	} else if (strcmp(func_name, "toggleoverview") == 0) {
-		func = toggleoverview;
-	} else if (strcmp(func_name, "togglejump") == 0) {
-		func = togglejump;
-	} else if (strcmp(func_name, "set_proportion") == 0) {
-		func = set_proportion;
-		(*arg).f = atof(arg_value);
-	} else if (strcmp(func_name, "switch_proportion_preset") == 0) {
-		func = switch_proportion_preset;
-		(*arg).i = parse_circle_direction(arg_value);
-	} else if (strcmp(func_name, "viewtoleft") == 0) {
-		func = viewtoleft;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "viewtoright") == 0) {
-		func = viewtoright;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "view_insert") == 0) {
-		func = view_insert;
-		(*arg).i = strcmp(arg_value, "next") == 0 ? NEXT : PREV;
-	} else if (strcmp(func_name, "tagsilent") == 0) {
-		func = tagsilent;
-		(*arg).ui = parse_tag_mask(arg_value);
-	} else if (strcmp(func_name, "tagtoleft") == 0) {
-		func = tagtoleft;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "tagtoright") == 0) {
-		func = tagtoright;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "killclient") == 0) {
-		func = killclient;
-		(*arg).i = parse_force(arg_value);
-	} else if (strcmp(func_name, "centerwin") == 0) {
-		func = centerwin;
-	} else if (strcmp(func_name, "focuslast") == 0) {
-		func = focuslast;
-	} else if (strcmp(func_name, "switcher") == 0) {
-		func = switcher;
-		if (strcmp(arg_value, "all_next") == 0) {
-			(*arg).i = NEXT;
-			(*arg).i2 = SW_ALL_MON;
-		} else if (strcmp(arg_value, "all_prev") == 0) {
-			(*arg).i = PREV;
-			(*arg).i2 = SW_ALL_MON;
-		} else if (strcmp(arg_value, "all_tag_next") == 0) {
-			(*arg).i = NEXT;
-			(*arg).i2 = SW_ALL_TAG;
-		} else if (strcmp(arg_value, "all_tag_prev") == 0) {
-			(*arg).i = PREV;
-			(*arg).i2 = SW_ALL_TAG;
-		} else if (strcmp(arg_value, "prev") == 0) {
-			(*arg).i = PREV;
-			(*arg).i2 = SW_CURRENT_TAG;
-		} else {
-			(*arg).i = NEXT;
-			(*arg).i2 = SW_CURRENT_TAG;
-		}
-	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
-		func = toggle_trackpad_enable;
-	} else if (strcmp(func_name, "setoption") == 0) {
-		func = setoption;
-
-		(*arg).v = strdup(arg_value);
-
-		// 收集需要拼接的参数
-		const char *non_empty_params[4] = {NULL};
-		int32_t param_index = 0;
-
-		if (arg_value2 && arg_value2[0] != '\0')
-			non_empty_params[param_index++] = arg_value2;
-		if (arg_value3 && arg_value3[0] != '\0')
-			non_empty_params[param_index++] = arg_value3;
-		if (arg_value4 && arg_value4[0] != '\0')
-			non_empty_params[param_index++] = arg_value4;
-		if (arg_value5 && arg_value5[0] != '\0')
-			non_empty_params[param_index++] = arg_value5;
-
-		// 处理拼接
-		if (param_index == 0) {
-			(*arg).v2 = strdup("");
-		} else {
-			// 计算总长度
-			size_t len = 0;
-			for (int32_t i = 0; i < param_index; i++) {
-				len += strlen(non_empty_params[i]);
-			}
-			len += (param_index - 1) + 1; // 逗号数 + null终止符
-
-			char *temp = malloc(len);
-			if (temp) {
-				char *cursor = temp;
-				for (int32_t i = 0; i < param_index; i++) {
-					if (i > 0) {
-						*cursor++ = ',';
-					}
-					size_t param_len = strlen(non_empty_params[i]);
-					memcpy(cursor, non_empty_params[i], param_len);
-					cursor += param_len;
-				}
-				*cursor = '\0';
-				(*arg).v2 = temp;
-			}
-		}
-	} else if (strcmp(func_name, "setkeymode") == 0) {
-		func = setkeymode;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "switch_keyboard_layout") == 0) {
-		func = switch_keyboard_layout;
-		(*arg).i = CLAMP_INT(atoi(arg_value), 0, 100);
-	} else if (strcmp(func_name, "setlayout") == 0) {
-		func = setlayout;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "switch_layout") == 0) {
-		func = switch_layout;
-	} else if (strcmp(func_name, "togglefloating") == 0) {
-		func = togglefloating;
-	} else if (strcmp(func_name, "togglefullscreen") == 0) {
-		func = togglefullscreen;
-	} else if (strcmp(func_name, "togglefakefullscreen") == 0) {
-		func = togglefakefullscreen;
-	} else if (strcmp(func_name, "toggleoverlay") == 0) {
-		func = toggleoverlay;
-	} else if (strcmp(func_name, "minimized") == 0) {
-		func = minimized;
-	} else if (strcmp(func_name, "restore_minimized") == 0) {
-		func = restore_minimized;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "toggle_scratchpad") == 0) {
-		func = toggle_scratchpad;
-	} else if (strcmp(func_name, "toggle_render_border") == 0) {
-		func = toggle_render_border;
-	} else if (strcmp(func_name, "focusmon") == 0) {
-		func = focusmon;
-		(*arg).i = parse_direction(arg_value);
-		if ((*arg).i == UNDIR) {
-			(*arg).v = strdup(arg_value);
-		}
-	} else if (strcmp(func_name, "tagmon") == 0) {
-		func = tagmon;
-		(*arg).i = parse_direction(arg_value);
-		(*arg).i2 = atoi(arg_value2);
-		if ((*arg).i == UNDIR) {
-			(*arg).v = strdup(arg_value);
-		};
-	} else if (strcmp(func_name, "incgaps") == 0) {
-		func = incgaps;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "togglegaps") == 0) {
-		func = togglegaps;
-	} else if (strcmp(func_name, "chvt") == 0) {
-		func = chvt;
-		(*arg).ui = atoi(arg_value);
-	} else if (strcmp(func_name, "spawn") == 0) {
-		func = spawn;
-		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
-						  arg_value5};
-		(*arg).v = combine_args_until_empty(values, 5);
-	} else if (strcmp(func_name, "spawn_shell") == 0) {
-		func = spawn_shell;
-		char *values[] = {arg_value, arg_value2, arg_value3, arg_value4,
-						  arg_value5};
-		(*arg).v = combine_args_until_empty(values, 5);
-	} else if (strcmp(func_name, "spawn_on_empty") == 0) {
-		func = spawn_on_empty;
-		(*arg).v = strdup(arg_value);
-		(*arg).ui = parse_tag_mask(arg_value2);
-	} else if (strcmp(func_name, "quit") == 0) {
-		func = quit;
-	} else if (strcmp(func_name, "create_virtual_output") == 0) {
-		func = create_virtual_output;
-	} else if (strcmp(func_name, "destroy_all_virtual_output") == 0) {
-		func = destroy_all_virtual_output;
-	} else if (strcmp(func_name, "moveresize") == 0) {
-		func = moveresize;
-		(*arg).ui = parse_mouse_action(arg_value);
-	} else if (strcmp(func_name, "togglemaximizescreen") == 0) {
-		func = togglemaximizescreen;
-	} else if (strcmp(func_name, "viewtoleft_have_client") == 0) {
-		func = viewtoleft_have_client;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "viewtoright_have_client") == 0) {
-		func = viewtoright_have_client;
-		(*arg).i = atoi(arg_value);
-	} else if (strcmp(func_name, "reload_config") == 0) {
-		func = reload_config;
-	} else if (strcmp(func_name, "load_config_file") == 0) {
-		func = load_config_file;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "tag") == 0) {
-		func = tag;
-		(*arg).ui = parse_tag_mask(arg_value);
-		(*arg).i = atoi(arg_value2);
-	} else if (strcmp(func_name, "view") == 0) {
-		func = bind_to_view;
-		(*arg).ui = parse_tag_mask(arg_value);
-		(*arg).i = atoi(arg_value2);
-	} else if (strcmp(func_name, "viewcrossmon") == 0) {
-		func = viewcrossmon;
-		(*arg).ui = parse_tag_mask(arg_value);
-		(*arg).v = strdup(arg_value2);
-	} else if (strcmp(func_name, "tagcrossmon") == 0) {
-		func = tagcrossmon;
-		(*arg).ui = parse_tag_mask(arg_value);
-		(*arg).v = strdup(arg_value2);
-	} else if (strcmp(func_name, "toggletag") == 0) {
-		func = toggletag;
-		(*arg).ui = parse_tag_mask(arg_value);
-	} else if (strcmp(func_name, "toggleview") == 0) {
-		func = toggleview;
-		(*arg).ui = parse_tag_mask(arg_value);
-	} else if (strcmp(func_name, "comboview") == 0) {
-		func = comboview;
-		(*arg).ui = parse_tag_mask(arg_value);
-	} else if (strcmp(func_name, "smartmovewin") == 0) {
-		func = smartmovewin;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "smartresizewin") == 0) {
-		func = smartresizewin;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "resizewin") == 0) {
-		func = resizewin;
-		(*arg).ui = parse_num_type(arg_value);
-		(*arg).ui2 = parse_num_type(arg_value2);
-		(*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
-												 : atoi(arg_value + 1);
-		(*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
-												   : atoi(arg_value2 + 1);
-	} else if (strcmp(func_name, "movewin") == 0) {
-		func = movewin;
-		(*arg).ui = parse_num_type(arg_value);
-		(*arg).ui2 = parse_num_type(arg_value2);
-		(*arg).i = (*arg).ui == NUM_TYPE_DEFAULT ? atoi(arg_value)
-												 : atoi(arg_value + 1);
-		(*arg).i2 = (*arg).ui2 == NUM_TYPE_DEFAULT ? atoi(arg_value2)
-												   : atoi(arg_value2 + 1);
-	} else if (strcmp(func_name, "toggle_named_scratchpad") == 0) {
-		func = toggle_named_scratchpad;
-		(*arg).v = strdup(arg_value);
-		(*arg).v2 = strdup(arg_value2);
-		(*arg).v3 = strdup(arg_value3);
-	} else if (strcmp(func_name, "disable_monitor") == 0) {
-		func = disable_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "enable_monitor") == 0) {
-		func = enable_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "toggle_monitor") == 0) {
-		func = toggle_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "sleep_monitor") == 0) {
-		func = sleep_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "wakeup_monitor") == 0) {
-		func = wakeup_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "sleep_toggle_monitor") == 0) {
-		func = sleep_toggle_monitor;
-		(*arg).v = strdup(arg_value);
-	} else if (strcmp(func_name, "scroller_stack") == 0) {
-		func = scroller_stack;
-		(*arg).i = parse_direction(arg_value);
-	} else if (strcmp(func_name, "toggle_all_floating") == 0) {
-		func = toggle_all_floating;
-	} else if (strcmp(func_name, "dwindle_toggle_split_direction") == 0) {
-		func = dwindle_toggle_split_direction;
-	} else if (strcmp(func_name, "dwindle_split_horizontal") == 0) {
-		func = dwindle_split_horizontal;
-	} else if (strcmp(func_name, "dwindle_split_vertical") == 0) {
-		func = dwindle_split_vertical;
-	} else if (strcmp(func_name, "dwindle_toggle_current_split") == 0) {
-		func = dwindle_toggle_current_split;
-	} else {
-		return NULL;
-	}
-	return func;
 }
 
 void set_env_without_display() {
@@ -1070,7 +338,6 @@ void run_exec_once() {
 		spawn_shell(&arg);
 	}
 }
-
 bool parse_option(Config *config, char *key, char *value, int line_number) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
@@ -1207,6 +474,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->edge_scroller_focus_allow_speed = atof(value);
 	} else if (strcmp(key, "focus_cross_monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
+	} else if (strcmp(key, "focusdir_only_zone_overlap") == 0) {
+		config->focusdir_only_zone_overlap = atoi(value);
 	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
 		config->exchange_cross_monitor = atoi(value);
 	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
@@ -1498,6 +767,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
 		config->overviewgappo = atoi(value);
+	} else if (strcmp(key, "overcircle_center_ratio") == 0) {
+		config->overcircle_center_ratio = atof(value);
 	} else if (strcmp(key, "jump_labels") == 0) {
 		if (config->jump_labels)
 			free(config->jump_labels);
@@ -1756,6 +1027,16 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->scratchpad_width_ratio = atof(value);
 	} else if (strcmp(key, "scratchpad_height_ratio") == 0) {
 		config->scratchpad_height_ratio = atof(value);
+	} else if (strcmp(key, "special_dim") == 0) {
+		config->special_dim = atof(value);
+	} else if (strcmp(key, "special_gappih") == 0) {
+		config->special_gappih = atoi(value);
+	} else if (strcmp(key, "special_gappiv") == 0) {
+		config->special_gappiv = atoi(value);
+	} else if (strcmp(key, "special_gappoh") == 0) {
+		config->special_gappoh = atoi(value);
+	} else if (strcmp(key, "special_gappov") == 0) {
+		config->special_gappov = atoi(value);
 	} else if (strcmp(key, "borderpx") == 0) {
 		config->borderpx = atoi(value);
 	} else if (strcmp(key, "group_bar_height") == 0) {
@@ -3046,7 +2327,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 	return true;
 }
-
 bool parse_config_line(Config *config, const char *line, int line_number) {
 	char processed_line[512];
 	strncpy(processed_line, line, sizeof(processed_line) - 1);
@@ -3064,6 +2344,607 @@ bool parse_config_line(Config *config, const char *line, int line_number) {
 	trim_whitespace(value);
 
 	return parse_option(config, key, value, line_number);
+}
+
+int compare_keybind_by_key_only(const void *a, const void *b) {
+	const KeyBinding *ka = (const KeyBinding *)a;
+	const KeyBinding *kb = (const KeyBinding *)b;
+
+	if (ka->mod != kb->mod)
+		return (ka->mod > kb->mod) ? 1 : -1;
+
+	if (ka->keysymcode.type != kb->keysymcode.type)
+		return (ka->keysymcode.type > kb->keysymcode.type) ? 1 : -1;
+
+	if (ka->keysymcode.type == KEY_TYPE_SYM) {
+		if (ka->keysymcode.keysym != kb->keysymcode.keysym)
+			return (ka->keysymcode.keysym > kb->keysymcode.keysym) ? 1 : -1;
+	} else {
+		if (ka->keysymcode.keycode.keycode1 != kb->keysymcode.keycode.keycode1)
+			return (ka->keysymcode.keycode.keycode1 >
+					kb->keysymcode.keycode.keycode1)
+					   ? 1
+					   : -1;
+	}
+	return 0;
+}
+
+bool same_key(const KeyBinding *a, const KeyBinding *b) {
+	return compare_keybind_by_key_only(a, b) == 0;
+}
+
+bool same_mousebind_key(const void *a, const void *b) {
+	const MouseBinding *ma = (const MouseBinding *)a;
+	const MouseBinding *mb = (const MouseBinding *)b;
+	return ma->mod == mb->mod && ma->button == mb->button;
+}
+
+bool same_axisbind_key(const void *a, const void *b) {
+	const AxisBinding *aa = (const AxisBinding *)a;
+	const AxisBinding *ab = (const AxisBinding *)b;
+	return aa->mod == ab->mod && aa->dir == ab->dir;
+}
+
+bool same_switchbind_key(const void *a, const void *b) {
+	const SwitchBinding *sa = (const SwitchBinding *)a;
+	const SwitchBinding *sb = (const SwitchBinding *)b;
+	return sa->fold == sb->fold;
+}
+
+bool same_gesturebind_key(const void *a, const void *b) {
+	const GestureBinding *ga = (const GestureBinding *)a;
+	const GestureBinding *gb = (const GestureBinding *)b;
+	return ga->mod == gb->mod && ga->motion == gb->motion &&
+		   ga->fingers_count == gb->fingers_count;
+}
+
+void get_mousebind_meta(const void *elem, BindingConflictMeta *meta) {
+	const MouseBinding *b = (const MouseBinding *)elem;
+	meta->mode = b->mode;
+	meta->iscommonmode = b->iscommonmode;
+	meta->file_index = b->file_index;
+	meta->line_number = b->line_number;
+}
+
+void get_axisbind_meta(const void *elem, BindingConflictMeta *meta) {
+	const AxisBinding *b = (const AxisBinding *)elem;
+	meta->mode = b->mode;
+	meta->iscommonmode = b->iscommonmode;
+	meta->file_index = b->file_index;
+	meta->line_number = b->line_number;
+}
+
+void get_switchbind_meta(const void *elem, BindingConflictMeta *meta) {
+	const SwitchBinding *b = (const SwitchBinding *)elem;
+	meta->mode = b->mode;
+	meta->iscommonmode = b->iscommonmode;
+	meta->file_index = b->file_index;
+	meta->line_number = b->line_number;
+}
+
+void get_gesturebind_meta(const void *elem, BindingConflictMeta *meta) {
+	const GestureBinding *b = (const GestureBinding *)elem;
+	meta->mode = b->mode;
+	meta->iscommonmode = b->iscommonmode;
+	meta->file_index = b->file_index;
+	meta->line_number = b->line_number;
+}
+
+bool check_mouse_binding_conflicts(Config *config) {
+	return check_simple_binding_conflicts(
+		config->mouse_bindings, config->mouse_bindings_count,
+		sizeof(MouseBinding), same_mousebind_key, get_mousebind_meta,
+		"mousebind");
+}
+
+bool check_axis_binding_conflicts(Config *config) {
+	return check_simple_binding_conflicts(
+		config->axis_bindings, config->axis_bindings_count, sizeof(AxisBinding),
+		same_axisbind_key, get_axisbind_meta, "axisbind");
+}
+
+bool check_switch_binding_conflicts(Config *config) {
+	return check_simple_binding_conflicts(
+		config->switch_bindings, config->switch_bindings_count,
+		sizeof(SwitchBinding), same_switchbind_key, get_switchbind_meta,
+		"switchbind");
+}
+
+void free_circle_layout(Config *config) {
+	if (config->circle_layout) {
+		// 释放每个字符串
+		for (int32_t i = 0; i < config->circle_layout_count; i++) {
+			if (config->circle_layout[i]) {
+				free(config->circle_layout[i]);	 // 释放单个字符串
+				config->circle_layout[i] = NULL; // 防止野指针
+			}
+		}
+		// 释放 circle_layout 数组本身
+		free(config->circle_layout);
+		config->circle_layout = NULL; // 防止野指针
+	}
+	config->circle_layout_count = 0; // 重置计数
+}
+
+void set_xcursor_env() {
+	if (config.cursor_size > 0) {
+		char size_str[16];
+		snprintf(size_str, sizeof(size_str), "%d", config.cursor_size);
+		setenv("XCURSOR_SIZE", size_str, 1);
+	} else {
+		setenv("XCURSOR_SIZE", "24", 1);
+	}
+
+	if (config.cursor_theme) {
+		setenv("XCURSOR_THEME", config.cursor_theme, 1);
+	}
+}
+
+void reapply_rootbg(void) {
+	wlr_scene_rect_set_color(root_bg, config.rootcolor);
+}
+
+void reapply_property(void) {
+	Client *c = NULL;
+
+	// reset border width when config change
+	wl_list_for_each(c, &clients, link) {
+		if (c && !c->iskilling) {
+			if (!c->isnoborder && !c->isfullscreen) {
+				c->bw = config.borderpx;
+			}
+			client_set_group_config(c);
+		}
+	}
+}
+
+void reapply_pointer(void) {
+	InputDevice *id;
+	struct libinput_device *device;
+	wl_list_for_each(id, &inputdevices, link) {
+
+		if (id->wlr_device->type != WLR_INPUT_DEVICE_POINTER) {
+			continue;
+		}
+
+		device = id->libinput_device;
+		if (wlr_input_device_is_libinput(id->wlr_device) && device) {
+			configure_pointer(id->wlr_device, device);
+		}
+	}
+}
+
+void reapply_tagrule(void) {
+	Monitor *m = NULL;
+	wl_list_for_each(m, &mons, link) {
+		if (!m->wlr_output->enabled) {
+			continue;
+		}
+		parse_tagrule(m);
+	}
+}
+
+void reset_option(void) {
+	init_baked_points();
+	handlecursoractivity();
+	reset_keyboard_layout();
+	reset_blur_params();
+	set_env_without_display();
+	set_env_display();
+	run_exec();
+
+	reapply_cursor_style();
+	reapply_property();
+	reapply_rootbg();
+	reapply_keyboard();
+	reapply_pointer();
+	reapply_master();
+
+	reapply_tagrule();
+	reapply_monitor_rules();
+
+	arrange(selmon, false, false);
+}
+
+int32_t parse_force(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[10];
+	int32_t i = 0;
+	while (str[i] && i < 9) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0';
+
+	// 根据转换后的小写字符串返回对应的枚举值
+	if (strcmp(lowerStr, "unforce") == 0) {
+		return UNFORCE;
+	} else if (strcmp(lowerStr, "force") == 0) {
+		return FORCE;
+	} else {
+		return UNFORCE;
+	}
+}
+
+int32_t parse_fold_state(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[10];
+	int32_t i = 0;
+	while (str[i] && i < 9) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0';
+
+	// 根据转换后的小写字符串返回对应的枚举值
+	if (strcmp(lowerStr, "fold") == 0) {
+		return FOLD;
+	} else if (strcmp(lowerStr, "unfold") == 0) {
+		return UNFOLD;
+	} else {
+		return INVALIDFOLD;
+	}
+}
+
+// 辅助函数：检查字符串是否以指定的前缀开头（忽略大小写）
+char *combine_args_until_empty(char *values[], int count) {
+	// find the first empty string
+	int first_empty = count;
+	for (int i = 0; i < count; i++) {
+		// check if it's empty: empty string or only contains "0" (initialized)
+		if (values[i][0] == '\0' ||
+			(strlen(values[i]) == 1 && values[i][0] == '0')) {
+			first_empty = i;
+			break;
+		}
+	}
+
+	// 	if there are no valid parameters, return an empty string
+	if (first_empty == 0) {
+		return strdup("");
+	}
+
+	// 	calculate the total length
+	size_t total_len = 0;
+	for (int i = 0; i < first_empty; i++) {
+		total_len += strlen(values[i]);
+	}
+	// 	plus the number of commas (first_empty-1 commas)
+	total_len += (first_empty - 1);
+
+	// 	allocate memory and concatenate
+	char *combined = malloc(total_len + 1);
+	if (combined == NULL) {
+		return strdup("");
+	}
+
+	combined[0] = '\0';
+	for (int i = 0; i < first_empty; i++) {
+		if (i > 0) {
+			strcat(combined, ",");
+		}
+		strcat(combined, values[i]);
+	}
+
+	return combined;
+}
+
+uint32_t parse_mod(const char *mod_str) {
+	if (!mod_str || !*mod_str) {
+		return UINT32_MAX;
+	}
+
+	uint32_t mod = 0;
+	char input_copy[256];
+	char *token;
+	char *saveptr = NULL;
+	bool match_success = false;
+
+	// 复制并转换为小写
+	strncpy(input_copy, mod_str, sizeof(input_copy) - 1);
+	input_copy[sizeof(input_copy) - 1] = '\0';
+	for (char *p = input_copy; *p; p++) {
+		*p = tolower(*p);
+	}
+
+	// 分割处理每个部分
+	token = strtok_r(input_copy, "+", &saveptr);
+	while (token != NULL) {
+		// 去除前后空白
+		trim_whitespace(token);
+
+		// 如果 token 变成空字符串则跳过
+		if (*token == '\0') {
+			token = strtok_r(NULL, "+", &saveptr);
+			continue;
+		}
+
+		if (strncmp(token, "code:", 5) == 0) {
+			// 处理 code: 形式
+			char *endptr;
+			long keycode = strtol(token + 5, &endptr, 10);
+			if (endptr != token + 5 && (*endptr == '\0' || *endptr == ' ')) {
+				switch (keycode) {
+				case 133:
+				case 134:
+					mod |= WLR_MODIFIER_LOGO;
+					break;
+				case 37:
+				case 105:
+					mod |= WLR_MODIFIER_CTRL;
+					break;
+				case 50:
+				case 62:
+					mod |= WLR_MODIFIER_SHIFT;
+					break;
+				case 64:
+				case 108:
+					mod |= WLR_MODIFIER_ALT;
+					break;
+				default:
+					mango_error(false, WLR_ERROR,
+								"unknown modifier keycode: "
+								"\033[1m\033[31m%s\033[0m\n",
+								token);
+					break;
+				}
+			}
+		} else {
+			if (!strcmp(token, "super") || !strcmp(token, "super_l") ||
+				!strcmp(token, "super_r")) {
+				mod |= WLR_MODIFIER_LOGO;
+				match_success = true;
+			}
+			if (!strcmp(token, "ctrl") || !strcmp(token, "ctrl_l") ||
+				!strcmp(token, "ctrl_r")) {
+				mod |= WLR_MODIFIER_CTRL;
+				match_success = true;
+			}
+			if (!strcmp(token, "shift") || !strcmp(token, "shift_l") ||
+				!strcmp(token, "shift_r")) {
+				mod |= WLR_MODIFIER_SHIFT;
+				match_success = true;
+			}
+			if (!strcmp(token, "alt") || !strcmp(token, "alt_l") ||
+				!strcmp(token, "alt_r")) {
+				mod |= WLR_MODIFIER_ALT;
+				match_success = true;
+			}
+			if (!strcmp(token, "hyper") || !strcmp(token, "hyper_l") ||
+				!strcmp(token, "hyper_r")) {
+				mod |= WLR_MODIFIER_MOD3;
+				match_success = true;
+			}
+			if (!strcmp(token, "none")) {
+				match_success = true;
+			}
+		}
+
+		token = strtok_r(NULL, "+", &saveptr);
+	}
+
+	if (!match_success) {
+		mod = UINT32_MAX;
+		mango_error(false, WLR_ERROR,
+					"Unknown modifier: "
+					"\033[1m\033[31m%s\033[0m\n",
+					mod_str);
+	}
+
+	return mod;
+}
+
+// 定义辅助函数：在 keymap 中查找 keysym 对应的多个 keycode
+int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap,
+										xkb_keysym_t sym,
+										MultiKeycode *multi_kc) {
+	xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
+	xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
+
+	multi_kc->keycode1 = 0;
+	multi_kc->keycode2 = 0;
+	multi_kc->keycode3 = 0;
+
+	int32_t found_count = 0;
+
+	for (xkb_keycode_t keycode = min_keycode;
+		 keycode <= max_keycode && found_count < 3; keycode++) {
+		// 使用布局0和层级0
+		const xkb_keysym_t *syms;
+		int32_t num_syms =
+			xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
+
+		for (int32_t i = 0; i < num_syms; i++) {
+			if (syms[i] == sym) {
+				switch (found_count) {
+				case 0:
+					multi_kc->keycode1 = keycode;
+					break;
+				case 1:
+					multi_kc->keycode2 = keycode;
+					break;
+				case 2:
+					multi_kc->keycode3 = keycode;
+					break;
+				}
+				found_count++;
+				break;
+			}
+		}
+	}
+
+	return found_count;
+}
+
+KeySymCode parse_key(const char *key_str, bool isbindsym) {
+	KeySymCode kc = {0}; // 初始化为0
+
+	if (config.keymap == NULL || config.ctx == NULL) {
+		// 处理错误
+		kc.type = KEY_TYPE_SYM;
+		kc.keysym = XKB_KEY_NoSymbol;
+		return kc;
+	}
+
+	// 处理 code: 前缀的情况
+	if (strncmp(key_str, "code:", 5) == 0) {
+		char *endptr;
+		xkb_keycode_t keycode = (xkb_keycode_t)strtol(key_str + 5, &endptr, 10);
+		kc.type = KEY_TYPE_CODE;
+		kc.keycode.keycode1 = keycode; // 只设置第一个
+		kc.keycode.keycode2 = 0;
+		kc.keycode.keycode3 = 0;
+		return kc;
+	}
+
+	// change key string to keysym, case insensitive
+	xkb_keysym_t sym =
+		xkb_keysym_from_name(key_str, XKB_KEYSYM_CASE_INSENSITIVE);
+
+	if (isbindsym) {
+		kc.type = KEY_TYPE_SYM;
+		kc.keysym = sym;
+		return kc;
+	}
+
+	if (sym != XKB_KEY_NoSymbol) {
+		// 尝试找到对应的多个 keycode
+		int32_t found_count =
+			find_keycodes_for_keysym(config.keymap, sym, &kc.keycode);
+		if (found_count > 0) {
+			kc.type = KEY_TYPE_CODE;
+			kc.keysym = sym; // 仍然保存 keysym 供参考
+		} else {
+			kc.type = KEY_TYPE_SYM;
+			kc.keysym = sym;
+			// keycode 字段保持为0
+		}
+	} else {
+		// 无法解析的键名
+		kc.type = KEY_TYPE_SYM;
+		kc.keysym = XKB_KEY_NoSymbol;
+		mango_error(false, WLR_ERROR, "Unknown key: \033[1m\033[31m%s\033[0m\n",
+					key_str);
+		// keycode 字段保持为0
+	}
+
+	return kc;
+}
+
+uint32_t parse_button(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[20];
+	int32_t i = 0;
+	while (str[i] && i < 19) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0'; // 确保字符串正确终止
+
+	// 解析 "code:数字" 格式
+	if (strncmp(lowerStr, "code:", 5) == 0) {
+		const char *numStart = lowerStr + 5; // 跳过 "code:"
+		char *endptr;
+		unsigned long val = strtoul(numStart, &endptr, 10);
+
+		// 检查是否成功转换且无多余字符，且值未溢出（在 uint32_t 范围内）
+		if (endptr != numStart && *endptr == '\0' && val <= UINT32_MAX) {
+			return (uint32_t)val;
+		} else {
+			mango_error(false, WLR_ERROR,
+						"Invalid code format: "
+						"\033[1m\033[31m%s\033[0m\n",
+						str);
+			return UINT32_MAX;
+		}
+	}
+
+	// 根据转换后的小写字符串返回对应的按钮编号
+	if (strcmp(lowerStr, "btn_left") == 0) {
+		return BTN_LEFT;
+	} else if (strcmp(lowerStr, "btn_right") == 0) {
+		return BTN_RIGHT;
+	} else if (strcmp(lowerStr, "btn_middle") == 0) {
+		return BTN_MIDDLE;
+	} else if (strcmp(lowerStr, "btn_side") == 0) {
+		return BTN_SIDE;
+	} else if (strcmp(lowerStr, "btn_extra") == 0) {
+		return BTN_EXTRA;
+	} else if (strcmp(lowerStr, "btn_forward") == 0) {
+		return BTN_FORWARD;
+	} else if (strcmp(lowerStr, "btn_back") == 0) {
+		return BTN_BACK;
+	} else if (strcmp(lowerStr, "btn_task") == 0) {
+		return BTN_TASK;
+	} else {
+		mango_error(false, WLR_ERROR,
+					"Unknown button: "
+					"\033[1m\033[31m%s\033[0m\n",
+					str);
+		return UINT32_MAX;
+	}
+}
+
+int32_t parse_mouse_action(const char *str) {
+	// 将输入字符串转换为小写
+	char lowerStr[20];
+	int32_t i = 0;
+	while (str[i] && i < 19) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0'; // 确保字符串正确终止
+
+	// 根据转换后的小写字符串返回对应的按钮编号
+	if (strcmp(lowerStr, "curmove") == 0) {
+		return CurMove;
+	} else if (strcmp(lowerStr, "curresize") == 0) {
+		return CurResize;
+	} else if (strcmp(lowerStr, "curnormal") == 0) {
+		return CurNormal;
+	} else if (strcmp(lowerStr, "curpressed") == 0) {
+		return CurPressed;
+	} else {
+		return 0;
+	}
+}
+
+uint32_t parse_tag_mask(char *str) {
+	uint32_t mask = 0;
+	char *token;
+	char *arg_copy = strdup(str);
+
+	if (arg_copy != NULL) {
+		char *saveptr = NULL;
+		token = strtok_r(arg_copy, "|", &saveptr);
+
+		while (token != NULL) {
+			trim_whitespace(token);
+			int32_t num = atoi(token);
+			if (num == 0 && strcmp(token, "0") == 0) {
+				mask |= TAG0_MASK;
+			} else if (num > 0 && num <= tag_num_MAX) {
+				mask |= (1 << (num - 1));
+			}
+			token = strtok_r(NULL, "|", &saveptr);
+		}
+
+		free(arg_copy);
+	}
+
+	// tag0 and normal tags are exclusive; keep tag0 when mixed
+	if ((mask & TAG0_MASK) && (mask & TAGMASK))
+		mask = TAG0_MASK;
+
+	uint32_t result = 0;
+
+	if (mask) {
+		result = mask;
+	} else {
+		result = atoi(str);
+	}
+
+	return result;
 }
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
@@ -3159,31 +3040,25 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	return parse_correct;
 }
 
-int compare_keybind_by_key_only(const void *a, const void *b) {
-	const KeyBinding *ka = (const KeyBinding *)a;
-	const KeyBinding *kb = (const KeyBinding *)b;
-
-	if (ka->mod != kb->mod)
-		return (ka->mod > kb->mod) ? 1 : -1;
-
-	if (ka->keysymcode.type != kb->keysymcode.type)
-		return (ka->keysymcode.type > kb->keysymcode.type) ? 1 : -1;
-
-	if (ka->keysymcode.type == KEY_TYPE_SYM) {
-		if (ka->keysymcode.keysym != kb->keysymcode.keysym)
-			return (ka->keysymcode.keysym > kb->keysymcode.keysym) ? 1 : -1;
-	} else {
-		if (ka->keysymcode.keycode.keycode1 != kb->keysymcode.keycode.keycode1)
-			return (ka->keysymcode.keycode.keycode1 >
-					kb->keysymcode.keycode.keycode1)
-					   ? 1
-					   : -1;
-	}
-	return 0;
-}
-
-bool same_key(const KeyBinding *a, const KeyBinding *b) {
-	return compare_keybind_by_key_only(a, b) == 0;
+const char *mod_to_string(uint32_t mod) {
+	char buf[128];
+	buf[0] = '\0';
+	if (mod & WLR_MODIFIER_LOGO)
+		strcat(buf, "Super+");
+	if (mod & WLR_MODIFIER_CTRL)
+		strcat(buf, "Ctrl+");
+	if (mod & WLR_MODIFIER_ALT)
+		strcat(buf, "Alt+");
+	if (mod & WLR_MODIFIER_SHIFT)
+		strcat(buf, "Shift+");
+	if (mod & WLR_MODIFIER_MOD3)
+		strcat(buf, "Hyper+");
+	size_t len = strlen(buf);
+	if (len > 0)
+		buf[len - 1] = '\0';
+	else
+		strcpy(buf, "None");
+	return buf;
 }
 
 bool check_key_binding_conflicts(Config *config) {
@@ -3252,36 +3127,10 @@ bool check_key_binding_conflicts(Config *config) {
 	return conflict_found;
 }
 
-bool same_mousebind_key(const void *a, const void *b) {
-	const MouseBinding *ma = (const MouseBinding *)a;
-	const MouseBinding *mb = (const MouseBinding *)b;
-	return ma->mod == mb->mod && ma->button == mb->button;
-}
-
-bool same_axisbind_key(const void *a, const void *b) {
-	const AxisBinding *aa = (const AxisBinding *)a;
-	const AxisBinding *ab = (const AxisBinding *)b;
-	return aa->mod == ab->mod && aa->dir == ab->dir;
-}
-
-bool same_switchbind_key(const void *a, const void *b) {
-	const SwitchBinding *sa = (const SwitchBinding *)a;
-	const SwitchBinding *sb = (const SwitchBinding *)b;
-	return sa->fold == sb->fold;
-}
-
-bool same_gesturebind_key(const void *a, const void *b) {
-	const GestureBinding *ga = (const GestureBinding *)a;
-	const GestureBinding *gb = (const GestureBinding *)b;
-	return ga->mod == gb->mod && ga->motion == gb->motion &&
-		   ga->fingers_count == gb->fingers_count;
-}
-
-bool check_simple_binding_conflicts(void *arr, size_t count, size_t elem_size,
-									bool (*same_key)(const void *,
-													 const void *),
-									BindingMetaFunc get_meta,
-									const char *kind) {
+bool
+check_simple_binding_conflicts(void *arr, size_t count, size_t elem_size,
+							   bool (*same_key)(const void *, const void *),
+							   BindingMetaFunc get_meta, const char *kind) {
 	bool conflict_found = false;
 
 	for (size_t i = 0; i < count; i++) {
@@ -3321,79 +3170,11 @@ bool check_simple_binding_conflicts(void *arr, size_t count, size_t elem_size,
 	return conflict_found;
 }
 
-void get_mousebind_meta(const void *elem, BindingConflictMeta *meta) {
-	const MouseBinding *b = (const MouseBinding *)elem;
-	meta->mode = b->mode;
-	meta->iscommonmode = b->iscommonmode;
-	meta->file_index = b->file_index;
-	meta->line_number = b->line_number;
-}
-
-void get_axisbind_meta(const void *elem, BindingConflictMeta *meta) {
-	const AxisBinding *b = (const AxisBinding *)elem;
-	meta->mode = b->mode;
-	meta->iscommonmode = b->iscommonmode;
-	meta->file_index = b->file_index;
-	meta->line_number = b->line_number;
-}
-
-void get_switchbind_meta(const void *elem, BindingConflictMeta *meta) {
-	const SwitchBinding *b = (const SwitchBinding *)elem;
-	meta->mode = b->mode;
-	meta->iscommonmode = b->iscommonmode;
-	meta->file_index = b->file_index;
-	meta->line_number = b->line_number;
-}
-
-void get_gesturebind_meta(const void *elem, BindingConflictMeta *meta) {
-	const GestureBinding *b = (const GestureBinding *)elem;
-	meta->mode = b->mode;
-	meta->iscommonmode = b->iscommonmode;
-	meta->file_index = b->file_index;
-	meta->line_number = b->line_number;
-}
-
-bool check_mouse_binding_conflicts(Config *config) {
-	return check_simple_binding_conflicts(
-		config->mouse_bindings, config->mouse_bindings_count,
-		sizeof(MouseBinding), same_mousebind_key, get_mousebind_meta,
-		"mousebind");
-}
-
-bool check_axis_binding_conflicts(Config *config) {
-	return check_simple_binding_conflicts(
-		config->axis_bindings, config->axis_bindings_count, sizeof(AxisBinding),
-		same_axisbind_key, get_axisbind_meta, "axisbind");
-}
-
-bool check_switch_binding_conflicts(Config *config) {
-	return check_simple_binding_conflicts(
-		config->switch_bindings, config->switch_bindings_count,
-		sizeof(SwitchBinding), same_switchbind_key, get_switchbind_meta,
-		"switchbind");
-}
-
 bool check_gesture_binding_conflicts(Config *config) {
 	return check_simple_binding_conflicts(
 		config->gesture_bindings, config->gesture_bindings_count,
 		sizeof(GestureBinding), same_gesturebind_key, get_gesturebind_meta,
 		"gesturebind");
-}
-
-void free_circle_layout(Config *config) {
-	if (config->circle_layout) {
-		// 释放每个字符串
-		for (int32_t i = 0; i < config->circle_layout_count; i++) {
-			if (config->circle_layout[i]) {
-				free(config->circle_layout[i]);	 // 释放单个字符串
-				config->circle_layout[i] = NULL; // 防止野指针
-			}
-		}
-		// 释放 circle_layout 数组本身
-		free(config->circle_layout);
-		config->circle_layout = NULL; // 防止野指针
-	}
-	config->circle_layout_count = 0; // 重置计数
 }
 
 void free_baked_points(void) {
@@ -3780,6 +3561,8 @@ void override_config(void) {
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
+	config.overcircle_center_ratio =
+		CLAMP_FLOAT(config.overcircle_center_ratio, 0.1f, 0.9f);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
 	config.xwayland_ignore_scale =
 		CLAMP_INT(config.xwayland_ignore_scale, 0, 1);
@@ -3806,6 +3589,8 @@ void override_config(void) {
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
+	config.focusdir_only_zone_overlap =
+		CLAMP_INT(config.focusdir_only_zone_overlap, 0, 1);
 	config.exchange_cross_monitor =
 		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
 	config.scratchpad_cross_monitor =
@@ -3882,6 +3667,11 @@ void override_config(void) {
 		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
 	config.scratchpad_height_ratio =
 		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
+	config.special_dim = CLAMP_FLOAT(config.special_dim, 0.0f, 1.0f);
+	config.special_gappih = CLAMP_INT(config.special_gappih, 0, 1000);
+	config.special_gappiv = CLAMP_INT(config.special_gappiv, 0, 1000);
+	config.special_gappoh = CLAMP_INT(config.special_gappoh, 0, 1000);
+	config.special_gappov = CLAMP_INT(config.special_gappov, 0, 1000);
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
 	config.group_bar_height = CLAMP_INT(config.group_bar_height, 0, 500);
 	config.smartgaps = CLAMP_INT(config.smartgaps, 0, 1);
@@ -3982,6 +3772,11 @@ void set_value_default() {
 	config.gappov = 10;
 	config.scratchpad_width_ratio = 0.8f;
 	config.scratchpad_height_ratio = 0.9f;
+	config.special_dim = 0.5f;
+	config.special_gappih = 10;
+	config.special_gappiv = 10;
+	config.special_gappoh = 20;
+	config.special_gappov = 20;
 
 	config.scroller_structs = 20;
 	config.scroller_default_proportion = 0.9f;
@@ -3993,6 +3788,7 @@ void set_value_default() {
 	config.edge_scroller_pointer_focus = 1;
 	config.edge_scroller_focus_allow_speed = 0.0f;
 	config.focus_cross_monitor = 0;
+	config.focusdir_only_zone_overlap = 0;
 	config.exchange_cross_monitor = 0;
 	config.scratchpad_cross_monitor = 0;
 	config.focus_cross_tag = 0;
@@ -4024,6 +3820,7 @@ void set_value_default() {
 	config.group_bar_height = 50;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
+	config.overcircle_center_ratio = 0.5f;
 	config.cursor_hide_timeout = 0;
 	config.cursor_hide_on_keypress = 0;
 
@@ -4241,7 +4038,6 @@ void set_default_key_bindings(Config *config) {
 }
 
 bool parse_config(void) {
-
 	char filename[1024];
 
 	free_config();
@@ -4418,20 +4214,6 @@ void reapply_monitor_rules(void) {
 	updatemons(NULL, NULL);
 }
 
-void set_xcursor_env() {
-	if (config.cursor_size > 0) {
-		char size_str[16];
-		snprintf(size_str, sizeof(size_str), "%d", config.cursor_size);
-		setenv("XCURSOR_SIZE", size_str, 1);
-	} else {
-		setenv("XCURSOR_SIZE", "24", 1);
-	}
-
-	if (config.cursor_theme) {
-		setenv("XCURSOR_THEME", config.cursor_theme, 1);
-	}
-}
-
 void reapply_cursor_style(void) {
 	if (hide_cursor_source) {
 		wl_event_source_timer_update(hide_cursor_source, 0);
@@ -4467,24 +4249,6 @@ void reapply_cursor_style(void) {
 	} else {
 		wl_event_source_timer_update(hide_cursor_source,
 									 config.cursor_hide_timeout * 1000);
-	}
-}
-
-void reapply_rootbg(void) {
-	wlr_scene_rect_set_color(root_bg, config.rootcolor);
-}
-
-void reapply_property(void) {
-	Client *c = NULL;
-
-	// reset border width when config change
-	wl_list_for_each(c, &clients, link) {
-		if (c && !c->iskilling) {
-			if (!c->isnoborder && !c->isfullscreen) {
-				c->bw = config.borderpx;
-			}
-			client_set_group_config(c);
-		}
 	}
 }
 
@@ -4539,27 +4303,11 @@ void reapply_keyboard(void) {
 	}
 }
 
-void reapply_pointer(void) {
-	InputDevice *id;
-	struct libinput_device *device;
-	wl_list_for_each(id, &inputdevices, link) {
-
-		if (id->wlr_device->type != WLR_INPUT_DEVICE_POINTER) {
-			continue;
-		}
-
-		device = id->libinput_device;
-		if (wlr_input_device_is_libinput(id->wlr_device) && device) {
-			configure_pointer(id->wlr_device, device);
-		}
-	}
-}
-
 void reapply_master(void) {
 
 	int32_t i;
 	Monitor *m = NULL;
-	for (i = 0; i <= config.tag_num; i++) {
+	for (i = 0; i < PERTAG_SLOTS; i++) {
 		wl_list_for_each(m, &mons, link) {
 			if (!m->wlr_output->enabled) {
 				continue;
@@ -4570,6 +4318,10 @@ void reapply_master(void) {
 			m->gappiv = config.gappiv;
 			m->gappoh = config.gappoh;
 			m->gappov = config.gappov;
+			m->special_gappih = config.special_gappih;
+			m->special_gappiv = config.special_gappiv;
+			m->special_gappoh = config.special_gappoh;
+			m->special_gappov = config.special_gappov;
 		}
 	}
 }
@@ -4608,7 +4360,8 @@ bool tag_rule_matches_monitor(const ConfigTagRule *tr, Monitor *m) {
 }
 
 // Apply one tag rule to a slot (caller checks coverage).
-void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr, uint32_t tag) {
+void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr,
+								   uint32_t tag) {
 	int32_t jk;
 
 	for (jk = 0; jk < LENGTH(layouts); jk++) {
@@ -4644,6 +4397,8 @@ void parse_tagrule(Monitor *m) {
 	// Set defaults for every tag.
 	for (i = 0; i <= config.tag_num; i++)
 		tag_slot_set_defaults(m, i);
+	// dedicated state slot for the all-tags view
+	tag_slot_set_defaults(m, PERTAG_ALL_TAGS_IDX);
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 		const ConfigTagRule *tr = &config.tag_rules[i];
@@ -4669,40 +4424,7 @@ void parse_tagrule(Monitor *m) {
 	}
 }
 
-void reapply_tagrule(void) {
-	Monitor *m = NULL;
-	wl_list_for_each(m, &mons, link) {
-		if (!m->wlr_output->enabled) {
-			continue;
-		}
-		parse_tagrule(m);
-	}
-}
-
-void reset_option(void) {
-	init_baked_points();
-	handlecursoractivity();
-	reset_keyboard_layout();
-	reset_blur_params();
-	set_env_without_display();
-	set_env_display();
-	run_exec();
-
-	reapply_cursor_style();
-	reapply_property();
-	reapply_rootbg();
-	reapply_keyboard();
-	reapply_pointer();
-	reapply_master();
-
-	reapply_tagrule();
-	reapply_monitor_rules();
-
-	arrange(selmon, false, false);
-}
-
 void reset_tag(int old_tag_num) {
-
 	if (config.tag_num != old_tag_num) {
 		uint32_t last_tag_mask = (uint32_t)1 << (config.tag_num - 1);
 		Client *c = NULL;

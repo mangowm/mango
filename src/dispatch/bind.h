@@ -97,5 +97,6 @@ void focusid(const Arg *arg);
 
 void toggle_special_tag(const Arg *arg);
 void tag_special_tag(const Arg *arg);
+void toggle_special_tag_mon(Monitor *m);
 void tag_special_silent(const Arg *arg);
 #endif

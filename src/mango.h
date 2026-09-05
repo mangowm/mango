@@ -512,6 +512,8 @@ typedef struct {
 	struct wlr_keyboard
 		*keyboard; /* 实际生效的 wlr_keyboard（group 或独立键盘） */
 	struct wlr_keyboard *virtual_keyboard;
+	struct wlr_keyboard
+		*prev_seat_keyboard; /* 接管 seat 前生效的键盘，销毁时恢复用 */
 
 	int32_t nsyms;
 	const xkb_keysym_t *keysyms; /* invalid if nsyms == 0 */
@@ -605,6 +607,11 @@ struct Monitor {
 	int32_t gappiv; /* vertical gap between windows */
 	int32_t gappoh; /* horizontal outer gaps */
 	int32_t gappov; /* vertical outer gaps */
+	// special workspace gaps, per monitor
+	int32_t special_gappih;
+	int32_t special_gappiv;
+	int32_t special_gappoh;
+	int32_t special_gappov;
 	Pertag *pertag;
 	uint32_t ovbk_current_tagset;
 	uint32_t ovbk_prev_tagset;
@@ -613,13 +620,16 @@ struct Monitor {
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t ov_normal_mode; /* 热区进入时使用普通网格布局 */
+	int32_t ov_tab_layout;	/* overcircle 进入时使用居中 tab 布局 */
 	int32_t only_sleep;
+	bool special_empty_view; // user intentionally opened the empty special view
 	uint32_t visible_clients;
 	uint32_t visible_tiling_clients;
 	uint32_t visible_scroll_tiling_clients;
 	uint32_t visible_fake_tiling_clients;
 	uint32_t hide_clients;
 	struct wlr_scene_optimized_blur *blur;
+	struct wlr_scene_rect *special_dim_rect;
 	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;

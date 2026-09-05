@@ -69,19 +69,16 @@ struct fx_corner_radii set_client_corner_location(Client *c) {
 }
 
 bool is_horizontal_stack_layout(Monitor *m) {
-	if (m->pertag->curtag &&
-		(m->pertag->ltidxs[m->pertag->curtag]->id == TILE ||
-		 m->pertag->ltidxs[m->pertag->curtag]->id == DECK))
-		return true;
-	return false;
+	uint32_t tag = get_mon_curtag(m);
+	return m->pertag->ltidxs[tag]->id == TILE ||
+		   m->pertag->ltidxs[tag]->id == DECK;
 }
 
 bool is_horizontal_right_stack_layout(Monitor *m) {
-	if (m->pertag->curtag &&
-		m->pertag->ltidxs[m->pertag->curtag]->id == RIGHT_TILE)
-		return true;
-	return false;
+	uint32_t tag = get_mon_curtag(m);
+	return m->pertag->ltidxs[tag]->id == RIGHT_TILE;
 }
+
 int32_t is_special_animation_rule(Client *c) {
 	if (is_scroller_layout(c->mon) && !c->isfloating) {
 		return DOWN;
@@ -542,10 +539,11 @@ void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 }
 void client_draw_split_border(Client *c, bool hit_no_border,
 							  struct ivec2 offsets) {
-	if (c->iskilling || !c->mon || !client_surface(c)->mapped)
+		if (c->iskilling || !c->mon || !client_surface(c)->mapped)
 		return;
 
-	const Layout *layout = c->mon->pertag->ltidxs[c->mon->pertag->curtag];
+	uint32_t tag = get_client_tag_idx(c);
+	const Layout *layout = c->mon->pertag->ltidxs[tag];
 
 	if (hit_no_border || !ISTILED(c) || layout->id != DWINDLE ||
 		!config.dwindle_manual_split || c->isfullscreen) {
@@ -556,7 +554,7 @@ void client_draw_split_border(Client *c, bool hit_no_border,
 		return;
 	}
 
-	DwindleNode **root = &c->mon->pertag->dwindle_root[c->mon->pertag->curtag];
+	DwindleNode **root = &c->mon->pertag->dwindle_root[tag];
 	DwindleNode *dnode = dwindle_find_leaf(*root, c);
 	if (!dnode) {
 		wlr_scene_node_set_enabled(&c->splitindicator[0]->node, false);
@@ -1407,7 +1405,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->bw = 0;
 
 	bool hit_no_border = check_hit_no_border(c);
-	if (hit_no_border && config.smartgaps) {
+	if (hit_no_border) {
 		c->bw = 0;
 		c->fake_no_border = true;
 	}
@@ -1478,9 +1476,6 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	client_set_pending_state(c);
 	setborder_color(c);
 }
-void resize(Client *c, struct wlr_box geo, int32_t interact) {
-	resize_apply(c, geo, (ResizeOpts){.interact = interact});
-}
 
 bool client_draw_fadeout_frame(Client *c) {
 	if (!c)
@@ -1488,6 +1483,29 @@ bool client_draw_fadeout_frame(Client *c) {
 
 	fadeout_client_animation_next_tick(c);
 	return true;
+}
+
+void client_set_unfocused_opacity_animation(Client *c) {
+	float *border_color = get_border_color(c);
+	wlr_scene_node_raise_to_top(&c->border->node);
+	if (!config.animations) {
+		setborder_color(c);
+		return;
+	}
+
+	c->opacity_animation.duration = config.animation_duration_focus;
+	memcpy(c->opacity_animation.target_border_color, border_color,
+		   sizeof(c->opacity_animation.target_border_color));
+	c->opacity_animation.target_opacity = c->unfocused_opacity;
+	c->opacity_animation.time_started = get_now_in_ms();
+	memcpy(c->opacity_animation.initial_border_color,
+		   c->opacity_animation.current_border_color,
+		   sizeof(c->opacity_animation.initial_border_color));
+	c->opacity_animation.initial_opacity = c->opacity_animation.current_opacity;
+	c->opacity_animation.running = true;
+}
+void resize(Client *c, struct wlr_box geo, int32_t interact) {
+	resize_apply(c, geo, (ResizeOpts){.interact = interact});
 }
 
 void client_set_focused_opacity_animation(Client *c) {
@@ -1510,25 +1528,8 @@ void client_set_focused_opacity_animation(Client *c) {
 	c->opacity_animation.initial_opacity = c->opacity_animation.current_opacity;
 	c->opacity_animation.running = true;
 }
-void client_set_unfocused_opacity_animation(Client *c) {
-	float *border_color = get_border_color(c);
-	wlr_scene_node_raise_to_top(&c->border->node);
-	if (!config.animations) {
-		setborder_color(c);
-		return;
-	}
 
-	c->opacity_animation.duration = config.animation_duration_focus;
-	memcpy(c->opacity_animation.target_border_color, border_color,
-		   sizeof(c->opacity_animation.target_border_color));
-	c->opacity_animation.target_opacity = c->unfocused_opacity;
-	c->opacity_animation.time_started = get_now_in_ms();
-	memcpy(c->opacity_animation.initial_border_color,
-		   c->opacity_animation.current_border_color,
-		   sizeof(c->opacity_animation.initial_border_color));
-	c->opacity_animation.initial_opacity = c->opacity_animation.current_opacity;
-	c->opacity_animation.running = true;
-}
+
 bool client_apply_focus_opacity(Client *c) {
 	if (config.blur && !c->noblur && c->blur_opacity != 1.0f &&
 		c->animation.action != OPEN) {
@@ -1626,6 +1627,7 @@ bool client_apply_focus_opacity(Client *c) {
 
 	return false;
 }
+
 bool client_draw_frame(Client *c) {
 	bool need_next_tick = false;
 	bool force_render = false;

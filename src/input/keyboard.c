@@ -15,7 +15,6 @@ void ipc_key_watch_notify(struct wl_listener *listener, void *data) {
 	InputDevice *id = wl_container_of(listener, id, key_watch);
 	ipc_notify_device_event(id->wlr_device);
 }
-
 /* 设备匹配：优先精确匹配 name / vendor:product:name 标识符，其次匹配类型 */
 ConfigDeviceRule *find_device_rule(struct wlr_input_device *device) {
 	if (!device || !config.device_rules || config.device_rules_count <= 0)
@@ -162,8 +161,156 @@ struct xkb_keymap *compile_rule_keymap(ConfigDeviceRule *rule) {
 	return keymap;
 }
 
+int32_t keyrepeat(void *data) {
+	KeyboardGroup *group = data;
+	int32_t i;
+	if (!group->nsyms || group->keyboard->repeat_info.rate <= 0)
+		return 0;
+
+	wl_event_source_timer_update(group->key_repeat_source,
+								 1000 / group->keyboard->repeat_info.rate);
+
+	for (i = 0; i < group->nsyms; i++)
+		keybinding(WL_KEYBOARD_KEY_STATE_PRESSED, false, group->mods,
+				   group->keysyms[i], group->keycode);
+
+	return 0;
+}
+
+bool is_keyboard_shortcut_inhibitor(struct wlr_surface *surface) {
+	KeyboardShortcutsInhibitor *kbsinhibitor;
+
+	wl_list_for_each(kbsinhibitor, &keyboard_shortcut_inhibitors, link) {
+		if (kbsinhibitor->inhibitor->surface == surface) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool keypressglobal(struct wlr_surface *last_surface,
+					struct wlr_keyboard *keyboard,
+					struct wlr_keyboard_key_event *event, uint32_t mods,
+					xkb_keysym_t keysym, uint32_t keycode) {
+	Client *c = NULL, *lastc = focustop(selmon);
+	uint32_t keycodes[32] = {0};
+	int32_t reset = false;
+	const char *appid = NULL;
+	const char *title = NULL;
+	int32_t ji;
+	const ConfigWinRule *r;
+
+	for (ji = 0; ji < config.window_rules_count; ji++) {
+		r = &config.window_rules[ji];
+
+		if (!r->globalkeybinding.mod ||
+			(!r->globalkeybinding.keysymcode.keysym &&
+			 !r->globalkeybinding.keysymcode.keycode.keycode1 &&
+			 !r->globalkeybinding.keysymcode.keycode.keycode2 &&
+			 !r->globalkeybinding.keysymcode.keycode.keycode3))
+			continue;
+
+			/* match key only (case insensitive) ignoring mods */
+		if (((r->globalkeybinding.keysymcode.type == KEY_TYPE_SYM &&
+			  r->globalkeybinding.keysymcode.keysym == keysym) ||
+			 (r->globalkeybinding.keysymcode.type == KEY_TYPE_CODE &&
+			  (r->globalkeybinding.keysymcode.keycode.keycode1 == keycode ||
+			   r->globalkeybinding.keysymcode.keycode.keycode2 == keycode ||
+			   r->globalkeybinding.keysymcode.keycode.keycode3 == keycode))) &&
+			r->globalkeybinding.mod == mods) {
+			wl_list_for_each(c, &clients, link) {
+				if (c && c != lastc) {
+					appid = client_get_appid(c);
+					title = client_get_title(c);
+
+					if ((r->title && regex_match(r->title, title) && !r->id) ||
+						(r->id && regex_match(r->id, appid) && !r->title) ||
+						(r->id && regex_match(r->id, appid) && r->title &&
+						 regex_match(r->title, title))) {
+						reset = true;
+						wlr_seat_keyboard_enter(seat, client_surface(c),
+												keycodes, 0,
+												&keyboard->modifiers);
+						wlr_seat_keyboard_send_key(seat, event->time_msec,
+												   event->keycode,
+												   event->state);
+						goto done;
+					}
+				}
+			}
+		}
+	}
+
+done:
+	if (reset)
+		wlr_seat_keyboard_enter(seat, last_surface, keycodes, 0,
+								&keyboard->modifiers);
+	return reset;
+}
+
+void handle_keyboard_shortcuts_inhibitor_destroy(struct wl_listener *listener,
+												 void *data) {
+	KeyboardShortcutsInhibitor *inhibitor =
+		wl_container_of(listener, inhibitor, destroy);
+
+	mango_error(true, WLR_DEBUG, "Removing keyboard shortcuts inhibitor");
+
+	wl_list_remove(&inhibitor->link);
+	wl_list_remove(&inhibitor->destroy.link);
+	free(inhibitor);
+}
+
+void handle_keyboard_shortcuts_inhibit_new_inhibitor(
+	struct wl_listener *listener, void *data) {
+
+	struct wlr_keyboard_shortcuts_inhibitor_v1 *inhibitor = data;
+
+	if (config.allow_shortcuts_inhibit == SHORTCUTS_INHIBIT_DISABLE) {
+		return;
+	}
+
+	// per-view, seat-agnostic config via criteria
+	Client *c = NULL;
+	LayerSurface *l = NULL;
+
+	int32_t type = toplevel_from_wlr_surface(inhibitor->surface, &c, &l);
+
+	if (type < 0)
+		return;
+
+	if (type != LayerShell && c && !c->allow_shortcuts_inhibit) {
+		return;
+	}
+
+	mango_error(true, WLR_DEBUG, "Adding keyboard shortcuts inhibitor");
+
+	KeyboardShortcutsInhibitor *kbsinhibitor =
+		calloc(1, sizeof(KeyboardShortcutsInhibitor));
+
+	kbsinhibitor->inhibitor = inhibitor;
+
+	kbsinhibitor->destroy.notify = handle_keyboard_shortcuts_inhibitor_destroy;
+	wl_signal_add(&inhibitor->events.destroy, &kbsinhibitor->destroy);
+
+	wl_list_insert(&keyboard_shortcut_inhibitors, &kbsinhibitor->link);
+
+	wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
+}
+
+
+#ifdef XWAYLAND
+int32_t synckeymap(void *data) {
+	reset_keyboard_layout();
+	// we only need to sync keymap once
+	mango_error(true, WLR_INFO, "timer to synckeymap done");
+	wl_event_source_timer_update(sync_keymap, 0);
+	return 0;
+}
+#endif
+
+
 void standalone_keyboard_apply_config(KeyboardGroup *group,
-									  ConfigDeviceRule *rule) {
+											 ConfigDeviceRule *rule) {
 	if (!group || !group->keyboard)
 		return;
 
@@ -205,8 +352,8 @@ void standalone_keyboard_apply_config(KeyboardGroup *group,
 }
 
 void create_standalone_keyboard(InputDevice *input_dev,
-								struct wlr_keyboard *keyboard,
-								ConfigDeviceRule *rule) {
+									   struct wlr_keyboard *keyboard,
+									   ConfigDeviceRule *rule) {
 	KeyboardGroup *group = ecalloc(1, sizeof(*group));
 	group->wlr_group = NULL;
 	group->keyboard = keyboard;
@@ -227,10 +374,54 @@ void create_standalone_keyboard(InputDevice *input_dev,
 	input_dev->device_data = group;
 }
 
+// 让所有保存了该键盘的组失效，避免恢复时用到已销毁的键盘
+static void invalidate_saved_seat_keyboard(struct wlr_keyboard *keyboard) {
+	KeyboardGroup *group;
+	wl_list_for_each(group, &virtual_keyboards, link) {
+		if (group->prev_seat_keyboard == keyboard)
+			group->prev_seat_keyboard = NULL;
+	}
+	wl_list_for_each(group, &standalone_keyboards, link) {
+		if (group->prev_seat_keyboard == keyboard)
+			group->prev_seat_keyboard = NULL;
+	}
+}
+
+// 被销毁的键盘正占着 seat（或 seat 已经没键盘）时，恢复它接管前生效的
+// 键盘——可能是 kb_group，也可能是 devicerule 的独立键盘
+static void restore_seat_keyboard(KeyboardGroup *group) {
+	struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+	if (active && active != group->keyboard)
+		return;
+	struct wlr_keyboard *fallback = group->prev_seat_keyboard;
+	if (!fallback && kb_group)
+		fallback = kb_group->keyboard;
+	if (fallback)
+		wlr_seat_set_keyboard(seat, fallback);
+}
+
+// 物理键盘（kb_group + devicerule 独立键盘）当前的修饰键并集，
+// 供鼠标绑定这类需要看硬件按键状态的地方使用。虚拟键盘（比如输入法
+// 的）不算在内，它的修饰状态可能残留或锁死，不该触发鼠标绑定
+uint32_t keyboard_hard_modifiers(void) {
+	uint32_t mods = 0;
+	KeyboardGroup *group;
+
+	if (kb_group && kb_group->keyboard)
+		mods |= wlr_keyboard_get_modifiers(kb_group->keyboard);
+	wl_list_for_each(group, &standalone_keyboards, link) {
+		if (group->keyboard)
+			mods |= wlr_keyboard_get_modifiers(group->keyboard);
+	}
+	return mods;
+}
+
 void destroy_standalone_keyboard(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	invalidate_saved_seat_keyboard(group->keyboard);
+	restore_seat_keyboard(group);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
@@ -317,39 +508,15 @@ void destroykeyboardgroup(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == last_active_keyboard)
 		last_active_keyboard = NULL;
+	wl_list_remove(&group->link);
+	invalidate_saved_seat_keyboard(group->keyboard);
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
 	wl_list_remove(&group->modifiers.link);
 	wl_list_remove(&group->destroy.link);
 	wlr_keyboard_group_destroy(group->wlr_group);
+	kb_group = NULL;
 	free(group);
-}
-
-int32_t keyrepeat(void *data) {
-	KeyboardGroup *group = data;
-	int32_t i;
-	if (!group->nsyms || group->keyboard->repeat_info.rate <= 0)
-		return 0;
-
-	wl_event_source_timer_update(group->key_repeat_source,
-								 1000 / group->keyboard->repeat_info.rate);
-
-	for (i = 0; i < group->nsyms; i++)
-		keybinding(WL_KEYBOARD_KEY_STATE_PRESSED, false, group->mods,
-				   group->keysyms[i], group->keycode);
-
-	return 0;
-}
-
-bool is_keyboard_shortcut_inhibitor(struct wlr_surface *surface) {
-	KeyboardShortcutsInhibitor *kbsinhibitor;
-
-	wl_list_for_each(kbsinhibitor, &keyboard_shortcut_inhibitors, link) {
-		if (kbsinhibitor->inhibitor->surface == surface) {
-			return true;
-		}
-	}
-	return false;
 }
 
 int32_t // 17
@@ -416,67 +583,6 @@ keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
 	}
 	return handled;
 }
-
-bool keypressglobal(struct wlr_surface *last_surface,
-					struct wlr_keyboard *keyboard,
-					struct wlr_keyboard_key_event *event, uint32_t mods,
-					xkb_keysym_t keysym, uint32_t keycode) {
-	Client *c = NULL, *lastc = focustop(selmon);
-	uint32_t keycodes[32] = {0};
-	int32_t reset = false;
-	const char *appid = NULL;
-	const char *title = NULL;
-	int32_t ji;
-	const ConfigWinRule *r;
-
-	for (ji = 0; ji < config.window_rules_count; ji++) {
-		r = &config.window_rules[ji];
-
-		if (!r->globalkeybinding.mod ||
-			(!r->globalkeybinding.keysymcode.keysym &&
-			 !r->globalkeybinding.keysymcode.keycode.keycode1 &&
-			 !r->globalkeybinding.keysymcode.keycode.keycode2 &&
-			 !r->globalkeybinding.keysymcode.keycode.keycode3))
-			continue;
-
-		/* match key only (case insensitive) ignoring mods */
-		if (((r->globalkeybinding.keysymcode.type == KEY_TYPE_SYM &&
-			  r->globalkeybinding.keysymcode.keysym == keysym) ||
-			 (r->globalkeybinding.keysymcode.type == KEY_TYPE_CODE &&
-			  (r->globalkeybinding.keysymcode.keycode.keycode1 == keycode ||
-			   r->globalkeybinding.keysymcode.keycode.keycode2 == keycode ||
-			   r->globalkeybinding.keysymcode.keycode.keycode3 == keycode))) &&
-			r->globalkeybinding.mod == mods) {
-			wl_list_for_each(c, &clients, link) {
-				if (c && c != lastc) {
-					appid = client_get_appid(c);
-					title = client_get_title(c);
-
-					if ((r->title && regex_match(r->title, title) && !r->id) ||
-						(r->id && regex_match(r->id, appid) && !r->title) ||
-						(r->id && regex_match(r->id, appid) && r->title &&
-						 regex_match(r->title, title))) {
-						reset = true;
-						wlr_seat_keyboard_enter(seat, client_surface(c),
-												keycodes, 0,
-												&keyboard->modifiers);
-						wlr_seat_keyboard_send_key(seat, event->time_msec,
-												   event->keycode,
-												   event->state);
-						goto done;
-					}
-				}
-			}
-		}
-	}
-
-done:
-	if (reset)
-		wlr_seat_keyboard_enter(seat, last_surface, keycodes, 0,
-								&keyboard->modifiers);
-	return reset;
-}
-
 void keypress(struct wl_listener *listener, void *data) {
 	int32_t i;
 	/* This event is raised when a key is pressed or released. */
@@ -512,9 +618,10 @@ void keypress(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
-	// overview tab mode detect mod key release
-	if (selmon && !selmon->is_jump_mode && selmon->isoverview && selmon->sel &&
-		!locked && !group->virtual_keyboard &&
+	// overcircle 模式下松开模式键退出 overview
+	if (selmon && selmon->ov_tab_layout && !selmon->is_jump_mode &&
+		selmon->isoverview && selmon->sel && !locked &&
+		!group->virtual_keyboard &&
 		event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
 		ISMODEKEYCODE(keycode)) {
 		toggleoverview(&(Arg){0});
@@ -584,7 +691,7 @@ void keypress(struct wl_listener *listener, void *data) {
 					 toupper((unsigned char)c_char) ==
 						 toupper((unsigned char)c->jump_char))) {
 					focusclient(c, 1);
-					toggleoverview(&(Arg){0});
+					toggleoverview(&(Arg){.tc = c});
 					return;
 				}
 			}
@@ -609,6 +716,13 @@ void keypress(struct wl_listener *listener, void *data) {
 		return;
 	}
 	if (!mango_im_keyboard_grab_forward_key(group, event)) {
+		// prev_seat_keyboard 记的是“这把键盘接管 seat 之前”seat 上的键盘，
+		// 这把键盘销毁时靠它把 seat 还回去。所以只有 seat 还不是本键盘时
+		// 才算接管、才需要更新；要是无条件赋值，同一把键盘连按第二次就会
+		// 把 prev 覆盖成自己，销毁时“恢复”到的就是正在销毁的这把键盘
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (active != group->keyboard)
+			group->prev_seat_keyboard = active;
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Pass unhandled keycodes along to the client. */
 		wlr_seat_keyboard_notify_key(seat, event->time_msec, event->keycode,
@@ -626,6 +740,13 @@ void keypressmod(struct wl_listener *listener, void *data) {
 
 	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 
+		// prev_seat_keyboard 记的是“这把键盘接管 seat 之前”seat 上的键盘，
+		// 这把键盘销毁时靠它把 seat 还回去。所以只有 seat 还不是本键盘时
+		// 才算接管、才需要更新；要是无条件赋值，同一把键盘连按第二次就会
+		// 把 prev 覆盖成自己，销毁时“恢复”到的就是正在销毁的这把键盘
+		struct wlr_keyboard *active = wlr_seat_get_keyboard(seat);
+		if (active != group->keyboard)
+			group->prev_seat_keyboard = active;
 		wlr_seat_set_keyboard(seat, group->keyboard);
 		/* Send modifiers to the client. */
 		wlr_seat_keyboard_notify_modifiers(seat, &group->keyboard->modifiers);
@@ -733,93 +854,53 @@ void reset_keyboard_layout(void) {
 cleanup_context:
 	xkb_context_unref(context);
 }
-
-void handle_keyboard_shortcuts_inhibitor_destroy(struct wl_listener *listener,
-												 void *data) {
-	KeyboardShortcutsInhibitor *inhibitor =
-		wl_container_of(listener, inhibitor, destroy);
-
-	mango_error(true, WLR_DEBUG, "Removing keyboard shortcuts inhibitor");
-
-	wl_list_remove(&inhibitor->link);
-	wl_list_remove(&inhibitor->destroy.link);
-	free(inhibitor);
-}
-
-void handle_keyboard_shortcuts_inhibit_new_inhibitor(
-	struct wl_listener *listener, void *data) {
-
-	struct wlr_keyboard_shortcuts_inhibitor_v1 *inhibitor = data;
-
-	if (config.allow_shortcuts_inhibit == SHORTCUTS_INHIBIT_DISABLE) {
-		return;
-	}
-
-	// per-view, seat-agnostic config via criteria
-	Client *c = NULL;
-	LayerSurface *l = NULL;
-
-	int32_t type = toplevel_from_wlr_surface(inhibitor->surface, &c, &l);
-
-	if (type < 0)
-		return;
-
-	if (type != LayerShell && c && !c->allow_shortcuts_inhibit) {
-		return;
-	}
-
-	mango_error(true, WLR_DEBUG, "Adding keyboard shortcuts inhibitor");
-
-	KeyboardShortcutsInhibitor *kbsinhibitor =
-		calloc(1, sizeof(KeyboardShortcutsInhibitor));
-
-	kbsinhibitor->inhibitor = inhibitor;
-
-	kbsinhibitor->destroy.notify = handle_keyboard_shortcuts_inhibitor_destroy;
-	wl_signal_add(&inhibitor->events.destroy, &kbsinhibitor->destroy);
-
-	wl_list_insert(&keyboard_shortcut_inhibitors, &kbsinhibitor->link);
-
-	wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
-}
-
 void virtualkeyboard(struct wl_listener *listener, void *data) {
 	struct wlr_virtual_keyboard_v1 *kb = data;
-	/* virtual keyboards shouldn't share keyboard group */
+	// 虚拟键盘不进物理键盘组，单把键盘也没必要套 wlr group，
+	// 直接按独立键盘处理，用 virtual_keyboard 字段区分
 	wlr_seat_set_capabilities(seat,
 							  seat->capabilities | WL_SEAT_CAPABILITY_KEYBOARD);
-	KeyboardGroup *group = createkeyboardgroup();
+	struct wlr_keyboard *prev = wlr_seat_get_keyboard(seat);
+
+	KeyboardGroup *group = ecalloc(1, sizeof(*group));
+	group->wlr_group = NULL;
+	group->keyboard = &kb->keyboard;
 	group->virtual_keyboard = &kb->keyboard;
-	/* 虚拟键盘也应用 devicerule 的独立 keymap/重复率 */
+	group->prev_seat_keyboard = prev;
+	wl_list_init(&group->link);
+	wl_list_insert(&virtual_keyboards, &group->link);
+
+	// keymap/重复率：命中 devicerule 用规则里的，否则用全局配置；
+	// 客户端之后发来的 keymap 会覆盖这里设的默认值
 	ConfigDeviceRule *rule = find_device_rule(&kb->keyboard.base);
-	if (rule && device_rule_has_keyboard_settings(rule)) {
-		struct xkb_keymap *keymap = compile_rule_keymap(rule);
-		if (keymap) {
-			wlr_keyboard_set_keymap(group->keyboard, keymap);
-			xkb_keymap_unref(keymap);
-			wlr_keyboard_set_repeat_info(
-				group->keyboard,
-				rule->repeat_rate != -1 ? rule->repeat_rate
-										: config.repeat_rate,
-				rule->repeat_delay != -1 ? rule->repeat_delay
-										 : config.repeat_delay);
-		}
+	struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	struct xkb_keymap *keymap =
+		(rule && device_rule_has_keyboard_settings(rule))
+			? compile_rule_keymap(rule)
+			: (context ? xkb_keymap_new_from_names(context, &config.xkb_rules,
+												   XKB_KEYMAP_COMPILE_NO_FLAGS)
+					   : NULL);
+	if (keymap) {
+		wlr_keyboard_set_keymap(&kb->keyboard, keymap);
+		xkb_keymap_unref(keymap);
 	}
-	/* Set the keymap to match the group keymap */
-	wlr_keyboard_set_keymap(&kb->keyboard, group->keyboard->keymap);
+	if (context)
+		xkb_context_unref(context);
+	wlr_keyboard_set_repeat_info(
+		&kb->keyboard,
+		rule && rule->repeat_rate != -1 ? rule->repeat_rate
+										: config.repeat_rate,
+		rule && rule->repeat_delay != -1 ? rule->repeat_delay
+										 : config.repeat_delay);
+
+	LISTEN(&kb->keyboard.events.key, &group->key, keypress);
+	LISTEN(&kb->keyboard.events.modifiers, &group->modifiers, keypressmod);
 	LISTEN(&kb->keyboard.base.events.destroy, &group->destroy,
-		   destroykeyboardgroup);
+		   destroy_standalone_keyboard);
 
-	/* Add the new keyboard to the group */
-	wlr_keyboard_group_add_keyboard(group->wlr_group, &kb->keyboard);
+	group->key_repeat_source =
+		wl_event_loop_add_timer(event_loop, keyrepeat, group);
+
+	wlr_seat_set_keyboard(seat, &kb->keyboard);
 }
 
-#ifdef XWAYLAND
-int32_t synckeymap(void *data) {
-	reset_keyboard_layout();
-	// we only need to sync keymap once
-	mango_error(true, WLR_INFO, "timer to synckeymap done");
-	wl_event_source_timer_update(sync_keymap, 0);
-	return 0;
-}
-#endif

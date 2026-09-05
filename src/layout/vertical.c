@@ -1,117 +1,7 @@
 #include "vertical.h"
 #include "../common/globals.h"
 #include "../manage/client.h"
-
-void vertical_tile(Monitor *m) {
-	int32_t i, n = 0, w, r, ie = enablegaps, mh, mx, tx;
-	Client *c = NULL;
-	Client *fc = NULL;
-	double mfact = 0;
-	int32_t master_num = 0;
-	int32_t stack_num = 0;
-
-	n = m->visible_fake_tiling_clients;
-	master_num = m->pertag->nmasters[get_mon_curtag(m)];
-	master_num = n > master_num ? master_num : n;
-	stack_num = n - master_num;
-
-	if (n == 0)
-		return;
-
-	int32_t cur_gapih = enablegaps ? m->gappih : 0;
-	int32_t cur_gapiv = enablegaps ? m->gappiv : 0;
-	int32_t cur_gapoh = enablegaps ? m->gappoh : 0;
-	int32_t cur_gapov = enablegaps ? m->gappov : 0;
-
-	cur_gapih =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapih;
-	cur_gapiv =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapiv;
-	cur_gapoh =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapoh;
-	cur_gapov =
-		config.smartgaps && m->visible_fake_tiling_clients == 1 ? 0 : cur_gapov;
-
-	wl_list_for_each(fc, &clients, link) {
-		if (VISIBLEON(fc, m) && ISFAKETILED(fc))
-			break;
-	}
-
-	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[get_mon_curtag(m)];
-
-	if (n > m->pertag->nmasters[get_mon_curtag(m)])
-		mh = m->pertag->nmasters[get_mon_curtag(m)]
-				 ? (m->w.height + cur_gapiv * ie) * mfact
-				 : 0;
-	else
-		mh = m->w.height - 2 * cur_gapov + cur_gapiv * ie;
-
-	i = 0;
-	mx = tx = cur_gapoh;
-
-	int32_t master_surplus_width =
-		(m->w.width - 2 * cur_gapoh - cur_gapih * ie * (master_num - 1));
-	float master_surplus_ratio = 1.0;
-
-	int32_t slave_surplus_width =
-		(m->w.width - 2 * cur_gapoh - cur_gapih * ie * (stack_num - 1));
-	float slave_surplus_ratio = 1.0;
-
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
-			continue;
-		if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
-			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
-			if (c->master_inner_per > 0.0f) {
-				w = master_surplus_width * c->master_inner_per /
-					master_surplus_ratio;
-				master_surplus_width = master_surplus_width - w;
-				master_surplus_ratio =
-					master_surplus_ratio - c->master_inner_per;
-				c->master_mfact_per = mfact;
-			} else {
-				w = (m->w.width - mx - cur_gapih - cur_gapih * ie * (r - 1)) /
-					r;
-				c->master_inner_per = w / (m->w.width - mx - cur_gapih -
-										   cur_gapih * ie * (r - 1));
-				c->master_mfact_per = mfact;
-			}
-			client_tile_resize(c,
-							   (struct wlr_box){.x = m->w.x + mx,
-												.y = m->w.y + cur_gapov,
-												.width = w,
-												.height = mh - cur_gapiv * ie},
-							   0);
-			mx += w + cur_gapih * ie; // 使用理论宽度累加
-		} else {
-			r = n - i;
-			if (c->stack_inner_per > 0.0f) {
-				w = slave_surplus_width * c->stack_inner_per /
-					slave_surplus_ratio;
-				slave_surplus_width = slave_surplus_width - w;
-				slave_surplus_ratio = slave_surplus_ratio - c->stack_inner_per;
-				c->master_mfact_per = mfact;
-			} else {
-				w = (m->w.width - tx - cur_gapih - cur_gapih * ie * (r - 1)) /
-					r;
-				c->stack_inner_per = w / (m->w.width - tx - cur_gapih -
-										  cur_gapih * ie * (r - 1));
-				c->master_mfact_per = mfact;
-			}
-
-			client_tile_resize(
-				c,
-				(struct wlr_box){.x = m->w.x + tx,
-								 .y = m->w.y + mh + cur_gapov,
-								 .width = w,
-								 .height = m->w.height - mh - 2 * cur_gapov},
-				0);
-			tx += w + cur_gapih * ie; // 使用理论宽度累加
-		}
-		i++;
-	}
-}
+#include "../manage/monitor.h"
 
 void vertical_deck(Monitor *m) {
 	int32_t mh, mx;
@@ -119,7 +9,7 @@ void vertical_deck(Monitor *m) {
 	Client *c = NULL;
 	Client *fc = NULL;
 	float mfact;
-	uint32_t nmasters = m->pertag->nmasters[m->pertag->curtag];
+	uint32_t nmasters = m->pertag->nmasters[get_mon_curtag(m)];
 
 	int32_t cur_gappiv = enablegaps ? m->gappiv : 0;
 	int32_t cur_gappoh = enablegaps ? m->gappoh : 0;
@@ -146,7 +36,7 @@ void vertical_deck(Monitor *m) {
 	}
 
 	mfact = fc->master_mfact_per > 0.0f ? fc->master_mfact_per
-										: m->pertag->mfacts[m->pertag->curtag];
+										: m->pertag->mfacts[get_mon_curtag(m)];
 
 	if (n > nmasters)
 		mh = nmasters ? round((m->w.height - 2 * cur_gappov) * mfact) : 0;

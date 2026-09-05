@@ -2,6 +2,7 @@
 #include "src/common/globals.h"
 #include "../manage/client.h"
 #include "../common/util.h"
+#include "../manage/monitor.h"
 
 // 统计同方向上的节点总和 (N_old)
 int count_block_items(DwindleNode *node, bool split_h) {
@@ -11,42 +12,6 @@ int count_block_items(DwindleNode *node, bool split_h) {
 		return 1;
 	return count_block_items(node->first, split_h) +
 		   count_block_items(node->second, split_h);
-}
-
-// 向上查找方向块路径，并计算每个祖先节点的绝对占比
-int get_block_path_and_ratios(DwindleNode *target, bool split_h,
-							  DwindleNode ***path, float **p) {
-	/* 第一遍统计同方向块深度，据此动态分配 */
-	int depth = 1;
-	DwindleNode *curr = target->parent;
-	while (curr && curr->split_h == split_h) {
-		depth++;
-		curr = curr->parent;
-	}
-
-	*path = calloc(depth, sizeof(**path));
-	*p = calloc(depth, sizeof(**p));
-	if (!*path || !*p)
-		return 0;
-
-	int path_len = 0;
-	(*path)[path_len++] = target;
-	curr = target->parent;
-	while (curr && curr->split_h == split_h) {
-		(*path)[path_len++] = curr;
-		curr = curr->parent;
-	}
-
-	(*p)[path_len - 1] = 1.0f; // 方向块根节点占比为 100%
-	for (int i = path_len - 1; i > 0; i--) {
-		DwindleNode *S = (*path)[i];
-		DwindleNode *child = (*path)[i - 1];
-		if (S->first == child)
-			(*p)[i - 1] = (*p)[i] * S->ratio;
-		else
-			(*p)[i - 1] = (*p)[i] * (1.0f - S->ratio);
-	}
-	return path_len;
 }
 
 DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c) {
@@ -74,90 +39,6 @@ void dwindle_free_tree(DwindleNode *node) {
 	free(node);
 }
 
-void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
-					float ratio, bool as_first, bool split_h, bool lock) {
-	DwindleNode *new_leaf = dwindle_new_leaf(new_c);
-
-	if (!*root) {
-		new_leaf->custom_leaf_split_h = true;
-		*root = new_leaf;
-		return;
-	}
-
-	DwindleNode *target = focused ? dwindle_find_leaf(*root, focused) : NULL;
-	if (!target)
-		target = dwindle_first_leaf(*root);
-
-	// ================= 保持其他窗口比例缩减逻辑 =================
-	if (config.dwindle_manual_split) {
-		DwindleNode **path = NULL;
-		float *p = NULL;
-		int path_len = get_block_path_and_ratios(target, split_h, &path, &p);
-
-		if (path && p) {
-			int n_old = 1;
-			if (path_len > 1) {
-				n_old = count_block_items(path[path_len - 1], split_h);
-			}
-			float N = (float)(n_old + 1);
-
-			for (int i = path_len - 1; i > 0; i--) {
-				DwindleNode *S = path[i];
-				DwindleNode *child = path[i - 1];
-				float p_S = p[i];
-				float p_first = p_S * S->ratio;
-
-				if (S->first == child) {
-					float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
-					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-					S->ratio = p_first_new / p_S_new;
-				} else {
-					float p_first_new = p_first * (N - 1.0f) / N;
-					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
-					S->ratio = p_first_new / p_S_new;
-				}
-				if (S->ratio < 0.001f)
-					S->ratio = 0.001f;
-				if (S->ratio > 0.999f)
-					S->ratio = 0.999f;
-			}
-		}
-		free(path);
-		free(p);
-	}
-	// ============================================================
-
-	DwindleNode *split = calloc(1, sizeof(DwindleNode));
-	split->is_split = true;
-	split->split_h = split_h;
-	split->split_locked = lock;
-	split->custom_leaf_split_h = target->custom_leaf_split_h;
-	new_leaf->custom_leaf_split_h = target->custom_leaf_split_h;
-
-	if (as_first) {
-		split->first = new_leaf;
-		split->second = target;
-	} else {
-		split->first = target;
-		split->second = new_leaf;
-	}
-
-	// 通用逻辑
-	split->ratio = ratio;
-
-	split->parent = target->parent;
-	target->parent = split;
-	new_leaf->parent = split;
-
-	if (!split->parent) {
-		*root = split;
-	} else {
-		if (split->parent->first == target)
-			split->parent->first = split;
-		else
-			split->parent->second = split;
-	}
-}
 
 void dwindle_remove(DwindleNode **root, Client *c) {
 	DwindleNode *leaf = dwindle_find_leaf(*root, c);
@@ -310,8 +191,137 @@ void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
 	}
 }
 
+DwindleNode *dwindle_new_leaf(Client *c) {
+	DwindleNode *n = calloc(1, sizeof(DwindleNode));
+	n->client = c;
+	return n;
+}
+
+// 向上查找方向块路径，并计算每个祖先节点的绝对占比
+int get_block_path_and_ratios(DwindleNode *target, bool split_h,
+									 DwindleNode ***path, float **p) {
+	/* 第一遍统计同方向块深度，据此动态分配 */
+	int depth = 1;
+	DwindleNode *curr = target->parent;
+	while (curr && curr->split_h == split_h) {
+		depth++;
+		curr = curr->parent;
+	}
+
+	*path = calloc(depth, sizeof(**path));
+	*p = calloc(depth, sizeof(**p));
+	if (!*path || !*p)
+		return 0;
+
+	int path_len = 0;
+	(*path)[path_len++] = target;
+	curr = target->parent;
+	while (curr && curr->split_h == split_h) {
+		(*path)[path_len++] = curr;
+		curr = curr->parent;
+	}
+
+	(*p)[path_len - 1] = 1.0f; // 方向块根节点占比为 100%
+	for (int i = path_len - 1; i > 0; i--) {
+		DwindleNode *S = (*path)[i];
+		DwindleNode *child = (*path)[i - 1];
+		if (S->first == child)
+			(*p)[i - 1] = (*p)[i] * S->ratio;
+		else
+			(*p)[i - 1] = (*p)[i] * (1.0f - S->ratio);
+	}
+	return path_len;
+}
+
+void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
+						   float ratio, bool as_first, bool split_h,
+						   bool lock) {
+	DwindleNode *new_leaf = dwindle_new_leaf(new_c);
+
+	if (!*root) {
+		new_leaf->custom_leaf_split_h = true;
+		*root = new_leaf;
+		return;
+	}
+
+	DwindleNode *target = focused ? dwindle_find_leaf(*root, focused) : NULL;
+	if (!target)
+		target = dwindle_first_leaf(*root);
+
+	// ================= 保持其他窗口比例缩减逻辑 =================
+	if (config.dwindle_manual_split) {
+		DwindleNode **path = NULL;
+		float *p = NULL;
+		int path_len = get_block_path_and_ratios(target, split_h, &path, &p);
+
+		if (path && p) {
+			int n_old = 1;
+			if (path_len > 1) {
+				n_old = count_block_items(path[path_len - 1], split_h);
+			}
+			float N = (float)(n_old + 1);
+
+			for (int i = path_len - 1; i > 0; i--) {
+				DwindleNode *S = path[i];
+				DwindleNode *child = path[i - 1];
+				float p_S = p[i];
+				float p_first = p_S * S->ratio;
+
+				if (S->first == child) {
+					float p_first_new = p_first * (N - 1.0f) / N + 1.0f / N;
+					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+					S->ratio = p_first_new / p_S_new;
+				} else {
+					float p_first_new = p_first * (N - 1.0f) / N;
+					float p_S_new = p_S * (N - 1.0f) / N + 1.0f / N;
+					S->ratio = p_first_new / p_S_new;
+				}
+				if (S->ratio < 0.001f)
+					S->ratio = 0.001f;
+				if (S->ratio > 0.999f)
+					S->ratio = 0.999f;
+			}
+		}
+		free(path);
+		free(p);
+	}
+	// ============================================================
+
+	DwindleNode *split = calloc(1, sizeof(DwindleNode));
+	split->is_split = true;
+	split->split_h = split_h;
+	split->split_locked = lock;
+	split->custom_leaf_split_h = target->custom_leaf_split_h;
+	new_leaf->custom_leaf_split_h = target->custom_leaf_split_h;
+
+	if (as_first) {
+		split->first = new_leaf;
+		split->second = target;
+	} else {
+		split->first = target;
+		split->second = new_leaf;
+	}
+
+	// 通用逻辑
+	split->ratio = ratio;
+
+	split->parent = target->parent;
+	target->parent = split;
+	new_leaf->parent = split;
+
+	if (!split->parent) {
+		*root = split;
+	} else {
+		if (split->parent->first == target)
+			split->parent->first = split;
+		else
+			split->parent->second = split;
+	}
+}
+
+
 void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-						 float ratio, int32_t dir) {
+								float ratio, int32_t dir) {
 	if (!c || !target || c == target)
 		return;
 	if (!dwindle_find_leaf(*root, c) || !dwindle_find_leaf(*root, target))
@@ -323,15 +333,16 @@ void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
 }
 
 void dwindle_swap_clients(Client *c1, Client *c2) {
+
 	if (!c1 || !c2 || !c1->mon || !c2->mon || c1 == c2)
 		return;
 
 	Monitor *m1 = c1->mon;
 	Monitor *m2 = c2->mon;
 
-	DwindleNode **c1_root = &m1->pertag->dwindle_root[m1->pertag->curtag];
+	DwindleNode **c1_root = &m1->pertag->dwindle_root[get_mon_curtag(m1)];
 	DwindleNode *c1node = dwindle_find_leaf(*c1_root, c1);
-	DwindleNode **c2_root = &m2->pertag->dwindle_root[m2->pertag->curtag];
+	DwindleNode **c2_root = &m2->pertag->dwindle_root[get_mon_curtag(m2)];
 	DwindleNode *c2node = dwindle_find_leaf(*c2_root, c2);
 
 	client_swap_layout_properties(c1, c2);
@@ -350,7 +361,7 @@ void dwindle_swap_clients(Client *c1, Client *c2) {
 }
 
 void dwindle_resize_client(Monitor *m, Client *c) {
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
 	if (!leaf)
 		return;
@@ -426,8 +437,9 @@ void dwindle_resize_client(Monitor *m, Client *c) {
 				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
 }
 
-void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
-	uint32_t tag = m->pertag->curtag;
+void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
+									   int32_t dy) {
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
 	if (!leaf)
 		return;
@@ -477,7 +489,7 @@ void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
 void dwindle_remove_client(Client *c) {
 	Monitor *m;
 	wl_list_for_each(m, &mons, link) {
-		for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++)
+		for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 			dwindle_remove(&m->pertag->dwindle_root[t], c);
 	}
 }
@@ -485,7 +497,7 @@ void dwindle_remove_client(Client *c) {
 /* Insert a new client respecting dwindle_vsplit, dwindle_hsplit, and
  * dwindle_smart_split config options. */
 void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
-								Client *focused, float ratio) {
+									   Client *focused, float ratio) {
 	if (!new_c || !focused)
 		return;
 
@@ -577,7 +589,7 @@ void dwindle(Monitor *m) {
 	if (n == 0)
 		return;
 
-	uint32_t tag = m->pertag->curtag;
+	uint32_t tag = get_mon_curtag(m);
 	DwindleNode **root = &m->pertag->dwindle_root[tag];
 	float ratio = config.dwindle_split_ratio;
 
@@ -666,15 +678,7 @@ void dwindle(Monitor *m) {
 }
 
 void cleanup_monitor_dwindle(Monitor *m) {
-	for (uint32_t t = 0; t < (uint32_t)config.tag_num + 1; t++)
+	for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
 }
 
-DwindleNode *dwindle_locked_h_node = NULL;
-DwindleNode *dwindle_locked_v_node = NULL;
-
-DwindleNode *dwindle_new_leaf(Client *c) {
-	DwindleNode *n = calloc(1, sizeof(DwindleNode));
-	n->client = c;
-	return n;
-}

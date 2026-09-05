@@ -6,6 +6,11 @@
 #include "../mango.h"
 #include "../config/parse_config.h"
 
+// Macros
+#define TAG0_MASK (1U << 31)
+#define PERTAG_SLOTS (tag_num_MAX + 2)
+#define PERTAG_ALL_TAGS_IDX (tag_num_MAX + 1)
+
 /* Global variables */
 extern const char broken[];
 extern pid_t child_pid;

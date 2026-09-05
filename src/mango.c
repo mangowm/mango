@@ -154,7 +154,6 @@
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 
 #define TAGMASK (tagmask)
-#define TAG0_MASK (1U << 31)
 uint32_t tagmask = ((1u << 9) - 1); // 默认 9 个 tag
 
 #define ISFULLSCREEN(A)                                                        \
@@ -1169,7 +1168,6 @@ static struct wlr_keyboard
 	*last_active_keyboard; /* 最后按键的键盘，get keyboardlayout 用 */
 static struct wl_list inputdevices;
 static struct wl_list standalone_keyboards; /* 独立键盘链表 */
-static struct wl_list virtual_keyboards;	/* 虚拟键盘组链表 */
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
 static Client *grabc, *dropc;
@@ -1246,8 +1244,6 @@ static struct {
 #include "config/preset.h"
 // slots: 1..tag_num are normal tags, slot 0 is special tag0,
 // tag_num_MAX + 1 is the all-tags view
-#define PERTAG_ALL_TAGS_IDX (tag_num_MAX + 1)
-#define PERTAG_SLOTS (tag_num_MAX + 2)
 struct Pertag {
 	uint32_t curtag, prevtag;
 	int32_t nmasters[PERTAG_SLOTS];

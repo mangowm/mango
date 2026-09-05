@@ -8,7 +8,7 @@ static bool is_special_active(const Monitor *m) {
 	return m && !m->isoverview && (m->tagset[m->seltags] & TAG0_MASK);
 }
 
-static uint32_t get_mon_curtag(const Monitor *m) {
+uint32_t get_mon_curtag(const Monitor *m) {
 	if (!m || !m->pertag)
 		return 0;
 	// special workspace uses slot 0; all-tags view (curtag==0) uses its own

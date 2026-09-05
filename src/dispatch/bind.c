@@ -1583,7 +1583,7 @@ void toggle_scratchpad(const Arg *arg) {
 }
 
 // toggle the special workspace view on a given monitor
-static void toggle_special_tag_mon(Monitor *m) {
+void toggle_special_tag_mon(Monitor *m) {
 	if (!m || m->isoverview)
 		return;
 
