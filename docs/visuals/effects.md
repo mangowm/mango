@@ -52,7 +52,7 @@ shadowscolor=0x000000ff
 
 ---
 
-## Opacity & Corner Radius
+## Opacity, Dim & Corner Radius
 
 Control the transparency and roundness of your windows.
 
@@ -63,6 +63,8 @@ Control the transparency and roundness of your windows.
 | `no_radius_when_single` | `0` | Disable radius if only one window is visible. |
 | `focused_opacity` | `1.0` | Opacity for the active window (0.0 - 1.0). |
 | `unfocused_opacity` | `1.0` | Opacity for inactive windows (0.0 - 1.0). |
+| `active_dim` | `0.0` | Dims the active window by (0.0 - 1.0). |
+| `inactive_dim` | `0.0` | Dims inactive windows by (0.0 - 1.0). | 
 
 ```ini
 # Window corner radius in pixels

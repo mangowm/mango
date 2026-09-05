@@ -1175,6 +1175,8 @@ static void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_FLOAT_PROP(c, r, scroller_proportion_single);
 	APPLY_FLOAT_PROP(c, r, focused_opacity);
 	APPLY_FLOAT_PROP(c, r, unfocused_opacity);
+	APPLY_FLOAT_PROP(c, r, active_dim);
+	APPLY_FLOAT_PROP(c, r, inactive_dim);
 
 	APPLY_STRING_PROP(c, r, animation_type_open);
 	APPLY_STRING_PROP(c, r, animation_type_close);
@@ -1739,6 +1741,8 @@ void init_client_properties(Client *c) {
 	c->fake_no_border = false;
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
+	c->active_dim = config.active_dim;
+	c->inactive_dim = config.inactive_dim;
 	c->nofocus = 0;
 	c->nofadein = 0;
 	c->nofadeout = 0;
@@ -1786,6 +1790,10 @@ void init_client_properties(Client *c) {
 		   sizeof(c->opacity_animation.current_border_color));
 	c->opacity_animation.initial_opacity = c->unfocused_opacity;
 	c->opacity_animation.current_opacity = c->unfocused_opacity;
+	c->dim_animation.initial_dim = c->inactive_dim;
+	c->dim_animation.current_dim = c->inactive_dim;
+	c->dim_animation.target_dim = c->inactive_dim;
+	c->dim_animation.running = false;
 	c->animation.tagining = false;
 	c->animation.running = false;
 	c->animation.overining = false;
@@ -1909,6 +1917,11 @@ mapnotify(struct wl_listener *listener, void *data) {
 	c->shield->node.data = c;
 	wlr_scene_node_lower_to_bottom(&c->shield->node);
 	wlr_scene_node_set_enabled(&c->shield->node, false);
+
+	c->dim = wlr_scene_rect_create(c->scene, 0, 0, (float[4]){0, 0, 0, 0});
+	c->dim->node.data = c;
+	wlr_scene_node_lower_to_bottom(&c->dim->node);
+	wlr_scene_node_set_enabled(&c->dim->node, false);
 
 	if (config.new_is_master && selmon && !is_scroller_layout(selmon))
 		// tile at the top
@@ -2356,6 +2369,12 @@ void client_set_opacity(Client *c, double opacity) {
 								   scene_buffer_apply_opacity, &opacity);
 }
 
+void client_set_dim(Client *c, float dim) {
+	dim = CLAMP_FLOAT(dim, 0.0f, 1.0f);
+	wlr_scene_rect_set_color(c->dim, (float[4]){0, 0, 0, dim});
+	wlr_scene_node_set_enabled(&c->dim->node, dim > 0.0f);
+}
+
 void focusclient(Client *c, int32_t lift) {
 
 	Client *last_focus_client = NULL;
@@ -2409,9 +2428,11 @@ void focusclient(Client *c, int32_t lift) {
 			last_focus_client != c) {
 			last_focus_client->isfocusing = false;
 			client_set_unfocused_opacity_animation(last_focus_client);
+			client_set_unfocused_dim_animation(last_focus_client);
 		}
 
 		client_set_focused_opacity_animation(c);
+		client_set_focused_dim_animation(c);
 
 		// decide whether need to re-arrange
 
@@ -2436,6 +2457,7 @@ void focusclient(Client *c, int32_t lift) {
 
 			um->sel->isfocusing = false;
 			client_set_unfocused_opacity_animation(um->sel);
+			client_set_unfocused_dim_animation(um->sel);
 
 			if (um->sel->foreign_toplevel) {
 				wlr_foreign_toplevel_handle_v1_set_activated(

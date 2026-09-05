@@ -339,6 +339,15 @@ struct mango_opacity_animation {
 	float initial_border_color[4];
 };
 
+struct mango_dim_animation {
+	bool running;
+	float current_dim;
+	float target_dim;
+	float initial_dim;
+	uint32_t time_started;
+	uint32_t duration;
+};
+
 typedef struct {
 	float width_scale;
 	float height_scale;
@@ -375,6 +384,7 @@ struct Client {
 	struct wlr_scene_rect *splitindicator[4];
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_rect *shield;
+	struct wlr_scene_rect *dim;
 	struct wlr_scene_blur *blur;
 	struct wlr_scene_tree *scene_surface;
 	struct wlr_scene_tree *image_capture_tree;
@@ -473,6 +483,7 @@ struct Client {
 	bool need_output_flush;
 	struct mango_animation animation;
 	struct mango_opacity_animation opacity_animation;
+	struct mango_dim_animation dim_animation;
 	int32_t isterm, noswallow;
 	int32_t allow_csd;
 	int32_t force_fakemaximize;
@@ -490,6 +501,8 @@ struct Client {
 	int32_t isunglobal;
 	float focused_opacity;
 	float unfocused_opacity;
+	float active_dim;
+	float inactive_dim;
 	char oldmonname[128];
 	int32_t noblur;
 	float blur_opacity;
@@ -909,6 +922,7 @@ static void client_commit(Client *c);
 static void layer_commit(LayerSurface *l);
 static void client_draw_border(Client *c, struct ivec2 offsets);
 static void client_set_opacity(Client *c, double opacity);
+static void client_set_dim(Client *c, float dim);
 static void init_baked_points(void);
 static void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer,
 									   int32_t sx, int32_t sy, void *data);

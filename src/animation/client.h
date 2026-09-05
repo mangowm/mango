@@ -269,6 +269,8 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (config.blur && !c->noblur)
 		wlr_scene_blur_set_corner_radii(c->blur, data.corner_location);
 
+	wlr_scene_rect_set_corner_radii(c->dim, data.corner_location);
+
 	/* overview 卡片直接应用圆角 */
 	if (c->ov_card_tree) {
 		overview_card_set_corner_radii(c, data.corner_location);
@@ -487,6 +489,20 @@ void client_draw_shield(Client *c, struct ivec2 clip_box) {
 	wlr_scene_node_set_position(&c->shield->node, shield_x, shield_y);
 	wlr_scene_rect_set_size(c->shield, shield_width, shield_height);
 	wlr_scene_node_set_enabled(&c->shield->node, true);
+}
+
+void client_draw_dim(Client *c) {
+	if (c->dim_animation.current_dim <= 0.0f) {
+		if (c->dim->node.enabled)
+			wlr_scene_node_set_enabled(&c->dim->node, false);
+		return;
+	}
+
+	wlr_scene_node_raise_to_top(&c->dim->node);
+	wlr_scene_node_set_position(&c->dim->node, c->bw, c->bw);
+	wlr_scene_rect_set_size(c->dim, c->animation.current.width - 2 * c->bw,
+							c->animation.current.height - 2 * c->bw);
+	wlr_scene_node_set_enabled(&c->dim->node, true);
 }
 
 void client_draw_blur(Client *c, struct ivec2 clip_box) {
@@ -924,6 +940,7 @@ void client_apply_clip(Client *c, float factor) {
 		client_draw_groupbar(c, offsets);
 		client_draw_blur(c, surface_clip_offset);
 		client_draw_shield(c, surface_clip_offset);
+		client_draw_dim(c);
 
 		overview_layout_card(c);
 		overview_card_set_corner_radii(c, set_client_corner_location(c));
@@ -954,6 +971,7 @@ void client_apply_clip(Client *c, float factor) {
 		client_draw_groupbar(c, offsets);
 		client_draw_blur(c, surface_clip_offset);
 		client_draw_shield(c, surface_clip_offset);
+		client_draw_dim(c);
 
 		if (clip_box.width <= 0 || clip_box.height <= 0) {
 			should_render_client_surface = false;
@@ -1003,6 +1021,7 @@ void client_apply_clip(Client *c, float factor) {
 	client_draw_shadow(c, offsets);
 	client_draw_groupbar(c, offsets);
 	client_draw_shield(c, surface_clip_offset);
+	client_draw_dim(c);
 	client_draw_blur(c, surface_clip_offset);
 	/* 动画时同步 X11 根 surface 的 dest_size / 裁剪（source_box + dest_size）
 	 */
@@ -1443,6 +1462,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 
 		struct ivec2 surface_clip_offset = clip_to_hide(c, &clip, offsets);
 		client_draw_shield(c, surface_clip_offset);
+		client_draw_dim(c);
 		client_draw_blur(c, surface_clip_offset);
 
 		if (client_is_x11(c))
@@ -1497,6 +1517,29 @@ bool client_draw_fadeout_frame(Client *c) {
 
 	fadeout_client_animation_next_tick(c);
 	return true;
+}
+
+void client_set_focused_dim_animation(Client *c) {
+	if (!config.animations) {
+		client_set_dim(c, c->active_dim);
+		return;
+	}
+	c->dim_animation.duration = config.animation_duration_focus;
+	c->dim_animation.target_dim = c->active_dim;
+	c->dim_animation.time_started = get_now_in_ms();
+	c->dim_animation.initial_dim = c->dim_animation.current_dim;
+	c->dim_animation.running = true;
+}
+void client_set_unfocused_dim_animation(Client *c) {
+	if (!config.animations) {
+		client_set_dim(c, c->inactive_dim);
+		return;
+	}
+	c->dim_animation.duration = config.animation_duration_focus;
+	c->dim_animation.target_dim = c->inactive_dim;
+	c->dim_animation.time_started = get_now_in_ms();
+	c->dim_animation.initial_dim = c->dim_animation.current_dim;
+	c->dim_animation.running = true;
 }
 
 void client_set_focused_opacity_animation(Client *c) {
@@ -1639,6 +1682,45 @@ bool client_apply_focus_opacity(Client *c) {
 	return false;
 }
 
+bool client_apply_focus_dim(Client *c) {
+	if (c->isfullscreen) {
+		c->dim_animation.running = false;
+		client_set_dim(c, 0);
+	} else if (config.animations && c->dim_animation.running) {
+		struct timespec now;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+
+		int32_t passed_time =
+			timespec_to_ms(&now) - c->dim_animation.time_started;
+		double linear_progress =
+			c->dim_animation.duration
+				? (double)passed_time / (double)c->dim_animation.duration
+				: 1.0;
+		// float eased_progress = find_animation_curve_at(linear_progress,
+		// FOCUS);
+
+		c->dim_animation.current_dim =
+			c->dim_animation.initial_dim +
+			(c->dim_animation.target_dim - c->dim_animation.initial_dim) *
+				linear_progress;
+		client_set_dim(c, c->dim_animation.current_dim);
+
+		if (linear_progress >= 1.0f)
+			c->dim_animation.running = false;
+		else
+			return true;
+	} else if (c == selmon->sel) {
+		c->dim_animation.running = false;
+		c->dim_animation.current_dim = c->active_dim;
+		client_set_dim(c, c->active_dim);
+	} else {
+		c->dim_animation.running = false;
+		c->dim_animation.current_dim = c->inactive_dim;
+		client_set_dim(c, c->inactive_dim);
+	}
+	return false;
+}
+
 bool client_draw_frame(Client *c) {
 
 	bool need_next_tick = false;
@@ -1653,8 +1735,11 @@ bool client_draw_frame(Client *c) {
 		need_next_tick = force_render || need_next_tick;
 	}
 
-	if (!c->need_output_flush)
-		return client_apply_focus_opacity(c) || need_next_tick;
+	if (!c->need_output_flush) {
+		bool need_fade = client_apply_focus_opacity(c);
+		need_fade = client_apply_focus_dim(c) || need_fade;
+		return need_fade || need_next_tick;
+	}
 
 	if (config.animations && c->animation.running) {
 		need_next_tick = true;
@@ -1664,6 +1749,7 @@ bool client_draw_frame(Client *c) {
 	}
 
 	bool need_fade_focus = client_apply_focus_opacity(c);
+	bool need_fade_dim = client_apply_focus_dim(c);
 
-	return need_next_tick || need_fade_focus;
+	return need_next_tick || need_fade_focus || need_fade_dim;
 }

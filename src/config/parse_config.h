@@ -110,6 +110,8 @@ typedef struct {
 	int32_t noblur;
 	float focused_opacity;
 	float unfocused_opacity;
+	float active_dim;
+	float inactive_dim;
 	float scroller_proportion_single;
 	uint32_t passmod;
 	xkb_keysym_t keysym;
@@ -324,6 +326,8 @@ typedef struct {
 	uint32_t swipe_min_threshold;
 	float focused_opacity;
 	float unfocused_opacity;
+	float active_dim;
+	float inactive_dim;
 	float *scroller_proportion_preset;
 	int32_t scroller_proportion_preset_count;
 
@@ -1813,6 +1817,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->focused_opacity = atof(value);
 	} else if (strcmp(key, "unfocused_opacity") == 0) {
 		config->unfocused_opacity = atof(value);
+	} else if (strcmp(key, "active_dim") == 0) {
+		config->active_dim = atof(value);
+	} else if (strcmp(key, "inactive_dim") == 0) {
+		config->inactive_dim = atof(value);
 	} else if (strcmp(key, "xkb_rules_rules") == 0) {
 		strncpy(config->xkb_rules_rules, value,
 				sizeof(config->xkb_rules_rules) - 1);
@@ -2756,6 +2764,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		// float rule value, relay to a client property
 		rule->focused_opacity = 0;
 		rule->unfocused_opacity = 0;
+		rule->active_dim = 0;
+		rule->inactive_dim = 0;
 		rule->scroller_proportion_single = 0.0f;
 		rule->scroller_proportion = 0;
 
@@ -2837,6 +2847,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->unfocused_opacity = atof(val);
 				} else if (strcmp(key, "focused_opacity") == 0) {
 					rule->focused_opacity = atof(val);
+				} else if (strcmp(key, "active_dim") == 0) {
+					rule->active_dim = atof(val);
+				} else if (strcmp(key, "inactive_dim") == 0) {
+					rule->inactive_dim = atof(val);
 				} else if (strcmp(key, "isoverlay") == 0) {
 					rule->isoverlay = atoi(val);
 				} else if (strcmp(key, "shield_when_capture") == 0) {
@@ -4476,6 +4490,8 @@ void override_config(void) {
 	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
+	config.active_dim = CLAMP_FLOAT(config.active_dim, 0.0f, 1.0f);
+	config.inactive_dim = CLAMP_FLOAT(config.inactive_dim, 0.0f, 1.0f);
 
 	config.groupbardata.border_width =
 		CLAMP_INT(config.groupbardata.border_width, 0, 100);
@@ -4654,6 +4670,8 @@ void set_value_default() {
 	config.shadows_position_y = 0;
 	config.focused_opacity = 1.0f;
 	config.unfocused_opacity = 1.0f;
+	config.active_dim = 0.0f;
+	config.inactive_dim = 0.0f;
 
 	config.shadowscolor[0] = 0.0f;
 	config.shadowscolor[1] = 0.0f;
