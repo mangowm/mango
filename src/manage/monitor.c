@@ -1,25 +1,66 @@
 #include "monitor.h"
 #include "misc.h"
 #include "layer.h"
+#include "client.h"
+#include "../animation/client.h"
 #include "../layout/layout.h"
 #include "../layout/arrange.h"
 #include "../layout/dwindle.h"
 #include "../layout/scroll.h"
-#include "../common/globals.h"
+#include "../common/util.h"
 #include "../common/log.h"
+#include "../common/globals.h"
 #include "../ext-protocol/text-input.h"
 #include "../ext-protocol/tearing.h"
 #include "../ext-protocol/ext-workspace.h"
 #include "../ext-protocol/hdr.h"
+#include "../ext-protocol/foreign-toplevel.h"
 #include "../ext-protocol/xdg-output.h"
 #include "../ipc/ipc.h"
-#include "../animation/client.h"
 #include "../animation/common.h"
 #include "../dispatch/bind.h"
-#include "../ext-protocol/foreign-toplevel.h"
-#include "src/animation/layer.h"
-#include "../common/util.h"
-#include "client.h"
+#include "../animation/layer.h"
+#include "../mango.h"
+
+bool is_special_active(const Monitor *m) {
+	return m && !m->isoverview && (m->tagset[m->seltags] & TAG0_MASK);
+}
+
+uint32_t get_mon_curtag(const Monitor *m) {
+	if (!m || !m->pertag)
+		return 0;
+	// special workspace uses slot 0; all-tags view (curtag==0) uses its own
+	// slot
+	if (is_special_active(m))
+		return 0;
+	return m->pertag->curtag ? m->pertag->curtag : PERTAG_ALL_TAGS_IDX;
+}
+
+// true if m still has a live (not minimized/destroyed) special window
+bool special_has_clients(const Monitor *m) {
+	Client *c;
+	if (!m)
+		return false;
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon == m && !c->iskilling && !c->isminimized &&
+			(c->tags & TAG0_MASK)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+uint32_t get_monitor_active_tagset(const Monitor *m) {
+	if (!m)
+		return 0;
+	if (is_special_active(m) && m->pertag) {
+		uint32_t prev_set = m->tagset[m->seltags ^ 1] & TAGMASK;
+		return prev_set ? prev_set
+						: (m->pertag->prevtag ? (1U << (m->pertag->prevtag - 1))
+											  : 1);
+	}
+	return m->tagset[m->seltags];
+}
 
 Monitor *dirtomon(enum wlr_direction dir) {
 	struct wlr_output *next;
@@ -39,27 +80,43 @@ Monitor *dirtomon(enum wlr_direction dir) {
 }
 
 bool is_scroller_layout(Monitor *m) {
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == SCROLLER)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == SCROLLER)
 		return true;
 
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == VERTICAL_SCROLLER)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == VERTICAL_SCROLLER)
 		return true;
 
 	return false;
 }
 
 bool is_monocle_layout(Monitor *m) {
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == MONOCLE)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == MONOCLE)
 		return true;
 
 	return false;
 }
 
 bool is_centertile_layout(Monitor *m) {
-	if (m->pertag->ltidxs[m->pertag->curtag]->id == CENTER_TILE)
+	if (m->pertag->ltidxs[get_mon_curtag(m)]->id == CENTER_TILE)
 		return true;
 
 	return false;
+}
+
+// sync the special overlay dim layer to the monitor and view state
+void special_update_dim(Monitor *m) {
+	if (!m || !m->special_dim_rect)
+		return;
+	wlr_scene_rect_set_size(m->special_dim_rect, m->m.width, m->m.height);
+	wlr_scene_node_set_position(&m->special_dim_rect->node, m->m.x, m->m.y);
+	if (is_special_active(m)) {
+		wlr_scene_rect_set_color(
+			m->special_dim_rect,
+			(float[4]){0.0f, 0.0f, 0.0f, config.special_dim});
+		wlr_scene_node_set_enabled(&m->special_dim_rect->node, true);
+	} else {
+		wlr_scene_node_set_enabled(&m->special_dim_rect->node, false);
+	}
 }
 
 uint32_t get_tag_status(uint32_t tag, Monitor *m) {
@@ -86,6 +143,10 @@ uint32_t get_tags_first_tag_num(uint32_t source_tags) {
 		return 0;
 	}
 
+	if (source_tags & TAG0_MASK) {
+		return 0;
+	}
+
 	for (i = 0; !(tag & 1) && source_tags != 0 && i < (uint32_t)config.tag_num;
 		 i++) {
 		tag = source_tags >> i;
@@ -106,7 +167,16 @@ uint32_t get_tags_first_tag(uint32_t source_tags) {
 	tag = 0;
 
 	if (!source_tags) {
-		return selmon->pertag->curtag;
+		return is_special_active(selmon)
+				   ? TAG0_MASK
+				   : (selmon ? (1 << (selmon->pertag->curtag
+										  ? selmon->pertag->curtag - 1
+										  : 0))
+							 : 1);
+	}
+
+	if (source_tags & TAG0_MASK) {
+		return TAG0_MASK;
 	}
 
 	for (i = 0; !(tag & 1) && source_tags != 0 && i < (uint32_t)config.tag_num;
@@ -205,6 +275,7 @@ bool match_monitor_spec(char *spec, Monitor *m) {
 
 	return match;
 }
+
 bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 							   struct wlr_output_state *state) {
 	struct wlr_output *wlr_output = scene_output->output;
@@ -280,6 +351,7 @@ bool mango_output_commit(Monitor *m) {
 	}
 	return committed;
 }
+
 struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
 												int32_t width, int32_t height,
 												float refresh) {
@@ -335,7 +407,9 @@ bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
 		return false;
 	return true;
 }
-struct wlr_color_transform *monitor_load_icc_transform(const char *path) {
+
+struct wlr_color_transform *
+monitor_load_icc_transform(const char *path) {
 	int fd = open(path, O_RDONLY | O_NOCTTY | O_CLOEXEC);
 	if (fd == -1) {
 		mango_error(true, WLR_ERROR, "Failed to open ICC profile %s", path);
@@ -403,7 +477,7 @@ void monitor_set_icc(Monitor *m, const char *path) {
 /* 将规则中的显示参数应用到 wlr_output_state 中，返回是否设置了自定义模式 */
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state) {
-		bool mode_set = false;
+	bool mode_set = false;
 	m->vrr_global_enable = rule->vrr >= 0 ? rule->vrr : 0;
 	m->hdr_enable = rule->hdr >= 0 ? rule->hdr : 0;
 	m->prefer_disable = rule->disable >= 0 ? rule->disable : 0;
@@ -441,6 +515,248 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	return mode_set;
 }
 
+void createmon(struct wl_listener *listener, void *data) {
+	struct wlr_output *wlr_output = data;
+	const ConfigMonitorRule *r;
+	uint32_t i;
+	int32_t ji;
+	Monitor *m = NULL;
+	bool custom_monitor_mode = false;
+
+	if (!wlr_output_init_render(wlr_output, alloc, drw))
+		return;
+
+	if (wlr_output->non_desktop) {
+		if (drm_lease_manager) {
+			wlr_drm_lease_v1_manager_offer_output(drm_lease_manager,
+												  wlr_output);
+		}
+		return;
+	}
+
+	struct wl_event_loop *loop = wl_display_get_event_loop(dpy);
+	m = wlr_output->data = ecalloc(1, sizeof(*m));
+
+	m->iscleanuping = false;
+	m->skip_frame_timeout =
+		wl_event_loop_add_timer(loop, monitor_skip_frame_timeout_callback, m);
+	m->skiping_frame = false;
+	m->resizing_count_pending = 0;
+	m->resizing_count_current = 0;
+	m->carousel_anim_dir = 0;
+	m->vrr_global_enable = false;
+	m->is_vrr_enabling = false;
+	m->hdr_enable = false;
+	m->prefer_disable = false;
+	m->is_hdr_enabling = false;
+	m->hdr_min_lum = 0.0f;
+	m->hdr_max_lum = 0.0f;
+	m->hdr_max_avg_lum = 0.0f;
+	m->hdr_force = false;
+
+	m->wlr_output = wlr_output;
+	m->wlr_output->data = m;
+
+	for (i = 0; i < LENGTH(m->layers); i++)
+		wl_list_init(&m->layers[i]);
+
+	m->gappih = config.gappih;
+	m->gappiv = config.gappiv;
+	m->gappoh = config.gappoh;
+	m->gappov = config.gappov;
+	m->special_gappih = config.special_gappih;
+	m->special_gappiv = config.special_gappiv;
+	m->special_gappoh = config.special_gappoh;
+	m->special_gappov = config.special_gappov;
+	m->isoverview = 0;
+	m->sel = NULL;
+	m->is_in_hotarea = 0;
+	m->ov_normal_mode = 0;
+	m->ov_tab_layout = 0;
+	m->m.x = INT32_MAX;
+	m->m.y = INT32_MAX;
+
+	// 临时 pending 状态，用于匹配规则时暂存设置
+	struct wlr_output_state pending;
+	wlr_output_state_init(&pending);
+	float scale = 1;
+	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
+	wlr_output_state_set_scale(&pending, scale);
+	wlr_output_state_set_transform(&pending, rr);
+
+	for (ji = 0; ji < config.monitor_rules_count; ji++) {
+		r = &config.monitor_rules[ji];
+
+		if (monitor_matches_rule(m, r)) {
+			m->m.x = r->x == INT32_MAX ? INT32_MAX : r->x;
+			m->m.y = r->y == INT32_MAX ? INT32_MAX : r->y;
+
+			if (apply_rule_to_state(m, r, &pending)) {
+				custom_monitor_mode = true;
+			}
+			break; // 只应用第一个匹配规则
+		}
+	}
+
+	if (!custom_monitor_mode) {
+		struct wlr_output_mode *preferred_mode =
+			wlr_output_preferred_mode(wlr_output);
+		if (preferred_mode) {
+			wlr_output_state_set_mode(&pending, preferred_mode);
+		} else {
+			struct wlr_output_state custom_test_mode;
+			wlr_output_state_init(&custom_test_mode);
+			wlr_output_state_set_custom_mode(&custom_test_mode, 1920, 1080,
+											 60000);
+			if (wlr_output_test_state(wlr_output, &custom_test_mode)) {
+				wlr_output_state_set_custom_mode(&pending, 1920, 1080, 60000);
+			}
+			wlr_output_state_finish(&custom_test_mode);
+		}
+	}
+
+	// ===================================================
+	// 构建最终的输出状态，包含 HDR，并通过 scene 提交
+	// ===================================================
+	struct wlr_output_state state;
+	wlr_output_state_init(&state);
+
+	// 启用/禁用
+	if (m->prefer_disable) {
+		wlr_output_state_set_enabled(&state, false);
+	} else {
+		wlr_output_state_set_enabled(&state, true);
+	}
+
+	// 模式设置
+	if (pending.committed & WLR_OUTPUT_STATE_MODE) {
+		if (pending.mode_type == WLR_OUTPUT_STATE_MODE_FIXED) {
+			wlr_output_state_set_mode(&state, pending.mode);
+		} else if (pending.mode_type == WLR_OUTPUT_STATE_MODE_CUSTOM) {
+			wlr_output_state_set_custom_mode(&state, pending.custom_mode.width,
+											 pending.custom_mode.height,
+											 pending.custom_mode.refresh);
+		}
+	} else {
+		// 兜底,使用首选模式
+		struct wlr_output_mode *pref = wlr_output_preferred_mode(wlr_output);
+		if (pref)
+			wlr_output_state_set_mode(&state, pref);
+	}
+
+	// 缩放、变换
+	if (pending.committed & WLR_OUTPUT_STATE_SCALE)
+		wlr_output_state_set_scale(&state, pending.scale);
+	if (pending.committed & WLR_OUTPUT_STATE_TRANSFORM)
+		wlr_output_state_set_transform(&state, pending.transform);
+
+	// 自适应同步 (VRR)
+	if (pending.committed & WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED)
+		wlr_output_state_set_adaptive_sync_enabled(
+			&state, pending.adaptive_sync_enabled);
+
+	// HDR 设置
+	if (m->hdr_enable) {
+		output_state_setup_hdr(m, false, &state);
+	} else {
+		output_enable_hdr(m, &state, false, false);
+	}
+
+	// 创建 scene_output（如果尚未创建）
+	m->scene_output = wlr_scene_output_create(scene, wlr_output);
+
+	// 通过 scene 构建最终提交状态（初始化 swapchain）
+	bool has_img_desc =
+		(state.committed & WLR_OUTPUT_STATE_IMAGE_DESCRIPTION) ||
+		wlr_output->image_description != NULL;
+	struct wlr_scene_output_state_options opts = {
+		.swapchain = NULL, // 让 scene 自动创建
+		.color_transform = NULL,
+	};
+	if (m->icc_transform && !has_img_desc)
+		opts.color_transform = m->icc_transform;
+
+	wlr_scene_output_build_state(m->scene_output, &state, &opts);
+
+	wlr_output_commit_state(wlr_output, &state);
+
+	wlr_output_state_finish(&state);
+	wlr_output_state_finish(&pending);
+
+	// 加入布局
+	struct wlr_output_layout_output *layout_output;
+	if (m->m.x == INT32_MAX || m->m.y == INT32_MAX)
+		layout_output = wlr_output_layout_add_auto(output_layout, wlr_output);
+	else
+		layout_output =
+			wlr_output_layout_add(output_layout, wlr_output, m->m.x, m->m.y);
+
+	wlr_scene_output_layout_add_output(scene_layout, layout_output,
+									   m->scene_output);
+
+	// 获取有效分辨率
+	wlr_output_effective_resolution(wlr_output, &m->m.width, &m->m.height);
+
+	// 加入全局 monitor 链表
+	wl_list_insert(&mons, &m->link);
+
+	// 初始化 Pertag 等
+	m->pertag = calloc(1, sizeof(Pertag));
+	for (int i = 0; i < PERTAG_SLOTS; i++)
+		m->pertag->scroller_state[i] = NULL;
+
+	if (chvt_backup_tag &&
+		regex_match(chvt_backup_selmon, m->wlr_output->name)) {
+		m->tagset[0] = m->tagset[1] = (1 << (chvt_backup_tag - 1)) & TAGMASK;
+		m->pertag->curtag = m->pertag->prevtag = chvt_backup_tag;
+		chvt_backup_tag = 0;
+		memset(chvt_backup_selmon, 0, sizeof(chvt_backup_selmon));
+	} else {
+		m->tagset[0] = m->tagset[1] = 1;
+		m->pertag->curtag = m->pertag->prevtag = 1;
+	}
+
+	for (i = 0; i <= config.tag_num; i++) {
+		m->pertag->nmasters[i] = config.default_nmaster;
+		m->pertag->mfacts[i] = config.default_mfact;
+		m->pertag->ltidxs[i] = &layouts[0];
+	}
+
+	// 应用 tag rule
+	parse_tagrule(m);
+
+	if (config.blur) {
+		m->blur = wlr_scene_optimized_blur_create(&scene->tree, 0, 0);
+		wlr_scene_node_set_position(&m->blur->node, m->m.x, m->m.y);
+		wlr_scene_node_reparent(&m->blur->node, layers[LyrBlur]);
+		wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
+	}
+
+	m->special_dim_rect =
+		wlr_scene_rect_create(layers[LyrSpecialDim], m->m.width, m->m.height,
+							  (float[4]){0.0f, 0.0f, 0.0f, config.special_dim});
+	special_update_dim(m);
+
+	// ext workspace group
+	m->ext_group = wlr_ext_workspace_group_handle_v1_create(
+		ext_manager, EXT_WORKSPACE_ENABLE_CAPS);
+	wlr_ext_workspace_group_handle_v1_output_enter(m->ext_group, m->wlr_output);
+
+	for (i = 1; i <= config.tag_num; i++) {
+		add_workspace_by_tag(i, m);
+	}
+
+	updatemons(NULL, NULL);
+
+	// 设置监听器
+	LISTEN(&wlr_output->events.frame, &m->frame, rendermon);
+	LISTEN(&wlr_output->events.destroy, &m->destroy, cleanupmon);
+	LISTEN(&wlr_output->events.request_state, &m->request_state,
+		   requestmonstate);
+
+	printstatus(IPC_WATCH_ARRANGGE);
+}
+
 void cleanupmon(struct wl_listener *listener, void *data) {
 	Monitor *m = wl_container_of(listener, m, destroy);
 	LayerSurface *l = NULL, *tmp = NULL;
@@ -474,6 +790,10 @@ void cleanupmon(struct wl_listener *listener, void *data) {
 	if (m->blur) {
 		wlr_scene_node_destroy(&m->blur->node);
 		m->blur = NULL;
+	}
+	if (m->special_dim_rect) {
+		wlr_scene_node_destroy(&m->special_dim_rect->node);
+		m->special_dim_rect = NULL;
 	}
 	if (m->skip_frame_timeout) {
 		monitor_stop_skip_frame_timer(m);
@@ -691,6 +1011,8 @@ void updatemons(struct wl_listener *listener, void *data) {
 			wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 		}
 
+		special_update_dim(m);
+
 		if (m->lock_surface) {
 			struct wlr_scene_tree *scene_tree = m->lock_surface->surface->data;
 			wlr_scene_node_set_position(&scene_tree->node, m->m.x, m->m.y);
@@ -749,6 +1071,7 @@ void outputmgrapply(struct wl_listener *listener, void *data) {
 	struct wlr_output_configuration_v1 *config = data;
 	outputmgrapplyortest(config, 0);
 }
+
 void // 0.7 custom
 outputmgrapplyortest(struct wlr_output_configuration_v1 *config, int32_t test) {
 	/*
@@ -969,6 +1292,7 @@ void check_vrr_enable(Client *c) {
 		mango_output_commit(m);
 	}
 }
+
 /*
  * Output / Monitor：输出创建与销毁、模式/自适应刷新/ICC、
  * 输出管理器协议、渲染与跳帧控制。
@@ -998,12 +1322,21 @@ void gpureset(struct wl_listener *listener, void *data) {
 	wlr_allocator_destroy(old_alloc);
 	wlr_renderer_destroy(old_drw);
 }
-}
 
 void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv) {
-	selmon->gappoh = MANGO_MAX(oh, 0);
-	selmon->gappov = MANGO_MAX(ov, 0);
-	selmon->gappih = MANGO_MAX(ih, 0);
-	selmon->gappiv = MANGO_MAX(iv, 0);
+	if (!selmon)
+		return;
+	if (selmon->pertag && is_special_active(selmon)) {
+		selmon->special_gappoh = MANGO_MAX(oh, 0);
+		selmon->special_gappov = MANGO_MAX(ov, 0);
+		selmon->special_gappih = MANGO_MAX(ih, 0);
+		selmon->special_gappiv = MANGO_MAX(iv, 0);
+	} else {
+		selmon->gappoh = MANGO_MAX(oh, 0);
+		selmon->gappov = MANGO_MAX(ov, 0);
+		selmon->gappih = MANGO_MAX(ih, 0);
+		selmon->gappiv = MANGO_MAX(iv, 0);
+	}
 	arrange(selmon, false, false);
 }
+

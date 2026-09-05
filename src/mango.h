@@ -183,9 +183,6 @@ enum {
 	XdgImPopup,
 	GroupBar
 };
-
-/* client types */
-enum { AxisUp, AxisDown, AxisLeft, AxisRight }; // 滚轮滚动的方向
 enum {
 	LyrBg,
 	LyrBlur,
@@ -193,12 +190,22 @@ enum {
 	LyrTile,
 	LyrMaximize,
 	LyrTop,
+	// special workspace layers: above LyrTop; dim at the bottom, then
+	// tiled / maximized / floating+fullscreen
+	LyrSpecialDim,
+	LyrSpecialTile,
+	LyrSpecialMaximize,
+	LyrSpecialTop,
 	LyrFadeOut,
 	LyrOverlay,
 	LyrIMPopup, // text-input layer
 	LyrBlock,
 	NUM_LAYERS
-};
+}; /* scene layers */
+
+
+/* client types */
+enum { AxisUp, AxisDown, AxisLeft, AxisRight }; // 滚轮滚动的方向
 
 /* scene layers */
 
