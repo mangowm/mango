@@ -577,6 +577,7 @@ typedef struct {
 	int32_t noblur;
 	int32_t noanim;
 	int32_t noshadow;
+	int32_t animation_slide_direction;
 	char *animation_type_open;
 	char *animation_type_close;
 	bool shield_when_capture;
