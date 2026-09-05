@@ -125,6 +125,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `switcher` | `next/prev`, `all_tag_next/all_tag_prev`, `all_next/all_prev` | Open or cycle the thumbnail switcher. `next`/`prev` list the current tag's windows, `all_tag_next`/`all_tag_prev` list all tags on the current monitor, `all_next`/`all_prev` list all monitors and tags. Releasing any modifier key selects. |
 | `exchange_client` | `left/right/up/down` | Swap window with neighbor in direction. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
+| `move_client` | `left/right/up/down` | Move window to direction. |
 | `zoom` | - | Swap focused window with Master. |
 
 ### Group

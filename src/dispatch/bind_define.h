@@ -126,6 +126,38 @@ void exchange_client(const Arg *arg) {
 	return;
 }
 
+void move_client(const Arg *arg) {
+	if (!selmon)
+		return;
+
+	Client *c = arg->tc ? arg->tc : selmon->sel;
+
+	if (!c || c->isfloating) {
+		return;
+	} else if ((c->isfullscreen || c->ismaximizescreen) &&
+			   !is_scroller_layout(c->mon)) {
+		return;
+	}
+
+	Client *tc = direction_select(arg);
+	tc = get_focused_stack_client(tc, arg->tc);
+
+	uint32_t layout_id =
+		(!tc ? dirtomon(arg->i)->pertag->ltidxs[c->mon->pertag->curtag]->id
+			 : tc->mon->pertag->ltidxs[c->mon->pertag->curtag]->id);
+
+	if (layout_id == DWINDLE) {
+		dwindle_move_client(c, tc, config.dwindle_split_ratio, arg->i, false);
+		arrange(c->mon, false, false);
+	} else {
+		move_two_client(c, tc, arg->i);
+	}
+
+	warp_cursor(c);
+
+	return;
+}
+
 void exchange_stack_client(const Arg *arg) {
 	if (!selmon)
 		return;
