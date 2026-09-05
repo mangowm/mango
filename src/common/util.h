@@ -1,4 +1,8 @@
+#ifndef __COMMON_UTIL_H__
+#define __COMMON_UTIL_H__ 1
+
 /* See LICENSE.dwm file for copyright and license details. */
+#include <stdint.h>
 #include <time.h>
 #include <wayland-util.h>
 
@@ -16,3 +20,5 @@ char *string_printf(const char *fmt, ...);
 void wl_list_swap(struct wl_list *l1, struct wl_list *l2);
 void wl_list_safe_reinsert_prev(struct wl_list *l1, struct wl_list *l2);
 void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2);
+
+#endif

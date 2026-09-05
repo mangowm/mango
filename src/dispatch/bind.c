@@ -1,3 +1,25 @@
+#include "bind.h"
+#include "../common/globals.h"
+#include "../manage/client.h"
+#include "../common/log.h"
+#include "../manage/monitor.h"
+#include "../input/pointer.h"
+#include "../layout/arrange.h"
+#include "../layout/layout.h"
+#include "../manage/misc.h"
+#include "../common/globals.h"
+#include "../animation/client.h"
+#include "../config/parse_config.h"
+#include "../ipc/ipc.h"
+#include "../layout/scroll.h"
+#include "../ext-protocol/xdg-activation.h"
+#include "../ext-protocol/foreign-toplevel.h"
+#include "../layout/overview.h"
+#include "../ext-protocol/ext-workspace.h"
+#include "../overview/overview.h"
+#include "../layout/dwindle.h"
+#include "../common/util.h"
+
 void bind_to_view(const Arg *arg) {
 	if (!selmon)
 		return;
@@ -144,8 +166,8 @@ void exchange_stack_client(const Arg *arg) {
 	return;
 }
 
-static bool view_shift_tag(const Arg *arg, int dir);
-static bool view_shift_tag_have_client(const Arg *arg, int dir);
+bool view_shift_tag(const Arg *arg, int dir);
+bool view_shift_tag_have_client(const Arg *arg, int dir);
 
 void focusdir(const Arg *arg) {
 
@@ -1561,7 +1583,7 @@ void toggle_scratchpad(const Arg *arg) {
 }
 
 // toggle the special workspace view on a given monitor
-static void toggle_special_tag_mon(Monitor *m) {
+void toggle_special_tag_mon(Monitor *m) {
 	if (!m || m->isoverview)
 		return;
 
@@ -1801,7 +1823,7 @@ void toggleview(const Arg *arg) {
 	return;
 }
 
-static bool view_shift_tag(const Arg *arg, int dir) {
+bool view_shift_tag(const Arg *arg, int dir) {
 	if (!selmon)
 		return false;
 
@@ -1837,7 +1859,7 @@ static bool view_shift_tag(const Arg *arg, int dir) {
 	return true;
 }
 
-static bool view_shift_tag_have_client(const Arg *arg, int dir) {
+bool view_shift_tag_have_client(const Arg *arg, int dir) {
 	if (!selmon)
 		return false;
 

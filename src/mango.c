@@ -1,8 +1,10 @@
 /*
  * See LICENSE file for copyright and license details.
  */
-#include "wlr-layer-shell-unstable-v1-protocol.h"
+#include "mango.h"
 #include "wlr/util/box.h"
+/* Mango includes */
+#include "animation/common.h"
 #include "wlr/util/edges.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -152,7 +154,6 @@
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
 
 #define TAGMASK (tagmask)
-#define TAG0_MASK (1U << 31)
 uint32_t tagmask = ((1u << 9) - 1); // 默认 9 个 tag
 
 #define ISFULLSCREEN(A)                                                        \
@@ -200,25 +201,6 @@ enum {
 	GroupBar
 }; /* client types */
 enum { AxisUp, AxisDown, AxisLeft, AxisRight }; // 滚轮滚动的方向
-enum {
-	LyrBg,
-	LyrBlur,
-	LyrBottom,
-	LyrTile,
-	LyrMaximize,
-	LyrTop,
-	// special workspace layers: above LyrTop; dim at the bottom, then
-	// tiled / maximized / floating+fullscreen
-	LyrSpecialDim,
-	LyrSpecialTile,
-	LyrSpecialMaximize,
-	LyrSpecialTop,
-	LyrFadeOut,
-	LyrOverlay,
-	LyrIMPopup, // text-input layer
-	LyrBlock,
-	NUM_LAYERS
-}; /* scene layers */
 
 #ifdef XWAYLAND
 enum {
@@ -727,196 +709,192 @@ typedef struct {
 } SnapshotMetadata;
 
 /* function declarations */
-static void applybounds(
+void applybounds(
 	Client *c,
-	struct wlr_box *bbox); // 设置边界规则,能让一些窗口拥有比较适合的大小
-static void applyrules(Client *c); // 窗口规则应用,应用config.h中定义的窗口规则
-static void apply_window_snap(Client *c);
-static void arrange(Monitor *m, bool want_animation,
-					bool from_view); // 布局函数,让窗口俺平铺规则移动和重置大小
-static void arrangelayer(Monitor *m, struct wl_list *list,
-						 struct wlr_box *usable_area, int32_t exclusive);
-static void arrangelayers(Monitor *m);
-static void handle_print_status(struct wl_listener *listener, void *data);
-static void axisnotify(struct wl_listener *listener,
-					   void *data); // 滚轮事件处理
-static void buttonpress(struct wl_listener *listener,
-						void *data); // 鼠标按键事件处理
-static bool handle_buttonpress(struct wlr_pointer_button_event *event);
-static int32_t ongesture(struct wlr_pointer_swipe_end_event *event);
-static void swipe_begin(struct wl_listener *listener, void *data);
-static void swipe_update(struct wl_listener *listener, void *data);
-static void swipe_end(struct wl_listener *listener, void *data);
-static void pinch_begin(struct wl_listener *listener, void *data);
-static void pinch_update(struct wl_listener *listener, void *data);
-static void pinch_end(struct wl_listener *listener, void *data);
-static void hold_begin(struct wl_listener *listener, void *data);
-static void hold_end(struct wl_listener *listener, void *data);
-static void checkidleinhibitor(struct wlr_surface *exclude);
-static void cleanup(void);										  // 退出清理
-static void cleanupmon(struct wl_listener *listener, void *data); // 退出清理
-static void closemon(Monitor *m);
-static void cleanuplisteners(void);
-static void toggle_hotarea(int32_t x_root, int32_t y_root); // 触发热区
-static void maplayersurfacenotify(struct wl_listener *listener, void *data);
-static void commitlayersurfacenotify(struct wl_listener *listener, void *data);
-static void commitnotify(struct wl_listener *listener, void *data);
-static void createdecoration(struct wl_listener *listener, void *data);
-static void createidleinhibitor(struct wl_listener *listener, void *data);
-static void createkeyboard(struct wlr_keyboard *keyboard);
-static void requestmonstate(struct wl_listener *listener, void *data);
-static void createlayersurface(struct wl_listener *listener, void *data);
-static void createlocksurface(struct wl_listener *listener, void *data);
-static void createmon(struct wl_listener *listener, void *data);
-static void createnotify(struct wl_listener *listener, void *data);
-static void createpointer(struct wlr_pointer *pointer);
-static void configure_pointer(struct wlr_input_device *wlr_device,
-							  struct libinput_device *device);
-static void destroyinputdevice(struct wl_listener *listener, void *data);
-static void createswitch(struct wlr_switch *switch_device);
-static void switch_toggle(struct wl_listener *listener, void *data);
-static void createpointerconstraint(struct wl_listener *listener, void *data);
-static void cursorconstrain(struct wlr_pointer_constraint_v1 *constraint);
-static void commitpopup(struct wl_listener *listener, void *data);
-static void createpopup(struct wl_listener *listener, void *data);
-static void cursorframe(struct wl_listener *listener, void *data);
-static void cursorwarptohint(void);
-static void destroydecoration(struct wl_listener *listener, void *data);
-static void destroydragicon(struct wl_listener *listener, void *data);
-static void destroyidleinhibitor(struct wl_listener *listener, void *data);
-static void destroylayernodenotify(struct wl_listener *listener, void *data);
-static void destroylock(SessionLock *lock, int32_t unlocked);
-static void destroylocksurface(struct wl_listener *listener, void *data);
-static void destroynotify(struct wl_listener *listener, void *data);
-static void destroypointerconstraint(struct wl_listener *listener, void *data);
-static void destroysessionlock(struct wl_listener *listener, void *data);
-static void destroykeyboardgroup(struct wl_listener *listener, void *data);
-static Monitor *dirtomon(enum wlr_direction dir);
-static void setcursorshape(struct wl_listener *listener, void *data);
+	struct wlr_box *bbox);	// 设置边界规则,能让一些窗口拥有比较适合的大小
+void applyrules(Client *c); // 窗口规则应用,应用config.h中定义的窗口规则
+void apply_window_snap(Client *c);
+void arrange(Monitor *m, bool want_animation,
+			 bool from_view); // 布局函数,让窗口俺平铺规则移动和重置大小
+void arrangelayer(Monitor *m, struct wl_list *list, struct wlr_box *usable_area,
+				  int32_t exclusive);
+void arrangelayers(Monitor *m);
+void handle_print_status(struct wl_listener *listener, void *data);
+void axisnotify(struct wl_listener *listener,
+				void *data); // 滚轮事件处理
+void buttonpress(struct wl_listener *listener,
+				 void *data); // 鼠标按键事件处理
+bool handle_buttonpress(struct wlr_pointer_button_event *event);
+int32_t ongesture(struct wlr_pointer_swipe_end_event *event);
+void swipe_begin(struct wl_listener *listener, void *data);
+void swipe_update(struct wl_listener *listener, void *data);
+void swipe_end(struct wl_listener *listener, void *data);
+void pinch_begin(struct wl_listener *listener, void *data);
+void pinch_update(struct wl_listener *listener, void *data);
+void pinch_end(struct wl_listener *listener, void *data);
+void hold_begin(struct wl_listener *listener, void *data);
+void hold_end(struct wl_listener *listener, void *data);
+void checkidleinhibitor(struct wlr_surface *exclude);
+void cleanupmon(struct wl_listener *listener, void *data); // 退出清理
+void closemon(Monitor *m);
+void toggle_hotarea(int32_t x_root, int32_t y_root); // 触发热区
+void maplayersurfacenotify(struct wl_listener *listener, void *data);
+void commitlayersurfacenotify(struct wl_listener *listener, void *data);
+void commitnotify(struct wl_listener *listener, void *data);
+void createdecoration(struct wl_listener *listener, void *data);
+void createidleinhibitor(struct wl_listener *listener, void *data);
+void createkeyboard(struct wlr_keyboard *keyboard);
+void requestmonstate(struct wl_listener *listener, void *data);
+void createlayersurface(struct wl_listener *listener, void *data);
+void createlocksurface(struct wl_listener *listener, void *data);
+void createmon(struct wl_listener *listener, void *data);
+void createpointer(struct wlr_pointer *pointer);
+void configure_pointer(struct wlr_input_device *wlr_device,
+					   struct libinput_device *device);
+void destroyinputdevice(struct wl_listener *listener, void *data);
+void createswitch(struct wlr_switch *switch_device);
+void switch_toggle(struct wl_listener *listener, void *data);
+void createpointerconstraint(struct wl_listener *listener, void *data);
+void cursorconstrain(struct wlr_pointer_constraint_v1 *constraint);
+void commitpopup(struct wl_listener *listener, void *data);
+void cursorwarptohint(void);
+void destroydecoration(struct wl_listener *listener, void *data);
+void destroydragicon(struct wl_listener *listener, void *data);
+void destroyidleinhibitor(struct wl_listener *listener, void *data);
+void destroylayernodenotify(struct wl_listener *listener, void *data);
+void destroylock(SessionLock *lock, int32_t unlocked);
+void destroylocksurface(struct wl_listener *listener, void *data);
+void destroynotify(struct wl_listener *listener, void *data);
+void destroypointerconstraint(struct wl_listener *listener, void *data);
+void destroysessionlock(struct wl_listener *listener, void *data);
+void destroykeyboardgroup(struct wl_listener *listener, void *data);
+Monitor *dirtomon(enum wlr_direction dir);
+void setcursorshape(struct wl_listener *listener, void *data);
 
-static void focuslayer(LayerSurface *l);
-static void focusclient(Client *c, int32_t lift);
+void focuslayer(LayerSurface *l);
+void focusclient(Client *c, int32_t lift);
 
-static void setborder_color(Client *c);
-static Client *focustop(Monitor *m);
-static void fullscreennotify(struct wl_listener *listener, void *data);
-static void gpureset(struct wl_listener *listener, void *data);
+void setborder_color(Client *c);
+Client *focustop(Monitor *m);
+void fullscreennotify(struct wl_listener *listener, void *data);
+void gpureset(struct wl_listener *listener, void *data);
 
-static int32_t keyrepeat(void *data);
+int32_t keyrepeat(void *data);
 
-static void inputdevice(struct wl_listener *listener, void *data);
-static int32_t keybinding(uint32_t state, bool locked, uint32_t mods,
-						  xkb_keysym_t sym, uint32_t keycode);
-static void keypress(struct wl_listener *listener, void *data);
-static void keypressmod(struct wl_listener *listener, void *data);
-static bool keypressglobal(struct wlr_surface *last_surface,
-						   struct wlr_keyboard *keyboard,
-						   struct wlr_keyboard_key_event *event, uint32_t mods,
-						   xkb_keysym_t keysym, uint32_t keycode);
-static void locksession(struct wl_listener *listener, void *data);
-static void mapnotify(struct wl_listener *listener, void *data);
-static void maximizenotify(struct wl_listener *listener, void *data);
-static void minimizenotify(struct wl_listener *listener, void *data);
-static void motionabsolute(struct wl_listener *listener, void *data);
-static void motionnotify(uint32_t time, struct wlr_input_device *device,
-						 double sx, double sy, double sx_unaccel,
-						 double sy_unaccel);
-static void motionrelative(struct wl_listener *listener, void *data);
+void inputdevice(struct wl_listener *listener, void *data);
+int32_t keybinding(uint32_t state, bool locked, uint32_t mods, xkb_keysym_t sym,
+				   uint32_t keycode);
+void keypress(struct wl_listener *listener, void *data);
+void keypressmod(struct wl_listener *listener, void *data);
+bool keypressglobal(struct wlr_surface *last_surface,
+					struct wlr_keyboard *keyboard,
+					struct wlr_keyboard_key_event *event, uint32_t mods,
+					xkb_keysym_t keysym, uint32_t keycode);
+void locksession(struct wl_listener *listener, void *data);
+void mapnotify(struct wl_listener *listener, void *data);
+void maximizenotify(struct wl_listener *listener, void *data);
+void minimizenotify(struct wl_listener *listener, void *data);
+void motionabsolute(struct wl_listener *listener, void *data);
+void motionnotify(uint32_t time, struct wlr_input_device *device, double sx,
+				  double sy, double sx_unaccel, double sy_unaccel);
+void motionrelative(struct wl_listener *listener, void *data);
 
-static void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
-static void add_foreign_topleve(Client *c);
-static void exchange_two_client(Client *c1, Client *c2);
-static void outputmgrapply(struct wl_listener *listener, void *data);
-static void outputmgrapplyortest(struct wlr_output_configuration_v1 *config,
-								 int32_t test);
-static void outputmgrtest(struct wl_listener *listener, void *data);
-static void pointerfocus(Client *c, struct wlr_surface *surface, double sx,
-						 double sy, uint32_t time);
-static void printstatus(enum ipc_watch_type type);
-static void quitsignal(int32_t signo);
-static void powermgrsetmode(struct wl_listener *listener, void *data);
-static void rendermon(struct wl_listener *listener, void *data);
-static void requestdecorationmode(struct wl_listener *listener, void *data);
-static void requestdrmlease(struct wl_listener *listener, void *data);
-static void requeststartdrag(struct wl_listener *listener, void *data);
-static void resize(Client *c, struct wlr_box geo, int32_t interact);
-static void run(char *startup_cmd, int readiness_fd);
-static void setcursor(struct wl_listener *listener, void *data);
-static void setfloating(Client *c, int32_t floating);
-static void setfakefullscreen(Client *c, int32_t fakefullscreen);
-static void setfullscreen(Client *c, int32_t fullscreen, bool rearrange);
-static void setmaximizescreen(Client *c, int32_t maximizescreen,
-							  bool rearrange);
-static void reset_maximizescreen_size(Client *c);
-static void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv);
+void reset_foreign_tolevel(Client *c, Monitor *oldmon, Monitor *newmon);
+void add_foreign_topleve(Client *c);
+void exchange_two_client(Client *c1, Client *c2);
+void outputmgrapply(struct wl_listener *listener, void *data);
+void outputmgrapplyortest(struct wlr_output_configuration_v1 *config,
+						  int32_t test);
+void outputmgrtest(struct wl_listener *listener, void *data);
+void pointerfocus(Client *c, struct wlr_surface *surface, double sx, double sy,
+				  uint32_t time);
+void printstatus(enum ipc_watch_type type);
+void powermgrsetmode(struct wl_listener *listener, void *data);
+void rendermon(struct wl_listener *listener, void *data);
+void requestdecorationmode(struct wl_listener *listener, void *data);
+void requestdrmlease(struct wl_listener *listener, void *data);
+void requeststartdrag(struct wl_listener *listener, void *data);
+void setcursor(struct wl_listener *listener, void *data);
+void setfloating(Client *c, int32_t floating);
+void setfakefullscreen(Client *c, int32_t fakefullscreen);
+void setfullscreen(Client *c, int32_t fullscreen, bool rearrange);
+void setmaximizescreen(Client *c, int32_t maximizescreen, bool rearrange);
+void reset_maximizescreen_size(Client *c);
+void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv);
 
-static void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus);
-static void setpsel(struct wl_listener *listener, void *data);
-static void setsel(struct wl_listener *listener, void *data);
-static void setup(void);
-static void startdrag(struct wl_listener *listener, void *data);
+void setmon(Client *c, Monitor *m, uint32_t newtags, bool focus);
+void setpsel(struct wl_listener *listener, void *data);
+void setsel(struct wl_listener *listener, void *data);
+void startdrag(struct wl_listener *listener, void *data);
 
-static void unlocksession(struct wl_listener *listener, void *data);
-static void unmaplayersurfacenotify(struct wl_listener *listener, void *data);
-static void unmapnotify(struct wl_listener *listener, void *data);
-static void updatemons(struct wl_listener *listener, void *data);
-static void updatetitle(struct wl_listener *listener, void *data);
-static void urgent(struct wl_listener *listener, void *data);
-static void view(const Arg *arg, bool want_animation);
+void unlocksession(struct wl_listener *listener, void *data);
+void unmaplayersurfacenotify(struct wl_listener *listener, void *data);
+void unmapnotify(struct wl_listener *listener, void *data);
+void updatemons(struct wl_listener *listener, void *data);
+void updatetitle(struct wl_listener *listener, void *data);
+void urgent(struct wl_listener *listener, void *data);
+void view(const Arg *arg, bool want_animation);
 
-static void handlesig(int32_t signo);
-static void
-handle_keyboard_shortcuts_inhibit_new_inhibitor(struct wl_listener *listener,
-												void *data);
-static void virtualkeyboard(struct wl_listener *listener, void *data);
-static void virtualpointer(struct wl_listener *listener, void *data);
-static void warp_cursor(const Client *c);
-static Monitor *xytomon(double x, double y);
-static Monitor *get_monitor_nearest_to(int32_t x, int32_t y);
-static void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
-												  void *data);
-static void xytonode(double x, double y, struct wlr_surface **psurface,
-					 Client **pc, LayerSurface **pl, MangoGroupBar **tb,
-					 double *nx, double *ny);
-static void clear_fullscreen_flag(Client *c);
-static pid_t getparentprocess(pid_t p);
-static int32_t isdescprocess(pid_t p, pid_t c);
-static Client *termforwin(Client *w);
-static void client_replace(Client *c, Client *w, bool is_group_change_member,
-						   bool is_swallow);
+void handle_keyboard_shortcuts_inhibit_new_inhibitor(
+	struct wl_listener *listener, void *data);
+void virtualkeyboard(struct wl_listener *listener, void *data);
+void virtualpointer(struct wl_listener *listener, void *data);
+void warp_cursor(const Client *c);
+Monitor *xytomon(double x, double y);
+Monitor *get_monitor_nearest_to(int32_t x, int32_t y);
+void handle_iamge_copy_capture_new_session(struct wl_listener *listener,
+										   void *data);
+void xytonode(double x, double y, struct wlr_surface **psurface, Client **pc,
+			  LayerSurface **pl, MangoGroupBar **tb, double *nx, double *ny);
+void clear_fullscreen_flag(Client *c);
+pid_t getparentprocess(pid_t p);
+int32_t isdescprocess(pid_t p, pid_t c);
+Client *termforwin(Client *w);
+void client_replace(Client *c, Client *w, bool is_group_change_member,
+					bool is_swallow);
 
-static void warp_cursor_to_selmon(Monitor *m);
+void warp_cursor_to_selmon(Monitor *m);
 uint32_t want_restore_fullscreen(Client *target_client);
-static void overview_restore(Client *c, const Arg *arg);
-static void overview_backup(Client *c);
-static void set_minimized(Client *c);
+void overview_restore(Client *c, const Arg *arg);
+void overview_backup(Client *c);
+void set_minimized(Client *c);
 
-static void show_scratchpad(Client *c);
-static void show_hide_client(Client *c);
-static void tag_client(const Arg *arg, Client *target_client);
+void show_scratchpad(Client *c);
+void show_hide_client(Client *c);
+void tag_client(const Arg *arg, Client *target_client);
 
-static struct wlr_box setclient_coordinate_center(Client *c, Monitor *m,
-												  struct wlr_box geom,
-												  int32_t offsetx,
-												  int32_t offsety);
-static uint32_t get_tags_first_tag(uint32_t tags);
+struct wlr_box setclient_coordinate_center(Client *c, Monitor *m,
+										   struct wlr_box geom, int32_t offsetx,
+										   int32_t offsety);
+uint32_t get_tags_first_tag(uint32_t tags);
 
-static struct wlr_output_mode *
-get_nearest_output_mode(struct wlr_output *output, int32_t width,
-						int32_t height, float refresh);
+struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
+												int32_t width, int32_t height,
+												float refresh);
 
-static void client_commit(Client *c);
-static void layer_commit(LayerSurface *l);
-static void client_draw_border(Client *c, struct ivec2 offsets);
-static void client_set_opacity(Client *c, double opacity);
-static void init_baked_points(void);
-static void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer,
-									   int32_t sx, int32_t sy, void *data);
+void client_set_opacity(Client *c, double opacity);
+void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer, int32_t sx,
+								int32_t sy, void *data);
 
-static Client *direction_select(const Arg *arg);
-static void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
-						bool changefocus);
+Client *direction_select(const Arg *arg);
+void view_in_mon(const Arg *arg, bool want_animation, Monitor *m,
+				 bool changefocus);
 
+<<<<<<< HEAD
+void client_send_frame_done(Client *c, const struct timespec *now);
+void overview_layout_card(Client *c);
+void overview_destroy_card(Client *c);
+void overview_card_set_corner_radii(Client *c, struct fx_corner_radii corners);
+Client *center_tiled_select(Monitor *m);
+void handlecursoractivity(void);
+int32_t hidecursor(void *data);
+bool check_hit_no_border(Client *c);
+void reset_keyboard_layout(void);
+void client_update_oldmonname_record(Client *c, Monitor *m);
+void pending_kill_client(Client *c);
+uint32_t get_tags_first_tag_num(uint32_t source_tags);
+void set_layer_open_animaiton(LayerSurface *l, struct wlr_box geo);
+=======
 static void buffer_set_effect(Client *c, BufferData buffer_data);
 static void snap_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 										   int32_t sx, int32_t sy, void *data);
@@ -953,138 +931,124 @@ static void get_layer_target_geometry(LayerSurface *l,
 static void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									  int32_t sx, int32_t sy, void *data);
 static double find_animation_curve_at(double t, int32_t type);
+>>>>>>> c62e01c303b8e19598df0b0b7cd16e466a71fc21
 
-static void apply_opacity_to_rect_nodes(Client *c, struct wlr_scene_node *node,
-										double animation_passed);
-static struct fx_corner_radii set_client_corner_location(Client *c);
-static double all_output_frame_duration_ms();
-static struct wlr_scene_tree *
-wlr_scene_tree_snapshot(struct wlr_scene_node *node,
-						struct wlr_scene_tree *parent);
-static bool is_scroller_layout(Monitor *m);
-static bool is_monocle_layout(Monitor *m);
-static bool is_centertile_layout(Monitor *m);
-static void create_output(struct wlr_backend *backend, void *data);
-static void get_layout_abbr(char *abbr, const char *full_name);
-static void apply_named_scratchpad(Client *target_client);
-static Client *get_client_by_id_or_title(const char *arg_id,
-										 const char *arg_title);
-static bool switch_scratchpad_client_state(Client *c);
-static bool check_trackpad_disabled(struct wlr_pointer *pointer);
-static uint32_t get_tag_status(uint32_t tag, Monitor *m);
-static void view_insert_shift_tags(Monitor *m, uint32_t target);
-static void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state);
-static Client *get_next_stack_client(Client *c, bool reverse);
-static void set_float_malposition(Client *tc);
-static void set_size_per(Monitor *m, Client *c);
-static void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
-							   int32_t offsety, uint32_t time);
-static void refresh_monitors_workspaces_status(Monitor *m);
-static void init_client_properties(Client *c);
-static float *get_border_color(Client *c);
-static void clear_fullscreen_and_maximized_state(Monitor *m);
-static void request_fresh_all_monitors(void);
-static Client *find_client_by_direction(Client *tc, const Arg *arg,
-										bool findfloating);
-static void exit_scroller_stack(Client *c);
-static Client *scroll_get_stack_head_client(Client *c);
-static bool client_only_in_one_tag(Client *c);
-static Client *get_focused_stack_client(Client *sc,
-										Client *custom_focus_client);
-static bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc);
-static void monitor_stop_skip_frame_timer(Monitor *m);
-static int monitor_skip_frame_timeout_callback(void *data);
-static Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
-static bool match_monitor_spec(char *spec, Monitor *m);
-static void last_cursor_surface_destroy(struct wl_listener *listener,
-										void *data);
-static int32_t keep_idle_inhibit(void *data);
-static void check_keep_idle_inhibit(Client *c);
-static void pre_calculate_before_arrange(Monitor *m, bool want_animation,
-										 bool from_view, bool only_calculate);
-static void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
-static void client_pending_maximized_state(Client *c, int32_t ismaximized);
-static void client_pending_minimized_state(Client *c, int32_t isminimized);
-static void scroller_insert_stack(Client *c, Client *target_client,
-								  bool insert_before);
-static void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-								float ratio, int32_t dir);
-static void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx,
-									   int32_t dy);
-static void dwindle_resize_client(Monitor *m, Client *c);
+void apply_opacity_to_rect_nodes(Client *c, struct wlr_scene_node *node,
+								 double animation_passed);
+double all_output_frame_duration_ms();
+bool is_scroller_layout(Monitor *m);
+bool is_monocle_layout(Monitor *m);
+bool is_centertile_layout(Monitor *m);
+void create_output(struct wlr_backend *backend, void *data);
+void get_layout_abbr(char *abbr, const char *full_name);
+void apply_named_scratchpad(Client *target_client);
+Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title);
+bool switch_scratchpad_client_state(Client *c);
+bool check_trackpad_disabled(struct wlr_pointer *pointer);
+uint32_t get_tag_status(uint32_t tag, Monitor *m);
+void view_insert_shift_tags(Monitor *m, uint32_t target);
+void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state);
+Client *get_next_stack_client(Client *c, bool reverse);
+void set_float_malposition(Client *tc);
+void set_size_per(Monitor *m, Client *c);
+void resize_tile_client(Client *grabc, bool isdrag, int32_t offsetx,
+						int32_t offsety, uint32_t time);
+void refresh_monitors_workspaces_status(Monitor *m);
+void init_client_properties(Client *c);
+float *get_border_color(Client *c);
+void clear_fullscreen_and_maximized_state(Monitor *m);
+void request_fresh_all_monitors(void);
+Client *find_client_by_direction(Client *tc, const Arg *arg, bool findfloating);
+void exit_scroller_stack(Client *c);
+Client *scroll_get_stack_head_client(Client *c);
+bool client_only_in_one_tag(Client *c);
+Client *get_focused_stack_client(Client *sc, Client *custom_focus_client);
+bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc);
+void monitor_stop_skip_frame_timer(Monitor *m);
+int monitor_skip_frame_timeout_callback(void *data);
+Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
+bool match_monitor_spec(char *spec, Monitor *m);
+void last_cursor_surface_destroy(struct wl_listener *listener, void *data);
+int32_t keep_idle_inhibit(void *data);
+void check_keep_idle_inhibit(Client *c);
+void pre_calculate_before_arrange(Monitor *m, bool want_animation,
+								  bool from_view, bool only_calculate);
+void client_pending_fullscreen_state(Client *c, int32_t isfullscreen);
+void client_pending_maximized_state(Client *c, int32_t ismaximized);
+void client_pending_minimized_state(Client *c, int32_t isminimized);
+void scroller_insert_stack(Client *c, Client *target_client,
+						   bool insert_before);
+void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
+						 float ratio, int32_t dir);
+void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy);
+void dwindle_resize_client(Monitor *m, Client *c);
 
-static struct TagScrollerState *ensure_scroller_state(Monitor *m, uint32_t tag);
-static struct ScrollerStackNode *find_scroller_node(struct TagScrollerState *st,
-													Client *c);
-static void sync_scroller_state_to_clients(Monitor *m, uint32_t tag);
-static void scroller_node_remove(struct TagScrollerState *st,
-								 struct ScrollerStackNode *target);
-static struct ScrollerStackNode *
-scroller_node_create(struct TagScrollerState *st, Client *c);
-static void update_scroller_state(Monitor *m);
+struct TagScrollerState *ensure_scroller_state(Monitor *m, uint32_t tag);
+struct ScrollerStackNode *find_scroller_node(struct TagScrollerState *st,
+											 Client *c);
+void sync_scroller_state_to_clients(Monitor *m, uint32_t tag);
+void scroller_node_remove(struct TagScrollerState *st,
+						  struct ScrollerStackNode *target);
+struct ScrollerStackNode *scroller_node_create(struct TagScrollerState *st,
+											   Client *c);
+void update_scroller_state(Monitor *m);
 Client *scroll_get_stack_tail_client(Client *c);
-static DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
-static void overview_backup_surface(Client *c);
+DwindleNode *dwindle_find_leaf(DwindleNode *node, Client *c);
+void overview_backup_surface(Client *c);
 
-static void create_jump_hints(Monitor *m);
-static void finish_jump_mode(Monitor *m);
-static void begin_jump_mode(Monitor *m);
-static void global_draw_group_bar(Client *c, int32_t x, int32_t y,
-								  int32_t width, int32_t height);
+void create_jump_hints(Monitor *m);
+void finish_jump_mode(Monitor *m);
+void begin_jump_mode(Monitor *m);
 
-static void client_reparent_group(Client *c);
-static void client_change_mon(Client *c, Monitor *m);
-static void check_vrr_enable(Client *c);
-static void output_state_setup_hdr(Monitor *m, bool silent,
-								   struct wlr_output_state *state);
-static void output_enable_hdr(Monitor *m, struct wlr_output_state *os,
-							  bool enabled, bool silent);
-static bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
-									  struct wlr_output_state *state);
-static bool mango_output_commit(Monitor *m);
-static bool check_tearing_frame_allow(Monitor *m);
-static void client_set_group_config(Client *c);
-static const char *xdg_activation_v1_export_token(void);
+void client_reparent_group(Client *c);
+void client_change_mon(Client *c, Monitor *m);
+void check_vrr_enable(Client *c);
+void output_enable_hdr(Monitor *m, struct wlr_output_state *os, bool enabled,
+					   bool silent);
+bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
+							   struct wlr_output_state *state);
+bool mango_output_commit(Monitor *m);
+void client_set_group_config(Client *c);
 
-static int32_t client_is_x11(Client *c);
-static struct wlr_surface *client_surface(Client *c);
-static int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
-										 LayerSurface **pl);
-static void client_activate_surface(struct wlr_surface *s, int32_t activated);
-static const char *client_get_appid(Client *c);
-static int32_t client_get_pid(Client *c);
-static void client_get_clip(Client *c, struct wlr_box *clip);
-static void client_get_geometry(Client *c, struct wlr_box *geom);
-static Client *client_get_parent(Client *c);
-static int32_t client_has_children(Client *c);
-static const char *client_get_title(Client *c);
-static int32_t client_is_float_type(Client *c);
-static int32_t client_is_rendered_on_mon(Client *c, Monitor *m);
-static int32_t client_is_unmanaged(Client *c);
-static void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb);
-static void client_send_close(Client *c);
-static void client_set_border_color(Client *c, const float color[static 4]);
-static void client_set_fullscreen(Client *c, int32_t fullscreen);
-static void client_set_scale(struct wlr_surface *s, float scale);
-static void client_update_xwayland_clip(Client *c, struct wlr_box *clip);
-static void client_update_xwayland_dest_size(Client *c);
-static uint32_t client_set_size(Client *c, uint32_t width, uint32_t height);
-static void client_set_minimized(Client *c, bool minimized);
-static void client_set_maximized(Client *c, bool maximized);
-static void client_set_tiled(Client *c, uint32_t edges);
-static int32_t client_should_ignore_focus(Client *c);
-static int32_t client_is_x11_popup(Client *c);
-static int32_t client_should_global(Client *c);
-static int32_t client_should_overtop(Client *c);
-static int32_t client_wants_focus(Client *c);
-static int32_t client_wants_fullscreen(Client *c);
-static bool client_request_minimize(Client *c, void *data);
-static bool client_request_maximize(Client *c, void *data);
-static void client_set_size_bound(Client *c);
-static void client_swap_layout_properties(Client *c1, Client *c2);
-static void client_swap_monitors_and_tags(Client *c1, Client *c2);
-static void finish_exchange_arrange_and_focus(Client *c1, Client *c2,
-											  Monitor *m1, Monitor *m2);
+int32_t client_is_x11(Client *c);
+struct wlr_surface *client_surface(Client *c);
+int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
+								  LayerSurface **pl);
+void client_activate_surface(struct wlr_surface *s, int32_t activated);
+const char *client_get_appid(Client *c);
+int32_t client_get_pid(Client *c);
+void client_get_clip(Client *c, struct wlr_box *clip);
+void client_get_geometry(Client *c, struct wlr_box *geom);
+Client *client_get_parent(Client *c);
+int32_t client_has_children(Client *c);
+const char *client_get_title(Client *c);
+int32_t client_is_float_type(Client *c);
+int32_t client_is_rendered_on_mon(Client *c, Monitor *m);
+int32_t client_is_unmanaged(Client *c);
+void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb);
+void client_send_close(Client *c);
+void client_set_border_color(Client *c, const float color[4]);
+void client_set_fullscreen(Client *c, int32_t fullscreen);
+void client_set_scale(struct wlr_surface *s, float scale);
+void client_update_xwayland_clip(Client *c, struct wlr_box *clip);
+void client_update_xwayland_dest_size(Client *c);
+uint32_t client_set_size(Client *c, uint32_t width, uint32_t height);
+void client_set_minimized(Client *c, bool minimized);
+void client_set_maximized(Client *c, bool maximized);
+void client_set_tiled(Client *c, uint32_t edges);
+int32_t client_should_ignore_focus(Client *c);
+int32_t client_is_x11_popup(Client *c);
+int32_t client_should_global(Client *c);
+int32_t client_should_overtop(Client *c);
+int32_t client_wants_focus(Client *c);
+int32_t client_wants_fullscreen(Client *c);
+bool client_request_minimize(Client *c, void *data);
+bool client_request_maximize(Client *c, void *data);
+void client_set_size_bound(Client *c);
+void client_swap_layout_properties(Client *c1, Client *c2);
+void client_swap_monitors_and_tags(Client *c1, Client *c2);
+void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,
+									   Monitor *m2);
 void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact);
 uint32_t generate_client_id(void);
 void client_active(Client *c);
@@ -1102,12 +1066,12 @@ void mango_surface_frame_done(struct wlr_surface *surface, int sx, int sy,
 							  void *data);
 bool client_force_render(Client *c);
 int32_t is_single_bit_set(uint32_t x);
-static bool layer_ignores_focus(LayerSurface *l);
+bool layer_ignores_focus(LayerSurface *l);
 
 /* 重排后补充的前置声明 */
-static void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
-								   int32_t sy, void *user_data);
-static void unminimize(Client *c);
+void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
+							int32_t sy, void *user_data);
+void unminimize(Client *c);
 Client *termforwin(Client *w);
 Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title);
 Client *center_tiled_select(Monitor *m);
@@ -1122,9 +1086,11 @@ Monitor *dirtomon(enum wlr_direction dir);
 Monitor *xytomon(double x, double y);
 Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 
-#include "data/static_keymap.h"
-#include "dispatch/bind_declare.h"
+#include "dispatch/bind.h"
 #include "layout/layout.h"
+<<<<<<< HEAD
+#include "common/globals.h"
+=======
 
 /* variables */
 static const char broken[] = "broken";
@@ -1183,7 +1149,6 @@ static struct wlr_keyboard
 	*last_active_keyboard; /* 最后按键的键盘，get keyboardlayout 用 */
 static struct wl_list inputdevices;
 static struct wl_list standalone_keyboards; /* 独立键盘链表 */
-static struct wl_list virtual_keyboards;	/* 虚拟键盘组链表 */
 static struct wl_list keyboard_shortcut_inhibitors;
 static uint32_t cursor_mode;
 static Client *grabc, *dropc;
@@ -1260,8 +1225,6 @@ static struct {
 #include "config/preset.h"
 // slots: 1..tag_num are normal tags, slot 0 is special tag0,
 // tag_num_MAX + 1 is the all-tags view
-#define PERTAG_ALL_TAGS_IDX (tag_num_MAX + 1)
-#define PERTAG_SLOTS (tag_num_MAX + 2)
 struct Pertag {
 	uint32_t curtag, prevtag;
 	int32_t nmasters[PERTAG_SLOTS];
@@ -1276,106 +1239,34 @@ struct Pertag {
 	const Layout *ltidxs[PERTAG_SLOTS];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
 };
+>>>>>>> c62e01c303b8e19598df0b0b7cd16e466a71fc21
 #include "common/log.h"
-#include "config/parse_config.h"
-
-static struct wl_signal mango_print_status;
-
-static struct wl_listener print_status_listener = {.notify =
-													   handle_print_status};
-static struct wl_listener cursor_axis = {.notify = axisnotify};
-static struct wl_listener cursor_button = {.notify = buttonpress};
-static struct wl_listener cursor_frame = {.notify = cursorframe};
-static struct wl_listener cursor_motion = {.notify = motionrelative};
-static struct wl_listener cursor_motion_absolute = {.notify = motionabsolute};
-static struct wl_listener gpu_reset = {.notify = gpureset};
-static struct wl_listener layout_change = {.notify = updatemons};
-static struct wl_listener new_idle_inhibitor = {.notify = createidleinhibitor};
-static struct wl_listener new_input_device = {.notify = inputdevice};
-static struct wl_listener new_virtual_keyboard = {.notify = virtualkeyboard};
-static struct wl_listener new_virtual_pointer = {.notify = virtualpointer};
-static struct wl_listener new_pointer_constraint = {
-	.notify = createpointerconstraint};
-static struct wl_listener new_output = {.notify = createmon};
-static struct wl_listener new_xdg_toplevel = {.notify = createnotify};
-static struct wl_listener new_xdg_popup = {.notify = createpopup};
-static struct wl_listener new_xdg_decoration = {.notify = createdecoration};
-static struct wl_listener new_layer_surface = {.notify = createlayersurface};
-static struct wl_listener output_mgr_apply = {.notify = outputmgrapply};
-static struct wl_listener output_mgr_test = {.notify = outputmgrtest};
-static struct wl_listener output_power_mgr_set_mode = {.notify =
-														   powermgrsetmode};
-static struct wl_listener ext_image_copy_capture_mgr_new_session = {
-	.notify = handle_iamge_copy_capture_new_session};
-static struct wl_listener request_cursor = {.notify = setcursor};
-static struct wl_listener request_set_psel = {.notify = setpsel};
-static struct wl_listener request_set_sel = {.notify = setsel};
-static struct wl_listener request_set_cursor_shape = {.notify = setcursorshape};
-static struct wl_listener request_start_drag = {.notify = requeststartdrag};
-static struct wl_listener start_drag = {.notify = startdrag};
-static struct wl_listener new_session_lock = {.notify = locksession};
-static struct wl_listener drm_lease_request = {.notify = requestdrmlease};
-static struct wl_listener keyboard_shortcuts_inhibit_new_inhibitor = {
-	.notify = handle_keyboard_shortcuts_inhibit_new_inhibitor};
-static struct wl_listener last_cursor_surface_destroy_listener = {
-	.notify = last_cursor_surface_destroy};
-
-#ifdef XWAYLAND
-static float xwayland_client_scale(Client *c);
-static float xwayland_preferred_scale(Client *c);
-static void xwayland_apply_scale(Client *c);
-static void xwayland_logical_to_x11(struct wlr_box *box, float scale);
-static void xwayland_x11_to_logical(struct wlr_box *box, float scale);
-static bool
-xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
-										  double *sx, double *sy);
-static void fix_xwayland_coordinate(struct wlr_box *geom);
-static int32_t synckeymap(void *data);
-static void activatex11(struct wl_listener *listener, void *data);
-static void configurex11(struct wl_listener *listener, void *data);
-static void createnotifyx11(struct wl_listener *listener, void *data);
-static void dissociatex11(struct wl_listener *listener, void *data);
-static void commitx11(struct wl_listener *listener, void *data);
-static void associatex11(struct wl_listener *listener, void *data);
-static void sethints(struct wl_listener *listener, void *data);
-static void xwaylandready(struct wl_listener *listener, void *data);
-static void setgeometrynotify(struct wl_listener *listener, void *data);
-static struct wl_listener new_xwayland_surface = {.notify = createnotifyx11};
-static struct wl_listener xwayland_ready = {.notify = xwaylandready};
-static struct wlr_xwayland *xwayland;
-static struct wl_event_source *sync_keymap;
-#endif
 
 /* export an activation token for the process we're about to spawn */
 
-static void ipc_notify_device_event(struct wlr_input_device *device);
-
-#include "animation/client.h"
 #include "animation/common.h"
-#include "animation/layer.h"
-#include "animation/tag.h"
-#include "dispatch/bind_define.h"
-#include "ext-protocol/all.h"
 #include "input/touch.h"
 #include "input/switch.h"
 #include "input/tablet.h"
 #include "ipc/ipc.h"
-#include "layout/arrange.h"
 #include "layout/dwindle.h"
 #include "layout/horizontal.h"
 #include "layout/overview.h"
 #include "layout/scroll.h"
 #include "layout/vertical.h"
-#include "overview/overview.h"
-#include "switcher/switcher.h"
 
-#include "manage/client.h"
 #include "input/keyboard.h"
-#include "manage/layer.h"
 #include "input/pointer.h"
 #include "manage/monitor.h"
-#include "input/device.h"
 #include "manage/misc.h"
+#include "ext-protocol/ext-workspace.h"
+#include "ext-protocol/foreign-toplevel.h"
+#include "ext-protocol/hdr.h"
+#include "ext-protocol/tearing.h"
+#include "ext-protocol/text-input.h"
+#include "ext-protocol/xdg-activation.h"
+#include "ext-protocol/xdg-output.h"
+#include "common/util.h"
 
 void handlesig(int32_t signo) {
 	if (signo == SIGCHLD)

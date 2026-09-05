@@ -1,9 +1,13 @@
+#include <stdio.h>
+#ifndef __DATA_STATIC_KEYMAP_H__
+#define __DATA_STATIC_KEYMAP_H__ 1
+
 typedef struct {
 	const char *full_name;
 	const char *abbr; // 全部使用小写
 } LayoutMapping;
 
-static const LayoutMapping layout_mappings[] = {
+const LayoutMapping layout_mappings[] = {
 	{"English (US)", "us"},
 	{"English (UK)", "gb"},
 	{"Russian", "ru"},
@@ -77,3 +81,5 @@ static const LayoutMapping layout_mappings[] = {
 	{"Malayalam", "ml"},
 	{NULL, NULL} // 结束标记
 };
+
+#endif
