@@ -4,192 +4,8 @@
 #include "../manage/monitor.h"
 #include "../common/util.h"
 
-bool switcher_is_active(void) { return sw.tree != NULL; }
-
-bool switcher_candidate(Client *c) {
-	if (!c->mon || c->iskilling || c->isminimized || c->isunglobal ||
-		c->is_logic_hide || !client_surface(c) || !client_surface(c)->mapped ||
-		client_is_unmanaged(c) || client_is_x11_popup(c))
-		return false;
-
-	if (sw.scope == SW_CURRENT_TAG)
-		return c->mon == sw.mon && VISIBLEON(c, sw.mon);
-	if (sw.scope == SW_ALL_TAG)
-		return c->mon == sw.mon;
-	return (int32_t)c->tags > 0;
-}
-
-void switcher_content_size(Client *c, float *w, float *h) {
-#ifdef XWAYLAND
-	if (client_is_x11(c)) {
-		struct wlr_surface *s = client_surface(c);
-		*w = s->current.width;
-		*h = s->current.height;
-		return;
-	}
-#endif
-	*w = c->surface.xdg->geometry.width;
-	*h = c->surface.xdg->geometry.height;
-}
-
-// map the surface tree into the fixed tile box, re-run after each commit
-// because the content size or clip may change
-void switcher_tile_layout(struct switcher_tile *tile) {
-	struct wlr_box clip;
-	float src_w, src_h;
-	client_get_clip(tile->c, &clip);
-	switcher_content_size(tile->c, &src_w, &src_h);
-	if (src_w <= 0 || src_h <= 0)
-		return;
-
-	float scale_x = (float)tile->cw / src_w;
-	float scale_y = (float)sw.tile_h / src_h;
-	struct switcher_surface *entry;
-	wl_list_for_each(entry, &tile->surfaces, link) {
-		struct wlr_surface *s = entry->surface;
-		if (entry->is_root) {
-			float ratio_x =
-				s->current.width > 0
-					? (float)s->current.buffer_width / s->current.width
-					: 1.0f;
-			float ratio_y =
-				s->current.height > 0
-					? (float)s->current.buffer_height / s->current.height
-					: 1.0f;
-			struct wlr_fbox src = {
-				.x = clip.x * ratio_x,
-				.y = clip.y * ratio_y,
-				.width = src_w * ratio_x,
-				.height = src_h * ratio_y,
-			};
-			wlr_scene_buffer_set_source_box(entry->buffer, &src);
-			wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
-			wlr_scene_buffer_set_dest_size(entry->buffer, tile->cw, sw.tile_h);
-		} else {
-			wlr_scene_node_set_position(&entry->buffer->node,
-										(int)((entry->sx - clip.x) * scale_x),
-										(int)((entry->sy - clip.y) * scale_y));
-			wlr_scene_buffer_set_dest_size(entry->buffer,
-										   (int)(s->current.width * scale_x),
-										   (int)(s->current.height * scale_y));
-		}
-	}
-}
-
-void switcher_surface_finish(struct switcher_surface *entry) {
-	wl_list_remove(&entry->commit.link);
-	wl_list_remove(&entry->destroy.link);
-	wl_list_remove(&entry->output_sample.link);
-	wl_list_remove(&entry->frame_done.link);
-	wl_list_remove(&entry->link);
-	free(entry);
-}
-
-void switcher_surface_update_buffer(struct switcher_surface *entry) {
-	struct wlr_surface *surface = entry->surface;
-	struct wlr_scene_buffer *buffer = entry->buffer;
-
-	struct wlr_fbox source;
-	wlr_surface_get_buffer_source_box(surface, &source);
-	wlr_scene_buffer_set_source_box(buffer, &source);
-	wlr_scene_buffer_set_transform(buffer, surface->current.transform);
-
-	const struct wlr_alpha_modifier_surface_v1_state *alpha =
-		wlr_alpha_modifier_v1_get_surface_state(surface);
-	wlr_scene_buffer_set_opacity(buffer,
-								 alpha ? (float)alpha->multiplier : 1.0f);
-
-	enum wlr_color_transfer_function transfer_function =
-		WLR_COLOR_TRANSFER_FUNCTION_GAMMA22;
-	enum wlr_color_named_primaries primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB;
-	const struct wlr_image_description_v1_data *image =
-		wlr_surface_get_image_description_v1_data(surface);
-	if (image) {
-		transfer_function =
-			wlr_color_manager_v1_transfer_function_to_wlr(image->tf_named);
-		primaries =
-			wlr_color_manager_v1_primaries_to_wlr(image->primaries_named);
-	}
-	wlr_scene_buffer_set_transfer_function(buffer, transfer_function);
-	wlr_scene_buffer_set_primaries(buffer, primaries);
-
-	enum wlr_color_encoding encoding = WLR_COLOR_ENCODING_NONE;
-	enum wlr_color_range range = WLR_COLOR_RANGE_NONE;
-	const struct wlr_color_representation_v1_surface_state *representation =
-		wlr_color_representation_v1_get_surface_state(surface);
-	if (representation) {
-		if (representation->coefficients)
-			encoding = wlr_color_representation_v1_color_encoding_to_wlr(
-				representation->coefficients);
-		if (representation->range)
-			range = wlr_color_representation_v1_color_range_to_wlr(
-				representation->range);
-	}
-	wlr_scene_buffer_set_color_encoding(buffer, encoding);
-	wlr_scene_buffer_set_color_range(buffer, range);
-
-	if (!surface->buffer || surface->current.width <= 0 ||
-		surface->current.height <= 0) {
-		wlr_scene_buffer_set_buffer(buffer, NULL);
-		return;
-	}
-
-	struct wlr_scene_buffer_set_buffer_options options = {
-		.damage = &surface->buffer_damage,
-	};
-	struct wlr_linux_drm_syncobj_surface_v1_state *syncobj =
-		wlr_linux_drm_syncobj_v1_get_surface_state(surface);
-	if (syncobj) {
-		options.wait_timeline = syncobj->acquire_timeline;
-		options.wait_point = syncobj->acquire_point;
-	}
-	wlr_scene_buffer_set_buffer_with_options(buffer, &surface->buffer->base,
-											 &options);
-}
-
-void switcher_surface_commit(struct wl_listener *listener, void *data) {
-	struct switcher_surface *entry = wl_container_of(listener, entry, commit);
-	switcher_surface_update_buffer(entry);
-	switcher_tile_layout(entry->tile);
-}
-
-void switcher_surface_destroy(struct wl_listener *listener, void *data) {
-	struct switcher_surface *entry = wl_container_of(listener, entry, destroy);
-	struct wlr_scene_buffer *buffer = entry->buffer;
-	switcher_surface_finish(entry);
-	wlr_scene_node_destroy(&buffer->node);
-}
-void switcher_surface_output_sample(struct wl_listener *listener, void *data) {
-	struct switcher_surface *entry =
-		wl_container_of(listener, entry, output_sample);
-	const struct wlr_scene_output_sample_event *event = data;
-	if (entry->buffer->primary_output != event->output)
-		return;
-
-	struct wlr_output *output = event->output->output;
-	if (event->direct_scanout)
-		wlr_presentation_surface_scanned_out_on_output(entry->surface, output);
-	else
-		wlr_presentation_surface_textured_on_output(entry->surface, output);
-
-	struct wlr_linux_drm_syncobj_surface_v1_state *syncobj =
-		wlr_linux_drm_syncobj_v1_get_surface_state(entry->surface);
-	if (syncobj && event->release_timeline)
-		wlr_linux_drm_syncobj_v1_state_add_release_point(
-			syncobj, event->release_timeline, event->release_point,
-			output->event_loop);
-}
-// hidden clients are paced by the preview buffer
-void switcher_surface_frame_done(struct wl_listener *listener, void *data) {
-	struct switcher_surface *entry =
-		wl_container_of(listener, entry, frame_done);
-	struct wlr_scene_frame_done_event *event = data;
-	if (entry->buffer->primary_output == event->output)
-		wlr_surface_send_frame_done(entry->surface, &event->when);
-}
-
-void switcher_tile_add_surface(struct wlr_surface *surface, int sx, int sy,
-							   void *data) {
+void switcher_tile_add_surface(struct wlr_surface *surface, int sx,
+									  int sy, void *data) {
 	struct switcher_tile *tile = data;
 
 	// only the real scene surface may update wl_surface output membership
@@ -460,6 +276,33 @@ void switcher(const Arg *arg) {
 	} else {
 		switcher_open(scope);
 	}
+}
+bool switcher_is_active(void) { return sw.tree != NULL; }
+
+bool switcher_candidate(Client *c) {
+	if (!c->mon || c->iskilling || c->isminimized || c->isunglobal ||
+		c->is_logic_hide || !client_surface(c) || !client_surface(c)->mapped ||
+		client_is_unmanaged(c) || client_is_x11_popup(c))
+		return false;
+
+	if (sw.scope == SW_CURRENT_TAG)
+		return c->mon == sw.mon && VISIBLEON(c, sw.mon);
+	if (sw.scope == SW_ALL_TAG)
+		return c->mon == sw.mon;
+	return (int32_t)c->tags > 0;
+}
+
+void switcher_content_size(Client *c, float *w, float *h) {
+#ifdef XWAYLAND
+	if (client_is_x11(c)) {
+		struct wlr_surface *s = client_surface(c);
+		*w = s->current.width;
+		*h = s->current.height;
+		return;
+	}
+#endif
+	*w = c->surface.xdg->geometry.width;
+	*h = c->surface.xdg->geometry.height;
 }
 
 const float switcher_panel_color[4] = {0.09f, 0.09f, 0.11f, 0.92f};
