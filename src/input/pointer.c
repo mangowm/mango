@@ -129,6 +129,8 @@ static bool pointer_client_visible(Client *c) {
 
 static Client *confine_pointer_last = NULL;
 
+#define CONFINE_POINTER_MARGIN 5
+
 static Client *pointer_confine_rule_client(void) {
 	Client *c = server.selected_monitor ? server.selected_monitor->sel : NULL;
 
@@ -959,10 +961,14 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		Client *rule_client = pointer_confine_rule_client();
 		if (!server.active_constraint && rule_client) {
 			struct wlr_box box = pointer_client_warp_box(rule_client);
-			double min_x = box.x + rule_client->bw;
-			double min_y = box.y + rule_client->bw;
-			double max_x = box.x + box.width - rule_client->bw;
-			double max_y = box.y + box.height - rule_client->bw;
+			double min_x =
+				box.x + rule_client->bw + CONFINE_POINTER_MARGIN;
+			double min_y =
+				box.y + rule_client->bw + CONFINE_POINTER_MARGIN;
+			double max_x = box.x + box.width - rule_client->bw -
+						   CONFINE_POINTER_MARGIN - 1;
+			double max_y = box.y + box.height - rule_client->bw -
+						   CONFINE_POINTER_MARGIN - 1;
 
 			if (max_x < min_x) {
 				max_x = min_x;
