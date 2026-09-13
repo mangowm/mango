@@ -279,8 +279,11 @@ exec-once=echo "Xft.dpi: 144" | xrdb -merge
 You can create and manage virtual displays through IPC commands:
 
 ```bash
-# Create virtual output
+# Create a virtual output with an auto-generated name (HEADLESS-N)
 mmsg dispatch create_virtual_output
+
+# Create a virtual output named "virmon1"
+mmsg dispatch create_virtual_output,virmon1
 
 # Destroy all virtual outputs
 mmsg dispatch destroy_all_virtual_output
@@ -293,7 +296,7 @@ You can configure virtual monitors using `wlr-randr`:
 wlr-randr
 
 # Configure virtual monitor
-wlr-randr --output HEADLESS-1 --pos 1921,0 --scale 1 --custom-mode 1920x1080@60Hz
+wlr-randr --output virmon1 --pos 1921,0 --scale 1 --custom-mode 1920x1080@60Hz
 ```
 
 Virtual monitors can be used for screen sharing with tools like [Sunshine](https://github.com/LizardByte/Sunshine) and [Moonlight](https://github.com/moonlight-stream/moonlight-android), allowing other devices to act as extended monitors.

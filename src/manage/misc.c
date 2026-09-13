@@ -500,7 +500,7 @@ void handle_new_session_lock(struct wl_listener *listener, void *data) {
 }
 void handle_new_foreign_toplevel_capture_request(struct wl_listener *listener,
 												 void *data) {
-	struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request
+	struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_event
 		*request = data;
 	Client *c = request->toplevel_handle->data;
 

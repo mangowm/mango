@@ -4671,6 +4671,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = quit;
 	} else if (strcmp(func_name, "create_virtual_output") == 0) {
 		func = create_virtual_output;
+		if (arg_value && arg_value[0] != '\0') {
+			(*arg).v = strdup(arg_value);
+		}
 	} else if (strcmp(func_name, "destroy_all_virtual_output") == 0) {
 		func = destroy_all_virtual_output;
 	} else if (strcmp(func_name, "moveresize") == 0) {

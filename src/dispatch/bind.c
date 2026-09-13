@@ -115,15 +115,22 @@ void create_virtual_output(const Arg *arg) {
 		return;
 	}
 
-	bool done = false;
-	wlr_multi_for_each_backend(server.backend, create_output, &done);
+	struct create_output_ctx ctx = {
+		.done = false,
+		.name = arg->v,
+	};
+	wlr_multi_for_each_backend(server.backend, create_output, &ctx);
 
-	if (!done) {
+	if (!ctx.done) {
 		mango_error(true, WLR_ERROR, "Failed to create virtual output");
 		return;
 	}
 
-	mango_error(true, WLR_INFO, "Virtual output created");
+	if (ctx.name) {
+		mango_error(true, WLR_INFO, "Virtual output '%s' created", ctx.name);
+	} else {
+		mango_error(true, WLR_INFO, "Virtual output created");
+	}
 	return;
 }
 

@@ -932,22 +932,23 @@ void handle_output_request_state(struct wl_listener *listener, void *data) {
 }
 
 void create_output(struct wlr_backend *b, void *data) {
-	bool *done = data;
-	if (*done) {
+	struct create_output_ctx *ctx = data;
+	if (ctx->done) {
 		return;
 	}
 
 	if (wlr_backend_is_wl(b)) {
 		wlr_wl_output_create(b);
-		*done = true;
+		ctx->done = true;
 	} else if (wlr_backend_is_headless(b)) {
-		wlr_headless_add_output(b, 1920, 1080);
-		*done = true;
+		if (wlr_headless_add_output(b, 1920, 1080, ctx->name) != NULL) {
+			ctx->done = true;
+		}
 	}
 #if WLR_HAS_X11_BACKEND
 	else if (wlr_backend_is_x11(b)) {
 		wlr_x11_output_create(b);
-		*done = true;
+		ctx->done = true;
 	}
 #endif
 }

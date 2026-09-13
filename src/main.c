@@ -550,7 +550,7 @@ void setup(void) {
 	server.new_foreign_toplevel_capture_listener.notify =
 		handle_new_foreign_toplevel_capture_request;
 	wl_signal_add(&server.ext_foreign_toplevel_image_capture_source_manager
-					   ->events.new_request,
+					   ->events.capture_request,
 				  &server.new_foreign_toplevel_capture_listener);
 
 	server.tearing_control =
@@ -620,7 +620,7 @@ void setup(void) {
 		wlr_server_decoration_manager_create(server.display),
 		WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 	server.decoration_manager =
-		wlr_xdg_decoration_manager_v1_create(server.display);
+		wlr_xdg_decoration_manager_v1_create(server.display, 1);
 	wl_signal_add(&server.decoration_manager->events.new_toplevel_decoration,
 				  &server.new_xdg_decoration_listener);
 
