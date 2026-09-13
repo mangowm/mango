@@ -181,10 +181,11 @@ pointer_warp_into_constraint(struct wlr_pointer_constraint_v1 *constraint,
 	}
 
 	double lx, ly;
-	if (pointer_constraint_hint_position(constraint, c, &lx, &ly) &&
-		pointer_cursor_outside_client(c)) {
-
+	if (pointer_constraint_hint_position(constraint, c, &lx, &ly)) {
 		wlr_cursor_warp(server.cursor, NULL, lx, ly);
+		wlr_seat_pointer_warp(constraint->seat,
+							  constraint->current.cursor_hint.x,
+							  constraint->current.cursor_hint.y);
 		return;
 	}
 
@@ -928,9 +929,11 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 				double lx, ly;
 
 				if (cc &&
-					pointer_constraint_hint_position(active, cc, &lx, &ly) &&
-					pointer_cursor_outside_client(cc)) {
+					pointer_constraint_hint_position(active, cc, &lx, &ly)) {
 					wlr_cursor_warp(server.cursor, NULL, lx, ly);
+					wlr_seat_pointer_warp(active->seat,
+										  active->current.cursor_hint.x,
+										  active->current.cursor_hint.y);
 				}
 				return;
 			}
