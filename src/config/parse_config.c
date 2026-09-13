@@ -3682,7 +3682,8 @@ void override_config(void) {
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
-	config.focus_cross_monitor_mru = CLAMP_INT(config.focus_cross_monitor_mru, 0, 1);
+	config.focus_cross_monitor_mru =
+		CLAMP_INT(config.focus_cross_monitor_mru, 0, 1);
 	config.focusdir_only_zone_overlap =
 		CLAMP_INT(config.focusdir_only_zone_overlap, 0, 1);
 	config.exchange_cross_monitor =
