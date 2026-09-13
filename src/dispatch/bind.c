@@ -248,6 +248,10 @@ void focus_direction(const Arg *arg) {
 
 	if (!server.selected_monitor->isoverview)
 		c = get_focused_stack_client(c, arg->tc);
+	if (c && c->mon && c->mon != server.selected_monitor &&
+		config.focus_cross_monitor_mru) {
+		c = client_focus_top(c->mon);
+	}
 	if (c) {
 		client_focus(c, 1);
 		if (config.warpcursor)
@@ -464,10 +468,17 @@ void focus_monitor(const Arg *arg) {
 		return;
 
 	server.selected_monitor = tm;
+
+	c = !arg->tc || config.focus_cross_monitor_mru
+			? client_focus_top(server.selected_monitor)
+			: arg->tc;
 	if (config.warpcursor) {
-		pointer_warp_to_monitor(server.selected_monitor);
+		if (c) {
+			pointer_warp_to_client(c);
+		} else {
+			pointer_warp_to_monitor(server.selected_monitor);
+		}
 	}
-	c = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 	if (!c) {
 		server.selected_monitor->sel = NULL;
 		wlr_seat_pointer_notify_clear_focus(server.seat);

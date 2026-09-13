@@ -329,6 +329,7 @@ typedef struct {
 	int32_t edge_scroller_pointer_focus;
 	double edge_scroller_focus_allow_speed;
 	int32_t focus_cross_monitor;
+	int32_t focus_cross_monitor_mru;
 	int32_t focusdir_only_zone_overlap;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
