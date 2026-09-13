@@ -16,8 +16,9 @@ jobs:
       pull-requests: write
       discussions: write
     steps:
-      - uses: dessant/lock-threads@v5
+      - uses: dessant/lock-threads@v6
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           issue-inactive-days: "30"
           issue-comment: >
             I'm going to lock this issue because it has been closed for _30 days_. ⏳

@@ -18,6 +18,7 @@ You can install it using the `moss` package manager:
 ```bash
 sudo moss install mangowm
 ```
+* The Default config will be located at `/usr/share/defaults/mango`.
 
 ---
 
@@ -58,6 +59,7 @@ dnf install mangowm
 The package is hosted in the community-maintained **GURU** repository.
 
 1. **Add the GURU repository**
+
    ```bash
    emerge --ask --verbose eselect-repository
    eselect repository enable guru
@@ -82,6 +84,7 @@ The package definition is described in the source repository.
 
 1. **Add mango channel**
    Add to `$HOME/.config/guix/channels.scm`:
+
    ```scheme
    (cons (channel
            (name 'mangowm)
@@ -92,11 +95,13 @@ The package definition is described in the source repository.
 
 2. **Install**
    After running `guix pull`, you can install mangowm:
+
    ```bash
    guix install mangowm
    ```
 
    Or add it to your system configuration using the mangowm module:
+
    ```scheme
    (use-modules (mangowm))
 
@@ -115,6 +120,7 @@ The package definition is described in the source repository.
 The repository provides a Flake with a NixOS module.
 
 1. **Add flake input**
+
    ```nix
    # flake.nix
    {
@@ -132,6 +138,7 @@ The repository provides a Flake with a NixOS module.
 2. **Import the NixOS module**
 
    **Option A — Import in `configuration.nix`:**
+
    ```nix
    # configuration.nix (or any other file that you import)
    {inputs, ...}: {
@@ -145,6 +152,7 @@ The repository provides a Flake with a NixOS module.
    ```
 
    **Option B — Import directly in flake:**
+
    ```nix
    # flake.nix
    {
@@ -165,6 +173,7 @@ The repository provides a Flake with a NixOS module.
    ```
 
 3. **Enable the module**
+
    ```nix
    # configuration.nix (or any other file that you import)
    {
@@ -172,9 +181,67 @@ The repository provides a Flake with a NixOS module.
    }
    ```
 
-4. **Extra options**
-   - `programs.mango.package` — the mango package to use, allows usage of custom mango drvs
-   - `programs.mango.addLoginEntry` (default: `true`) — adds login entry to the display manager
+4. **Start mango on login**
+
+   The following are common examples. Refer to the official NixOS documentation for full configuration options.
+
+   **Option A — greetd:** Autologin on first start; login screen after logout.
+
+   ```nix
+   services.greetd = {
+     enable = true;
+     settings = {
+       initial_session = {
+         command = "mango";
+         user = "your-username"; # auto-login on first start, no password required
+       };
+       default_session = {
+         command = "${pkgs.greetd.tuigreet}/bin/tuigreet --cmd mango";
+         user = "greeter";
+       };
+     };
+   };
+   ```
+
+   **Option B — Display manager autologin:** Autologin via an existing display manager (e.g. SDDM, GDM). [`addLoginEntry`](/docs/nix-options#addloginentry) (default: `true`) automatically registers mango as a session.
+
+   ```nix
+   services.displayManager = {
+     defaultSession = "mango"; # derived from mango.desktop filename
+     autoLogin = {
+       enable = true;
+       user = "your-username";
+     };
+   };
+   ```
+
+   **Option C — getty autologin:** No login screen, boots directly into mango on TTY1.
+
+   For bash/zsh:
+
+   ```nix
+   services.getty.autologinUser = "your-username";
+
+   environment.loginShellInit = ''
+     [ "$(tty)" = /dev/tty1 ] && exec mango
+   '';
+   ```
+
+   For fish:
+
+   ```nix
+   services.getty.autologinUser = "your-username";
+
+   programs.fish.loginShellInit = ''
+     if test (tty) = /dev/tty1
+         exec mango
+     end
+   '';
+   ```
+
+5. **All available options**
+
+   See [Nix Module Options](/docs/nix-options) for the full list of NixOS and Home Manager options.
 
 ---
 
@@ -195,6 +262,7 @@ pikman install mangowm
 If your distribution isn't listed above, or you want the latest unreleased changes, you can build mangowm from source.
 
 > **Info:** Ensure the following dependencies are installed before proceeding:
+>
 > - `wayland`
 > - `wayland-protocols`
 > - `libinput`
@@ -206,6 +274,9 @@ If your distribution isn't listed above, or you want the latest unreleased chang
 > - `hwdata`
 > - `seatd`
 > - `pcre2`
+> - `pango`
+> - `cjson`
+> - `pixman`
 > - `xorg-xwayland`
 > - `libxcb`
 
@@ -213,8 +284,9 @@ You will need to build `wlroots` and `scenefx` manually as well.
 
 1. **Build wlroots**
    Clone and install the specific version required (check README for latest version).
+
    ```bash
-   git clone -b 0.19.3 https://gitlab.freedesktop.org/wlroots/wlroots.git
+   git clone -b 0.20.2 https://gitlab.freedesktop.org/wlroots/wlroots.git
    cd wlroots
    meson build -Dprefix=/usr
    sudo ninja -C build install
@@ -222,8 +294,9 @@ You will need to build `wlroots` and `scenefx` manually as well.
 
 2. **Build scenefx**
    This library handles the visual effects.
+
    ```bash
-   git clone -b 0.4.1 https://github.com/wlrfx/scenefx.git
+   git clone -b 0.5 https://github.com/wlrfx/scenefx.git
    cd scenefx
    meson build -Dprefix=/usr
    sudo ninja -C build install

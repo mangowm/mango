@@ -6,7 +6,10 @@
 #include <string.h>
 #include <time.h>
 
-#include "util.h"
+#include <wlr/util/log.h>
+
+#include "mango/common/log.h"
+#include "mango/common/util.h"
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
@@ -59,12 +62,13 @@ int32_t regex_match(const char *pattern, const char *str) {
 	}
 
 	pcre2_code *re = pcre2_compile((PCRE2_SPTR)pattern, PCRE2_ZERO_TERMINATED,
-								   PCRE2_UTF, // 启用 UTF-8 支持
+								   PCRE2_UTF, // Enables UTF-8 support.
 								   &errnum, &erroffset, NULL);
 	if (!re) {
 		PCRE2_UCHAR errbuf[256];
 		pcre2_get_error_message(errnum, errbuf, sizeof(errbuf));
-		fprintf(stderr, "PCRE2 error: %s at offset %zu\n", errbuf, erroffset);
+		mango_error(false, WLR_ERROR, "PCRE2 error: %s at offset %zu\n", errbuf,
+					erroffset);
 		return 0;
 	}
 
@@ -173,4 +177,62 @@ char *string_printf(const char *fmt, ...) {
 	vsnprintf(str, len + 1, fmt, args);
 	va_end(args);
 	return str;
+}
+
+void wl_list_swap(struct wl_list *l1, struct wl_list *l2) {
+	struct wl_list *tmp1_prev = l1->prev;
+	struct wl_list *tmp2_prev = l2->prev;
+	struct wl_list *tmp1_next = l1->next;
+	struct wl_list *tmp2_next = l2->next;
+
+	if (l1->next == l2) { /* l1 -> l2 are adjacent. */
+		l1->next = l2->next;
+		l1->prev = l2;
+		l2->next = l1;
+		l2->prev = tmp1_prev;
+		tmp1_prev->next = l2;
+		tmp2_next->prev = l1;
+	} else if (l2->next == l1) { /* l2 -> l1 are adjacent. */
+		l2->next = l1->next;
+		l2->prev = l1;
+		l1->next = l2;
+		l1->prev = tmp2_prev;
+		tmp2_prev->next = l1;
+		tmp1_next->prev = l2;
+	} else { /* Not adjacent. */
+		l2->next = tmp1_next;
+		l2->prev = tmp1_prev;
+		l1->next = tmp2_next;
+		l1->prev = tmp2_prev;
+		tmp1_prev->next = l2;
+		tmp1_next->prev = l2;
+		tmp2_prev->next = l1;
+		tmp2_next->prev = l1;
+	}
+}
+
+void wl_list_safe_reinsert_prev(struct wl_list *l1, struct wl_list *l2) {
+	if (!l1 || !l2)
+		return;
+	if (l1 == l2)
+		return;
+	if (l1->prev == l2)
+		return;
+
+	wl_list_remove(l2);
+	wl_list_init(l2);
+	wl_list_insert(l1->prev, l2);
+}
+
+void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2) {
+	if (!l1 || !l2)
+		return;
+	if (l1 == l2)
+		return;
+	if (l1->next == l2)
+		return;
+
+	wl_list_remove(l2);
+	wl_list_init(l2);
+	wl_list_insert(l1, l2);
 }

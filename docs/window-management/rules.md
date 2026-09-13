@@ -10,8 +10,13 @@ Window rules allow you to set specific properties (floating, opacity, size, anim
 **Format:**
 
 ```ini
+# Set window rules that apply to every times when the window is opened
 windowrule=Parameter:Values,title:Values
 windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
+
+# Set window rules that only apply once when the window is opened
+windowrule-once=Parameter:Values,title:Values
+windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 ```
 
 ### State & Behavior Parameters
@@ -34,18 +39,23 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
-| `indleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
+| `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
+| `force_render` | integer | `0` / `1` | Force render frame even if the window is not visible |
+| `activation_bypass` | integer | `0` / `1` | Bypass xdg-activation authentication: activation requests for this window are treated as authenticated, so the normal activation behavior applies regardless of token validity |
+
 
 ### Geometry & Position
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `width` | integer | 0-9999 | Window width when it becomes a floating window |
-| `height` | integer | 0-9999 | Window height when it becomes a floating window |
+| `width` | float | 0-9999 | Window width when it becomes a floating window,if the value below 1, it will be the percentage of the screen width,otherwise it will be the pixel value |
+| `height` | float | 0-9999 | Window height when it becomes a floating window,if the value below 1, it will be the percentage of the screen height,otherwise it will be the pixel value |
 | `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
 | `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
-| `tags` | integer | 1-9 | Assign to specific tag |
+| `tags` | mask | `0-9` / `1\|3\|5` | Assign to specific one tag (use `0` for special workspace overlay) or multiple tags (use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
 
@@ -61,6 +71,7 @@ windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `focused_opacity` | integer | `0` / `1` | Window focused opacity |
 | `unfocused_opacity` | integer | `0` / `1` | Window unfocused opacity |
 | `allow_csd` | integer | `0` / `1` | Allow client side decoration |
+| `confine_pointer` | integer | `0` / `1` | While this window is focused and visible, force the cursor to stay inside it (does not require the client to use the pointer constraints protocol) |
 
 > **Tip:** For detailed visual effects configuration, see the [Window Effects](/docs/visuals/effects) page for blur, shadows, and opacity settings.
 
@@ -115,11 +126,14 @@ windowrule=width:1000,height:900,appid:yesplaymusic,title:Demons
 
 # Global keybindings for OBS Studio
 windowrule=globalkeybinding:ctrl+alt-o,appid:com.obsproject.Studio
-windowrule=globalkeybinding:ctrl+alt+n,appid:com.obsproject.Studio
+windowrule=globalkeybinding:ctrl+alt-n,appid:com.obsproject.Studio
 windowrule=isopensilent:1,appid:com.obsproject.Studio
 
 # Force tearing for games
 windowrule=force_tearing:1,title:vkcube
+
+# Skip xdg-activation authentication for this app
+windowrule=activation_bypass:1,appid:org.example.App
 windowrule=force_tearing:1,title:Counter-Strike 2
 
 # Named scratchpad for file manager
@@ -138,7 +152,7 @@ windowrule=offsetx:20,offsety:-30,width:800,height:600,appid:alacritty
 # Send to specific tag and monitor
 windowrule=tags:9,monitor:HDMI-A-1,appid:discord
 
-# Terminal swallowing setup
+# Terminal swallowdby setup
 windowrule=isterm:1,appid:st
 windowrule=noswallow:1,appid:foot
 
@@ -166,13 +180,14 @@ You can set all parameters in one line. If only `id` is set, the rule is followe
 tagrule=id:Values,Parameter:Values,Parameter:Values
 tagrule=id:Values,monitor_name:eDP-1,Parameter:Values,Parameter:Values
 tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
+tagrule=id:*,Parameter:Values
 ```
 
 > **Tip:** See [Layouts](/docs/window-management/layouts#supported-layouts) for detailed descriptions of each layout type.
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | integer | 0-9 | Match by tag id, 0 means the ~0 tag |
+| `id` | integer / wildcard | 0-9 / `*` | Match by tag id, 0 means the ~0 tag. Use `*` to match all tags at once |
 | `monitor_name` | string | monitor name | Match by monitor name |
 | `monitor_make` | string | monitor make | Match by monitor manufacturer |
 | `monitor_model` | string | monitor model | Match by monitor model |
@@ -183,10 +198,16 @@ tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
 | `no_hide` | integer | `0` / `1` | Not hide even if the tag is empty |
 | `nmaster` | integer | 0, 99 | Number of master windows |
 | `mfact` | float | 0.1–0.9 | Master area factor |
+| `scroller_default_proportion` | float | 0.1-1.0 | Set scroller  default proportion. |
+| `scroller_default_proportion_single` | float | 0.1-1.0 | Set scroller auto adjust proportion when it is single window(only apply when set `scroller_ignore_proportion_single` to `0`) |
+| `scroller_ignore_proportion_single` | integer | `0` / `1` | Ignore scroller single proportion setting. |
 
 ### Examples
 
 ```ini
+# Set layout for all tags at once (equivalent to the two rules below)
+tagrule=id:*,layout_name:scroller
+
 # Set layout for specific tags
 tagrule=id:1,layout_name:scroller
 tagrule=id:2,layout_name:scroller
@@ -204,6 +225,10 @@ tagrule=id:4,monitor_name:eDP-1,no_hide:1,layout_name:scroller
 # Advanced tag configuration with master layout settings
 tagrule=id:5,layout_name:tile,nmaster:2,mfact:0.6
 tagrule=id:6,monitor_name:HDMI-A-1,layout_name:monocle,no_render_border:1
+
+# set scroller proportion for specific tag
+tagrule=id:1,layout_name:scroller,scroller_default_proportion_single:0.5,scroller_ignore_proportion_single:0,scroller_default_proportion:0.9,monitor_name:HDMI-A-1
+
 ```
 
 > **Tip:** For Waybar configuration with persistent tags, see [Status Bar](/docs/visuals/status-bar) documentation.
@@ -220,7 +245,7 @@ You can set all parameters in one line. Target "layer shell" surfaces like statu
 layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 ```
 
-> **Tip:** You can use `mmsg -e` to get the last open layer name for debugging.
+> **Tip:** You can use `mmsg get last_open_surface` to get the last open layer name for debugging.
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
@@ -230,6 +255,7 @@ layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 | `noblur` | integer | `0` / `1` | Disable blur |
 | `noanim` | integer | `0` / `1` | Disable layer animation |
 | `noshadow` | integer | `0` / `1` | Disable layer shadow |
+| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `noanim:1`) |
 
 > **Tip:** For animation types, see [Animations](/docs/visuals/animations#animation-types). For visual effects, see [Window Effects](/docs/visuals/effects).
 

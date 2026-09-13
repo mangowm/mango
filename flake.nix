@@ -8,12 +8,13 @@
     };
   };
 
-  outputs = {
-    self,
-    flake-parts,
-    ...
-  } @ inputs:
-    flake-parts.lib.mkFlake {inherit inputs;} {
+  outputs =
+    {
+      self,
+      flake-parts,
+      ...
+    }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.flake-parts.flakeModules.easyOverlay
       ];
@@ -23,30 +24,41 @@
         nixosModules.mango = import ./nix/nixos-modules.nix self;
       };
 
-      perSystem = {
-        config,
-        pkgs,
-        ...
-      }: let
-        inherit (pkgs) callPackage ;
-        mango = callPackage ./nix {
-          inherit (inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}) scenefx;
+      perSystem =
+        {
+          config,
+          pkgs,
+          ...
+        }:
+        let
+          inherit (pkgs) callPackage;
+          mango = callPackage ./nix {
+            scenefx = inputs.scenefx.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          };
+          shellOverride = old: {
+            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.clang-tools ];
+            buildInputs = old.buildInputs ++ [ ];
+          };
+        in
+        {
+          packages.default = mango;
+          overlayAttrs = {
+            inherit (config.packages) mango;
+          };
+          packages = {
+            inherit mango;
+            hm-options-json = pkgs.callPackage (import ./nix/generate-options.nix self) {
+              module = ./nix/hm-modules.nix;
+              optionPrefix = "wayland.windowManager.mango.";
+            };
+            nixos-options-json = pkgs.callPackage (import ./nix/generate-options.nix self) {
+              module = ./nix/nixos-modules.nix;
+              optionPrefix = "programs.mango.";
+            };
+          };
+          devShells.default = mango.overrideAttrs shellOverride;
+          formatter = pkgs.nixfmt;
         };
-        shellOverride = old: {
-          nativeBuildInputs = old.nativeBuildInputs ++ [];
-          buildInputs = old.buildInputs ++ [];
-        };
-      in {
-        packages.default = mango;
-        overlayAttrs = {
-          inherit (config.packages) mango;
-        };
-        packages = {
-          inherit mango;
-        };
-        devShells.default = mango.overrideAttrs shellOverride;
-        formatter = pkgs.alejandra;
-      };
       systems = [
         "x86_64-linux"
         "aarch64-linux"

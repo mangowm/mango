@@ -7,16 +7,18 @@ description: Configure mouse buttons, scrolling, gestures, and lid switches.
 
 Assign actions to mouse button presses with optional modifier keys.
 
+> **Info:** All of the bindings in this page (`mousebind`, `axisbind`, `gesturebind`, `switchbind`) support key modes via `keymode=<name>`, using the exact same rules as `bind`. See [Keys: Key Modes](/docs/bindings/keys).
+
 ### Syntax
 
 ```ini
 mousebind=MODIFIERS,BUTTON,COMMAND,PARAMETERS
 ```
 
-- **Modifiers**: `SUPER`, `CTRL`, `ALT`, `SHIFT`, `NONE`. Combine with `+` (e.g., `SUPER+CTRL`)
-- **Buttons**: `btn_left`, `btn_right`, `btn_middle`, `btn_side`, `btn_extra`, `btn_forward`, `btn_back`, `btn_task`
-
-> **Warning:** When modifiers are set to `NONE`, only `btn_middle` works in normal mode. `btn_left` and `btn_right` only work in overview mode.
+- **Modifiers**: `SUPER`, `CTRL`, `ALT`, `SHIFT`, `NONE`. Combine with `+` (e.g., `SUPER+CTRL`).
+- **Buttons**: Can be specified in one of the following ways:
+  - **Standard Names**: `btn_left`, `btn_right`, `btn_middle`, `btn_side`, `btn_extra`, `btn_forward`, `btn_back`, `btn_task`
+  - **Hardware Codes**: `code:NUMBER` (e.g., `code:272`, `code:273`, useful for binding non-standard or extra mouse buttons)
 
 ### Examples
 
@@ -26,10 +28,7 @@ mousebind=SUPER,btn_left,moveresize,curmove
 mousebind=SUPER,btn_right,moveresize,curresize
 mousebind=SUPER+CTRL,btn_right,killclient
 
-# Overview mode (requires NONE modifier)
-mousebind=NONE,btn_left,toggleoverview,-1
-mousebind=NONE,btn_right,killclient,0
-mousebind=NONE,btn_middle,togglemaximizescreen,0
+mousebind=NONE,code:273,togglemaximizescreen,0
 ```
 
 ---
@@ -57,7 +56,7 @@ axisbind=SUPER,DOWN,viewtoright_have_client
 
 ## Gesture Bindings
 
-Enable touchpad swipe gestures for navigation and window management.
+Enable trackpad swipe gestures for navigation and window management.
 
 ### Syntax
 
@@ -68,7 +67,26 @@ gesturebind=MODIFIERS,DIRECTION,FINGERS,COMMAND,PARAMETERS
 - **Direction**: `up`, `down`, `left`, `right`
 - **Fingers**: `3` or `4`
 
-> **Info:** Gestures require proper touchpad configuration. See [Input Devices](/docs/configuration/input) for touchpad settings like `tap_to_click` and `disable_while_typing`.
+> **Info:** Gestures require proper trackpad configuration. See [Input Devices](/docs/configuration/input) for trackpad settings like `tap_to_click` and `trackpad_disable_while_typing`.
+
+### Drag previews for bound gestures
+
+`gesture_live=1` shows the transition while dragging for these gesturebind
+commands:
+
+```ini
+# right drag -> previous tag
+gesturebind=none,right,4,viewprev_have_client
+# left drag -> next tag
+gesturebind=none,left,4,viewnext_have_client
+
+# swipe up -> overview
+gesturebind=none,up,4,toggleoverview
+# swipe down -> close overview
+gesturebind=none,down,4,toggleoverview
+```
+
+Set `gesture_live=0` to disable previews and act only on release.
 
 ### Examples
 
@@ -79,9 +97,9 @@ gesturebind=none,right,3,focusdir,right
 gesturebind=none,up,3,focusdir,up
 gesturebind=none,down,3,focusdir,down
 
-# 4-finger: Workspace navigation
-gesturebind=none,left,4,viewtoleft_have_client
-gesturebind=none,right,4,viewtoright_have_client
+# 4-finger: Workspace navigation (right drag -> previous tag, left drag -> next)
+gesturebind=none,right,4,viewprev_have_client
+gesturebind=none,left,4,viewnext_have_client
 gesturebind=none,up,4,toggleoverview
 gesturebind=none,down,4,toggleoverview
 ```

@@ -1,10 +1,15 @@
 /.cache
 /.vscode
 /result
+/build
+/mango-wlonly
 config.h
-mango
+/mango
 mango.o
 util.o
 *-protocol.h
 *-protocol.c
 *-protocol.o
+
+.envrc
+.direnv

@@ -4,12 +4,14 @@
   #:use-module (guix gexp)
   #:use-module (guix packages)
   #:use-module (guix utils)
-  #:use-module (gnu packages wm)
+  #:use-module (gnu packages window-management)
+  #:use-module (gnu packages gtk)
   #:use-module (gnu packages freedesktop)
   #:use-module (gnu packages xdisorg)
   #:use-module (gnu packages pciutils)
   #:use-module (gnu packages admin)
   #:use-module (gnu packages pcre)
+  #:use-module (gnu packages javascript)
   #:use-module (gnu packages xorg)
   #:use-module (gnu packages build-tools)
   #:use-module (gnu packages ninja)
@@ -53,9 +55,12 @@
                   hwdata
                   seatd
                   pcre2
+                  pango
+                  cjson
                   libxcb
+                  pixman
                   xcb-util-wm
-                  wlroots-0.19
+                  wlroots-0.20
                   scenefx))
     (native-inputs (list pkg-config wayland-protocols))
     (home-page "https://github.com/mangowm/mango")

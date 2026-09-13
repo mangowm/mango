@@ -41,11 +41,10 @@ blur_optimized=0
 
 ### My games are lagging or stuttering
 
-Try enabling **SyncObj** timeline support and **Adaptive Sync** (VRR) if your monitor supports it.
+Try enabling **SyncObj** timeline support.
 
 ```ini
 syncobj_enable=1
-adaptive_sync=1
 ```
 
 ---
@@ -66,7 +65,8 @@ Then force it for your specific game:
 windowrule=force_tearing:1,title:Counter-Strike 2
 ```
 
-> **Warning:** Some graphics cards require setting `WLR_DRM_NO_ATOMIC=1` before mango starts for tearing to work. Add it to `/etc/environment` and reboot, or launch mango with `WLR_DRM_NO_ATOMIC=1 mango`. See [Monitors — Tearing](/docs/configuration/monitors#tearing-game-mode) for details.
+> **Warning:** Some graphics cards require setting `env=WLR_DRM_NO_ATOMIC,1` in config before mango starts for tearing to work. 
+> See [Monitors — Tearing](/docs/configuration/monitors#tearing-game-mode) for details.
 
 ---
 

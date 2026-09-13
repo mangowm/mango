@@ -1,14 +1,24 @@
-self: {
+self:
+{
   config,
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.programs.mango;
-in {
+in
+{
+  disabledModules = [ "programs/wayland/mango.nix" ];
+
   options = {
     programs.mango = {
       enable = lib.mkEnableOption "mango, a wayland compositor based on dwl";
+      addLoginEntry = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Whether to add a login entry to the display manager for mango. Only has effect if a display manager is configured (e.g. SDDM, GDM via `services.displayManager`).";
+      };
       package = lib.mkOption {
         type = lib.types.package;
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.mango;
@@ -18,10 +28,9 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages =
-      [
-        cfg.package
-      ];
+    environment.systemPackages = [
+      cfg.package
+    ];
 
     xdg.portal = {
       enable = lib.mkDefault true;
@@ -32,12 +41,12 @@ in {
             "gtk"
           ];
           # except those
-          "org.freedesktop.impl.portal.Secret" = ["gnome-keyring"];
-          "org.freedesktop.impl.portal.ScreenCast" = ["wlr"];
-          "org.freedesktop.impl.portal.ScreenShot" = ["wlr"];
+          "org.freedesktop.impl.portal.Secret" = [ "gnome-keyring" ];
+          "org.freedesktop.impl.portal.ScreenCast" = [ "wlr" ];
+          "org.freedesktop.impl.portal.Screenshot" = [ "wlr" ];
 
           # wlr does not have this interface
-          "org.freedesktop.impl.portal.Inhibit" = [];
+          "org.freedesktop.impl.portal.Inhibit" = [ ];
         };
       };
       extraPortals = with pkgs; [
@@ -47,7 +56,7 @@ in {
 
       wlr.enable = lib.mkDefault true;
 
-      configPackages = [cfg.package];
+      configPackages = [ cfg.package ];
     };
 
     security.polkit.enable = lib.mkDefault true;
@@ -55,7 +64,7 @@ in {
     programs.xwayland.enable = lib.mkDefault true;
 
     services = {
-      displayManager.sessionPackages = [cfg.package];
+      displayManager.sessionPackages = lib.mkIf cfg.addLoginEntry [ cfg.package ];
 
       graphical-desktop.enable = lib.mkDefault true;
     };

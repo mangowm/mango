@@ -26,6 +26,12 @@ rootcolor=0x323232ff
 # Inactive window border
 bordercolor=0x444444ff
 
+# Drop shadow when dragging windows
+dropcolor=0x8FBA7C55
+
+# Split window border color in manual dwindle layout
+splitcolor=0xEB441EFF
+
 # Active window border
 focuscolor=0xc66b25ff
 
@@ -45,6 +51,39 @@ You can also color-code windows based on their state:
 | Overlay | `overlaycolor` | `0x14a57cff` |
 
 > **Tip:** For scratchpad window sizing, see [Scratchpad](/docs/window-management/scratchpad) configuration.
+
+### Overview Jump Mode
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `jump_label_decorate_fg_color` | `0xc4939dff` | text color. |
+| `jump_label_decorate_bg_color` | `0x201b14ff` | background color.|
+| `jump_label_decorate_focus_fg_color` | `0x201b14ff` |  text color for focus. |
+| `jump_label_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
+| `jump_label_decorate_border_color` | `0x8BAA9Bff` | border color.|
+| `jump_label_decorate_border_width` | `4` | border width.|
+| `jump_label_decorate_corner_radius` | `5` | corner radius.|
+| `jump_label_decorate_padding_x` | `10` | horizontal padding.|
+| `jump_label_decorate_padding_y` | `10` | vertical padding.|
+| `jump_label_decorate_font_desc` | `monospace Bold 16` | font set.|
+
+### Tab Bar For Monocle Layout
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `group_bar_height` | `50` | Height of the tab bar for monocle layout. |
+| `group_bar_decorate_fg_color` | `0xc4939dff` | text color.
+| `group_bar_decorate_bg_color` | `0x201b14ff` | background color.|
+| `group_bar_decorate_focus_fg_color` | `0x201b14ff` | text color for focus. |
+| `group_bar_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
+| `group_bar_decorate_border_color` | `0x8BAA9Bff` | border color.|
+| `group_bar_decorate_border_width` | `4` | border width.|
+| `group_bar_decorate_corner_radius` | `5` | corner radius.|
+| `group_bar_decorate_padding_x` | `0` | horizontal padding.|
+| `group_bar_decorate_padding_y` | `0` | vertical padding.|
+| `group_bar_decorate_font_desc` | `monospace Bold 16` | font set.|
+
+## Borders
+
+Control the appearance of window borders.
 
 ## Cursor Theme
 

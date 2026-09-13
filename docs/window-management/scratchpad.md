@@ -71,3 +71,47 @@ scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
 scratchpadcolor=0x516c93ff
 ```
+
+---
+
+## Special Workspace (Tag 0)
+
+The special workspace (Tag 0) provides an overlay workspace of windows that can be summoned anywhere with full layout support (Scroller, Master/Stack, Dwindle, etc.). When Tag 0 is active, windows from the underlying workspace remain visible in the background, and all windows on the special workspace are displayed above them.
+
+### Keybindings
+
+```ini
+# Toggle the special workspace overlay (Tag 0)
+bind=SUPER,s,toggle_special_tag
+
+# Move focused window to/from the special workspace
+bind=SUPER+SHIFT,s,tag_special_tag
+
+# Silently send active window to the special workspace without switching
+bind=SUPER+CTRL,s,tag_special_silent
+```
+
+### Window Rules for Special Workspace
+
+You can automatically assign applications to launch directly on the special workspace using `tags:0`:
+
+```ini
+# Automatically open Spotify and Discord in the special workspace
+windowrule=tags:0,appid:spotify
+windowrule=tags:0,appid:discord
+```
+
+### Configuration Options
+
+You can configure background dimming and custom layout gaps for the special workspace:
+
+```ini
+# Background dim level when special workspace is active (0.0 to 1.0, default 0.5)
+special_dim=0.5
+
+# Inner and outer gaps for windows on the special workspace
+special_gappih=10
+special_gappiv=10
+special_gappoh=20
+special_gappov=20
+```

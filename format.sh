@@ -1,3 +1,3 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
-clang-format -i src/*/*.h -i  src/*/*.c -i  src/mango.c -i mmsg/mmsg.c -i mmsg/arg.h -i mmsg/dynarr.h 
+clang-format -i include/mango/*/*.h -i src/*/*.c -i src/main.c -i mmsg/mmsg.c
