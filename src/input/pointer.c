@@ -35,6 +35,8 @@
 #endif
 #include <wlr/util/region.h>
 
+#define CONFINE_POINTER_MARGIN 5
+
 static struct LastCursor last_cursor;
 
 static double pointer_surface_scale(Client *c) {
@@ -181,10 +183,11 @@ pointer_warp_into_constraint(struct wlr_pointer_constraint_v1 *constraint,
 	}
 
 	double lx, ly;
-	if (pointer_constraint_hint_position(constraint, c, &lx, &ly) &&
-		pointer_cursor_outside_client(c)) {
-
+	if (pointer_constraint_hint_position(constraint, c, &lx, &ly)) {
 		wlr_cursor_warp(server.cursor, NULL, lx, ly);
+		wlr_seat_pointer_warp(constraint->seat,
+							  constraint->current.cursor_hint.x,
+							  constraint->current.cursor_hint.y);
 		return;
 	}
 
@@ -928,9 +931,11 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 				double lx, ly;
 
 				if (cc &&
-					pointer_constraint_hint_position(active, cc, &lx, &ly) &&
-					pointer_cursor_outside_client(cc)) {
+					pointer_constraint_hint_position(active, cc, &lx, &ly)) {
 					wlr_cursor_warp(server.cursor, NULL, lx, ly);
+					wlr_seat_pointer_warp(active->seat,
+										  active->current.cursor_hint.x,
+										  active->current.cursor_hint.y);
 				}
 				return;
 			}
@@ -956,10 +961,12 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		Client *rule_client = pointer_confine_rule_client();
 		if (!server.active_constraint && rule_client) {
 			struct wlr_box box = pointer_client_warp_box(rule_client);
-			double min_x = box.x + rule_client->bw;
-			double min_y = box.y + rule_client->bw;
-			double max_x = box.x + box.width - rule_client->bw;
-			double max_y = box.y + box.height - rule_client->bw;
+			double min_x = box.x + rule_client->bw + CONFINE_POINTER_MARGIN;
+			double min_y = box.y + rule_client->bw + CONFINE_POINTER_MARGIN;
+			double max_x = box.x + box.width - rule_client->bw -
+						   CONFINE_POINTER_MARGIN - 1;
+			double max_y = box.y + box.height - rule_client->bw -
+						   CONFINE_POINTER_MARGIN - 1;
 
 			if (max_x < min_x) {
 				max_x = min_x;
