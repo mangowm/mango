@@ -70,6 +70,22 @@ windowrule=force_tearing:1,title:Counter-Strike 2
 
 ---
 
+### The cursor escapes to another monitor when playing a fullscreen game
+
+Some X11 games (typically Proton/Wine titles, e.g. Satisfactory) capture the mouse by hiding the cursor and grabbing the pointer with `confine_to`. Xwayland emulates that with a locked pointer constraint, and that lock can be dropped by Xwayland itself (when the game releases the X11 confine while keeping the mouse captured). Once the lock is gone the compositor has nothing left to confine the pointer, so the cursor can move onto another monitor.
+
+Add a window rule to force the cursor to stay inside the game window while it is focused:
+
+```ini
+windowrule=confine_pointer:1,appid:steam_app_526870
+```
+
+Use `appid:` or `title:` to match your game — see [Window Rules](/docs/window-management/rules) for the available matching options.
+
+`confine_pointer=1` keeps the cursor 5px inside the window's surface whenever that window is the focused, visible window. The confinement is released as soon as the window loses focus, gets hidden, minimized, or moved to a hidden tag. It does not rely on the pointer constraints protocol.
+
+---
+
 ### How do I use pipes `|` in spawn commands?
 
 The standard `spawn` command does not support shell pipes directly. You must use `spawn_shell` instead.

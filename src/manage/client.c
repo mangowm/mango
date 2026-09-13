@@ -1047,10 +1047,15 @@ Client *direction_select(const Arg *arg) {
  * only return that client */
 Client *client_focus_top(Monitor *m) {
 	Client *c = NULL;
+
+	if (!m) {
+		return NULL;
+	}
+
 	wl_list_for_each(c, &server.focus_stack, flink) {
 		if (c->iskilling || c->isunglobal)
 			continue;
-		if (VISIBLEON(c, m))
+		if (VISIBLEON(c, m) && client_surface(c)->mapped)
 			return c;
 	}
 	return NULL;
