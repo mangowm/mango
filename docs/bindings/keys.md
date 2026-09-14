@@ -149,7 +149,13 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `tag` | `mask[,synctag]` | Move window to tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). Optional `synctag` (0/1) syncs to all monitors. |
 | `tagsilent` | `mask` | Move window to tag(s) without focusing it. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
 | `tagtoleft` | `[synctag]` | Move window to left tag. Optional `synctag` (0/1). |
+| `tagtoleftsilent` | `[synctag]` | Move window to left tag without focusing it. Optional `synctag` (0/1). |
 | `tagtoright` | `[synctag]` | Move window to right tag. Optional `synctag` (0/1). |
+| `tagtorightsilent` | `[synctag]` | Move window to right tag without focusing it. Optional `synctag` (0/1). |
+| `tagcrossmon` | `tag,monitor_spec` | Move window to specified tag on specified monitor. |
+| `toggletag` | `0-9` | Toggle tag on window (0 means all tags). |
+| `toggleview` | `1-9` | Toggle tag view. |
+| `comboview` | `1-9` | View multi tags pressed simultaneously. |
 | `tagcrossmon` | `mask,monitor_spec` | Move window to tag(s) on specified monitor. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format) and a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggletag` | `mask` | Toggle tag(s) on window. Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). `0` toggles all tags. |
 | `toggleview` | `mask` | Toggle view of tag(s). Accepts a [tag mask](/docs/bindings/keys#tag-mask-format). |
