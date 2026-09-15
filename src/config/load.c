@@ -429,7 +429,7 @@ bool parse_config(void) {
 	keybindings_conflict |= check_switch_binding_conflicts(&config);
 	keybindings_conflict |= check_gesture_binding_conflicts(&config);
 
-	bool result = parse_correct || keybindings_conflict;
+	bool result = parse_correct && !keybindings_conflict;
 	config_error_store_end();
 	config_error_nag_update();
 	return result;
