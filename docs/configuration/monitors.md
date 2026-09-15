@@ -107,14 +107,14 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `allow_tearing` | `0` | Global tearing control: `0` (Disable), `1` (Enable), `2` (Fullscreen only). |
+| `system.tearing.mode` | `0` | Global tearing control: `0` (Disable), `1` (Enable), `2` (Fullscreen only). |
 
 ## HDR
 > HDR is only supported in wl-only branch, since it requires the `vulkan` renderer but scenefx is not supported yet.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
+| `system.hdr.depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
 
 - you should enable HDR in monitorrule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
 - you must set `env=WLR_RENDERER,vulkan` before mango starts.
@@ -185,7 +185,7 @@ Vulkan renderer, so `WLR_RENDERER=vulkan` is still required.
 **Enable Globally:**
 
 ```ini
-allow_tearing=1
+system.tearing.mode=1
 ```
 
 **Enable per Window:**
@@ -198,7 +198,7 @@ windowrule=force_tearing:1,title:vkcube
 
 ### Tearing Behavior Matrix
 
-| `force_tearing` \ `allow_tearing` | DISABLED (0) | ENABLED (1) | FULLSCREEN_ONLY (2) |
+| `force_tearing` \ `system.tearing.mode` | DISABLED (0) | ENABLED (1) | FULLSCREEN_ONLY (2) |
 | :--- | :--- | :--- | :--- |
 | **UNSPECIFIED** (0) | Not Allowed | Follows tearing_hint | Only fullscreen follows tearing_hint |
 | **ENABLED** (1) | Not Allowed | Allowed | Only fullscreen allowed |
@@ -227,7 +227,7 @@ WLR_DRM_DEVICES=/dev/dri/card1 mango
 WLR_DRM_DEVICES=/dev/dri/card0:/dev/dri/card1 mango
 ```
 
-Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash apps like `kitty` that use syncobj. Set `env=WLR_DRM_NO_ATOMIC,1` in `config.conf` and relogin to resolve this.
+Some GPUs have compatibility issues with `system.syncobj.enable=1` — it may crash apps like `kitty` that use syncobj. Set `env=WLR_DRM_NO_ATOMIC,1` in `config.toml` and relogin to resolve this.
 
 ---
 
@@ -266,7 +266,7 @@ wlr-randr
 
 ```ini
 # don't scale xwayland in global to avoid blurry
-xwayland_ignore_scale=1
+system.xwayland.ignore.scale=1
 # scale:1.5 to scale native wayland app
 monitorrule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:0,scale:1.5
 # use dpi to scale xwayland(1.5 * 96 = 144)

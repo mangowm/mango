@@ -9,11 +9,11 @@ Control the sizing of window borders and gaps.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `borderpx` | `4` | Border width in pixels. |
-| `gappih` | `5` | Horizontal inner gap (between windows). |
-| `gappiv` | `5` | Vertical inner gap. |
-| `gappoh` | `10` | Horizontal outer gap (between windows and screen edges). |
-| `gappov` | `10` | Vertical outer gap. |
+| `deco.border.width` | `4` | Border width in pixels. |
+| `deco.gap.inner.horizontal` | `5` | Horizontal inner gap (between windows). |
+| `deco.gap.inner.vertical` | `5` | Vertical inner gap. |
+| `deco.gap.outer.horizontal` | `10` | Horizontal outer gap (between windows and screen edges). |
+| `deco.gap.outer.vertical` | `10` | Vertical outer gap. |
 
 ## Colors
 
@@ -21,22 +21,22 @@ Colors are defined in `0xRRGGBBAA` hex format.
 
 ```ini
 # Background color of the root window
-rootcolor=0x323232ff
+deco.color.root=0x323232ff
 
 # Inactive window border
-bordercolor=0x444444ff
+deco.color.border=0x444444ff
 
 # Drop shadow when dragging windows
-dropcolor=0x8FBA7C55
+deco.color.drop=0x8FBA7C55
 
 # Split window border color in manual dwindle layout
-splitcolor=0xEB441EFF
+deco.color.split=0xEB441EFF
 
 # Active window border
-focuscolor=0xc66b25ff
+deco.color.focus=0xc66b25ff
 
 # Urgent window border (alerts)
-urgentcolor=0xad401fff
+deco.color.urgent=0xad401fff
 ```
 
 ### State-Specific Colors
@@ -45,41 +45,41 @@ You can also color-code windows based on their state:
 
 | State | Config Key | Default Color |
 | :--- | :--- | :--- |
-| Maximized | `maximizescreencolor` | `0x89aa61ff` |
-| Scratchpad | `scratchpadcolor` | `0x516c93ff` |
-| Global | `globalcolor` | `0xb153a7ff` |
-| Overlay | `overlaycolor` | `0x14a57cff` |
+| Maximized | `deco.color.maximize` | `0x89aa61ff` |
+| Scratchpad | `deco.color.scratchpad` | `0x516c93ff` |
+| Global | `deco.color.global` | `0xb153a7ff` |
+| Overlay | `deco.color.overlay` | `0x14a57cff` |
 
 > **Tip:** For scratchpad window sizing, see [Scratchpad](/docs/window-management/scratchpad) configuration.
 
 ### Overview Jump Mode
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `jump_label_decorate_fg_color` | `0xc4939dff` | text color. |
-| `jump_label_decorate_bg_color` | `0x201b14ff` | background color.|
-| `jump_label_decorate_focus_fg_color` | `0x201b14ff` |  text color for focus. |
-| `jump_label_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
-| `jump_label_decorate_border_color` | `0x8BAA9Bff` | border color.|
-| `jump_label_decorate_border_width` | `4` | border width.|
-| `jump_label_decorate_corner_radius` | `5` | corner radius.|
-| `jump_label_decorate_padding_x` | `10` | horizontal padding.|
-| `jump_label_decorate_padding_y` | `10` | vertical padding.|
-| `jump_label_decorate_font_desc` | `monospace Bold 16` | font set.|
+| `deco.jumplabel.fg.color` | `0xc4939dff` | text color. |
+| `deco.jumplabel.bg.color` | `0x201b14ff` | background color.|
+| `deco.jumplabel.focus.fg.color` | `0x201b14ff` |  text color for focus. |
+| `deco.jumplabel.focus.bg.color` | `0xc4939dff` | background color for focus.|
+| `deco.jumplabel.border.color` | `0x8BAA9Bff` | border color.|
+| `deco.jumplabel.border.width` | `4` | border width.|
+| `deco.jumplabel.corner.radius` | `5` | corner radius.|
+| `deco.jumplabel.padding.x` | `10` | horizontal padding.|
+| `deco.jumplabel.padding.y` | `10` | vertical padding.|
+| `deco.jumplabel.font.desc` | `monospace Bold 16` | font set.|
 
 ### Tab Bar For Monocle Layout
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `group_bar_height` | `50` | Height of the tab bar for monocle layout. |
-| `group_bar_decorate_fg_color` | `0xc4939dff` | text color.
-| `group_bar_decorate_bg_color` | `0x201b14ff` | background color.|
-| `group_bar_decorate_focus_fg_color` | `0x201b14ff` | text color for focus. |
-| `group_bar_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
-| `group_bar_decorate_border_color` | `0x8BAA9Bff` | border color.|
-| `group_bar_decorate_border_width` | `4` | border width.|
-| `group_bar_decorate_corner_radius` | `5` | corner radius.|
-| `group_bar_decorate_padding_x` | `0` | horizontal padding.|
-| `group_bar_decorate_padding_y` | `0` | vertical padding.|
-| `group_bar_decorate_font_desc` | `monospace Bold 16` | font set.|
+| `deco.groupbar.height` | `50` | Height of the tab bar for monocle layout. |
+| `deco.groupbar.fg.color` | `0xc4939dff` | text color.
+| `deco.groupbar.bg.color` | `0x201b14ff` | background color.|
+| `deco.groupbar.focus.fg.color` | `0x201b14ff` | text color for focus. |
+| `deco.groupbar.focus.bg.color` | `0xc4939dff` | background color for focus.|
+| `deco.groupbar.border.color` | `0x8BAA9Bff` | border color.|
+| `deco.groupbar.border.width` | `4` | border width.|
+| `deco.groupbar.corner.radius` | `5` | corner radius.|
+| `deco.groupbar.padding.x` | `0` | horizontal padding.|
+| `deco.groupbar.padding.y` | `0` | vertical padding.|
+| `deco.groupbar.font.desc` | `monospace Bold 16` | font set.|
 
 ## Borders
 
@@ -90,6 +90,6 @@ Control the appearance of window borders.
 Set the size and theme of your mouse cursor.
 
 ```ini
-cursor_size=24
-cursor_theme=Adwaita
+cursor.size=24
+cursor.theme=Adwaita
 ```

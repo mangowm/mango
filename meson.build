@@ -178,7 +178,7 @@ desktop_install_dir = join_paths(prefix, 'share/wayland-sessions')
 portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
 install_data('assets/mango.desktop', install_dir : desktop_install_dir)
 install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
-install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+install_data('assets/config.toml', install_dir : join_paths(sysconfdir, 'mango'))
 
 # Ship mango-session.target so that systemd user services declaring
 # WantedBy=graphical-session.target (portals, panels, ...) are started together

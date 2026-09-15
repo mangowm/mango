@@ -67,11 +67,11 @@ gesturebind=MODIFIERS,DIRECTION,FINGERS,COMMAND,PARAMETERS
 - **Direction**: `up`, `down`, `left`, `right`
 - **Fingers**: `3` or `4`
 
-> **Info:** Gestures require proper trackpad configuration. See [Input Devices](/docs/configuration/input) for trackpad settings like `tap_to_click` and `trackpad_disable_while_typing`.
+> **Info:** Gestures require proper trackpad configuration. See [Input Devices](/docs/configuration/input) for trackpad settings like `input.trackpad.tap.to.click` and `input.trackpad.auto.disable`.
 
 ### Drag previews for bound gestures
 
-`gesture_live=1` shows the transition while dragging for these gesturebind
+`input.gesture.live=1` shows the transition while dragging for these gesturebind
 commands:
 
 ```ini
@@ -86,7 +86,7 @@ gesturebind=none,up,4,toggleoverview
 gesturebind=none,down,4,toggleoverview
 ```
 
-Set `gesture_live=0` to disable previews and act only on release.
+Set `input.gesture.live=0` to disable previews and act only on release.
 
 ### Examples
 

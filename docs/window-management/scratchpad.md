@@ -67,9 +67,9 @@ bind=alt,k,toggle_named_scratchpad,none,kitty-scratch,kitty -T kitty-scratch
 You can customize the size of scratchpad windows relative to the screen.
 
 ```ini
-scratchpad_width_ratio=0.8
-scratchpad_height_ratio=0.9
-scratchpadcolor=0x516c93ff
+scratchpad.width.ratio=0.8
+scratchpad.height.ratio=0.9
+deco.color.scratchpad=0x516c93ff
 ```
 
 ---
@@ -107,11 +107,11 @@ You can configure background dimming and custom layout gaps for the special work
 
 ```ini
 # Background dim level when special workspace is active (0.0 to 1.0, default 0.5)
-special_dim=0.5
+scratchpad.special.dim=0.5
 
 # Inner and outer gaps for windows on the special workspace
-special_gappih=10
-special_gappiv=10
-special_gappoh=20
-special_gappov=20
+scratchpad.special.gap.inner.horizontal=10
+scratchpad.special.gap.inner.vertical=10
+scratchpad.special.gap.outer.horizontal=20
+scratchpad.special.gap.outer.vertical=20
 ```

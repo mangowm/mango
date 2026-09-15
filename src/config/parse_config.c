@@ -400,54 +400,80 @@ void run_exec_once() {
 		spawn_shell(&arg);
 	}
 }
+
+static char header_prepend[256] = {0};
+static char skip_block = false;
+static char prepend_key[256] = {0};
+
 bool parse_option(Config *config, char *key, char *value, int line_number) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
-	} else if (strcmp(key, "animations") == 0) {
+	} else if (strcmp(key, "animations") == 0 ||
+			   strcmp(prepend_key, "deco.animation.enable") == 0) {
 		config->animations = atoi(value);
-	} else if (strcmp(key, "layer_animations") == 0) {
+	} else if (strcmp(key, "layer_animations") == 0 ||
+			   strcmp(prepend_key, "deco.layer.animation.enable") == 0) {
 		config->layer_animations = atoi(value);
-	} else if (strcmp(key, "animation_type_open") == 0) {
+	} else if (strcmp(key, "animation_type_open") == 0 ||
+			   strcmp(prepend_key, "deco.animation.type.open") == 0) {
 		snprintf(config->animation_type_open,
 				 sizeof(config->animation_type_open), "%.9s",
 				 value); // string limit to 9 char
-	} else if (strcmp(key, "animation_type_close") == 0) {
+	} else if (strcmp(key, "animation_type_close") == 0 ||
+			   strcmp(prepend_key, "deco.animation.type.close") == 0) {
 		snprintf(config->animation_type_close,
 				 sizeof(config->animation_type_close), "%.9s",
 				 value); // string limit to 9 char
-	} else if (strcmp(key, "layer_animation_type_open") == 0) {
+	} else if (strcmp(key, "layer_animation_type_open") == 0 ||
+			   strcmp(prepend_key, "deco.layer.animation.type.open") == 0) {
 		snprintf(config->layer_animation_type_open,
 				 sizeof(config->layer_animation_type_open), "%.9s",
 				 value); // string limit to 9 char
-	} else if (strcmp(key, "layer_animation_type_close") == 0) {
+	} else if (strcmp(key, "layer_animation_type_close") == 0 ||
+			   strcmp(prepend_key, "deco.layer.animation.type.close") == 0) {
 		snprintf(config->layer_animation_type_close,
 				 sizeof(config->layer_animation_type_close), "%.9s",
 				 value); // string limit to 9 char
-	} else if (strcmp(key, "animation_fade_in") == 0) {
+	} else if (strcmp(key, "animation_fade_in") == 0 ||
+			   strcmp(prepend_key, "deco.animation.fade.in.enable") == 0) {
 		config->animation_fade_in = atoi(value);
-	} else if (strcmp(key, "animation_fade_out") == 0) {
+	} else if (strcmp(key, "animation_fade_out") == 0 ||
+			   strcmp(prepend_key, "deco.animation.fade.out.enable") == 0) {
 		config->animation_fade_out = atoi(value);
-	} else if (strcmp(key, "tag_animation_direction") == 0) {
+	} else if (strcmp(key, "tag_animation_direction") == 0 ||
+			   strcmp(prepend_key, "deco.animation.tag.direction") == 0) {
 		config->tag_animation_direction = atoi(value);
-	} else if (strcmp(key, "zoom_initial_ratio") == 0) {
+	} else if (strcmp(key, "zoom_initial_ratio") == 0 ||
+			   strcmp(prepend_key, "deco.animation.zoom.initial.ratio") == 0) {
 		config->zoom_initial_ratio = atof(value);
-	} else if (strcmp(key, "zoom_end_ratio") == 0) {
+	} else if (strcmp(key, "zoom_end_ratio") == 0 ||
+			   strcmp(prepend_key, "deco.animation.zoom.end.ratio") == 0) {
 		config->zoom_end_ratio = atof(value);
-	} else if (strcmp(key, "fadein_begin_opacity") == 0) {
+	} else if (strcmp(key, "fadein_begin_opacity") == 0 ||
+			   strcmp(prepend_key, "deco.animation.fade.in.begin.opacity") ==
+				   0) {
 		config->fadein_begin_opacity = atof(value);
-	} else if (strcmp(key, "fadeout_begin_opacity") == 0) {
+	} else if (strcmp(key, "fadeout_begin_opacity") == 0 ||
+			   strcmp(prepend_key, "deco.animation.fade.out.begin.opacity") ==
+				   0) {
 		config->fadeout_begin_opacity = atof(value);
-	} else if (strcmp(key, "animation_duration_move") == 0) {
+	} else if (strcmp(key, "animation_duration_move") == 0 ||
+			   strcmp(prepend_key, "deco.animation.duration.move") == 0) {
 		config->animation_duration_move = atoi(value);
-	} else if (strcmp(key, "animation_duration_open") == 0) {
+	} else if (strcmp(key, "animation_duration_open") == 0 ||
+			   strcmp(prepend_key, "deco.animation.duration.open") == 0) {
 		config->animation_duration_open = atoi(value);
-	} else if (strcmp(key, "animation_duration_tag") == 0) {
+	} else if (strcmp(key, "animation_duration_tag") == 0 ||
+			   strcmp(prepend_key, "deco.animation.duration.tag") == 0) {
 		config->animation_duration_tag = atoi(value);
-	} else if (strcmp(key, "animation_duration_close") == 0) {
+	} else if (strcmp(key, "animation_duration_close") == 0 ||
+			   strcmp(prepend_key, "deco.animation.duration.close") == 0) {
 		config->animation_duration_close = atoi(value);
-	} else if (strcmp(key, "animation_duration_focus") == 0) {
+	} else if (strcmp(key, "animation_duration_focus") == 0 ||
+			   strcmp(prepend_key, "deco.animation.duration.focus") == 0) {
 		config->animation_duration_focus = atoi(value);
-	} else if (strcmp(key, "animation_curve_move") == 0) {
+	} else if (strcmp(key, "animation_curve_move") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.move") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_move, 4);
 		if (num != 4) {
@@ -457,7 +483,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_open") == 0) {
+	} else if (strcmp(key, "animation_curve_open") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.open") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_open, 4);
 		if (num != 4) {
@@ -467,7 +494,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_tag") == 0) {
+	} else if (strcmp(key, "animation_curve_tag") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.tag") == 0) {
 		int32_t num = parse_double_array(value, config->animation_curve_tag, 4);
 		if (num != 4) {
 			mango_error(false, WLR_ERROR,
@@ -476,7 +504,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_close") == 0) {
+	} else if (strcmp(key, "animation_curve_close") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.close") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_close, 4);
 		if (num != 4) {
@@ -486,7 +515,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_focus") == 0) {
+	} else if (strcmp(key, "animation_curve_focus") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.focus") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_focus, 4);
 		if (num != 4) {
@@ -496,7 +526,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_opafadein") == 0) {
+	} else if (strcmp(key, "animation_curve_opafadein") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.fade.in") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadein, 4);
 		if (num != 4) {
@@ -506,7 +537,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "animation_curve_opafadeout") == 0) {
+	} else if (strcmp(key, "animation_curve_opafadeout") == 0 ||
+			   strcmp(prepend_key, "deco.animation.curve.fade.out") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_opafadeout, 4);
 		if (num != 4) {
@@ -516,139 +548,206 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						value);
 			return false;
 		}
-	} else if (strcmp(key, "scroller_structs") == 0) {
+	} else if (strcmp(key, "scroller_structs") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.structs") == 0) {
 		config->scroller_structs = atoi(value);
-	} else if (strcmp(key, "scroller_default_proportion") == 0) {
+	} else if (strcmp(key, "scroller_default_proportion") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.default.proportion") == 0) {
 		config->scroller_default_proportion = atof(value);
-	} else if (strcmp(key, "scroller_default_proportion_single") == 0) {
+	} else if (strcmp(key, "scroller_default_proportion_single") == 0 ||
+			   strcmp(prepend_key,
+					  "layout.scroller.default.proportion.single") == 0) {
 		config->scroller_default_proportion_single = atof(value);
-	} else if (strcmp(key, "scroller_ignore_proportion_single") == 0) {
+	} else if (strcmp(key, "scroller_ignore_proportion_single") == 0 ||
+			   strcmp(prepend_key,
+					  "layout.scroller.ignore.proportion.single") == 0) {
 		config->scroller_ignore_proportion_single = atoi(value);
-	} else if (strcmp(key, "scroller_focus_center") == 0) {
+	} else if (strcmp(key, "scroller_focus_center") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.focus.center") == 0) {
 		config->scroller_focus_center = atoi(value);
-	} else if (strcmp(key, "scroller_prefer_center") == 0) {
+	} else if (strcmp(key, "scroller_prefer_center") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.prefer.center") == 0) {
 		config->scroller_prefer_center = atoi(value);
-	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
+	} else if (strcmp(key, "scroller_prefer_overspread") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.prefer.overspread") == 0) {
 		config->scroller_prefer_overspread = atoi(value);
-	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
+	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.edge.pointer.focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
-	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0) {
+	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.edge.focus.allow.speed") ==
+				   0) {
 		config->edge_scroller_focus_allow_speed = atof(value);
-	} else if (strcmp(key, "focus_cross_monitor") == 0) {
+	} else if (strcmp(key, "focus_cross_monitor") == 0 ||
+			   strcmp(prepend_key, "focus.cross.monitor") == 0) {
 		config->focus_cross_monitor = atoi(value);
-	} else if (strcmp(key, "focusdir_only_zone_overlap") == 0) {
+	} else if (strcmp(key, "focusdir_only_zone_overlap") == 0 ||
+			   strcmp(prepend_key, "focus.direction.zone.overlap") == 0) {
 		config->focusdir_only_zone_overlap = atoi(value);
-	} else if (strcmp(key, "exchange_cross_monitor") == 0) {
+	} else if (strcmp(key, "exchange_cross_monitor") == 0 ||
+			   strcmp(prepend_key, "window.move.cross.monitor") == 0) {
 		config->exchange_cross_monitor = atoi(value);
-	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
+	} else if (strcmp(key, "scratchpad_cross_monitor") == 0 ||
+			   strcmp(prepend_key, "scratchpad.cross.monitor") == 0) {
 		config->scratchpad_cross_monitor = atoi(value);
-	} else if (strcmp(key, "focus_cross_tag") == 0) {
+	} else if (strcmp(key, "focus_cross_tag") == 0 ||
+			   strcmp(prepend_key, "focus.cross.tag") == 0) {
 		config->focus_cross_tag = atoi(value);
-	} else if (strcmp(key, "view_current_to_back") == 0) {
+	} else if (strcmp(key, "view_current_to_back") == 0 ||
+			   strcmp(prepend_key, "tag.view.current.to.back") == 0) {
 		config->view_current_to_back = atoi(value);
-	} else if (strcmp(key, "blur") == 0) {
+	} else if (strcmp(key, "blur") == 0 ||
+			   strcmp(prepend_key, "deco.blur.enable") == 0) {
 		config->blur = atoi(value);
-	} else if (strcmp(key, "blur_layer") == 0) {
+	} else if (strcmp(key, "blur_layer") == 0 ||
+			   strcmp(prepend_key, "deco.layer.blur.enable") == 0) {
 		config->blur_layer = atoi(value);
-	} else if (strcmp(key, "blur_optimized") == 0) {
+	} else if (strcmp(key, "blur_optimized") == 0 ||
+			   strcmp(prepend_key, "deco.blur.optimized") == 0) {
 		config->blur_optimized = atoi(value);
-	} else if (strcmp(key, "border_radius") == 0) {
+	} else if (strcmp(key, "border_radius") == 0 ||
+			   strcmp(prepend_key, "deco.border.radius") == 0) {
 		config->border_radius = atoi(value);
-	} else if (strcmp(key, "blur_params_num_passes") == 0) {
+	} else if (strcmp(key, "blur_params_num_passes") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.num.passes") == 0) {
 		config->blur_params.num_passes = atoi(value);
-	} else if (strcmp(key, "blur_params_radius") == 0) {
+	} else if (strcmp(key, "blur_params_radius") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.radius") == 0) {
 		config->blur_params.radius = atoi(value);
-	} else if (strcmp(key, "blur_params_noise") == 0) {
+	} else if (strcmp(key, "blur_params_noise") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.noise") == 0) {
 		config->blur_params.noise = atof(value);
-	} else if (strcmp(key, "blur_params_brightness") == 0) {
+	} else if (strcmp(key, "blur_params_brightness") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.brightness") == 0) {
 		config->blur_params.brightness = atof(value);
-	} else if (strcmp(key, "blur_params_contrast") == 0) {
+	} else if (strcmp(key, "blur_params_contrast") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.contrast") == 0) {
 		config->blur_params.contrast = atof(value);
-	} else if (strcmp(key, "blur_params_saturation") == 0) {
+	} else if (strcmp(key, "blur_params_saturation") == 0 ||
+			   strcmp(prepend_key, "deco.blur.params.saturation") == 0) {
 		config->blur_params.saturation = atof(value);
-	} else if (strcmp(key, "shadows") == 0) {
+	} else if (strcmp(key, "shadows") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.enable") == 0) {
 		config->shadows = atoi(value);
-	} else if (strcmp(key, "shadow_only_floating") == 0) {
+	} else if (strcmp(key, "shadow_only_floating") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.only.floating") == 0) {
 		config->shadow_only_floating = atoi(value);
-	} else if (strcmp(key, "layer_shadows") == 0) {
+	} else if (strcmp(key, "layer_shadows") == 0 ||
+			   strcmp(prepend_key, "deco.layer.shadow.enable") == 0) {
 		config->layer_shadows = atoi(value);
-	} else if (strcmp(key, "shadows_size") == 0) {
+	} else if (strcmp(key, "shadows_size") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.size") == 0) {
 		config->shadows_size = atoi(value);
-	} else if (strcmp(key, "shadows_blur") == 0) {
+	} else if (strcmp(key, "shadows_blur") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.blur") == 0) {
 		config->shadows_blur = atof(value);
-	} else if (strcmp(key, "shadows_position_x") == 0) {
+	} else if (strcmp(key, "shadows_position_x") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.position.x") == 0) {
 		config->shadows_position_x = atoi(value);
-	} else if (strcmp(key, "shadows_position_y") == 0) {
+	} else if (strcmp(key, "shadows_position_y") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.position.y") == 0) {
 		config->shadows_position_y = atoi(value);
-	} else if (strcmp(key, "single_scratchpad") == 0) {
+	} else if (strcmp(key, "single_scratchpad") == 0 ||
+			   strcmp(prepend_key, "scratchpad.single") == 0) {
 		config->single_scratchpad = atoi(value);
-	} else if (strcmp(key, "xwayland_persistence") == 0) {
+	} else if (strcmp(key, "xwayland_persistence") == 0 ||
+			   strcmp(prepend_key, "system.xwayland.persistence") == 0) {
 		config->xwayland_persistence = atoi(value);
-	} else if (strcmp(key, "xwayland_ignore_scale") == 0) {
+	} else if (strcmp(key, "xwayland_ignore_scale") == 0 ||
+			   strcmp(prepend_key, "system.xwayland.ignore.scale") == 0) {
 		config->xwayland_ignore_scale = atoi(value);
-	} else if (strcmp(key, "syncobj_enable") == 0) {
+	} else if (strcmp(key, "syncobj_enable") == 0 ||
+			   strcmp(prepend_key, "system.syncobj.enable") == 0) {
 		config->syncobj_enable = atoi(value);
-	} else if (strcmp(key, "tag_carousel") == 0) {
+	} else if (strcmp(key, "tag_carousel") == 0 ||
+			   strcmp(prepend_key, "tag.carousel") == 0) {
 		config->tag_carousel = atoi(value);
-	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
+	} else if (strcmp(key, "drag_tile_refresh_interval") == 0 ||
+			   strcmp(prepend_key, "window.drag.tile.refresh.interval") == 0) {
 		config->drag_tile_refresh_interval = atof(value);
-	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
+	} else if (strcmp(key, "drag_floating_refresh_interval") == 0 ||
+			   strcmp(prepend_key, "window.drag.floating.refresh.interval") ==
+				   0) {
 		config->drag_floating_refresh_interval = atof(value);
-	} else if (strcmp(key, "allow_tearing") == 0) {
+	} else if (strcmp(key, "allow_tearing") == 0 ||
+			   strcmp(prepend_key, "system.tearing.mode") == 0) {
 		config->allow_tearing = atoi(value);
-	} else if (strcmp(key, "hdr_depth") == 0) {
+	} else if (strcmp(key, "hdr_depth") == 0 ||
+			   strcmp(prepend_key, "system.hdr.depth") == 0) {
 		config->hdr_depth = atoi(value);
-	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {
+	} else if (strcmp(key, "allow_shortcuts_inhibit") == 0 ||
+			   strcmp(prepend_key, "system.shortcuts.inhibit") == 0) {
 		config->allow_shortcuts_inhibit = atoi(value);
-	} else if (strcmp(key, "allow_lock_transparent") == 0) {
+	} else if (strcmp(key, "allow_lock_transparent") == 0 ||
+			   strcmp(prepend_key, "system.lock.transparent") == 0) {
 		config->allow_lock_transparent = atoi(value);
-	} else if (strcmp(key, "no_border_when_single") == 0) {
+	} else if (strcmp(key, "no_border_when_single") == 0 ||
+			   strcmp(prepend_key, "deco.border.hide.single") == 0) {
 		config->no_border_when_single = atoi(value);
-	} else if (strcmp(key, "no_radius_when_single") == 0) {
+	} else if (strcmp(key, "no_radius_when_single") == 0 ||
+			   strcmp(prepend_key, "deco.border.radius.hide.single") == 0) {
 		config->no_radius_when_single = atoi(value);
-	} else if (strcmp(key, "snap_distance") == 0) {
+	} else if (strcmp(key, "snap_distance") == 0 ||
+			   strcmp(prepend_key, "window.snap.distance") == 0) {
 		config->snap_distance = atoi(value);
-	} else if (strcmp(key, "enable_floating_snap") == 0) {
+	} else if (strcmp(key, "enable_floating_snap") == 0 ||
+			   strcmp(prepend_key, "window.snap.enable") == 0) {
 		config->enable_floating_snap = atoi(value);
-	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
+	} else if (strcmp(key, "drag_tile_to_tile") == 0 ||
+			   strcmp(prepend_key, "window.drag.tile.to.tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
-	} else if (strcmp(key, "drag_tile_small") == 0) {
+	} else if (strcmp(key, "drag_tile_small") == 0 ||
+			   strcmp(prepend_key, "window.drag.tile.small") == 0) {
 		config->drag_tile_small = atoi(value);
-	} else if (strcmp(key, "swipe_min_threshold") == 0) {
+	} else if (strcmp(key, "swipe_min_threshold") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.swipe.min.threshold") == 0) {
 		config->swipe_min_threshold = atoi(value);
-	} else if (strcmp(key, "gesture_live") == 0) {
+	} else if (strcmp(key, "gesture_live") == 0 ||
+			   strcmp(prepend_key, "input.gesture.live") == 0) {
 		config->gesture_live = atoi(value);
-	} else if (strcmp(key, "gesture_swipe_distance") == 0) {
+	} else if (strcmp(key, "gesture_swipe_distance") == 0 ||
+			   strcmp(prepend_key, "input.gesture.swipe.distance") == 0) {
 		config->gesture_swipe_distance = atoi(value);
-	} else if (strcmp(key, "gesture_swipe_cancel_ratio") == 0) {
+	} else if (strcmp(key, "gesture_swipe_cancel_ratio") == 0 ||
+			   strcmp(prepend_key, "input.gesture.swipe.cancel.ratio") == 0) {
 		config->gesture_swipe_cancel_ratio = atof(value);
-	} else if (strcmp(key, "gesture_swipe_min_speed_to_force") == 0) {
+	} else if (strcmp(key, "gesture_swipe_min_speed_to_force") == 0 ||
+			   strcmp(prepend_key, "input.gesture.swipe.min.speed.to.force") ==
+				   0) {
 		config->gesture_swipe_min_speed_to_force = atof(value);
-	} else if (strcmp(key, "focused_opacity") == 0) {
+	} else if (strcmp(key, "focused_opacity") == 0 ||
+			   strcmp(prepend_key, "deco.opacity.focused") == 0) {
 		config->focused_opacity = atof(value);
-	} else if (strcmp(key, "unfocused_opacity") == 0) {
+	} else if (strcmp(key, "unfocused_opacity") == 0 ||
+			   strcmp(prepend_key, "deco.opacity.unfocused") == 0) {
 		config->unfocused_opacity = atof(value);
-	} else if (strcmp(key, "xkb_rules_rules") == 0) {
+	} else if (strcmp(key, "xkb_rules_rules") == 0 ||
+			   strcmp(prepend_key, "input.kbd.rules.rules") == 0) {
 		strncpy(config->xkb_rules_rules, value,
 				sizeof(config->xkb_rules_rules) - 1);
 		config->xkb_rules_rules[sizeof(config->xkb_rules_rules) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_model") == 0) {
+	} else if (strcmp(key, "xkb_rules_model") == 0 ||
+			   strcmp(prepend_key, "input.kbd.rules.model") == 0) {
 		strncpy(config->xkb_rules_model, value,
 				sizeof(config->xkb_rules_model) - 1);
 		config->xkb_rules_model[sizeof(config->xkb_rules_model) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_layout") == 0) {
+	} else if (strcmp(key, "xkb_rules_layout") == 0 ||
+			   strcmp(prepend_key, "input.kbd.rules.layout") == 0) {
 		strncpy(config->xkb_rules_layout, value,
 				sizeof(config->xkb_rules_layout) - 1);
 		config->xkb_rules_layout[sizeof(config->xkb_rules_layout) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_variant") == 0) {
+	} else if (strcmp(key, "xkb_rules_variant") == 0 ||
+			   strcmp(prepend_key, "input.kbd.rules.variant") == 0) {
 		strncpy(config->xkb_rules_variant, value,
 				sizeof(config->xkb_rules_variant) - 1);
 		config->xkb_rules_variant[sizeof(config->xkb_rules_variant) - 1] = '\0';
-	} else if (strcmp(key, "xkb_rules_options") == 0) {
+	} else if (strcmp(key, "xkb_rules_options") == 0 ||
+			   strcmp(prepend_key, "input.kbd.rules.options") == 0) {
 		strncpy(config->xkb_rules_options, value,
 				sizeof(config->xkb_rules_options) - 1);
 		config->xkb_rules_options[sizeof(config->xkb_rules_options) - 1] = '\0';
-	} else if (strcmp(key, "scroller_proportion_preset") == 0) {
+	} else if (strcmp(key, "scroller_proportion_preset") == 0 ||
+			   strcmp(prepend_key, "layout.scroller.proportion.preset") == 0) {
 		// 1. Counts commas in value to determine how many floats to parse.
 		int32_t count = 0; // Initialized to 0.
 		for (const char *p = value; *p; p++) {
@@ -721,7 +820,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		// 5. Frees the temporary string copy.
 		free(value_copy);
-	} else if (strcmp(key, "circle_layout") == 0) {
+	} else if (strcmp(key, "circle_layout") == 0 ||
+			   strcmp(prepend_key, "layout.circle.layout") == 0) {
 		// 1. Counts commas in value to determine how many strings to parse.
 		int32_t count = 0; // Initialized to 0.
 		for (const char *p = value; *p; p++) {
@@ -801,109 +901,159 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		// 5. Frees the temporary string copy.
 		free(value_copy);
-	} else if (strcmp(key, "new_is_master") == 0) {
+	} else if (strcmp(key, "new_is_master") == 0 ||
+			   strcmp(prepend_key, "layout.master.new.is.master") == 0) {
 		config->new_is_master = atoi(value);
-	} else if (strcmp(key, "default_mfact") == 0) {
+	} else if (strcmp(key, "default_mfact") == 0 ||
+			   strcmp(prepend_key, "layout.master.default.mfact") == 0) {
 		config->default_mfact = atof(value);
-	} else if (strcmp(key, "default_nmaster") == 0) {
+	} else if (strcmp(key, "default_nmaster") == 0 ||
+			   strcmp(prepend_key, "layout.master.default.nmaster") == 0) {
 		config->default_nmaster = atoi(value);
-	} else if (strcmp(key, "tag_num") == 0) {
+	} else if (strcmp(key, "tag_num") == 0 ||
+			   strcmp(prepend_key, "tag.num") == 0) {
 		config->tag_num = atoi(value);
-	} else if (strcmp(key, "tag_gather") == 0) {
+	} else if (strcmp(key, "tag_gather") == 0 ||
+			   strcmp(prepend_key, "tag.gather") == 0) {
 		config->tag_gather = atoi(value);
-	} else if (strcmp(key, "center_master_overspread") == 0) {
+	} else if (strcmp(key, "center_master_overspread") == 0 ||
+			   strcmp(prepend_key, "layout.master.center.overspread") == 0) {
 		config->center_master_overspread = atoi(value);
-	} else if (strcmp(key, "center_when_single_stack") == 0) {
+	} else if (strcmp(key, "center_when_single_stack") == 0 ||
+			   strcmp(prepend_key, "layout.master.center.single.stack") == 0) {
 		config->center_when_single_stack = atoi(value);
-	} else if (strcmp(key, "dwindle_vsplit") == 0) {
+	} else if (strcmp(key, "dwindle_vsplit") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.vsplit") == 0) {
 		config->dwindle_vsplit = atoi(value);
-	} else if (strcmp(key, "dwindle_hsplit") == 0) {
+	} else if (strcmp(key, "dwindle_hsplit") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.hsplit") == 0) {
 		config->dwindle_hsplit = atoi(value);
-	} else if (strcmp(key, "dwindle_preserve_split") == 0) {
+	} else if (strcmp(key, "dwindle_preserve_split") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.preserve.split") == 0) {
 		config->dwindle_preserve_split = atoi(value);
-	} else if (strcmp(key, "dwindle_smart_split") == 0) {
+	} else if (strcmp(key, "dwindle_smart_split") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.smart.split") == 0) {
 		config->dwindle_smart_split = atoi(value);
-	} else if (strcmp(key, "dwindle_smart_resize") == 0) {
+	} else if (strcmp(key, "dwindle_smart_resize") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.smart.resize") == 0) {
 		config->dwindle_smart_resize = atoi(value);
-	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
+	} else if (strcmp(key, "dwindle_drop_simple_split") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.drop.simple.split") == 0) {
 		config->dwindle_drop_simple_split = atoi(value);
-	} else if (strcmp(key, "dwindle_manual_split") == 0) {
+	} else if (strcmp(key, "dwindle_manual_split") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.manual.split") == 0) {
 		config->dwindle_manual_split = atoi(value);
-	} else if (strcmp(key, "dwindle_split_ratio") == 0) {
+	} else if (strcmp(key, "dwindle_split_ratio") == 0 ||
+			   strcmp(prepend_key, "layout.dwindle.split.ratio") == 0) {
 		config->dwindle_split_ratio = atof(value);
-	} else if (strcmp(key, "hotarea_size") == 0) {
+	} else if (strcmp(key, "hotarea_size") == 0 ||
+			   strcmp(prepend_key, "overview.hotarea.size") == 0) {
 		config->hotarea_size = atoi(value);
-	} else if (strcmp(key, "hotarea_corner") == 0) {
+	} else if (strcmp(key, "hotarea_corner") == 0 ||
+			   strcmp(prepend_key, "overview.hotarea.corner") == 0) {
 		config->hotarea_corner = atoi(value);
-	} else if (strcmp(key, "enable_hotarea") == 0) {
+	} else if (strcmp(key, "enable_hotarea") == 0 ||
+			   strcmp(prepend_key, "overview.hotarea.enable") == 0) {
 		config->enable_hotarea = atoi(value);
-	} else if (strcmp(key, "hotarea_disable_on_fullscreen") == 0) {
+	} else if (strcmp(key, "hotarea_disable_on_fullscreen") == 0 ||
+			   strcmp(prepend_key, "overview.hotarea.disable.on.fullscreen") ==
+				   0) {
 		config->hotarea_disable_on_fullscreen = atoi(value);
-	} else if (strcmp(key, "overviewgappi") == 0) {
+	} else if (strcmp(key, "overviewgappi") == 0 ||
+			   strcmp(prepend_key, "overview.gap.inner") == 0) {
 		config->overviewgappi = atoi(value);
-	} else if (strcmp(key, "overviewgappo") == 0) {
+	} else if (strcmp(key, "overviewgappo") == 0 ||
+			   strcmp(prepend_key, "overview.gap.outer") == 0) {
 		config->overviewgappo = atoi(value);
-	} else if (strcmp(key, "overcircle_center_ratio") == 0) {
+	} else if (strcmp(key, "overcircle_center_ratio") == 0 ||
+			   strcmp(prepend_key, "overview.circle.center.ratio") == 0) {
 		config->overcircle_center_ratio = atof(value);
-	} else if (strcmp(key, "jump_labels") == 0) {
+	} else if (strcmp(key, "jump_labels") == 0 ||
+			   strcmp(prepend_key, "overview.jump.chars") == 0) {
 		if (config->jump_labels)
 			free(config->jump_labels);
 		config->jump_labels = strdup(value);
-	} else if (strcmp(key, "cursor_hide_timeout") == 0) {
+	} else if (strcmp(key, "cursor_hide_timeout") == 0 ||
+			   strcmp(prepend_key, "cursor.hide.timeout") == 0) {
 		config->cursor_hide_timeout = atoi(value);
-	} else if (strcmp(key, "cursor_hide_on_keypress") == 0) {
+	} else if (strcmp(key, "cursor_hide_on_keypress") == 0 ||
+			   strcmp(prepend_key, "cursor.hide.on.keypress") == 0) {
 		config->cursor_hide_on_keypress = atoi(value);
-	} else if (strcmp(key, "axis_bind_apply_timeout") == 0) {
+	} else if (strcmp(key, "axis_bind_apply_timeout") == 0 ||
+			   strcmp(prepend_key, "input.axis.bind.apply.timeout") == 0) {
 		config->axis_bind_apply_timeout = atoi(value);
-	} else if (strcmp(key, "focus_on_activate") == 0) {
+	} else if (strcmp(key, "focus_on_activate") == 0 ||
+			   strcmp(prepend_key, "focus.on.activate") == 0) {
 		config->focus_on_activate = atoi(value);
-	} else if (strcmp(key, "numlockon") == 0) {
+	} else if (strcmp(key, "numlockon") == 0 ||
+			   strcmp(prepend_key, "input.kbd.numlock.enable") == 0) {
 		config->numlockon = atoi(value);
-	} else if (strcmp(key, "idleinhibit_ignore_visible") == 0) {
+	} else if (strcmp(key, "idleinhibit_ignore_visible") == 0 ||
+			   strcmp(prepend_key, "window.idleinhibit.ignore.visible") == 0) {
 		config->idleinhibit_ignore_visible = atoi(value);
-	} else if (strcmp(key, "idleinhibit_when_fullscreen") == 0) {
+	} else if (strcmp(key, "idleinhibit_when_fullscreen") == 0 ||
+			   strcmp(prepend_key, "window.idleinhibit.when.fullscreen") == 0) {
 		config->idleinhibit_when_fullscreen = atoi(value);
-	} else if (strcmp(key, "sloppyfocus") == 0) {
+	} else if (strcmp(key, "sloppyfocus") == 0 ||
+			   strcmp(prepend_key, "focus.sloppyfocus") == 0) {
 		config->sloppyfocus = atoi(value);
-	} else if (strcmp(key, "warpcursor") == 0) {
+	} else if (strcmp(key, "warpcursor") == 0 ||
+			   strcmp(prepend_key, "focus.warp.cursor") == 0) {
 		config->warpcursor = atoi(value);
-	} else if (strcmp(key, "drag_corner") == 0) {
+	} else if (strcmp(key, "drag_corner") == 0 ||
+			   strcmp(prepend_key, "window.drag.corner") == 0) {
 		config->drag_corner = atoi(value);
-	} else if (strcmp(key, "drag_warp_cursor") == 0) {
+	} else if (strcmp(key, "drag_warp_cursor") == 0 ||
+			   strcmp(prepend_key, "window.drag.warp.cursor") == 0) {
 		config->drag_warp_cursor = atoi(value);
-	} else if (strcmp(key, "smartgaps") == 0) {
+	} else if (strcmp(key, "smartgaps") == 0 ||
+			   strcmp(prepend_key, "deco.gap.smart") == 0) {
 		config->smartgaps = atoi(value);
-	} else if (strcmp(key, "repeat_rate") == 0) {
+	} else if (strcmp(key, "repeat_rate") == 0 ||
+			   strcmp(prepend_key, "input.kbd.repeat.rate") == 0) {
 		config->repeat_rate = atoi(value);
-	} else if (strcmp(key, "repeat_delay") == 0) {
+	} else if (strcmp(key, "repeat_delay") == 0 ||
+			   strcmp(prepend_key, "input.kbd.repeat.delay") == 0) {
 		config->repeat_delay = atoi(value);
-	} else if (strcmp(key, "disable_trackpad") == 0) {
+	} else if (strcmp(key, "disable_trackpad") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.disable") == 0) {
 		config->disable_trackpad = atoi(value);
-	} else if (strcmp(key, "touch_enable") == 0) {
+	} else if (strcmp(key, "touch_enable") == 0 ||
+			   strcmp(prepend_key, "input.touch.enable") == 0) {
 		config->touch_enable = atoi(value);
-	} else if (strcmp(key, "touch_enable_mouse_emulation") == 0) {
+	} else if (strcmp(key, "touch_enable_mouse_emulation") == 0 ||
+			   strcmp(prepend_key, "input.touch.mouse.emulation") == 0) {
 		config->touch_enable_mouse_emulation = atoi(value);
-	} else if (strcmp(key, "tap_to_click") == 0) {
+	} else if (strcmp(key, "tap_to_click") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.tap.to.click") == 0) {
 		config->tap_to_click = atoi(value);
-	} else if (strcmp(key, "tap_and_drag") == 0) {
+	} else if (strcmp(key, "tap_and_drag") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.tap.and.drag") == 0) {
 		config->tap_and_drag = atoi(value);
-	} else if (strcmp(key, "drag_lock") == 0) {
+	} else if (strcmp(key, "drag_lock") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.drag.lock") == 0) {
 		config->drag_lock = atoi(value);
-	} else if (strcmp(key, "mouse_natural_scrolling") == 0) {
+	} else if (strcmp(key, "mouse_natural_scrolling") == 0 ||
+			   strcmp(prepend_key, "input.mouse.natural.scrolling") == 0) {
 		config->mouse_natural_scrolling = atoi(value);
-	} else if (strcmp(key, "trackpad_natural_scrolling") == 0) {
+	} else if (strcmp(key, "trackpad_natural_scrolling") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.natural.scrolling") == 0) {
 		config->trackpad_natural_scrolling = atoi(value);
-	} else if (strcmp(key, "cursor_size") == 0) {
+	} else if (strcmp(key, "cursor_size") == 0 ||
+			   strcmp(prepend_key, "cursor.size") == 0) {
 		config->cursor_size = atoi(value);
-	} else if (strcmp(key, "cursor_theme") == 0) {
+	} else if (strcmp(key, "cursor_theme") == 0 ||
+			   strcmp(prepend_key, "cursor.theme") == 0) {
 		if (config->cursor_theme)
 			free(config->cursor_theme);
 		config->cursor_theme = strdup(value);
-	} else if (strcmp(key, "group_bar_decorate_font_desc") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_font_desc") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.font.desc") == 0) {
 		if (config->groupbardata.font_desc)
 			free((void *)config->groupbardata.font_desc);
 		config->groupbardata.font_desc = strdup(value);
-	} else if (strcmp(key, "group_bar_decorate_fg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_fg_color") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.fg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -915,7 +1065,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->groupbardata.fg_color, color);
 		}
-	} else if (strcmp(key, "group_bar_decorate_bg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_bg_color") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.bg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -927,7 +1078,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->groupbardata.bg_color, color);
 		}
-	} else if (strcmp(key, "group_bar_decorate_focus_fg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_focus_fg_color") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.focus.fg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -939,7 +1091,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->groupbardata.focus_fg_color, color);
 		}
-	} else if (strcmp(key, "group_bar_decorate_focus_bg_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_focus_bg_color") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.focus.bg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -951,7 +1104,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->groupbardata.focus_bg_color, color);
 		}
-	} else if (strcmp(key, "group_bar_decorate_border_color") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_border_color") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.border.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -963,19 +1117,25 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->groupbardata.border_color, color);
 		}
-	} else if (strcmp(key, "group_bar_decorate_border_width") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_border_width") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.border.width") == 0) {
 		config->groupbardata.border_width = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "group_bar_decorate_corner_radius") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_corner_radius") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.corner.radius") == 0) {
 		config->groupbardata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "group_bar_decorate_padding_x") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_padding_x") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.padding.x") == 0) {
 		config->groupbardata.padding_x = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "group_bar_decorate_padding_y") == 0) {
+	} else if (strcmp(key, "group_bar_decorate_padding_y") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.padding.y") == 0) {
 		config->groupbardata.padding_y = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "jump_label_decorate_font_desc") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_font_desc") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.font.desc") == 0) {
 		if (config->jumplabeldata.font_desc)
 			free((void *)config->jumplabeldata.font_desc);
 		config->jumplabeldata.font_desc = strdup(value);
-	} else if (strcmp(key, "jump_label_decorate_fg_color") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_fg_color") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.fg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -987,7 +1147,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->jumplabeldata.fg_color, color);
 		}
-	} else if (strcmp(key, "jump_label_decorate_bg_color") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_bg_color") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.bg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -999,7 +1160,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->jumplabeldata.bg_color, color);
 		}
-	} else if (strcmp(key, "jump_label_decorate_focus_fg_color") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_focus_fg_color") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.focus.fg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1011,7 +1173,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->jumplabeldata.focus_fg_color, color);
 		}
-	} else if (strcmp(key, "jump_label_decorate_focus_bg_color") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_focus_bg_color") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.focus.bg.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1023,7 +1186,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->jumplabeldata.focus_bg_color, color);
 		}
-	} else if (strcmp(key, "jump_label_decorate_border_color") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_border_color") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.border.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1035,83 +1199,128 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->jumplabeldata.border_color, color);
 		}
-	} else if (strcmp(key, "jump_label_decorate_border_width") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_border_width") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.border.width") == 0) {
 		config->jumplabeldata.border_width = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "jump_label_decorate_corner_radius") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_corner_radius") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.corner.radius") == 0) {
 		config->jumplabeldata.corner_radius = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "jump_label_decorate_padding_x") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_padding_x") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.padding.x") == 0) {
 		config->jumplabeldata.padding_x = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "jump_label_decorate_padding_y") == 0) {
+	} else if (strcmp(key, "jump_label_decorate_padding_y") == 0 ||
+			   strcmp(prepend_key, "deco.jumplabel.padding.y") == 0) {
 		config->jumplabeldata.padding_y = CLAMP_INT(atoi(value), 0, 100);
-	} else if (strcmp(key, "mouse_accel_profile") == 0) {
+	} else if (strcmp(key, "mouse_accel_profile") == 0 ||
+			   strcmp(prepend_key, "input.mouse.accel.profile") == 0) {
 		config->mouse_accel_profile = atoi(value);
-	} else if (strcmp(key, "mouse_accel_speed") == 0) {
+	} else if (strcmp(key, "mouse_accel_speed") == 0 ||
+			   strcmp(prepend_key, "input.mouse.accel.speed") == 0) {
 		config->mouse_accel_speed = atof(value);
-	} else if (strcmp(key, "trackpad_accel_profile") == 0) {
+	} else if (strcmp(key, "trackpad_accel_profile") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.accel.profile") == 0) {
 		config->trackpad_accel_profile = atoi(value);
-	} else if (strcmp(key, "trackpad_accel_speed") == 0) {
+	} else if (strcmp(key, "trackpad_accel_speed") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.accel.speed") == 0) {
 		config->trackpad_accel_speed = atof(value);
-	} else if (strcmp(key, "mouse_left_handed") == 0) {
+	} else if (strcmp(key, "mouse_left_handed") == 0 ||
+			   strcmp(prepend_key, "input.mouse.left.handed") == 0) {
 		config->mouse_left_handed = atoi(value);
-	} else if (strcmp(key, "mouse_middle_button_emulation") == 0) {
+	} else if (strcmp(key, "mouse_middle_button_emulation") == 0 ||
+			   strcmp(prepend_key, "input.mouse.middle.button.emulation") ==
+				   0) {
 		config->mouse_middle_button_emulation = atoi(value);
-	} else if (strcmp(key, "mouse_scroll_method") == 0) {
+	} else if (strcmp(key, "mouse_scroll_method") == 0 ||
+			   strcmp(prepend_key, "input.mouse.scroll.method") == 0) {
 		config->mouse_scroll_method = atoi(value);
-	} else if (strcmp(key, "mouse_scroll_button") == 0) {
+	} else if (strcmp(key, "mouse_scroll_button") == 0 ||
+			   strcmp(prepend_key, "input.mouse.scroll.button") == 0) {
 		config->mouse_scroll_button = atoi(value);
-	} else if (strcmp(key, "mouse_click_method") == 0) {
+	} else if (strcmp(key, "mouse_click_method") == 0 ||
+			   strcmp(prepend_key, "input.mouse.click.method") == 0) {
 		config->mouse_click_method = atoi(value);
-	} else if (strcmp(key, "mouse_send_events_mode") == 0) {
+	} else if (strcmp(key, "mouse_send_events_mode") == 0 ||
+			   strcmp(prepend_key, "input.mouse.send.events.mode") == 0) {
 		config->mouse_send_events_mode = atoi(value);
-	} else if (strcmp(key, "trackpad_left_handed") == 0) {
+	} else if (strcmp(key, "trackpad_left_handed") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.left.handed") == 0) {
 		config->trackpad_left_handed = atoi(value);
-	} else if (strcmp(key, "trackpad_middle_button_emulation") == 0) {
+	} else if (strcmp(key, "trackpad_middle_button_emulation") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.middle.button.emulation") ==
+				   0) {
 		config->trackpad_middle_button_emulation = atoi(value);
-	} else if (strcmp(key, "trackpad_disable_while_typing") == 0) {
+	} else if (strcmp(key, "trackpad_disable_while_typing") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.auto.disable") == 0) {
 		config->trackpad_disable_while_typing = atoi(value);
-	} else if (strcmp(key, "trackpad_scroll_method") == 0) {
+	} else if (strcmp(key, "trackpad_scroll_method") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.scroll.method") == 0) {
 		config->trackpad_scroll_method = atoi(value);
-	} else if (strcmp(key, "trackpad_scroll_button") == 0) {
+	} else if (strcmp(key, "trackpad_scroll_button") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.scroll.button") == 0) {
 		config->trackpad_scroll_button = atoi(value);
-	} else if (strcmp(key, "trackpad_click_method") == 0) {
+	} else if (strcmp(key, "trackpad_click_method") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.click.method") == 0) {
 		config->trackpad_click_method = atoi(value);
-	} else if (strcmp(key, "trackpad_send_events_mode") == 0) {
+	} else if (strcmp(key, "trackpad_send_events_mode") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.send.events.mode") == 0) {
 		config->trackpad_send_events_mode = atoi(value);
-	} else if (strcmp(key, "send_events_mode") == 0) {
+	} else if (strcmp(key, "send_events_mode") == 0 ||
+			   strcmp(prepend_key, "input.device.send.events.mode") == 0) {
 		config->send_events_mode = atoi(value);
-	} else if (strcmp(key, "button_map") == 0) {
+	} else if (strcmp(key, "button_map") == 0 ||
+			   strcmp(prepend_key, "input.device.button.map") == 0) {
 		config->button_map = atoi(value);
-	} else if (strcmp(key, "axis_scroll_factor") == 0) {
+	} else if (strcmp(key, "axis_scroll_factor") == 0 ||
+			   strcmp(prepend_key, "input.axis.scroll.factor") == 0) {
 		config->axis_scroll_factor = atof(value);
-	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
+	} else if (strcmp(key, "trackpad_scroll_factor") == 0 ||
+			   strcmp(prepend_key, "input.trackpad.scroll.factor") == 0) {
 		config->trackpad_scroll_factor = atof(value);
-	} else if (strcmp(key, "gappih") == 0) {
+	} else if (strcmp(key, "gappih") == 0 ||
+			   strcmp(prepend_key, "deco.gap.inner.horizontal") == 0) {
 		config->gappih = atoi(value);
-	} else if (strcmp(key, "gappiv") == 0) {
+	} else if (strcmp(key, "gappiv") == 0 ||
+			   strcmp(prepend_key, "deco.gap.inner.vertical") == 0) {
 		config->gappiv = atoi(value);
-	} else if (strcmp(key, "gappoh") == 0) {
+	} else if (strcmp(key, "gappoh") == 0 ||
+			   strcmp(prepend_key, "deco.gap.outer.horizontal") == 0) {
 		config->gappoh = atoi(value);
-	} else if (strcmp(key, "gappov") == 0) {
+	} else if (strcmp(key, "gappov") == 0 ||
+			   strcmp(prepend_key, "deco.gap.outer.vertical") == 0) {
 		config->gappov = atoi(value);
-	} else if (strcmp(key, "scratchpad_width_ratio") == 0) {
+	} else if (strcmp(key, "scratchpad_width_ratio") == 0 ||
+			   strcmp(prepend_key, "scratchpad.width.ratio") == 0) {
 		config->scratchpad_width_ratio = atof(value);
-	} else if (strcmp(key, "scratchpad_height_ratio") == 0) {
+	} else if (strcmp(key, "scratchpad_height_ratio") == 0 ||
+			   strcmp(prepend_key, "scratchpad.height.ratio") == 0) {
 		config->scratchpad_height_ratio = atof(value);
-	} else if (strcmp(key, "special_dim") == 0) {
+	} else if (strcmp(key, "special_dim") == 0 ||
+			   strcmp(prepend_key, "scratchpad.special.dim") == 0) {
 		config->special_dim = atof(value);
-	} else if (strcmp(key, "special_gappih") == 0) {
+	} else if (strcmp(key, "special_gappih") == 0 ||
+			   strcmp(prepend_key, "scratchpad.special.gap.inner.horizontal") ==
+				   0) {
 		config->special_gappih = atoi(value);
-	} else if (strcmp(key, "special_gappiv") == 0) {
+	} else if (strcmp(key, "special_gappiv") == 0 ||
+			   strcmp(prepend_key, "scratchpad.special.gap.inner.vertical") ==
+				   0) {
 		config->special_gappiv = atoi(value);
-	} else if (strcmp(key, "special_gappoh") == 0) {
+	} else if (strcmp(key, "special_gappoh") == 0 ||
+			   strcmp(prepend_key, "scratchpad.special.gap.outer.horizontal") ==
+				   0) {
 		config->special_gappoh = atoi(value);
-	} else if (strcmp(key, "special_gappov") == 0) {
+	} else if (strcmp(key, "special_gappov") == 0 ||
+			   strcmp(prepend_key, "scratchpad.special.gap.outer.vertical") ==
+				   0) {
 		config->special_gappov = atoi(value);
-	} else if (strcmp(key, "borderpx") == 0) {
+	} else if (strcmp(key, "borderpx") == 0 ||
+			   strcmp(prepend_key, "deco.border.width") == 0) {
 		config->borderpx = atoi(value);
-	} else if (strcmp(key, "group_bar_height") == 0) {
+	} else if (strcmp(key, "group_bar_height") == 0 ||
+			   strcmp(prepend_key, "deco.groupbar.height") == 0) {
 		config->group_bar_height = atoi(value);
-	} else if (strcmp(key, "rootcolor") == 0) {
+	} else if (strcmp(key, "rootcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.root") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1124,7 +1333,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			convert_hex_to_rgba(config->rootcolor, color);
 		}
 
-	} else if (strcmp(key, "shadowscolor") == 0) {
+	} else if (strcmp(key, "shadowscolor") == 0 ||
+			   strcmp(prepend_key, "deco.shadow.color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1135,7 +1345,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->shadowscolor, color);
 		}
-	} else if (strcmp(key, "bordercolor") == 0) {
+	} else if (strcmp(key, "bordercolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.border") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1146,7 +1357,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->bordercolor, color);
 		}
-	} else if (strcmp(key, "dropcolor") == 0) {
+	} else if (strcmp(key, "dropcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.drop") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1157,7 +1369,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->dropcolor, color);
 		}
-	} else if (strcmp(key, "splitcolor") == 0) {
+	} else if (strcmp(key, "splitcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.split") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1168,7 +1381,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->splitcolor, color);
 		}
-	} else if (strcmp(key, "focuscolor") == 0) {
+	} else if (strcmp(key, "focuscolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.focus") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1179,7 +1393,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->focuscolor, color);
 		}
-	} else if (strcmp(key, "maximizescreencolor") == 0) {
+	} else if (strcmp(key, "maximizescreencolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.maximize") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1191,7 +1406,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->maximizescreencolor, color);
 		}
-	} else if (strcmp(key, "urgentcolor") == 0) {
+	} else if (strcmp(key, "urgentcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.urgent") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1202,7 +1418,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->urgentcolor, color);
 		}
-	} else if (strcmp(key, "scratchpadcolor") == 0) {
+	} else if (strcmp(key, "scratchpadcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.scratchpad") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1214,7 +1431,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->scratchpadcolor, color);
 		}
-	} else if (strcmp(key, "globalcolor") == 0) {
+	} else if (strcmp(key, "globalcolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.global") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1225,7 +1443,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->globalcolor, color);
 		}
-	} else if (strcmp(key, "overlaycolor") == 0) {
+	} else if (strcmp(key, "overlaycolor") == 0 ||
+			   strcmp(prepend_key, "deco.color.overlay") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
 			mango_error(false, WLR_ERROR,
@@ -1936,6 +2155,11 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->env[config->env_count] = env;
 		config->env_count++;
 
+		// apply immediately so later conditional blocks can see it
+		if (strcmp(env->type, "DISPLAY") != 0) {
+			setenv(env->type, env->value, 1);
+		}
+
 	} else if (strncmp(key, "exec", 9) == 0) {
 		char **new_exec =
 			realloc(config->exec, (config->exec_count + 1) * sizeof(char *));
@@ -2418,6 +2642,42 @@ bool parse_config_line(Config *config, const char *line, int line_number) {
 	strncpy(processed_line, line, sizeof(processed_line) - 1);
 	processed_line[sizeof(processed_line) - 1] = '\0';
 
+	char scratch[512];
+	strncpy(scratch, line, sizeof(scratch) - 1);
+	scratch[sizeof(scratch) - 1] = '\0';
+	trim_whitespace(scratch);
+
+	// handle headers
+	if (scratch[0] == '[') {
+		char *end = strchr(scratch, ']');
+		char content[256];
+		if (end) {
+			*end = '\0';
+			snprintf(content, sizeof(content), "%s", scratch + 1);
+			trim_whitespace(content);
+		} else {
+			content[0] = '\0';
+		}
+		// extract conditional logic
+		char *condition = strchr(content, '?');
+		if (condition) {
+			*condition = '\0';
+			condition++;
+			trim_whitespace(condition);
+		}
+		char *name = content;
+		trim_whitespace(name);
+		snprintf(header_prepend, sizeof(header_prepend), "%s", name);
+		skip_block =
+			(condition && condition[0]) ? (system(condition) != 0) : false;
+		// early return > do not parse header like regular key
+		return true;
+	}
+
+	// if skip_block is currently active > do not parse line
+	if (skip_block)
+		return true;
+
 	remove_comment(processed_line);
 
 	char key[256], value[256];
@@ -2428,6 +2688,12 @@ bool parse_config_line(Config *config, const char *line, int line_number) {
 
 	trim_whitespace(key);
 	trim_whitespace(value);
+
+	if (header_prepend[0])
+		snprintf(prepend_key, sizeof(prepend_key), "%s.%s", header_prepend,
+				 key);
+	else
+		snprintf(prepend_key, sizeof(prepend_key), "%s", key);
 
 	return parse_option(config, key, value, line_number);
 }
@@ -3060,6 +3326,11 @@ uint32_t parse_tag_mask(char *str) {
 bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	FILE *file;
 	char full_path[1024];
+	char saved_header[256];
+	bool saved_skip = skip_block;
+	snprintf(saved_header, sizeof(saved_header), "%s", header_prepend);
+	header_prepend[0] = '\0';
+	skip_block = false;
 
 	if (file_path[0] == '.' && file_path[1] == '/') {
 		// Relative path
@@ -3076,6 +3347,9 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 				mango_error(false, WLR_ERROR,
 							"HOME environment "
 							"variable not set.\n");
+				snprintf(header_prepend, sizeof(header_prepend), "%s",
+						 saved_header);
+				skip_block = saved_skip;
 				return false;
 			}
 			snprintf(full_path, sizeof(full_path), "%s/.config/mango/%s", home,
@@ -3092,6 +3366,9 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 			mango_error(false, WLR_ERROR,
 						"HOME environment "
 						"variable not set.\n");
+			snprintf(header_prepend, sizeof(header_prepend), "%s",
+					 saved_header);
+			skip_block = saved_skip;
 			return false;
 		}
 		snprintf(full_path, sizeof(full_path), "%s%s", home, file_path + 1);
@@ -3118,8 +3395,14 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 						"Failed to open "
 						"config file: %s\n",
 						file_path);
+			snprintf(header_prepend, sizeof(header_prepend), "%s",
+					 saved_header);
+			skip_block = saved_skip;
 			return false;
 		} else {
+			snprintf(header_prepend, sizeof(header_prepend), "%s",
+					 saved_header);
+			skip_block = saved_skip;
 			return true;
 		}
 	}
@@ -3147,6 +3430,8 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	fclose(file);
 
 	current_file_index = saved_file_index;
+	snprintf(header_prepend, sizeof(header_prepend), "%s", saved_header);
+	skip_block = saved_skip;
 	return parse_correct;
 }
 
@@ -4219,15 +4504,21 @@ bool parse_config(void) {
 			// Cannot continue if that fails.
 			return false;
 		}
-		// Builds the log file path.
-		snprintf(filename, sizeof(filename), "%s/.config/mango/config.conf",
-				 homedir);
-
-		// Checks whether the file exists.
+		// Prefers the TOML default, falling back to the legacy .conf
+		// (both in the user and system config dirs).
+		snprintf(filename, sizeof(filename),
+				 "%s/.config/mango/config.toml", homedir);
 		if (access(filename, F_OK) != 0) {
-			// Uses /etc/mango/config.conf when the file does not exist.
-			snprintf(filename, sizeof(filename), "%s/mango/config.conf",
-					 SYSCONFDIR);
+			snprintf(filename, sizeof(filename),
+					 "%s/.config/mango/config.conf", homedir);
+			if (access(filename, F_OK) != 0) {
+				snprintf(filename, sizeof(filename),
+						 "%s/mango/config.toml", SYSCONFDIR);
+				if (access(filename, F_OK) != 0) {
+					snprintf(filename, sizeof(filename),
+							 "%s/mango/config.conf", SYSCONFDIR);
+				}
+			}
 		}
 	}
 
