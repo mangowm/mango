@@ -1243,6 +1243,15 @@ static void close_inherited_fds(void) {
 	syscall(SYS_close_range, 3, ~0U, 0);
 }
 
+void spawn_tag(const Arg *arg) {
+	if (!arg->v || !arg->ui)
+		return;
+
+	/* view the target tag so the new client inherits it, then launch */
+	client_switch_view(&(Arg){.ui = arg->ui}, true);
+	spawn(arg);
+}
+
 void spawn_shell(const Arg *arg) {
 	if (!arg->v)
 		return;
