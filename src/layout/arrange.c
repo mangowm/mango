@@ -5,6 +5,7 @@
 #include "mango/input/pointer.h"
 #include "mango/ipc/ipc.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/group.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
 #include "mango/layout/vertical.h"
@@ -1432,6 +1433,9 @@ bool special_handle_empty_view(Monitor *m, bool from_view) {
 void arrange(Monitor *m, bool want_animation, bool from_view) {
 
 	if (!m || m->iscleanuping)
+		return;
+
+	if (server.group_capture_inhibit_arrange)
 		return;
 
 	if (!m->wlr_output->enabled)
