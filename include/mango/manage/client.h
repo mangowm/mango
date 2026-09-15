@@ -222,6 +222,7 @@ struct Client {
 	Client *group_prev;
 	Client *group_next;
 	bool isgroupfocusing;
+	char *grouptitle;
 };
 
 void client_update_geometry(Client *c);
@@ -264,6 +265,8 @@ void client_get_geometry(Client *c, struct wlr_box *geom);
 Client *client_get_parent(Client *c);
 int32_t client_has_children(Client *c);
 const char *client_get_title(Client *c);
+const char *client_get_display_title(Client *c);
+void client_set_grouptitle(Client *c, const char *name);
 int32_t client_is_float_type(Client *c);
 int32_t client_is_rendered_on_mon(Client *c, Monitor *m);
 int32_t client_is_unmanaged(Client *c);
@@ -408,16 +411,6 @@ void client_pending_force_kill(Client *c);
 void client_add_jump_label_node(Client *c);
 uint32_t client_target_layer(Client *c);
 void client_sync_layer(Client *c);
-void client_add_group_bar(Client *c);
-void client_focus_group_member(Client *c);
-void client_check_tab_node_visible(Client *c);
-void client_raise_group(Client *c);
-void client_reparent_group(Client *c);
-void client_handle_decorate_click(MangoGroupBar *gb);
-void client_set_group_mon(Client *c, Monitor *m);
-void client_set_group_config(Client *c);
-void client_group_detach(Client *c);
-void client_group_replace(Client *old, Client *new);
 void mango_surface_frame_done(struct wlr_surface *surface, int sx, int sy,
 							  void *data);
 // Feeds frame callbacks to all surfaces (including subsurfaces) of hidden

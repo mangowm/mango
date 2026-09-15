@@ -538,7 +538,30 @@ cJSON *monitor_active_tags(Monitor *m) {
 			cJSON_AddItemToArray(arr, cJSON_CreateNumber(i + 1));
 	return arr;
 }
+static int collect_group_info(Client *c, uint32_t *ids, int max, uint32_t *active) {
+	Client *head = c;
+	int n = 0;
+	*active = 0;
+	if (!c->group_prev && !c->group_next && !c->isgroupfocusing)
+		return 0;
+	while (head->group_prev && head->group_prev != head)
+		head = head->group_prev;
+	for (Client *m = head; m; m = m->group_next) {
+		if (n >= max)
+			break;
+		ids[n] = m->id;
+		if (m->isgroupfocusing)
+			*active = m->id;
+		n++;
+		if (m->group_next == head)
+			break;
+	}
+	return n;
+}
 cJSON *build_client_json(Client *c) {
+	uint32_t group_ids[256];
+	uint32_t group_active = 0;
+	int group_size = collect_group_info(c, group_ids, 256, &group_active);
 	cJSON *obj = cJSON_CreateObject();
 
 	cJSON_AddNumberToObject(obj, "id", c->id);
@@ -546,6 +569,8 @@ cJSON *build_client_json(Client *c) {
 	cJSON_AddStringToObject(obj, "foreign_toplevel_id",
 							c->ext_foreign_toplevel->identifier);
 	cJSON_AddStringToObject(obj, "title", client_get_title(c));
+	cJSON_AddStringToObject(obj, "grouptitle",
+							c->grouptitle ? c->grouptitle : "");
 	cJSON_AddStringToObject(obj, "appid", client_get_appid(c));
 	cJSON_AddStringToObject(obj, "monitor",
 							c->mon ? c->mon->wlr_output->name : "");
@@ -553,7 +578,14 @@ cJSON *build_client_json(Client *c) {
 	cJSON_AddBoolToObject(obj, "is_xwayland", c->type == X11 ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowing", c->swallowing ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowedby", c->swallowdby ? true : false);
-	cJSON_AddBoolToObject(obj, "is_group", c->group_prev || c->group_next);
+	cJSON_AddBoolToObject(obj, "is_group", group_size > 0);
+	cJSON_AddBoolToObject(obj, "is_group_active", c->isgroupfocusing);
+	cJSON_AddNumberToObject(obj, "group_size", group_size);
+	cJSON_AddNumberToObject(obj, "group_active", group_active);
+	cJSON *group_members = cJSON_CreateArray();
+	for (int i = 0; i < group_size; i++)
+		cJSON_AddItemToArray(group_members, cJSON_CreateNumber(group_ids[i]));
+	cJSON_AddItemToObject(obj, "group_members", group_members);
 	cJSON_AddBoolToObject(obj, "is_visible", c->mon && VISIBLEON(c, c->mon));
 	cJSON_AddBoolToObject(obj, "is_focused", c->isfocusing);
 	cJSON_AddBoolToObject(obj, "is_fullscreen", c->isfullscreen);

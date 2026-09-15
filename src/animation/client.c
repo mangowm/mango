@@ -3,6 +3,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/group.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
@@ -401,12 +402,14 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 	if (!c || !c->group_bar)
 		return;
 
-	if (!c->group_next && !c->group_prev) {
-		if (c->group_bar->scene_buffer->node.enabled)
-			wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node,
-									   false);
+	if (!c->group_next && !c->group_prev && !c->isgroupfocusing &&
+		c->group_bar->scene_buffer->node.enabled) {
+		wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
 		return;
 	}
+
+	if (!c->group_next && !c->group_prev && !c->isgroupfocusing)
+		return;
 
 	Client *head = c;
 	while (head->group_prev)
