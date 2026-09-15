@@ -8,6 +8,7 @@
 #include "mango/config/parse_config.h"
 #include "mango/dispatch/bind.h"
 #include "mango/draw/text-node.h"
+#include "mango/draw/texture.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/hdr.h"
@@ -225,6 +226,7 @@ void cleanup(void) {
 	wl_display_destroy(server.display);
 	/* Destroy after the wayland display (when the monitors are already
 	   destroyed) to avoid destroying them with an invalid scene output. */
+	texture_cache_teardown();
 	wlr_scene_node_destroy(&server.scene->tree.node);
 
 	mango_text_global_finish();
@@ -372,11 +374,15 @@ void setup(void) {
 	setenv("XDG_CURRENT_DESKTOP", "mango", 1);
 	setenv("_JAVA_AWT_WM_NONREPARENTING", "1", 1);
 
+	wl_list_init(&server.monitors);
+
 	parse_config();
 	if (server.cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
 	init_baked_points();
+	init_texture_system();
+	texture_prewarm_all();
 
 	set_env_without_display();
 
@@ -581,7 +587,6 @@ void setup(void) {
 
 	/* Configure a listener to be notified when new outputs are available on
 	 * the backend. */
-	wl_list_init(&server.monitors);
 	wl_signal_add(&server.backend->events.new_output,
 				  &server.new_output_listener);
 	server.scene_layout =

@@ -772,6 +772,12 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	m->pertag = calloc(1, sizeof(Pertag));
 	for (int i = 0; i < PERTAG_SLOTS; i++)
 		m->pertag->scroller_state[i] = NULL;
+	
+	static bool scaled_prewarmed = false;
+	if (!scaled_prewarmed) {
+		scaled_prewarmed = true;
+		texture_prewarm_all();
+	}
 
 	if (server.chvt_backup_tag &&
 		regex_match(server.chvt_backup_monitor_name, m->wlr_output->name)) {

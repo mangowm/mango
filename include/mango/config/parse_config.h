@@ -9,6 +9,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "mango/draw/text-node.h"
+#include "mango/draw/texture.h"
 
 /* Macros */
 // Integer version: truncates the fractional part.
@@ -152,6 +153,12 @@ typedef struct {
 	uint32_t passmod;
 	xkb_keysym_t keysym;
 	KeyBinding globalkeybinding;
+	float focus_color_override[MANGO_COLOR_COMPONENTS];
+	float border_color_override[MANGO_COLOR_COMPONENTS];
+	int32_t borderpx; // -1 = unset (defaults apply)
+	int32_t border_radius; // -1 = unset (defaults apply)
+	BorderTextureKey active_textures[MANGO_TEXTURE_SLOTS];
+	BorderTextureKey inactive_textures[MANGO_TEXTURE_SLOTS];
 } ConfigWinRule;
 
 typedef struct {
@@ -449,7 +456,7 @@ typedef struct {
 	float shadows_blur;
 	int32_t shadows_position_x;
 	int32_t shadows_position_y;
-	float shadowscolor[4];
+	float shadowscolor[MANGO_COLOR_COMPONENTS];
 
 	/* appearance */
 	int32_t smartgaps;
@@ -466,16 +473,18 @@ typedef struct {
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float special_dim;
-	float rootcolor[4];
-	float bordercolor[4];
-	float dropcolor[4];
-	float splitcolor[4];
-	float focuscolor[4];
-	float maximizescreencolor[4];
-	float urgentcolor[4];
-	float scratchpadcolor[4];
-	float globalcolor[4];
-	float overlaycolor[4];
+	float rootcolor[MANGO_COLOR_COMPONENTS];
+	float bordercolor[MANGO_COLOR_COMPONENTS];
+	float dropcolor[MANGO_COLOR_COMPONENTS];
+	float splitcolor[MANGO_COLOR_COMPONENTS];
+	float focuscolor[MANGO_COLOR_COMPONENTS];
+	float maximizescreencolor[MANGO_COLOR_COMPONENTS];
+	float urgentcolor[MANGO_COLOR_COMPONENTS];
+	float scratchpadcolor[MANGO_COLOR_COMPONENTS];
+	float globalcolor[MANGO_COLOR_COMPONENTS];
+	float overlaycolor[MANGO_COLOR_COMPONENTS];
+	BorderTextureKey active_textures[MANGO_TEXTURE_SLOTS];
+	BorderTextureKey inactive_textures[MANGO_TEXTURE_SLOTS];
 
 	int32_t log_level;
 	uint32_t capslock;
@@ -683,6 +692,8 @@ void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr, uint32_t tag);
 void set_env_without_display();
 
 void set_env_display();
+
+void texture_prewarm_all();
 
 FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						 char *arg_value2, char *arg_value3, char *arg_value4,
