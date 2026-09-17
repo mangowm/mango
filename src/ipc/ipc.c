@@ -846,15 +846,21 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
+		bool field_start = true;
 
 		while (*ptr) {
-			while (*ptr == ' ' || *ptr == '\t')
+			while (*ptr == ' ' || *ptr == '\t') {
 				*out++ = *ptr++;
+				field_start = true;
+			}
+			if (*ptr == '\0')
+				break;
 
-			if (strncmp(ptr, "client,", 7) == 0) {
+			if (field_start && strncmp(ptr, "client,", 7) == 0) {
 				char *end;
 				long id = strtol(ptr + 7, &end, 10);
-				if (id > 0 && end > ptr + 7 && (*end == '\0' || *end == ',')) {
+				if (id > 0 && end > ptr + 7 &&
+					(*end == '\0' || *end == ',')) {
 					client_id = (int)id;
 					ptr = end;
 					if (*ptr == ',')
@@ -862,6 +868,7 @@ void handle_command(int client_fd, const char *cmd_raw) {
 					continue;
 				}
 			}
+			field_start = *ptr == ',';
 			*out++ = *ptr++;
 		}
 		*out = '\0';
