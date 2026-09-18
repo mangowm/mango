@@ -1112,9 +1112,9 @@ void init_fadeout_client(Client *c) {
 			   (!c->animation_type_close &&
 				strcmp(config.animation_type_close, "slide") == 0)) {
 		fadeout_client->current.y =
-			c->geom.y + c->geom.height / 2 > c->mon->m.y + c->mon->m.height / 2
-				? c->mon->m.height - (c->animation.current.y - c->mon->m.y)
-				: c->mon->m.y - c->geom.height;
+			c->geom.y + c->geom.height / 2 >= c->mon->m.y + c->mon->m.height / 2
+				? c->mon->m.y + c->mon->m.height - c->animation.current.y
+				: c->mon->m.y - c->geom.height - c->animation.current.y;
 		fadeout_client->current.x = 0;
 	} else {
 		fadeout_client->current.y =
