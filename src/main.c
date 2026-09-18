@@ -366,7 +366,7 @@ void setup(void) {
 	setenv("XDG_CURRENT_DESKTOP", "mango", 1);
 	setenv("_JAVA_AWT_WM_NONREPARENTING", "1", 1);
 
-	parse_config(false);
+	parse_config();
 	if (server.cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
@@ -842,7 +842,7 @@ int32_t main(int32_t argc, char *argv[]) {
 			snprintf(server.cli_config_path, sizeof(server.cli_config_path),
 					 "%s", optarg);
 		} else if (c == 'p') {
-			return parse_config(false) ? EXIT_SUCCESS : EXIT_FAILURE;
+			return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
 		} else if (c == 'r') {
 			readiness_fd = atoi(optarg);
 			if (readiness_fd < 3) {

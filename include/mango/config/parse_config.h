@@ -29,14 +29,21 @@
 	if (rule->prop > 0.0f)                                                     \
 	obj->prop = rule->prop
 
-#define APPLY_STRING_PROP(obj, rule, prop)                                     \
-	if (rule->prop != NULL)                                                    \
-	obj->prop = rule->prop
-
 /* Tag animation / folding / global switch state. */
 enum { VERTICAL, HORIZONTAL };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
+
+enum animation_type {
+	ANIM_TYPE_UNSET = -1,
+	ANIM_TYPE_NONE = 0,
+	ANIM_TYPE_FADE,
+	ANIM_TYPE_SLIDE,
+	ANIM_TYPE_ZOOM,
+	ANIM_TYPE_UNKNOWN,
+};
+
+int32_t animation_type_from_string(const char *value);
 
 enum tearing_mode {
 	TEARING_DISABLED = 0,
@@ -106,10 +113,8 @@ typedef struct {
 	int32_t isfullscreen;
 	int32_t isfakefullscreen;
 	float scroller_proportion;
-	const char *animation_type_open;
-	const char *animation_type_close;
-	const char *layer_animation_type_open;
-	const char *layer_animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t isnoborder;
 	int32_t isnoanimation;
 	int32_t isopensilent;
@@ -194,8 +199,8 @@ typedef struct {
 
 typedef struct {
 	char *layer_name; // Layout name
-	char *animation_type_open;
-	char *animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t shield_when_capture;
 	int32_t noanim;
 } ConfigLayerRule;
@@ -288,10 +293,10 @@ typedef struct {
 typedef struct {
 	int32_t animations;
 	int32_t layer_animations;
-	char animation_type_open[10];
-	char animation_type_close[10];
-	char layer_animation_type_open[10];
-	char layer_animation_type_close[10];
+	int32_t animation_type_open;
+	int32_t animation_type_close;
+	int32_t layer_animation_type_open;
+	int32_t layer_animation_type_close;
 	int32_t animation_fade_in;
 	int32_t animation_fade_out;
 	int32_t tag_animation_direction;
@@ -615,7 +620,7 @@ void set_value_default();
 
 void set_default_key_bindings(Config *config);
 
-bool parse_config(bool reload);
+bool parse_config(void);
 
 void reapply_monitor_rules(void);
 

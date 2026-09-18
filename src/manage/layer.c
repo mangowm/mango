@@ -152,6 +152,8 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	l->dirty = false;
 	l->shield_when_capture = false;
 	l->need_output_flush = true;
+	l->animation_type_open = ANIM_TYPE_UNSET;
+	l->animation_type_close = ANIM_TYPE_UNSET;
 
 	// Applies the layer rule.
 	for (ji = 0; ji < config.layer_rules_count; ji++) {
@@ -161,8 +163,8 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 			r = &config.layer_rules[ji];
 			APPLY_INT_PROP(l, r, shield_when_capture);
 			APPLY_INT_PROP(l, r, noanim);
-			APPLY_STRING_PROP(l, r, animation_type_open);
-			APPLY_STRING_PROP(l, r, animation_type_close);
+			APPLY_INT_PROP(l, r, animation_type_open);
+			APPLY_INT_PROP(l, r, animation_type_close);
 		}
 	}
 
@@ -405,6 +407,8 @@ void handle_new_layer_surface(struct wl_listener *listener, void *data) {
 
 	l = layer_surface->data = ecalloc(1, sizeof(*l));
 	l->type = LayerShell;
+	l->animation_type_open = ANIM_TYPE_UNSET;
+	l->animation_type_close = ANIM_TYPE_UNSET;
 	LISTEN(&surface->events.map, &l->map, handle_layer_surface_map);
 	LISTEN(&surface->events.commit, &l->surface_commit,
 		   handle_layer_surface_commit);

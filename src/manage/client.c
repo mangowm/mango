@@ -1337,8 +1337,8 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_FLOAT_PROP(c, r, focused_opacity);
 	APPLY_FLOAT_PROP(c, r, unfocused_opacity);
 
-	APPLY_STRING_PROP(c, r, animation_type_open);
-	APPLY_STRING_PROP(c, r, animation_type_close);
+	APPLY_INT_PROP(c, r, animation_type_open);
+	APPLY_INT_PROP(c, r, animation_type_close);
 }
 void set_float_malposition(Client *tc) {
 	Client *c = NULL;
@@ -1839,6 +1839,8 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 
 	/* Allocate a Client for this surface */
 	c = toplevel->base->data = ecalloc(1, sizeof(*c));
+	c->animation_type_open = ANIM_TYPE_UNSET;
+	c->animation_type_close = ANIM_TYPE_UNSET;
 	c->surface.xdg = toplevel->base;
 	c->bw = config.borderpx;
 
@@ -4255,6 +4257,8 @@ void handle_new_xwayland_surface(struct wl_listener *listener, void *data) {
 
 	/* Allocate a Client for this surface */
 	c = xsurface->data = ecalloc(1, sizeof(*c));
+	c->animation_type_open = ANIM_TYPE_UNSET;
+	c->animation_type_close = ANIM_TYPE_UNSET;
 	c->surface.xwayland = xsurface;
 	c->type = X11;
 	/* Listen to the various events it can emit */

@@ -147,8 +147,8 @@ struct Client {
 	struct wl_listener set_decoration_mode;
 	struct wl_listener destroy_decoration;
 
-	const char *animation_type_open;
-	const char *animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t is_in_scratchpad;
 	int32_t iscustomsize;
 	int32_t iscustompos;

@@ -402,6 +402,20 @@ void run_exec_once() {
 		spawn_shell(&arg);
 	}
 }
+int32_t animation_type_from_string(const char *value) {
+	if (!value || !value[0])
+		return ANIM_TYPE_UNSET;
+	if (strcmp(value, "none") == 0)
+		return ANIM_TYPE_NONE;
+	if (strcmp(value, "fade") == 0)
+		return ANIM_TYPE_FADE;
+	if (strcmp(value, "slide") == 0)
+		return ANIM_TYPE_SLIDE;
+	if (strcmp(value, "zoom") == 0)
+		return ANIM_TYPE_ZOOM;
+	return ANIM_TYPE_UNKNOWN;
+}
+
 bool parse_option(Config *config, char *key, char *value, int line_number) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
@@ -410,21 +424,13 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 	} else if (strcmp(key, "layer_animations") == 0) {
 		config->layer_animations = atoi(value);
 	} else if (strcmp(key, "animation_type_open") == 0) {
-		snprintf(config->animation_type_open,
-				 sizeof(config->animation_type_open), "%.9s",
-				 value); // string limit to 9 char
+		config->animation_type_open = animation_type_from_string(value);
 	} else if (strcmp(key, "animation_type_close") == 0) {
-		snprintf(config->animation_type_close,
-				 sizeof(config->animation_type_close), "%.9s",
-				 value); // string limit to 9 char
+		config->animation_type_close = animation_type_from_string(value);
 	} else if (strcmp(key, "layer_animation_type_open") == 0) {
-		snprintf(config->layer_animation_type_open,
-				 sizeof(config->layer_animation_type_open), "%.9s",
-				 value); // string limit to 9 char
+		config->layer_animation_type_open = animation_type_from_string(value);
 	} else if (strcmp(key, "layer_animation_type_close") == 0) {
-		snprintf(config->layer_animation_type_close,
-				 sizeof(config->layer_animation_type_close), "%.9s",
-				 value); // string limit to 9 char
+		config->layer_animation_type_close = animation_type_from_string(value);
 	} else if (strcmp(key, "animation_fade_in") == 0) {
 		config->animation_fade_in = atoi(value);
 	} else if (strcmp(key, "animation_fade_out") == 0) {
@@ -1420,8 +1426,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		// Sets default values.
 		rule->layer_name = NULL;
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
+		rule->animation_type_open = ANIM_TYPE_UNSET;
+		rule->animation_type_close = ANIM_TYPE_UNSET;
 		rule->shield_when_capture = 0;
 		rule->noanim = 0;
 
@@ -1440,9 +1446,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				if (strcmp(key, "layer_name") == 0) {
 					rule->layer_name = strdup(val);
 				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
+					rule->animation_type_open = animation_type_from_string(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
+					rule->animation_type_close =
+						animation_type_from_string(val);
 				} else if (strcmp(key, "shield_when_capture") == 0) {
 					rule->shield_when_capture = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noanim") == 0) {
@@ -1523,8 +1530,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->no_force_center = -1;
 
 		// string rule value, relay to a client property
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
+		rule->animation_type_open = ANIM_TYPE_UNSET;
+		rule->animation_type_close = ANIM_TYPE_UNSET;
 
 		// float rule value, relay to a client property
 		rule->focused_opacity = 0;
@@ -1563,9 +1570,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				} else if (strcmp(key, "appid") == 0) {
 					rule->id = strdup(val);
 				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
+					rule->animation_type_open = animation_type_from_string(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
+					rule->animation_type_close =
+						animation_type_from_string(val);
 				} else if (strcmp(key, "tags") == 0) {
 					rule->tags = parse_tag_mask(val);
 				} else if (strcmp(key, "monitor") == 0) {
@@ -3272,16 +3280,12 @@ void free_config(void) {
 				free((void *)rule->id);
 			if (rule->title)
 				free((void *)rule->title);
-			if (rule->animation_type_open)
-				free((void *)rule->animation_type_open);
-			if (rule->animation_type_close)
-				free((void *)rule->animation_type_close);
 			if (rule->monitor)
 				free((void *)rule->monitor);
 			rule->id = NULL;
 			rule->title = NULL;
-			rule->animation_type_open = NULL;
-			rule->animation_type_close = NULL;
+			rule->animation_type_open = ANIM_TYPE_UNSET;
+			rule->animation_type_close = ANIM_TYPE_UNSET;
 			rule->monitor = NULL;
 			// Frees arg.v of globalkeybinding if dynamically allocated.
 			if (rule->globalkeybinding.arg.v) {
@@ -3452,10 +3456,8 @@ void free_config(void) {
 		for (int32_t i = 0; i < config.layer_rules_count; i++) {
 			if (config.layer_rules[i].layer_name)
 				free((void *)config.layer_rules[i].layer_name);
-			if (config.layer_rules[i].animation_type_open)
-				free((void *)config.layer_rules[i].animation_type_open);
-			if (config.layer_rules[i].animation_type_close)
-				free((void *)config.layer_rules[i].animation_type_close);
+			config.layer_rules[i].animation_type_open = ANIM_TYPE_UNSET;
+			config.layer_rules[i].animation_type_close = ANIM_TYPE_UNSET;
 		}
 		free(config.layer_rules);
 		config.layer_rules = NULL;
@@ -3759,6 +3761,10 @@ void override_config(void) {
 void set_value_default() {
 	config.animations = 1;
 	config.layer_animations = 0;
+	config.animation_type_open = ANIM_TYPE_UNSET;
+	config.animation_type_close = ANIM_TYPE_UNSET;
+	config.layer_animation_type_open = ANIM_TYPE_UNSET;
+	config.layer_animation_type_close = ANIM_TYPE_UNSET;
 	config.animation_fade_in = 1;
 	config.animation_fade_out = 1;
 	config.tag_animation_direction = HORIZONTAL;
@@ -4054,91 +4060,8 @@ void set_default_key_bindings(Config *config) {
 	config->key_bindings_count += default_key_bindings_count;
 }
 
-static void config_unbind_refs(void) {
-	Client *c = NULL;
-	LayerSurface *l = NULL;
-	Monitor *m = NULL;
-	int32_t i = 0;
-
-	wl_list_for_each(c, &server.clients, link) {
-		c->animation_type_open = NULL;
-		c->animation_type_close = NULL;
-	}
-
-	wl_list_for_each(c, &server.fadeout_clients, fadeout_link) {
-		c->animation_type_open = NULL;
-		c->animation_type_close = NULL;
-	}
-
-	wl_list_for_each(l, &server.fadeout_layers, fadeout_link) {
-		l->animation_type_open = NULL;
-		l->animation_type_close = NULL;
-	}
-
-	wl_list_for_each(m, &server.monitors, link) {
-		for (i = 0; i < 4; i++) {
-			wl_list_for_each(l, &m->layers[i], link) {
-				l->animation_type_open = NULL;
-				l->animation_type_close = NULL;
-			}
-		}
-	}
-}
-
-static void config_rebind_refs(void) {
-	Client *c = NULL;
-	LayerSurface *l = NULL;
-	Monitor *m = NULL;
-	ConfigWinRule *wr = NULL;
-	ConfigLayerRule *lr = NULL;
-	const char *appid = NULL;
-	const char *title = NULL;
-	char broken[] = "broken";
-	int32_t i = 0;
-	int32_t j = 0;
-
-	wl_list_for_each(c, &server.clients, link) {
-		if (!(appid = client_get_appid(c)))
-			appid = broken;
-		if (!(title = client_get_title(c)))
-			title = broken;
-
-		for (i = 0; i < config.window_rules_count; i++) {
-			wr = &config.window_rules[i];
-			if (!is_window_rule_matches(wr, appid, title))
-				continue;
-			if (wr->animation_type_open)
-				c->animation_type_open = wr->animation_type_open;
-			if (wr->animation_type_close)
-				c->animation_type_close = wr->animation_type_close;
-		}
-	}
-
-	wl_list_for_each(m, &server.monitors, link) {
-		for (i = 0; i < 4; i++) {
-			wl_list_for_each(l, &m->layers[i], link) {
-				if (!l->layer_surface)
-					continue;
-				for (j = 0; j < config.layer_rules_count; j++) {
-					lr = &config.layer_rules[j];
-					if (!regex_match(lr->layer_name,
-									 l->layer_surface->namespace))
-						continue;
-					if (lr->animation_type_open)
-						l->animation_type_open = lr->animation_type_open;
-					if (lr->animation_type_close)
-						l->animation_type_close = lr->animation_type_close;
-				}
-			}
-		}
-	}
-}
-
-bool parse_config(bool reload) {
+bool parse_config(void) {
 	char filename[1024];
-
-	if (reload)
-		config_unbind_refs();
 
 	free_config();
 
@@ -4231,9 +4154,6 @@ bool parse_config(bool reload) {
 		file_paths = NULL;
 		file_paths_count = 0;
 	}
-
-	if (reload)
-		config_rebind_refs();
 
 	return parse_correct || keybindings_conflict;
 }
@@ -4534,7 +4454,7 @@ void reset_tag(int old_tag_num) {
 
 int32_t reload_config(const Arg *arg) {
 	int old_tag_num = config.tag_num;
-	parse_config(true);
+	parse_config();
 	reset_tag(old_tag_num);
 	reset_option();
 	printstatus(IPC_WATCH_ARRANGGE);

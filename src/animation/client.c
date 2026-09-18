@@ -25,6 +25,18 @@ static bool client_gesture_driven(const Client *c) {
 		   c->mon == server.gesture_drive_mon;
 }
 
+static int32_t client_open_animation_type(const Client *c) {
+	return c->animation_type_open != ANIM_TYPE_UNSET
+			   ? c->animation_type_open
+			   : config.animation_type_open;
+}
+
+static int32_t client_close_animation_type(const Client *c) {
+	return c->animation_type_close != ANIM_TYPE_UNSET
+			   ? c->animation_type_close
+			   : config.animation_type_close;
+}
+
 bool client_animations_enabled(const Client *c) {
 	if (config.animations)
 		return true;
@@ -108,19 +120,13 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t special_direction;
 	int32_t center_x, center_y;
 
-	if ((!c->animation_type_open &&
-		 strcmp(config.animation_type_open, "fade") == 0) ||
-		(c->animation_type_open &&
-		 strcmp(c->animation_type_open, "fade") == 0)) {
+	if (client_open_animation_type(c) == ANIM_TYPE_FADE) {
 		c->animainit_geom.width = geo.width;
 		c->animainit_geom.height = geo.height;
 		c->animainit_geom.x = geo.x;
 		c->animainit_geom.y = geo.y;
 		return;
-	} else if ((!c->animation_type_open &&
-				strcmp(config.animation_type_open, "zoom") == 0) ||
-			   (c->animation_type_open &&
-				strcmp(c->animation_type_open, "zoom") == 0)) {
+	} else if (client_open_animation_type(c) == ANIM_TYPE_ZOOM) {
 		c->animainit_geom.width = geo.width * config.zoom_initial_ratio;
 		c->animainit_geom.height = geo.height * config.zoom_initial_ratio;
 		c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
@@ -959,10 +965,7 @@ void fadeout_client_animation_next_tick(Client *c) {
 		wlr_scene_node_for_each_buffer(&c->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
 
-	if ((c->animation_type_close &&
-		 strcmp(c->animation_type_close, "zoom") == 0) ||
-		(!c->animation_type_close &&
-		 strcmp(config.animation_type_close, "zoom") == 0)) {
+	if (client_close_animation_type(c) == ANIM_TYPE_ZOOM) {
 		BufferData buffer_data;
 		buffer_data.width = width;
 		buffer_data.height = height;
@@ -1050,13 +1053,12 @@ void init_fadeout_client(Client *c) {
 	if (c->shield_when_capture && server.active_capture_count > 0)
 		return;
 
-	if ((c->animation_type_close &&
-		 strcmp(c->animation_type_close, "none") == 0) ||
-		(!c->animation_type_close &&
-		 strcmp(config.animation_type_close, "none") == 0))
+	if (client_close_animation_type(c) == ANIM_TYPE_NONE)
 		return;
 
 	Client *fadeout_client = ecalloc(1, sizeof(*fadeout_client));
+	fadeout_client->animation_type_open = ANIM_TYPE_UNSET;
+	fadeout_client->animation_type_close = ANIM_TYPE_UNSET;
 
 	wlr_scene_node_set_enabled(&c->scene->node, true);
 	client_set_border_color(c, config.bordercolor);
@@ -1099,18 +1101,12 @@ void init_fadeout_client(Client *c) {
 	fadeout_client->animation.initial.x = 0;
 	fadeout_client->animation.initial.y = 0;
 
-	if ((!c->animation_type_close &&
-		 strcmp(config.animation_type_close, "fade") == 0) ||
-		(c->animation_type_close &&
-		 strcmp(c->animation_type_close, "fade") == 0)) {
+	if (client_close_animation_type(c) == ANIM_TYPE_FADE) {
 		fadeout_client->current.x = 0;
 		fadeout_client->current.y = 0;
 		fadeout_client->current.width = 0;
 		fadeout_client->current.height = 0;
-	} else if ((c->animation_type_close &&
-				strcmp(c->animation_type_close, "slide") == 0) ||
-			   (!c->animation_type_close &&
-				strcmp(config.animation_type_close, "slide") == 0)) {
+	} else if (client_close_animation_type(c) == ANIM_TYPE_SLIDE) {
 		fadeout_client->current.y =
 			c->geom.y + c->geom.height / 2 >= c->mon->m.y + c->mon->m.height / 2
 				? c->mon->m.y + c->mon->m.height - c->animation.current.y
@@ -1253,10 +1249,7 @@ void client_set_pending_state(Client *c) {
 	else
 		c->animation.should_animate = true;
 
-	if (((c->animation_type_open &&
-		  strcmp(c->animation_type_open, "none") == 0) ||
-		 (!c->animation_type_open &&
-		  strcmp(config.animation_type_open, "none") == 0)) &&
+	if (client_open_animation_type(c) == ANIM_TYPE_NONE &&
 		c->animation.action == OPEN)
 		c->animation.duration = 0;
 

@@ -30,8 +30,8 @@ typedef struct LayerSurface {
 	struct mango_animation animation;
 	bool dirty;
 	int32_t noanim;
-	char *animation_type_open;
-	char *animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	bool shield_when_capture;
 	bool need_output_flush;
 	bool being_unmapped;
