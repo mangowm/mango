@@ -15,24 +15,24 @@ Control key repeat rates and layout rules.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `repeat_rate` | `int` | `25` | How many times a key repeats per second. |
-| `repeat_delay` | `int` | `600` | Delay (ms) before a held key starts repeating. |
-| `numlockon` | `0` or `1` | `0` | Enable NumLock on startup. |
-| `xkb_rules_rules` | `string` | - | XKB rules file (e.g., `evdev`, `base`). Usually auto-detected. |
-| `xkb_rules_model` | `string` | - | Keyboard model (e.g., `pc104`, `macbook`). |
-| `xkb_rules_layout` | `string` | - | Keyboard layout code (e.g., `us`, `de`, `us,de`). |
-| `xkb_rules_variant` | `string` | - | Layout variant (e.g., `dvorak`, `colemak`, `intl`). |
-| `xkb_rules_options` | `string` | - | XKB options (e.g., `caps:escape`, `ctrl:nocaps`). |
+| `input.kbd.repeat.rate` | `int` | `25` | How many times a key repeats per second. |
+| `input.kbd.repeat.delay` | `int` | `600` | Delay (ms) before a held key starts repeating. |
+| `input.kbd.numlock.enable` | `0` or `1` | `0` | Enable NumLock on startup. |
+| `input.kbd.rules.rules` | `string` | - | XKB rules file (e.g., `evdev`, `base`). Usually auto-detected. |
+| `input.kbd.rules.model` | `string` | - | Keyboard model (e.g., `pc104`, `macbook`). |
+| `input.kbd.rules.layout` | `string` | - | Keyboard layout code (e.g., `us`, `de`, `us,de`). |
+| `input.kbd.rules.variant` | `string` | - | Layout variant (e.g., `dvorak`, `colemak`, `intl`). |
+| `input.kbd.rules.options` | `string` | - | XKB options (e.g., `caps:escape`, `ctrl:nocaps`). |
 
 **Example:**
 
 ```ini
-repeat_rate=40
-repeat_delay=300
-numlockon=1
-xkb_rules_layout=us,de
-xkb_rules_variant=dvorak
-xkb_rules_options=caps:escape,ctrl:nocaps
+input.kbd.repeat.rate=40
+input.kbd.repeat.delay=300
+input.kbd.numlock.enable=1
+input.kbd.rules.layout=us,de
+input.kbd.rules.variant=dvorak
+input.kbd.rules.options=caps:escape,ctrl:nocaps
 ```
 
 ---
@@ -43,16 +43,16 @@ Configuration for external mice.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `mouse_natural_scrolling` | `0` | Invert scrolling direction. |
-| `mouse_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
-| `mouse_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
-| `mouse_left_handed` | `0` | Swap left and right buttons. |
-| `mouse_middle_button_emulation` | `0` | Emulate middle button. |
-| `mouse_scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
-| `mouse_scroll_button` | `274` | The button used for button scrolling (272–279). |
-| `mouse_click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
-| `mouse_send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
-| `axis_scroll_factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
+| `input.mouse.natural.scrolling` | `0` | Invert scrolling direction. |
+| `input.mouse.accel.profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `input.mouse.accel.speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
+| `input.mouse.left.handed` | `0` | Swap left and right buttons. |
+| `input.mouse.middle.button.emulation` | `0` | Emulate middle button. |
+| `input.mouse.scroll.method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
+| `input.mouse.scroll.button` | `274` | The button used for button scrolling (272–279). |
+| `input.mouse.click.method` | `1` | `1` (Button areas), `2` (Clickfinger). |
+| `input.mouse.send.events.mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
+| `input.axis.scroll.factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
 ---
 
 ### Trackpad Settings
@@ -61,27 +61,27 @@ Specific settings for laptop trackpads. Some settings may require a relogin to t
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `disable_trackpad` | `0` | Set to `1` to disable the trackpad entirely. |
-| `tap_to_click` | `1` | Tap to trigger a left click. |
-| `tap_and_drag` | `1` | Tap and hold to drag items. |
-| `trackpad_natural_scrolling` | `0` | Invert scrolling direction (natural scrolling). |
-| `trackpad_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
-| `trackpad_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
-| `trackpad_scroll_button` | `274` | The button used for button scrolling (272–279). |
-| `trackpad_scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
-| `trackpad_click_method` | `1` | `1` (Button areas), `2` (Clickfinger). |
-| `trackpad_send_events_mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
-| `drag_lock` | `1` | Lock dragging after tapping. |
-| `trackpad_disable_while_typing` | `1` | Disable trackpad while typing. |
-| `trackpad_left_handed` | `0` | Swap left/right buttons. |
-| `trackpad_middle_button_emulation` | `0` | Emulate middle button. |
-| `swipe_min_threshold` | `1` | Minimum swipe threshold when use gesture. |
-| `gesture_live` | `1` | Drive tag/focus/overview transitions while the fingers are still moving (`1`), instead of only after release (`0`). |
-| `gesture_swipe_distance` | `300` | Finger travel (px) that corresponds to one full page transition. |
-| `gesture_swipe_cancel_ratio` | `0.5` | Releasing after the last page was dragged past this fraction commits it; below it, the transition animates back. |
-| `gesture_swipe_min_speed_to_force` | `10` | Average per-event speed (px) that forces a commit even below the cancel ratio (for quick flicks). |
-| `button_map` | `0` | `0` (Left/right/middle), `1` (Left/middle/right). |
-| `trackpad_scroll_factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
+| `input.trackpad.disable` | `0` | Set to `1` to disable the trackpad entirely. |
+| `input.trackpad.tap.to.click` | `1` | Tap to trigger a left click. |
+| `input.trackpad.tap.and.drag` | `1` | Tap and hold to drag items. |
+| `input.trackpad.natural.scrolling` | `0` | Invert scrolling direction (natural scrolling). |
+| `input.trackpad.accel.profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `input.trackpad.accel.speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
+| `input.trackpad.scroll.button` | `274` | The button used for button scrolling (272–279). |
+| `input.trackpad.scroll.method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
+| `input.trackpad.click.method` | `1` | `1` (Button areas), `2` (Clickfinger). |
+| `input.trackpad.send.events.mode` | `0` | `0` (Enabled), `1` (Disabled), `2` (Disabled on external mouse). |
+| `input.trackpad.drag.lock` | `1` | Lock dragging after tapping. |
+| `input.trackpad.auto.disable` | `1` | Disable trackpad while typing. |
+| `input.trackpad.left.handed` | `0` | Swap left/right buttons. |
+| `input.trackpad.middle.button.emulation` | `0` | Emulate middle button. |
+| `input.trackpad.swipe.min.threshold` | `1` | Minimum swipe threshold when use gesture. |
+| `input.gesture.live` | `1` | Drive tag/focus/overview transitions while the fingers are still moving (`1`), instead of only after release (`0`). |
+| `input.gesture.swipe.distance` | `300` | Finger travel (px) that corresponds to one full page transition. |
+| `input.gesture.swipe.cancel.ratio` | `0.5` | Releasing after the last page was dragged past this fraction commits it; below it, the transition animates back. |
+| `input.gesture.swipe.min.speed.to.force` | `10` | Average per-event speed (px) that forces a commit even below the cancel ratio (for quick flicks). |
+| `input.device.button.map` | `0` | `0` (Left/right/middle), `1` (Left/middle/right). |
+| `input.trackpad.scroll.factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
 ---
 
 ### Touchscreen Settings
@@ -92,8 +92,8 @@ emulation so the touchscreen keeps working with non-touch clients.
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `touch_enable` | `1` | Set to `0` to completely disable touchscreen support. |
-| `touch_enable_mouse_emulation` | `0` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
+| `input.touch.enable` | `1` | Set to `0` to completely disable touchscreen support. |
+| `input.touch.mouse.emulation` | `0` | When `1`, touch events landing on surfaces that do not accept touch are emulated as left mouse button clicks/moves. Set to `0` to disable emulation (such touches are ignored). |
 
 By default a touchscreen is restricted to the current screen (the monitor that
 currently has focus). To pin a specific touch device to a fixed output, use the
@@ -106,7 +106,7 @@ unless a device rule pins them to a fixed output.
 
 **Detailed descriptions:**
 
-- `scroll_button` values (use `mouse_scroll_button` / `trackpad_scroll_button`):
+- `scroll_button` values (use `input.mouse.scroll.button` / `input.trackpad.scroll.button`):
   - `272` — Left button.
   - `273` — Right button.
   - `274` — Middle button.
@@ -116,27 +116,27 @@ unless a device rule pins them to a fixed output.
   - `278` — Back button.
   - `279` — Task button.
 
-- `scroll_method` values (use `mouse_scroll_method` / `trackpad_scroll_method`):
+- `scroll_method` values (use `input.mouse.scroll.method` / `input.trackpad.scroll.method`):
   - `0` — Never send scroll events (no scrolling).
   - `1` — Two-finger scrolling: send scroll events when two fingers are logically down on the device.
   - `2` — Edge scrolling: send scroll events when a finger moves along the bottom or right edge.
   - `4` — Button scrolling: send scroll events when a button is held and the device moves along a scroll axis.
 
-- `click_method` values (use `mouse_click_method` / `trackpad_click_method`):
+- `click_method` values (use `input.mouse.click.method` / `input.trackpad.click.method`):
   - `0` — No software click emulation.
   - `1` — Button areas: use software-defined areas on the trackpad to generate button events.
   - `2` — Clickfinger: the number of fingers determines which button is pressed.
 
-- `mouse_accel_profile` or `trackpad_scroll_profile` values:
+- `input.mouse.accel.profile` or `trackpad_scroll_profile` values:
   - `0` — No acceleration.
-  - `1` — Flat: no dynamic acceleration. Pointer speed = original input speed × (1 + `mouse_accel_speed`).
+  - `1` — Flat: no dynamic acceleration. Pointer speed = original input speed × (1 + `input.mouse.accel.speed`).
   - `2` — Adaptive: slow movement results in less acceleration, fast movement results in more.
 
-- `button_map` values:
+- `input.device.button.map` values:
   - `0` — 1/2/3 finger tap maps to left / right / middle.
   - `1` — 1/2/3 finger tap maps to left / middle / right.
 
-- `send_events_mode` values (use `mouse_send_events_mode` / `trackpad_send_events_mode`):
+- `send_events_mode` values (use `input.mouse.send.events.mode` / `input.trackpad.send.events.mode`):
   - `0` — Send events from this device normally.
   - `1` — Do not send events from this device.
   - `2` — Disable this device when an external pointer device is plugged in.
@@ -146,13 +146,13 @@ unless a device rule pins them to a fixed output.
 
 ## Keyboard Layout Switching
 
-To bind multiple layouts and toggle between them, define the layouts in `xkb_rules_layout` and use `xkb_rules_options` to set a toggle key combination. Then bind `switch_keyboard_layout` to trigger a switch.
+To bind multiple layouts and toggle between them, define the layouts in `input.kbd.rules.layout` and use `input.kbd.rules.options` to set a toggle key combination. Then bind `switch_keyboard_layout` to trigger a switch.
 
 ```ini
 # Define two layouts: US QWERTY and US Dvorak
-xkb_rules_layout=us,us
-xkb_rules_variant=,dvorak
-xkb_rules_options=grp:lalt_lshift_toggle
+input.kbd.rules.layout=us,us
+input.kbd.rules.variant=,dvorak
+input.kbd.rules.options=grp:lalt_lshift_toggle
 ```
 
 Or bind it manually to a key:
@@ -243,10 +243,10 @@ Apply changes with `mmsg dispatch reload_config` or restart mango.
 ### Rule Options
 
 All options are optional; unset options fall back to the global settings.
-Keyboard `kb_*` options are independent of the global `xkb_rules_*` settings:
+Keyboard `kb_*` options are independent of the global `input.kbd.rules.*` settings:
 a rule's keymap is compiled only from the options it sets (unset fields use
 the XKB defaults), so a rule like `kb_layout:pt` is not affected by a global
-`xkb_rules_variant`.
+`input.kbd.rules.variant`.
 
 | Category | Option | Description |
 | :--- | :--- | :--- |

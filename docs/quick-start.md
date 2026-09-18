@@ -17,10 +17,10 @@ Now that you have mangowm installed, let's get your environment set up.
 
 2. **Copy Default Config**
 
-   A default configuration file is provided at `/etc/mango/config.conf`. Copy it to your local directory to start customizing.
+   A default configuration file is provided at `/etc/mango/config.toml`. Copy it to your local directory to start customizing.
 
    ```bash
-   cp /etc/mango/config.conf ~/.config/mango/config.conf
+   cp /etc/mango/config.toml ~/.config/mango/config.toml
    ```
 
 3. **Launch mangowm**
@@ -34,7 +34,7 @@ Now that you have mangowm installed, let's get your environment set up.
    Optional: To specify a custom config file path:
 
    ```bash
-   mango -c /path/to/your/config.conf
+   mango -c /path/to/your/config.toml
    ```
 
 ## Essential Keybindings
@@ -52,7 +52,7 @@ mangowm uses the following keybinds by default:
 | `Ctrl` + `1-9` | Switch to Tag 1-9 |
 | `Alt` + `1-9` | Move window to Tag 1-9 |
 
-> **Warning:** Some default bindings rely on specific tools like `foot` (terminal) and `rofi` (launcher). Ensure you have them installed or update your `config.conf` to use your preferred alternatives.
+> **Warning:** Some default bindings rely on specific tools like `foot` (terminal) and `rofi` (launcher). Ensure you have them installed or update your `config.toml` to use your preferred alternatives.
 
 ## Recommended Tools
 

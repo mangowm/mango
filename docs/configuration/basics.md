@@ -9,7 +9,7 @@ mangowm uses a simple configuration file format. By default, it looks for a conf
 
 1. **Locate Default Config**
 
-   A fallback configuration is provided at `/etc/mango/config.conf`. You can use this as a reference.
+   A fallback configuration is provided at `/etc/mango/config.toml`. You can use this as a reference.
 
 2. **Create User Config**
 
@@ -17,7 +17,7 @@ mangowm uses a simple configuration file format. By default, it looks for a conf
 
    ```bash
    mkdir -p ~/.config/mango
-   cp /etc/mango/config.conf ~/.config/mango/config.conf
+   cp /etc/mango/config.toml ~/.config/mango/config.toml
    ```
 
 3. **Launch with Custom Config (Optional)**
@@ -25,7 +25,7 @@ mangowm uses a simple configuration file format. By default, it looks for a conf
    If you prefer to keep your config elsewhere, you can launch mango with the `-c` flag.
 
    ```bash
-   mango -c /path/to/your_config.conf
+   mango -c /path/to/your_config.toml
    ```
 
 ### Sub-Configuration
@@ -43,12 +43,74 @@ source=./theme.conf
 source-optional=~/.config/mango/optional.conf
 ```
 
+### Headers
+
+Mango's configuration supports headers using a TOML-like format:
+```ini
+[deco.animation]
+duration.close = 200
+duration.open = 200
+duration.focus = 400
+duration.move = 300
+duration.tag = 400
+```
+
+The above is equal to the following:
+```ini
+deco.animation.duration.close = 200
+deco.animation.duration.open = 200
+deco.animation.duration.focus = 400
+deco.animation.duration.move = 300
+deco.animation.duration.tag = 400
+```
+
+The header text is effectively prepended to each option in that "block", a new header overwrites a previous one.
+
+Each config file (including sub-configurations) starts with the header set to `[]`, meaning none. you can reset the header like this at any time.
+
+headers also have the ability to be conditional, a condition can be added with the `?` symbol:
+```ini
+[deco.animation ? test "$ENVIRONMENT_VARIABLE" == "sometext"]
+duration.open = 200
+...
+```
+
+this condition can also be used with an empty block: `[? test $ENV == true]`
+
+Conditional blocks will suppress all settings after them until the next block if the provided command after the `?` exits non-0:
+```ini
+# this would be applied
+[deco.animation ? exit 0]
+duration.open = 200
+
+# this would not
+[deco.animation ? exit 1]
+duration.close = 200
+```
+
+Some options are "global", which means they will always work regardless of header. this is the case for all legacy versions of options, as well as the following:
+- all bind-related options
+- all rule-related options
+- exec/exec-once
+- source/source-optional
+- keymode
+- env
+
+These *will* still respect conditional blocks, but can be added under any header, so the following is valid:
+```ini
+# nested env key is global, and won't get resolved to deco.animation.env
+[deco.animation]
+duration.open = 200
+env = OPENDURATION,200
+```
+
+
 ### Validate Configuration
 
 You can check your configuration for errors without starting mangowm:
 
 ```bash
-mango -c /path/to/config.conf -p
+mango -c /path/to/config.toml -p
 ```
 
 Use with `source-optional` for shared configs across different setups.

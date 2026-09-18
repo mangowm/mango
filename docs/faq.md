@@ -5,37 +5,37 @@ description: Frequently asked questions and troubleshooting.
 
 ### How do I arrange tiled windows with my mouse?
 
-You can enable the `drag_tile_to_tile` option in your config. This allows you to drag a tiled window onto another to swap them.
+You can enable the `window.drag.tile.to.tile` option in your config. This allows you to drag a tiled window onto another to swap them.
 
 ```ini
-drag_tile_to_tile=1
+window.drag.tile.to.tile=1
 ```
 
 ---
 
 ### Why is my background blurry or why does blur look wrong?
 
-Blur applies to the transparent areas of windows. To disable it entirely, set `blur=0`.
+Blur applies to the transparent areas of windows. To disable it entirely, set `deco.blur.enable=0`.
 
-If you are experiencing **performance issues with blur**, make sure `blur_optimized=1` (the default). This caches the wallpaper as the blur background, which is much cheaper on the GPU:
+If you are experiencing **performance issues with blur**, make sure `deco.blur.optimized=1` (the default). This caches the wallpaper as the blur background, which is much cheaper on the GPU:
 
 ```ini
-blur_optimized=1
+deco.blur.optimized=1
 ```
 
 ---
 
 ### Blur shows my wallpaper instead of the real background content
 
-This is expected behavior when `blur_optimized=1` (the default). The optimizer caches the wallpaper to reduce GPU load — windows will blur against the wallpaper rather than the actual content stacked beneath them.
+This is expected behavior when `deco.blur.optimized=1` (the default). The optimizer caches the wallpaper to reduce GPU load — windows will blur against the wallpaper rather than the actual content stacked beneath them.
 
 If you want blur to composite against the true background (i.e., show whatever is actually behind the window), set:
 
 ```ini
-blur_optimized=0
+deco.blur.optimized=0
 ```
 
-> **Warning:** Disabling `blur_optimized` significantly increases GPU consumption and may cause rendering lag, especially on lower-end hardware.
+> **Warning:** Disabling `deco.blur.optimized` significantly increases GPU consumption and may cause rendering lag, especially on lower-end hardware.
 
 ---
 
@@ -44,7 +44,7 @@ blur_optimized=0
 Try enabling **SyncObj** timeline support.
 
 ```ini
-syncobj_enable=1
+system.syncobj.enable=1
 ```
 
 ---
@@ -56,7 +56,7 @@ You can enable **Tearing** (similar to VSync off).
 First, enable it globally:
 
 ```ini
-allow_tearing=1
+system.tearing.mode=1
 ```
 
 Then force it for your specific game:

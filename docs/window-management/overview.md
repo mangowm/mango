@@ -7,22 +7,22 @@ description: Configure the overview mode for window navigation.
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `hotarea_size` | integer | `10` | Hot area size in pixels. |
-| `enable_hotarea` | integer | `0` | Enable hot areas (0: disable, 1: enable). |
-| `hotarea_disable_on_fullscreen` | integer | `1` | Disable hot areas while a fullscreen window is focused (0: disable, 1: enable). |
-| `hotarea_corner` | integer | `2` | Hot area corner (0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right). |
-| `overviewgappi` | integer | `5` | Inner gap in overview mode. |
-| `overviewgappo` | integer | `30` | Outer gap in overview mode. |
-| `overcircle_center_ratio` | float | `0.5` | Width ratio of the centered window in the `overcircle` layout (0.1–0.9). |
-| `jump_labels` | string | `HJKLASDFGQWERTYUIOPZXCVBNM` | Character sequence used for jump hints in overview mode. |
+| `overview.hotarea.size` | integer | `10` | Hot area size in pixels. |
+| `overview.hotarea.enable` | integer | `0` | Enable hot areas (0: disable, 1: enable). |
+| `overview.hotarea.disable.on.fullscreen` | integer | `1` | Disable hot areas while a fullscreen window is focused (0: disable, 1: enable). |
+| `overview.hotarea.corner` | integer | `2` | Hot area corner (0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right). |
+| `overview.gap.inner` | integer | `5` | Inner gap in overview mode. |
+| `overview.gap.outer` | integer | `30` | Outer gap in overview mode. |
+| `overview.circle.center.ratio` | float | `0.5` | Width ratio of the centered window in the `overcircle` layout (0.1–0.9). |
+| `overview.jump.chars` | string | `HJKLASDFGQWERTYUIOPZXCVBNM` | Character sequence used for jump hints in overview mode. |
 
 ### Setting Descriptions
 
-- `enable_hotarea` — Toggles overview when the cursor enters the configured corner.
-- `hotarea_disable_on_fullscreen` — When enabled, the hot area does not trigger overview while a fullscreen window is focused.
-- `hotarea_size` — Size of the hot area trigger zone in pixels.
-- `hotarea_corner` — Corner that triggers the hot area (0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right).
-- `jump_labels` — Defines the ordered characters used for jump hints when in overview jump mode. Each visible window is assigned a label in this order, and pressing the corresponding key jumps to that window. The number of labels limits how many windows can be assigned hints at once.
+- `overview.hotarea.enable` — Toggles overview when the cursor enters the configured corner.
+- `overview.hotarea.disable.on.fullscreen` — When enabled, the hot area does not trigger overview while a fullscreen window is focused.
+- `overview.hotarea.size` — Size of the hot area trigger zone in pixels.
+- `overview.hotarea.corner` — Corner that triggers the hot area (0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right).
+- `overview.jump.chars` — Defines the ordered characters used for jump hints when in overview jump mode. Each visible window is assigned a label in this order, and pressing the corresponding key jumps to that window. The number of labels limits how many windows can be assigned hints at once.
 
 [`overcircle`](/docs/bindings/keys#focus--movement) opens overview; while
 overview is open, each trigger cycles focus to the next window on the current

@@ -217,7 +217,7 @@ list of string
 
 
 
-Extra configuration lines to add to ` ~/.config/mango/config.conf `\.
+Extra configuration lines to add to ` ~/.config/mango/config.toml `\.
 This is useful for advanced configurations that don’t fit the structured
 settings format, or for options that aren’t yet supported by the module\.
 
@@ -259,8 +259,9 @@ should be written as lists\. Variables and colors names should be
 quoted\. See [https://mangowm\.github\.io/docs](https://mangowm\.github\.io/docs) for more examples\.
 
 **Note:** This option uses a structured format that is converted to Mango’s
-configuration syntax\. Nested attributes are flattened with underscore separators\.
-For example: ` animation.duration_open = 400 ` becomes ` animation_duration_open = 400 `
+configuration syntax\. Nested attributes are flattened with dot separators\.
+For example: ` { deco.blur.enable = 1; } ` outputs ` deco.blur.enable = 1 `
+which matches the recommended dotted key names in the config docs\.
 
 Keymodes (submaps) are supported via the special ` keymode ` attribute\. Each keymode
 is a nested attribute set under ` keymode ` that contains its own bindings\.
@@ -285,27 +286,22 @@ Mango configuration value
 ```nix
 {
   # Window effects
-  blur = 1;
-  blur_optimized = 1;
-  blur_params = {
-    radius = 5;
-    num_passes = 2;
-  };
-  border_radius = 6;
-  focused_opacity = 1.0;
+  deco.blur.enable = 1;
+  deco.blur.optimized = 1;
+  deco.blur.params.radius = 5;
+  deco.blur.params.num.passes = 2;
+  deco.border.radius = 6;
+  deco.opacity.focused = 1.0;
 
-  # Animations - use underscores for multi-part keys
-  animations = 1;
-  animation_type_open = "slide";
-  animation_type_close = "slide";
-  animation_duration_open = 400;
-  animation_duration_close = 800;
+  # Animations – use nested attrs
+  deco.animation.enable = 1;
+  deco.animation.type.open = "slide";
+  deco.animation.type.close = "slide";
+  deco.animation.duration.open = 400;
+  deco.animation.duration.close = 800;
 
-  # Or use nested attrs (will be flattened with underscores)
-  animation_curve = {
-    open = "0.46,1.0,0.29,1";
-    close = "0.08,0.92,0,1";
-  };
+  deco.animation.curve.open = "0.46,1.0,0.29,1";
+  deco.animation.curve.close = "0.08,0.92,0,1";
 
   # Use lists for duplicate keys like bind and tagrule
   bind = [

@@ -199,7 +199,7 @@ let
           mkKeymodeBlock =
             name: modeAttrs:
             let
-              modeCommands = flattenAttrs (p: k: "${p}_${k}") modeAttrs;
+              modeCommands = flattenAttrs (p: k: "${p}.${k}") modeAttrs;
             in
             "keymode = ${name}\n${mkCommands modeCommands}";
 
@@ -209,9 +209,9 @@ let
             else
               "\n" + concatMapStrings (name: mkKeymodeBlock name keymodes.${name} + "\n") (attrNames keymodes);
 
-          # Flatten the attrset, combining keys in a "path" like `"a_b_c" = "x"`.
-          # Uses `flattenAttrs` with an underscore separator.
-          commands = flattenAttrs (p: k: "${p}_${k}") attrsWithoutKeymodes;
+          # Flatten the attrset, combining keys in a "path" like `"a.b.c" = "x"`.
+          # Uses `flattenAttrs` with a dot separator.
+          commands = flattenAttrs (p: k: "${p}.${k}") attrsWithoutKeymodes;
 
           # General filtering function to check if a key starts with any prefix in a given list.
           filterCommands = list: n: foldl (acc: prefix: acc || hasPrefix prefix n) false list;

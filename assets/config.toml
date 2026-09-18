@@ -1,0 +1,324 @@
+# More option see https://github.com/DreamMaoMao/mango/wiki/
+# Recommended header-based config. See docs/configuration/basics.md.
+
+# Window effect
+[deco.blur]
+enable = 0
+optimized = 1
+params.num.passes = 2
+params.radius = 5
+params.noise = 0.02
+params.brightness = 0.9
+params.contrast = 0.9
+params.saturation = 1.2
+
+[deco.shadow]
+enable = 0
+only.floating = 1
+size = 10
+blur = 15
+position.x = 0
+position.y = 0
+color = 0x000000ff
+
+[deco.layer]
+blur.enable = 0
+shadow.enable = 0
+animation.enable = 1
+
+[deco.border]
+radius = 6
+radius.hide.single = 0
+hide.single = 0
+width = 4
+
+[deco.opacity]
+focused = 1.0
+unfocused = 1.0
+
+[deco.gap]
+inner.horizontal = 5
+inner.vertical = 5
+outer.horizontal = 10
+outer.vertical = 10
+smart = 0
+
+# Animation Configuration(support type:zoom,slide)
+# tag.animation.direction: 1-horizontal,0-vertical
+[deco.animation]
+enable = 1
+type.open = slide
+type.close = slide
+fade.in.enable = 1
+fade.out.enable = 1
+tag.direction = 1
+zoom.initial.ratio = 0.4
+zoom.end.ratio = 0.8
+fade.in.begin.opacity = 0.5
+fade.out.begin.opacity = 0.8
+
+[deco.animation.duration]
+move = 500
+open = 400
+tag = 350
+close = 800
+focus = 0
+
+[deco.animation.curve]
+open = 0.46,1.0,0.29,1
+move = 0.46,1.0,0.29,1
+tag = 0.46,1.0,0.29,1
+close = 0.08,0.92,0,1
+focus = 0.46,1.0,0.29,1
+fade.out = 0.5,0.5,0.5,0.5
+fade.in = 0.46,1.0,0.29,1
+
+# Appearance
+[deco.color]
+root = 0x201b14ff
+border = 0x444444ff
+drop = 0x8FBA7C55
+split = 0xEB441EFF
+focus = 0xc9b890ff
+maximize = 0x89aa61ff
+urgent = 0xad401fff
+scratchpad = 0x516c93ff
+global = 0xb153a7ff
+overlay = 0x14a57cff
+
+# Scroller Layout Setting
+[layout.scroller]
+structs = 20
+default.proportion = 0.8
+default.proportion.single = 1.0
+focus.center = 0
+prefer.center = 0
+edge.pointer.focus = 1
+edge.focus.allow.speed = 0.0
+proportion.preset = 0.5,0.8,1.0
+
+# Master-Stack Layout Setting
+[layout.master]
+new.is.master = 1
+default.mfact = 0.55
+default.nmaster = 1
+
+# Dwindle Layout Setting
+[layout.dwindle]
+smart.split = 0
+drop.simple.split = 1
+manual.split = 0
+hsplit = 1
+vsplit = 1
+preserve.split = 0
+
+# Overview Setting
+[overview]
+hotarea.size = 10
+hotarea.enable = 0
+hotarea.disable.on.fullscreen = 1
+gap.inner = 5
+gap.outer = 30
+circle.center.ratio = 0.5
+
+# Misc
+[cursor]
+size = 24
+
+[focus]
+sloppyfocus = 1
+warp.cursor = 1
+on.activate = 1
+cross.monitor = 0
+direction.zone.overlap = 1
+cross.tag = 0
+
+[window]
+drag.tile.to.tile = 1
+drag.tile.small = 1
+idleinhibit.ignore.visible = 0
+idleinhibit.when.fullscreen = 0
+snap.enable = 0
+snap.distance = 30
+
+[input.axis]
+bind.apply.timeout = 100
+
+# keyboard
+[input.kbd]
+repeat.rate = 25
+repeat.delay = 600
+numlock.enable = 0
+rules.layout = us
+
+# Trackpad
+# need relogin to make it apply
+[input.trackpad]
+disable = 0
+tap.to.click = 1
+tap.and.drag = 1
+drag.lock = 1
+natural.scrolling = 0
+auto.disable = 1
+left.handed = 0
+middle.button.emulation = 0
+swipe.min.threshold = 1
+
+# mouse
+# need relogin to make it apply
+[input.mouse]
+natural.scrolling = 0
+
+# Appearance
+[scratchpad]
+width.ratio = 0.8
+height.ratio = 0.9
+
+# layout support:
+# tile,scroller,grid,deck,monocle,center_tile,vertical_tile,vertical_scroller
+# global directives ignore headers, but reset for clarity
+[]
+tag.num = 9
+tagrule=id:1,layout_name:tile
+tagrule=id:2,layout_name:tile
+tagrule=id:3,layout_name:tile
+tagrule=id:4,layout_name:tile
+tagrule=id:5,layout_name:tile
+tagrule=id:6,layout_name:tile
+tagrule=id:7,layout_name:tile
+tagrule=id:8,layout_name:tile
+tagrule=id:9,layout_name:tile
+
+# Key Bindings
+# key name refer to `xev` or `wev` command output,
+# mod keys name: super,ctrl,alt,shift,none
+
+# reload config
+bind=SUPER,r,reload_config
+
+# menu and terminal
+bind=Alt,space,spawn,rofi -show drun
+bind=Alt,Return,spawn,foot
+
+# exit
+bind=SUPER,m,quit
+bind=ALT,q,killclient,
+
+# switch window focus
+bind=SUPER,Tab,focusstack,next
+bind=ALT,Left,focusdir,left
+bind=ALT,Right,focusdir,right
+bind=ALT,Up,focusdir,up
+bind=ALT,Down,focusdir,down
+
+# swap window
+bind=SUPER+SHIFT,Up,exchange_client,up
+bind=SUPER+SHIFT,Down,exchange_client,down
+bind=SUPER+SHIFT,Left,exchange_client,left
+bind=SUPER+SHIFT,Right,exchange_client,right
+
+# switch window status
+bind=SUPER,g,toggleglobal,
+bind=ALT,Tab,togglejump,
+bind=ALT,backslash,togglefloating,
+bind=ALT,a,togglemaximizescreen,
+bind=ALT,f,togglefullscreen,
+bind=ALT+SHIFT,f,togglefakefullscreen,
+bind=SUPER,i,minimized,
+bind=SUPER,o,toggleoverlay,
+bind=SUPER+SHIFT,I,restore_minimized
+bind=ALT,z,toggle_scratchpad
+
+# scroller layout
+bind=ALT,e,set_proportion,1.0
+bind=ALT,x,switch_proportion_preset,
+bind=alt+super+ctrl,Left,scroller_stack,left
+bind=alt+super+ctrl,Right,scroller_stack,right
+bind=alt+super+ctrl,Up,scroller_stack,up
+bind=alt+super+ctrl,Down,scroller_stack,down
+
+#dwindle layout(manual split mode)
+bind=alt+shift,Return,dwindle_toggle_split_direction
+
+# switch layout
+bind=SUPER,n,switch_layout
+
+# tag switch
+bind=SUPER,Left,viewtoleft,0
+bind=CTRL,Left,viewtoleft_have_client,0
+bind=SUPER,Right,viewtoright,0
+bind=CTRL,Right,viewtoright_have_client,0
+bind=CTRL+SUPER,Left,tagtoleft,0
+bind=CTRL+SUPER,Right,tagtoright,0
+
+bind=Ctrl,1,view,1,0
+bind=Ctrl,2,view,2,0
+bind=Ctrl,3,view,3,0
+bind=Ctrl,4,view,4,0
+bind=Ctrl,5,view,5,0
+bind=Ctrl,6,view,6,0
+bind=Ctrl,7,view,7,0
+bind=Ctrl,8,view,8,0
+bind=Ctrl,9,view,9,0
+
+# tag: move client to the tag and focus it
+# tagsilent: move client to the tag and not focus it
+# bind=Alt,1,tagsilent,1
+bind=Alt,1,tag,1,0
+bind=Alt,2,tag,2,0
+bind=Alt,3,tag,3,0
+bind=Alt,4,tag,4,0
+bind=Alt,5,tag,5,0
+bind=Alt,6,tag,6,0
+bind=Alt,7,tag,7,0
+bind=Alt,8,tag,8,0
+bind=Alt,9,tag,9,0
+
+# monitor switch
+bind=alt+shift,Left,focusmon,left
+bind=alt+shift,Right,focusmon,right
+bind=SUPER+Alt,Left,tagmon,left
+bind=SUPER+Alt,Right,tagmon,right
+
+# gaps
+bind=ALT+SHIFT,X,incgaps,1
+bind=ALT+SHIFT,Z,incgaps,-1
+bind=ALT+SHIFT,R,togglegaps
+
+# movewin
+bind=CTRL+SHIFT,Up,movewin,+0,-50
+bind=CTRL+SHIFT,Down,movewin,+0,+50
+bind=CTRL+SHIFT,Left,movewin,-50,+0
+bind=CTRL+SHIFT,Right,movewin,+50,+0
+
+# resizewin
+bind=CTRL+ALT,Up,resizewin,+0,-50
+bind=CTRL+ALT,Down,resizewin,+0,+50
+bind=CTRL+ALT,Left,resizewin,-50,+0
+bind=CTRL+ALT,Right,resizewin,+50,+0
+
+# Mouse Button Bindings
+# btn_left and btn_right can't bind none mod key
+mousebind=SUPER,btn_left,moveresize,curmove
+mousebind=NONE,btn_middle,togglemaximizescreen,0
+mousebind=SUPER,btn_right,moveresize,curresize
+
+
+# Axis Bindings
+axisbind=SUPER,UP,viewtoleft_have_client
+axisbind=SUPER,DOWN,viewtoright_have_client
+
+# Gesture Bindings
+gesturebind=none,left,3,focusdir,left
+gesturebind=none,right,3,focusdir,right
+gesturebind=none,up,3,focusdir,up
+gesturebind=none,down,3,focusdir,down
+gesturebind=none,right,4,viewprev_have_client
+gesturebind=none,left,4,viewnext_have_client
+gesturebind=none,up,4,enteroverview
+gesturebind=none,down,4,leaveoverview
+
+
+# layer rule
+layerrule=animation_type_open:zoom,layer_name:rofi
+layerrule=animation_type_close:zoom,layer_name:rofi
