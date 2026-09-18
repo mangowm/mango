@@ -576,6 +576,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->snap_distance = atoi(value);
 	} else if (strcmp(key, "enable_floating_snap") == 0) {
 		config->enable_floating_snap = atoi(value);
+	} else if (strcmp(key, "float_full_to_top") == 0) {
+		config->float_full_to_top = atoi(value);
 	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
 	} else if (strcmp(key, "drag_tile_small") == 0) {
@@ -3644,6 +3646,7 @@ void override_config(void) {
 	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
 	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
 	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
+	config.float_full_to_top = CLAMP_INT(config.float_full_to_top, 0, 1);
 	config.snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
 	config.cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
 	config.no_border_when_single =
@@ -3842,6 +3845,7 @@ void set_value_default() {
 	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
 	config.enable_floating_snap = 0;
+	config.float_full_to_top = 0;
 	config.swipe_min_threshold = 1;
 	config.gesture_live = 1;
 	config.gesture_swipe_distance = 300;

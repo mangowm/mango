@@ -3807,6 +3807,17 @@ uint32_t client_target_layer(Client *c) {
 	bool special_overlay = (c->tags & TAG0_MASK) ||
 						   (is_special_active(c->mon) && SCRATCHPAD_SHOWN(c));
 
+	if (config.float_full_to_top) {
+		if (special_overlay)
+			return c->isfloating || c->isfullscreen ? LyrSpecialTop
+				   : c->ismaximizescreen			? LyrSpecialMaximize
+													: LyrSpecialTile;
+
+		return c->isfloating || c->isfullscreen ? LyrTop
+			   : c->ismaximizescreen			? LyrMaximize
+												: LyrTile;
+	}
+
 	if (special_overlay)
 		return c->isfullscreen		 ? LyrSpecialFullscreen
 			   : c->isfloating		 ? LyrSpecialFloat

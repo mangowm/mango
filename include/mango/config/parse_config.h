@@ -330,6 +330,7 @@ typedef struct {
 	int32_t no_border_when_single;
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
+	int32_t float_full_to_top;
 	int32_t drag_tile_to_tile;
 	int32_t drag_tile_small;
 	uint32_t swipe_min_threshold;

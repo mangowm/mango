@@ -23,6 +23,7 @@ enum {
 	LyrSpecialDim,
 	LyrSpecialTile,
 	LyrSpecialMaximize,
+	LyrSpecialTop,
 	LyrSpecialFloat,
 	LyrSpecialFullscreen,
 	LyrFadeOut,

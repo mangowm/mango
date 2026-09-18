@@ -48,6 +48,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | :--- | :--- | :--- |
 | `enable_floating_snap` | `0` | Snap floating windows to edges or other windows. |
 | `snap_distance` | `30` | Max distance (pixels) to trigger floating snap. |
+| `float_full_to_top` | `0` | Let fullscreen, floating and layer-shell `top` windows share one layer so they can cover each other; which one ends up on top depends on which was opened or raised last. When `0`, they are split into separate layers instead: floating windows below, fullscreen windows above layer-shell `top` windows. |
 | `no_border_when_single` | `0` | Remove window borders when only one window is visible on the tag. |
 | `smartgaps` | `0` | Disable gaps when only one window is present. |
 | `idleinhibit_ignore_visible` | `0` | Allow invisible clients (e.g., background audio players) to inhibit idle. |
