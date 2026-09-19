@@ -38,6 +38,7 @@ description: Control mangowm programmatically using mmsg.
 | `get all-layers` | Returns a JSON array of all open layer surfaces (`monitor`, `layer`, `name`). |
 | `get all-tags` | Returns a JSON object containing the status of all tags. |
 | `get last_open_surface [<mon>]` | Returns the last focused surface name for a monitor,if the mon not set, it will get current monitor. |
+| `get binds` | Returns a JSON array of all registered key bindings with modifiers, key, dispatcher, args, description, flags, and mode. |
 
 *Example:*
 ```bash
@@ -45,6 +46,7 @@ mmsg get monitor eDP-1
 mmsg get all-clients
 mmsg get all-monitors
 mmsg get all-devices
+mmsg get binds
 mmsg get all-layers
 mmsg get cursorpos
 ```

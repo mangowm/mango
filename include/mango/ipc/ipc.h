@@ -82,6 +82,7 @@ cJSON *build_all_tags_response(void);
 cJSON *build_monitor_tags_response(Monitor *m);
 cJSON *build_layouts_response(void);
 cJSON *build_layers_response(void);
+cJSON *build_binds_response(void);
 
 void printstatus(enum ipc_watch_type type);
 void handle_print_status(struct wl_listener *listener, void *data);
