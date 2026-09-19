@@ -4,6 +4,7 @@
 #include "mango/animation/common.h"
 #include "mango/common/types.h"
 #include "mango/config/parse_config.h"
+#include "mango/draw/dim-node.h"
 #include <stdint.h>
 #include <sys/types.h>
 #include <wayland-server-core.h>
@@ -78,6 +79,7 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoGroupBar *group_bar;
+	MangoDimNode *dim_node;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -265,6 +267,8 @@ int32_t client_is_unmanaged(Client *c);
 void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb);
 void client_send_close(Client *c);
 void client_set_border_color(Client *c, const float color[4]);
+void client_set_state_colors(Client *c, const float border_color[4],
+							 const float dim_color[4]);
 void client_set_fullscreen(Client *c, int32_t fullscreen);
 void client_set_scale(struct wlr_surface *s, float scale);
 
@@ -317,6 +321,7 @@ Client *direction_select(const Arg *arg);
 Client *client_focus_top(Monitor *m);
 Client *get_next_stack_client(Client *c, bool reverse);
 float *get_border_color(Client *c);
+float *get_dim_color(Client *c);
 
 int32_t is_single_bit_set(uint32_t x);
 bool client_only_in_one_tag(Client *c);
@@ -386,6 +391,7 @@ void show_scratchpad(Client *c);
 bool switch_scratchpad_client_state(Client *c);
 void apply_named_scratchpad(Client *target_client);
 void client_update_border_color(Client *c);
+void client_add_dim_node(Client *c);
 void client_exchange(Client *c1, Client *c2);
 void client_replace(Client *c, Client *w, bool is_group_change_member,
 					bool is_swallow);

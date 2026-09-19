@@ -456,6 +456,9 @@ typedef struct {
 	float focuscolor[4];
 	float maximizescreencolor[4];
 	float urgentcolor[4];
+	int32_t dim_enable;
+	float dim_focused_color[4];
+	float dim_unfocused_color[4];
 	float scratchpadcolor[4];
 	float globalcolor[4];
 	float overlaycolor[4];

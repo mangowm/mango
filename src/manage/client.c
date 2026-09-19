@@ -318,6 +318,15 @@ void client_set_border_color(Client *c, const float color[4]) {
 		wlr_scene_rect_set_color(c->border[i], color);
 }
 
+void client_set_state_colors(Client *c, const float border_color[4],
+							 const float dim_color[4]) {
+	client_set_border_color(c, border_color);
+
+	if (c->dim_node) {
+		mango_dim_node_set_color(c->dim_node, dim_color);
+	}
+}
+
 void client_set_fullscreen(Client *c, int32_t fullscreen) {
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
@@ -1126,6 +1135,15 @@ float *get_border_color(Client *c) {
 	}
 }
 
+float *get_dim_color(Client *c) {
+
+	if (server.selected_monitor && server.selected_monitor->sel == c) {
+		return config.dim_focused_color;
+	} else {
+		return config.dim_unfocused_color;
+	}
+}
+
 int32_t is_single_bit_set(uint32_t x) { return x && !(x & (x - 1)); }
 
 bool client_only_in_one_tag(Client *c) {
@@ -1874,6 +1892,7 @@ void init_client_properties(Client *c) {
 	c->grid_row_per = 1.0f;
 	c->jump_label_node = NULL;
 	c->group_bar = NULL;
+	c->dim_node = NULL;
 	c->overview_scene_surface = NULL;
 	c->drop_direction = UNDIR;
 	c->enable_drop_area_draw = false;
@@ -1962,6 +1981,10 @@ void init_client_properties(Client *c) {
 		   sizeof(c->opacity_animation.initial_border_color));
 	memcpy(c->opacity_animation.current_border_color, config.bordercolor,
 		   sizeof(c->opacity_animation.current_border_color));
+	memcpy(c->opacity_animation.initial_dim_color, config.dim_unfocused_color,
+		   sizeof(c->opacity_animation.initial_dim_color));
+	memcpy(c->opacity_animation.current_dim_color, config.dim_unfocused_color,
+		   sizeof(c->opacity_animation.current_dim_color));
 	c->opacity_animation.initial_opacity = c->unfocused_opacity;
 	c->opacity_animation.current_opacity = c->unfocused_opacity;
 	c->animation.tagining = false;
@@ -2068,6 +2091,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	}
 
 	client_add_group_bar(c);
+	client_add_dim_node(c);
 
 	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
@@ -2367,6 +2391,11 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	if (c->group_bar) {
 		mango_group_bar_destroy(c->group_bar);
 		c->group_bar = NULL;
+	}
+
+	if (c->dim_node) {
+		mango_dim_node_destroy(c->dim_node);
+		c->dim_node = NULL;
 	}
 
 	if (c->image_capture_scene) {
@@ -3403,9 +3432,22 @@ void client_update_border_color(Client *c) {
 		return;
 
 	float *border_color = get_border_color(c);
+	float *dim_color = get_dim_color(c);
 	memcpy(c->opacity_animation.target_border_color, border_color,
 		   sizeof(c->opacity_animation.target_border_color));
-	client_set_border_color(c, border_color);
+	memcpy(c->opacity_animation.target_dim_color, dim_color,
+		   sizeof(c->opacity_animation.target_dim_color));
+	client_set_state_colors(c, border_color, dim_color);
+}
+
+void client_add_dim_node(Client *c) {
+	c->dim_node =
+		mango_dim_node_create(c->scene_surface, config.dim_unfocused_color);
+	if (!c->dim_node) {
+		return;
+	}
+
+	mango_dim_node_set_enabled(c->dim_node, false);
 }
 
 void client_exchange(Client *c1, Client *c2) {
