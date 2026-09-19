@@ -12,6 +12,12 @@
 #define MANGO_MIN(A, B) ((A) < (B) ? (A) : (B))
 #define GEZERO(A) ((A) >= 0 ? (A) : 0)
 
+#define MANGO_MAX_WAYLAND_STRING (WL_MAX_MESSAGE_SIZE - 13)
+
+struct wayland_string {
+	char data[MANGO_MAX_WAYLAND_STRING + 1];
+};
+
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define END(A) ((A) + LENGTH(A))
 #define LISTEN(E, L, H) wl_signal_add((E), ((L)->notify = (H), (L)))
@@ -33,6 +39,7 @@ char *join_strings(char *arr[], const char *sep);
 char *join_strings_with_suffix(char *arr[], const char *suffix,
 							   const char *sep);
 char *string_printf(const char *fmt, ...);
+const char *wayland_string_set(struct wayland_string *dst, const char *src);
 void wl_list_swap(struct wl_list *l1, struct wl_list *l2);
 void wl_list_safe_reinsert_prev(struct wl_list *l1, struct wl_list *l2);
 void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2);

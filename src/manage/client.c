@@ -2050,9 +2050,10 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	c->geom.height += 2 * c->bw;
 	c->overview_backup_geom = c->geom;
 
+	struct wayland_string appid, title;
 	struct wlr_ext_foreign_toplevel_handle_v1_state foreign_toplevel_state = {
-		.app_id = client_get_appid(c),
-		.title = client_get_title(c),
+		.app_id = wayland_string_set(&appid, client_get_appid(c)),
+		.title = wayland_string_set(&title, client_get_title(c)),
 	};
 
 	c->image_capture_scene = wlr_scene_create();
@@ -2498,17 +2499,20 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 	if (!c || c->iskilling)
 		return;
 
-	const char *title;
-	title = client_get_title(c);
+	const char *title = client_get_title(c);
 	mango_group_bar_update(c->group_bar, title,
 						   c->mon ? c->mon->wlr_output->scale : 1.0f);
-	if (title && c->foreign_toplevel)
-		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel, title);
-	if (title && c->ext_foreign_toplevel) {
+
+	struct wayland_string wayland_title;
+	const char *clamped_title = wayland_string_set(&wayland_title, title);
+	if (c->foreign_toplevel)
+		wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel,
+												 clamped_title);
+	if (c->ext_foreign_toplevel) {
 		wlr_ext_foreign_toplevel_handle_v1_update_state(
 			c->ext_foreign_toplevel,
 			&(struct wlr_ext_foreign_toplevel_handle_v1_state){
-				.title = title,
+				.title = clamped_title,
 				.app_id = c->ext_foreign_toplevel->app_id,
 			});
 	}

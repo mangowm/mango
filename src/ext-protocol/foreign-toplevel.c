@@ -107,17 +107,15 @@ void add_foreign_toplevel(Client *c) {
 		LISTEN(&(c->foreign_toplevel->events.destroy), &c->foreign_destroy,
 			   handle_foreign_destroy);
 		// Sets the external toplevel handle id to the app id.
-		const char *appid;
-		appid = client_get_appid(c);
-		if (appid)
-			wlr_foreign_toplevel_handle_v1_set_app_id(c->foreign_toplevel,
-													  appid);
+		struct wayland_string appid;
+		wlr_foreign_toplevel_handle_v1_set_app_id(
+			c->foreign_toplevel,
+			wayland_string_set(&appid, client_get_appid(c)));
 		// Sets the external toplevel handle title to the app title.
-		const char *title;
-		title = client_get_title(c);
-		if (title)
-			wlr_foreign_toplevel_handle_v1_set_title(c->foreign_toplevel,
-													 title);
+		struct wayland_string title;
+		wlr_foreign_toplevel_handle_v1_set_title(
+			c->foreign_toplevel,
+			wayland_string_set(&title, client_get_title(c)));
 		// Sets the external toplevel handle monitor to the current monitor.
 		wlr_foreign_toplevel_handle_v1_output_enter(c->foreign_toplevel,
 													c->mon->wlr_output);
