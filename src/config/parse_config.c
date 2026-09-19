@@ -1740,7 +1740,14 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->isfakefullscreen = atoi(val);
 				} else if (strcmp(key, "globalkeybinding") == 0) {
 					char mod_str[256], keysym_str[256];
-					sscanf(val, "%255[^-]-%255[a-zA-Z]", mod_str, keysym_str);
+					if (sscanf(val, "%255[^-]-%255s", mod_str, keysym_str) !=
+						2) {
+						mango_error(false, WLR_ERROR,
+									"Invalid globalkeybinding: "
+									"\033[1m\033[31m%s\033[0m\n",
+									val);
+						return false;
+					}
 					trim_whitespace(mod_str);
 					trim_whitespace(keysym_str);
 					rule->globalkeybinding.mod = parse_mod(mod_str);
