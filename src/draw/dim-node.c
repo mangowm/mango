@@ -22,8 +22,7 @@ static void dim_buffer_destroy(struct wlr_buffer *wlr_buffer) {
 
 static bool dim_buffer_begin_data_ptr_access(struct wlr_buffer *wlr_buffer,
 											 uint32_t flags, void **data,
-											 uint32_t *format,
-											 size_t *stride) {
+											 uint32_t *format, size_t *stride) {
 	if (flags & WLR_BUFFER_DATA_PTR_ACCESS_WRITE) {
 		return false;
 	}

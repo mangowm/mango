@@ -52,9 +52,12 @@ void set_tagin_animation(Monitor *m, Client *c) {
 }
 
 void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
-	bool tag_switch = !c->animation.tag_from_rule && want_animation &&
-					  m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
-					  client_animations_enabled(c);
+	bool was_enabled = c->scene->node.enabled;
+	bool in_place = was_enabled && !c->animation.running &&
+					wlr_box_equal(&c->animation.current, &c->geom);
+	bool tag_switch = !in_place && !c->animation.tag_from_rule &&
+					  want_animation && m->pertag->prevtag != 0 &&
+					  m->pertag->curtag != 0 && client_animations_enabled(c);
 
 	if (!ISTILED(c) || (!c->is_clip_to_hide || !is_scroller_layout(c->mon))) {
 		c->is_clip_to_hide = false;

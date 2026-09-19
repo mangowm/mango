@@ -1505,7 +1505,6 @@ static void client_interpolate_focus_animation(Client *c,
 			 c->opacity_animation.initial_dim_color[i]) *
 				eased_progress;
 	}
-
 }
 
 bool client_step_focus_animation(Client *c, double linear_progress) {
