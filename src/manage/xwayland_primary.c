@@ -4,15 +4,8 @@
 #include "mango/manage/monitor.h"
 
 #ifdef XWAYLAND
-#include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
 #include <wayland-server-core.h>
 #include <wlr/xwayland.h>
 #include <xcb/randr.h>
@@ -43,57 +36,9 @@ static struct wl_event_source *ready_timer = NULL;
 static bool ready_pending = false;
 static bool cache_refresh_attempted = false;
 
-/* A dead XWayland accepts connections but never answers, so probe it first.
- * xcb_connect() does the handshake on this thread and would block forever. */
-static bool xwayland_display_alive(const char *display) {
-	if (display[0] != ':') {
-		return false;
-	}
-	char path[64];
-	snprintf(path, sizeof(path), "/tmp/.X11-unix/X%d", atoi(display + 1));
-
-	int32_t fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (fd < 0) {
-		return false;
-	}
-
-	int32_t flags = fcntl(fd, F_GETFD, 0);
-	if (flags < 0 || fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
-		close(fd);
-		return false;
-	}
-
-	flags = fcntl(fd, F_GETFL, 0);
-	if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-		close(fd);
-		return false;
-	}
-
-	struct sockaddr_un addr = {.sun_family = AF_UNIX};
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 &&
-		errno != EINPROGRESS) {
-		close(fd);
-		return false;
-	}
-
-	bool alive = false;
-	struct pollfd pfd = {.fd = fd, .events = POLLOUT};
-	if (poll(&pfd, 1, 300) > 0) {
-		/* X setup request (protocol 11, no auth); any reply means it lives. */
-		static const char setup[12] = {'l', 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-		if (write(fd, setup, sizeof(setup)) == (ssize_t)sizeof(setup)) {
-			char reply[8];
-			pfd.events = POLLIN;
-			if (poll(&pfd, 1, 300) > 0 &&
-				read(fd, reply, sizeof(reply)) == (ssize_t)sizeof(reply)) {
-				alive = true;
-			}
-		}
-	}
-
-	close(fd);
-	return alive;
+static bool xwayland_server_running(void) {
+	return server.xwayland && server.xwayland->server &&
+		   server.xwayland->server->ready;
 }
 
 static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data);
@@ -139,13 +84,10 @@ static bool xwayland_primary_connect(void) {
 	if (conn) {
 		return true;
 	}
-	if (!xwayland_display_alive(display_name)) {
-		return false;
-	}
 
 	int32_t screen_num = 0;
 	conn = xcb_connect(display_name, &screen_num);
-	if (!conn || xcb_connection_has_error(conn)) {
+	if (!conn || xcb_connection_has_error(conn) || xcb_get_setup(conn) == NULL) {
 		xwayland_primary_close();
 		return false;
 	}
@@ -232,6 +174,11 @@ static void xwayland_primary_start(void) {
 		return;
 	}
 	if (strncmp(applied_name, target_name, XWL_NAME_MAX) == 0) {
+		return;
+	}
+	if (!xwayland_server_running()) {
+		applied_name[0] = '\0';
+		cache_valid = false;
 		return;
 	}
 	if (conn && xcb_connection_has_error(conn)) {
