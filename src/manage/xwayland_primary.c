@@ -87,7 +87,8 @@ static bool xwayland_primary_connect(void) {
 
 	int32_t screen_num = 0;
 	conn = xcb_connect(display_name, &screen_num);
-	if (!conn || xcb_connection_has_error(conn) || xcb_get_setup(conn) == NULL) {
+	if (!conn || xcb_connection_has_error(conn) ||
+		xcb_get_setup(conn) == NULL) {
 		xwayland_primary_close();
 		return false;
 	}
