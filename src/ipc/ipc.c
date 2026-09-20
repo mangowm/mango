@@ -843,6 +843,8 @@ void handle_command(int client_fd, const char *cmd_raw) {
 	} else if (strcmp(cmd, "get layouts") == 0) {
 		resp = build_layouts_response();
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
+		static const char client_prefix[] = "client,";
+		static const int client_prefix_len = sizeof(client_prefix) - 1;
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
@@ -858,10 +860,12 @@ void handle_command(int client_fd, const char *cmd_raw) {
 
 			// "client,<id>" must start a field, otherwise it would match the
 			// tail of a name like "viewtoleft_have_client,1".
-			if (field_start && strncmp(ptr, "client,", 7) == 0) {
+			if (field_start &&
+				strncmp(ptr, client_prefix, client_prefix_len) == 0) {
 				char *end;
-				long id = strtol(ptr + 7, &end, 10);
-				if (id > 0 && end > ptr + 7 && (*end == '\0' || *end == ',')) {
+				long id = strtol(ptr + client_prefix_len, &end, 10);
+				if (id > 0 && end > ptr + client_prefix_len &&
+					(*end == '\0' || *end == ',')) {
 					client_id = (int)id;
 					ptr = end;
 					if (*ptr == ',')
