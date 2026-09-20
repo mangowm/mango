@@ -279,8 +279,8 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 		return;
 
 	if (!c->group_next && !c->group_prev) {
-		if (c->group_bar->scene_buffer->node.enabled)
-			wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node,
+		if (c->group_bar->scene->node.enabled)
+			wlr_scene_node_set_enabled(&c->group_bar->scene->node,
 									   false);
 		return;
 	}
@@ -325,7 +325,7 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 		cur = head;
 		while (cur) {
 			if (cur->group_bar)
-				wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
+				wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
 										   false);
 			cur = cur->group_next;
 		}
@@ -430,7 +430,7 @@ void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 	if (!c->group_bar)
 		return;
 
-	wlr_scene_node_set_position(&c->group_bar->scene_buffer->node, x, y);
+	wlr_scene_node_set_position(&c->group_bar->scene->node, x, y);
 	mango_group_bar_set_size(c->group_bar, width, height);
 }
 void client_draw_split_border(Client *c, bool hit_no_border,

@@ -570,10 +570,10 @@ void finish_jump_mode(Monitor *m) {
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon == m) {
 			if (c->jump_label_node &&
-				c->jump_label_node->scene_buffer->node.enabled) {
+				c->jump_label_node->scene->node.enabled) {
 				c->jump_char = '\0';
 				wlr_scene_node_set_enabled(
-					&c->jump_label_node->scene_buffer->node, false);
+					&c->jump_label_node->scene->node, false);
 			}
 		}
 	}

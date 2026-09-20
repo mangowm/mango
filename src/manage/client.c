@@ -3554,11 +3554,11 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	}
 
 	if (w->group_bar && !is_group_change_member) {
-		wlr_scene_node_set_enabled(&w->group_bar->scene_buffer->node, false);
+		wlr_scene_node_set_enabled(&w->group_bar->scene->node, false);
 	}
 
 	if (w->jump_label_node) {
-		wlr_scene_node_set_enabled(&w->jump_label_node->scene_buffer->node,
+		wlr_scene_node_set_enabled(&w->jump_label_node->scene->node,
 								   false);
 	}
 
@@ -3840,10 +3840,10 @@ void client_add_jump_label_node(Client *c) {
 		return;
 	/* In overview, labels must be displayed above the card tree. */
 	if (c->ov_card_tree)
-		wlr_scene_node_raise_to_top(&c->jump_label_node->scene_buffer->node);
+		wlr_scene_node_raise_to_top(&c->jump_label_node->scene->node);
 	else
-		wlr_scene_node_lower_to_bottom(&c->jump_label_node->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->jump_label_node->scene_buffer->node, false);
+		wlr_scene_node_lower_to_bottom(&c->jump_label_node->scene->node);
+	wlr_scene_node_set_enabled(&c->jump_label_node->scene->node, false);
 }
 
 // scene layer a client belongs to; shown scratchpads join the special
@@ -3896,8 +3896,8 @@ void client_add_group_bar(Client *c) {
 
 	c->group_bar = mango_group_bar_create(c, GroupBar, server.layers[layer],
 										  config.groupbardata, 0, 0);
-	wlr_scene_node_lower_to_bottom(&c->group_bar->scene_buffer->node);
-	wlr_scene_node_set_enabled(&c->group_bar->scene_buffer->node, false);
+	wlr_scene_node_lower_to_bottom(&c->group_bar->scene->node);
+	wlr_scene_node_set_enabled(&c->group_bar->scene->node, false);
 	mango_group_bar_update(c->group_bar, client_get_title(c),
 						   c->mon ? c->mon->wlr_output->scale
 						   : server.selected_monitor
@@ -3960,10 +3960,10 @@ void client_check_tab_node_visible(Client *c) {
 		if (!c->mon->isoverview && cur->group_bar &&
 			(cur->group_next || cur->group_prev) && TAGMATCH(c, c->mon) &&
 			ISNORMAL(c) && !c->isfullscreen) {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
+			wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
 									   true);
 		} else {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene_buffer->node,
+			wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
 									   false);
 		}
 		cur = cur->group_next;
@@ -3981,7 +3981,7 @@ void client_raise_group(Client *c) {
 	Client *cur = head;
 	while (cur) {
 		if (cur->group_bar) {
-			wlr_scene_node_raise_to_top(&cur->group_bar->scene_buffer->node);
+			wlr_scene_node_raise_to_top(&cur->group_bar->scene->node);
 		}
 		wlr_scene_node_raise_to_top(&cur->scene->node);
 		cur = cur->group_next;
@@ -4001,7 +4001,7 @@ void client_reparent_group(Client *c) {
 	Client *cur = head;
 	while (cur) {
 		if (cur->group_bar) {
-			wlr_scene_node_reparent(&cur->group_bar->scene_buffer->node,
+			wlr_scene_node_reparent(&cur->group_bar->scene->node,
 									server.layers[layer]);
 		}
 		wlr_scene_node_reparent(&cur->scene->node, server.layers[layer]);
