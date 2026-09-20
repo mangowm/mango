@@ -31,6 +31,9 @@
 static struct wl_list ipc_watch_clients;
 static int ipc_device_watch_count;
 
+#define CLIENT_PREFIX "client,"
+#define CLIENT_PREFIX_LEN (sizeof(CLIENT_PREFIX) - 1)
+
 const char *ipc_device_type_str(struct wlr_input_device *dev) {
 	if (!dev)
 		return "unknown";
@@ -843,8 +846,6 @@ void handle_command(int client_fd, const char *cmd_raw) {
 	} else if (strcmp(cmd, "get layouts") == 0) {
 		resp = build_layouts_response();
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
-#define CLIENT_PREFIX "client,"
-#define CLIENT_PREFIX_LEN (sizeof(CLIENT_PREFIX) - 1)
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
