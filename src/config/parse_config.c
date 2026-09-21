@@ -325,11 +325,25 @@ bool starts_with_ignore_case(const char *str, const char *prefix) {
 	return true;
 }
 
-// Helper: finds all keycodes for a keysym in the keymap.
+static struct xkb_keymap *reference_keymap_instance = NULL;
+
+static struct xkb_keymap *reference_keymap(void) {
+	if (reference_keymap_instance == NULL && config.ctx != NULL) {
+		reference_keymap_instance = xkb_keymap_new_from_names(
+			config.ctx, &xkb_fallback_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	}
+
+	return reference_keymap_instance;
+}
+
 void cleanup_config_keymap(void) {
 	if (config.keymap != NULL) {
 		xkb_keymap_unref(config.keymap);
 		config.keymap = NULL;
+	}
+	if (reference_keymap_instance != NULL) {
+		xkb_keymap_unref(reference_keymap_instance);
+		reference_keymap_instance = NULL;
 	}
 	if (config.ctx != NULL) {
 		xkb_context_unref(config.ctx);
@@ -2817,45 +2831,99 @@ uint32_t parse_mod(const char *mod_str) {
 	return mod;
 }
 
-// Helper: finds all keycodes for a keysym in the keymap.
-int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
-								 MultiKeycode *multi_kc) {
+static int32_t find_keycodes_in_layout(struct xkb_keymap *keymap,
+									   xkb_layout_index_t layout,
+									   xkb_keysym_t sym,
+									   MultiKeycode *multi_kc) {
 	xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
 	xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
+	int32_t found_count = 0;
 
+	for (xkb_keycode_t keycode = min_keycode;
+		 keycode <= max_keycode && found_count < 3; keycode++) {
+		xkb_level_index_t levels =
+			xkb_keymap_num_levels_for_key(keymap, keycode, layout);
+		bool matched = false;
+
+		for (xkb_level_index_t level = 0; level < levels && !matched; level++) {
+			const xkb_keysym_t *syms;
+			int32_t num_syms = xkb_keymap_key_get_syms_by_level(
+				keymap, keycode, layout, level, &syms);
+
+			for (int32_t i = 0; i < num_syms; i++) {
+				if (syms[i] == sym) {
+					matched = true;
+					break;
+				}
+			}
+		}
+
+		if (!matched)
+			continue;
+
+		switch (found_count) {
+		case 0:
+			multi_kc->keycode1 = keycode;
+			break;
+		case 1:
+			multi_kc->keycode2 = keycode;
+			break;
+		case 2:
+			multi_kc->keycode3 = keycode;
+			break;
+		}
+		found_count++;
+	}
+
+	return found_count;
+}
+
+int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
+								 MultiKeycode *multi_kc) {
 	multi_kc->keycode1 = 0;
 	multi_kc->keycode2 = 0;
 	multi_kc->keycode3 = 0;
 
 	int32_t found_count = 0;
 
-	for (xkb_keycode_t keycode = min_keycode;
-		 keycode <= max_keycode && found_count < 3; keycode++) {
-		// Uses layout 0 and level 0.
-		const xkb_keysym_t *syms;
-		int32_t num_syms =
-			xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
+	if (keymap != NULL) {
+		xkb_layout_index_t layouts = xkb_keymap_num_layouts(keymap);
 
-		for (int32_t i = 0; i < num_syms; i++) {
-			if (syms[i] == sym) {
-				switch (found_count) {
-				case 0:
-					multi_kc->keycode1 = keycode;
-					break;
-				case 1:
-					multi_kc->keycode2 = keycode;
-					break;
-				case 2:
-					multi_kc->keycode3 = keycode;
-					break;
-				}
-				found_count++;
-				break;
+		for (xkb_layout_index_t layout = 0;
+			 layout < layouts && found_count == 0; layout++) {
+			found_count =
+				find_keycodes_in_layout(keymap, layout, sym, multi_kc);
+		}
+	}
+
+	if (found_count == 0) {
+		struct xkb_keymap *fallback = reference_keymap();
+
+		if (fallback != NULL && fallback != keymap) {
+			xkb_layout_index_t layouts = xkb_keymap_num_layouts(fallback);
+
+			for (xkb_layout_index_t layout = 0;
+				 layout < layouts && found_count == 0; layout++) {
+				found_count =
+					find_keycodes_in_layout(fallback, layout, sym, multi_kc);
 			}
 		}
 	}
 
 	return found_count;
+}
+
+int32_t find_keycodes_for_char(char c_char, MultiKeycode *multi_kc) {
+	multi_kc->keycode1 = 0;
+	multi_kc->keycode2 = 0;
+	multi_kc->keycode3 = 0;
+
+	if (c_char == '\0')
+		return 0;
+
+	return find_keycodes_for_keysym(
+		config.keymap, xkb_utf32_to_keysym((uint32_t)(unsigned char)c_char),
+		multi_kc);
 }
 
 KeySymCode parse_key(const char *key_str, bool isbindsym) {
@@ -2899,6 +2967,7 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		} else {
 			kc.type = KEY_TYPE_SYM;
 			kc.keysym = sym;
+			kc.unresolved = true;
 			// keycode field stays 0.
 		}
 	} else {
@@ -3565,6 +3634,73 @@ void update_global_var(void) {
 	server.tagmask = ((uint32_t)1 << config.tag_num) - 1;
 }
 
+static void resolve_keybinding_layout(struct xkb_keymap *keymap,
+									  KeyBinding *binding) {
+	if (binding->keysymcode.keysym == XKB_KEY_NoSymbol)
+		return;
+
+	if (binding->keysymcode.type != KEY_TYPE_CODE &&
+		!binding->keysymcode.unresolved) {
+		return;
+	}
+
+	MultiKeycode keycode = {0};
+
+	if (find_keycodes_for_keysym(keymap, binding->keysymcode.keysym, &keycode) >
+		0) {
+		binding->keysymcode.keycode = keycode;
+		binding->keysymcode.type = KEY_TYPE_CODE;
+		binding->keysymcode.unresolved = false;
+		return;
+	}
+
+	if (!binding->keysymcode.unresolved)
+		return;
+
+	char name[64] = {0};
+
+	xkb_keysym_get_name(binding->keysymcode.keysym, name, sizeof(name));
+	mango_error(false, WLR_ERROR,
+				"Key '%s' has no keycode in the configured layouts; it is "
+				"matched by keysym, which depends on the active layout\n",
+				name);
+}
+
+static void resolve_bindings_to_configured_layouts(Config *config) {
+	if (config->keymap != NULL) {
+		xkb_keymap_unref(config->keymap);
+		config->keymap = NULL;
+	}
+
+	if (config->ctx != NULL) {
+		config->keymap = xkb_keymap_new_from_names(
+			config->ctx, &config->xkb_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	}
+
+	if (config->keymap == NULL) {
+		mango_error(false, WLR_ERROR,
+					"Invalid xkb_rules_* layout; key names are resolved with "
+					"the us layout\n");
+
+		if (config->ctx != NULL) {
+			config->keymap = xkb_keymap_new_from_names(
+				config->ctx, &xkb_fallback_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+		}
+	}
+
+	for (int32_t i = 0; i < config->key_bindings_count; i++) {
+		resolve_keybinding_layout(config->keymap, &config->key_bindings[i]);
+	}
+
+	for (int32_t i = 0; i < config->window_rules_count; i++) {
+		ConfigWinRule *rule = &config->window_rules[i];
+
+		if (rule->globalkeybinding.mod != 0) {
+			resolve_keybinding_layout(config->keymap, &rule->globalkeybinding);
+		}
+	}
+}
+
 void override_config(void) {
 	config.animations = CLAMP_INT(config.animations, 0, 1);
 	config.layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
@@ -4171,6 +4307,7 @@ bool parse_config(void) {
 	bool keybindings_conflict = false;
 	set_value_default();
 	parse_correct = parse_config_file(&config, filename, true);
+	resolve_bindings_to_configured_layouts(&config);
 	set_default_key_bindings(&config);
 	override_config();
 

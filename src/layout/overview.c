@@ -550,6 +550,7 @@ void create_jump_hints(Monitor *m) {
 				break;
 			char c_char = jump_labels[label_idx];
 			c->jump_char = c_char;
+			find_keycodes_for_char(c_char, &c->jump_keycodes);
 
 			char label_text[2] = {c_char, '\0'};
 			if (!c->jump_label_node)
@@ -568,12 +569,14 @@ void finish_jump_mode(Monitor *m) {
 
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
-		if (c->mon == m) {
-			if (c->jump_label_node && c->jump_label_node->scene->node.enabled) {
-				c->jump_char = '\0';
-				wlr_scene_node_set_enabled(&c->jump_label_node->scene->node,
-										   false);
-			}
+		if (c->mon != m)
+			continue;
+
+		c->jump_char = '\0';
+		c->jump_keycodes = (MultiKeycode){0};
+
+		if (c->jump_label_node && c->jump_label_node->scene->node.enabled) {
+			wlr_scene_node_set_enabled(&c->jump_label_node->scene->node, false);
 		}
 	}
 	m->is_jump_mode = 0;

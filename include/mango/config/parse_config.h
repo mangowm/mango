@@ -85,6 +85,7 @@ typedef struct {
 	xkb_keysym_t keysym;
 	MultiKeycode keycode;
 	int32_t type;
+	bool unresolved;
 } KeySymCode;
 
 typedef struct {
@@ -588,6 +589,11 @@ int64_t parse_color(const char *hex_str);
 uint32_t parse_mod(const char *mod_str);
 
 void cleanup_config_keymap(void);
+
+int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
+								 MultiKeycode *multi_kc);
+
+int32_t find_keycodes_for_char(char c_char, MultiKeycode *multi_kc);
 
 KeySymCode parse_key(const char *key_str, bool isbindsym);
 

@@ -620,6 +620,23 @@ void keyboard_cancel_pending_release_bind(void) {
 	server.last_hold_keycode = 0;
 }
 
+static Client *keyboard_find_jump_client(Monitor *m, uint32_t keycode) {
+	Client *c;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m)
+			continue;
+
+		if (keycode == c->jump_keycodes.keycode1 ||
+			keycode == c->jump_keycodes.keycode2 ||
+			keycode == c->jump_keycodes.keycode3) {
+			return c;
+		}
+	}
+
+	return NULL;
+}
+
 void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	int32_t i;
 	/* This event is raised when a key is pressed or released. */
@@ -717,28 +734,19 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	if (server.selected_monitor && server.selected_monitor->is_jump_mode &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-		for (i = 0; i < nsyms; i++) {
+		Monitor *m = server.selected_monitor;
+
+		for (i = 0; i < nsyms; i++)
 			if (syms[i] == XKB_KEY_Escape) {
 				toggle_jump(&(Arg){0});
 				return;
 			}
-			// Converts the keysym to a character and matches it against
-			// jump_labels (letters ignore case).
-			uint32_t cp = xkb_keysym_to_utf32(syms[i]);
-			if (!cp || cp >= 0x80)
-				continue;
-			char c_char = (char)cp;
-			Client *c;
-			wl_list_for_each(c, &server.clients, link) {
-				if (c->mon == server.selected_monitor && c->jump_char != '\0' &&
-					(c_char == c->jump_char ||
-					 toupper((unsigned char)c_char) ==
-						 toupper((unsigned char)c->jump_char))) {
-					client_focus(c, 1);
-					toggle_overview(&(Arg){.tc = c});
-					return;
-				}
-			}
+
+		Client *target = keyboard_find_jump_client(m, keycode);
+		if (target != NULL) {
+			client_focus(target, 1);
+			toggle_overview(&(Arg){.tc = target});
+			return;
 		}
 	}
 

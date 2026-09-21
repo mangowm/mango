@@ -14,7 +14,7 @@ bind[flags]=MODIFIERS,KEY,COMMAND,PARAMETERS
 - **Modifiers**: `SUPER`, `CTRL`, `ALT`, `SHIFT`, `NONE` (combine with `+`, e.g. `SUPER+CTRL+ALT`).
 - **Key**: Key name (from `xev` or `wev`) or keycode (e.g., `code:24` for `q`).
 
-> **Info:** `bind` automatically converts keysym to keycode for comparison. This makes it compatible with all keyboard layouts, but the matching may not always be precise. If a key combination doesn't work on your keyboard layout, use a keycode instead (e.g., `code:24` instead of `q`).
+> **Info:** `bind` converts the key name to a keycode, so it keeps working while other layouts are active. The name is resolved against the layouts configured with `xkb_rules_layout` (`device:*:kb_layout` is not used here), in the order they are listed, and falls back to the reference `us` layout when none of them can produce the key name. This means `bind=SUPER,h` resolves to your own `h` key on layout variants such as Dvorak, and to the `us` position when only non-latin layouts are configured. Use `code:N` to bind a keycode directly, or `binds` to match the character the active layout produces.
 
 ### Flags
 

@@ -206,6 +206,7 @@ struct Client {
 	float scroller_proportion_single;
 	bool isfocusing;
 	char jump_char;
+	MultiKeycode jump_keycodes;
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
 	struct wlr_box drag_tile_float_backup_geom;
