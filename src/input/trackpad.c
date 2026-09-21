@@ -287,22 +287,6 @@ static double swipe_drive_axis(void) {
 static void swipe_drive_apply(Monitor *m, double p) {
 	Client *c = NULL;
 
-	if (swipe_func_is_view(swipe_drive.func)) {
-		wl_list_for_each(c, &server.clients, link) {
-			if (c->mon != m || !c->animation.running || !c->need_output_flush)
-				continue;
-			if (c->animation.action != TAG && c->animation.action != MOVE &&
-				c->animation.action != OVERVIEW && !c->animation.tagining &&
-				!c->animation.tagouting)
-				continue;
-
-			client_animation_set_progress(c, p);
-		}
-
-		request_fresh_all_monitors();
-		return;
-	}
-
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon != m || !c->animation.running || !c->need_output_flush)
 			continue;
@@ -312,6 +296,7 @@ static void swipe_drive_apply(Monitor *m, double p) {
 			continue;
 		client_animation_set_progress(c, p);
 	}
+
 	request_fresh_all_monitors();
 }
 
@@ -674,9 +659,16 @@ static bool swipe_drive_update(uint32_t fingers, uint32_t time) {
 
 	if (delta <= -SWIPE_LOCK_DISTANCE) {
 		swipe_drive.base = axis;
+
+		uint32_t tagset_before = m->tagset[m->seltags];
+		bool overview_before = m->isoverview;
+
 		if (!swipe_drive_fire_opposite())
 			return true;
-		if (!swipe_has_running_transition(m)) {
+
+		bool reversed = m->tagset[m->seltags] != tagset_before ||
+						m->isoverview != overview_before;
+		if (!reversed || !swipe_has_running_transition(m)) {
 			swipe_drive.active = false;
 			swipe_drive_unfreeze();
 			return true;
@@ -791,7 +783,6 @@ static void swipe_drive_end(void) {
 
 		if (commit) {
 			Client *c = NULL;
-			bool mirror_view = swipe_func_is_view(swipe_drive.func);
 			mango_error(true, WLR_DEBUG,
 						"swipe drive: commit, p=%.2f speed=%.1f\n", p,
 						swipe_drive.avg_speed);
@@ -804,41 +795,7 @@ static void swipe_drive_end(void) {
 					!c->animation.tagouting)
 					continue;
 
-				if (mirror_view &&
-					(c->animation.tagouting || c->animation.tagining)) {
-					double extent = swipe_horizontal ? m->w.width : m->w.height;
-					int dir = (swipe_drive.motion == SWIPE_RIGHT ||
-							   swipe_drive.motion == SWIPE_DOWN)
-								  ? 1
-								  : -1;
-					int32_t shift = (int32_t)llround(dir * extent);
-					double remain = 1.0 - p;
-					if (remain < 0.05)
-						remain = 0.05;
-
-					struct wlr_box target;
-					if (c->animation.tagouting) {
-						target = c->animation.initial;
-						if (swipe_horizontal)
-							target.x += shift;
-						else
-							target.y += shift;
-					} else {
-						target = c->geom;
-					}
-
-					c->animation.initial = c->animation.current;
-					c->current = target;
-					c->pending = target;
-					c->animation.duration = (uint32_t)MANGO_MAX(
-						1, (int32_t)(c->animation.duration * remain));
-					c->animation.time_started = get_now_in_ms();
-					c->animation.action = TAG;
-					c->animation.running = true;
-					c->need_output_flush = true;
-				} else {
-					client_animation_resume(c, 1.0 - p);
-				}
+				client_animation_resume(c, 1.0 - p);
 			}
 			request_fresh_all_monitors();
 			if (!config.animations)
