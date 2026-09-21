@@ -108,6 +108,7 @@ struct SwipeDrive {
 	double drag_prev_dx;
 	double drag_prev_dy;
 	uint32_t motion;
+	double max_delta;
 	int32_t (*func)(const Arg *);
 	Arg arg;
 };
@@ -657,27 +658,8 @@ static bool swipe_drive_update(uint32_t fingers, uint32_t time) {
 		return true;
 	}
 
-	if (delta <= -SWIPE_LOCK_DISTANCE) {
-		swipe_drive.base = axis;
-
-		uint32_t tagset_before = m->tagset[m->seltags];
-		bool overview_before = m->isoverview;
-
-		if (!swipe_drive_fire_opposite())
-			return true;
-
-		bool reversed = m->tagset[m->seltags] != tagset_before ||
-						m->isoverview != overview_before;
-		if (!reversed || !swipe_has_running_transition(m)) {
-			swipe_drive.active = false;
-			swipe_drive_unfreeze();
-			return true;
-		}
-		swipe_drive_freeze(m);
-		swipe_drive_apply(m, 0.0);
-		return true;
-	}
-
+	if (delta > swipe_drive.max_delta)
+		swipe_drive.max_delta = delta;
 	if (p < 0.0)
 		p = 0.0;
 	if (p > 1.0)
@@ -772,12 +754,14 @@ static void swipe_drive_end(void) {
 			p = 1.0;
 
 		uint32_t dur = swipe_drive.last_time - swipe_drive.first_time;
+		bool flick =
+			swipe_drive.speed_points > 0 &&
+			delta >= swipe_drive.max_delta - SWIPE_LOCK_DISTANCE &&
+			(swipe_drive.avg_speed >= config.gesture_swipe_min_speed_to_force ||
+			 dur <= SWIPE_FLICK_MAX_MS);
 		bool commit = swipe_func_is_overview(swipe_drive.func) ||
 					  delta >= distance * config.gesture_swipe_cancel_ratio ||
-					  (swipe_drive.speed_points > 0 &&
-					   (swipe_drive.avg_speed >=
-							config.gesture_swipe_min_speed_to_force ||
-						dur <= SWIPE_FLICK_MAX_MS));
+					  flick;
 
 		swipe_drive_unfreeze();
 
