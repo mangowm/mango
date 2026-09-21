@@ -80,6 +80,6 @@ void switcher_commit(void);
 Client *switcher_client_at(double lx, double ly);
 void switcher_open(int scope, int dir);
 void switcher_cycle(int dir);
-void switcher(const Arg *arg);
+int32_t switcher(const Arg *arg);
 
 #endif

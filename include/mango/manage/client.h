@@ -4,6 +4,7 @@
 #include "mango/animation/common.h"
 #include "mango/common/types.h"
 #include "mango/config/parse_config.h"
+#include "mango/draw/dim-node.h"
 #include <stdint.h>
 #include <sys/types.h>
 #include <wayland-server-core.h>
@@ -33,7 +34,7 @@ enum {
 
 /* Movement / drop directions used by smartmove, drag-to-tile and tag
  * animations. */
-enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
+enum { UP, DOWN, LEFT, RIGHT, UNDIR, ALLDIR }; /* smartmovewin */
 
 #define ISTILED(A)                                                             \
 	(A && !(A)->isfloating && !(A)->isminimized && !(A)->iskilling &&          \
@@ -53,6 +54,7 @@ enum { UP, DOWN, LEFT, RIGHT, UNDIR }; /* smartmovewin */
 #define TAGMATCH(C, M)                                                         \
 	((C) && (M) && (C)->mon == (M) && !(C)->isminimized &&                     \
 	 (((C)->tags & (M)->tagset[(M)->seltags])))
+#define SCRATCHPAD_SHOWN(C) ((C) && (C)->is_in_scratchpad && !(C)->isminimized)
 #define ISFULLSCREEN(A)                                                        \
 	((A)->isfullscreen || (A)->ismaximizescreen ||                             \
 	 (A)->overview_ismaximizescreenbak || (A)->overview_isfullscreenbak)
@@ -79,6 +81,7 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoGroupBar *group_bar;
+	MangoDimNode *dim_node;
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -118,8 +121,9 @@ struct Client {
 	bool xwl_req_valid;
 #endif
 	uint32_t bw;
-	uint32_t tags, oldtags, mini_restore_tag;
+	uint32_t tags, oldtags;
 	bool dirty;
+	int32_t xdg_geo_x, xdg_geo_y;
 	uint32_t configure_serial;
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
@@ -147,14 +151,13 @@ struct Client {
 	struct wl_listener set_decoration_mode;
 	struct wl_listener destroy_decoration;
 
-	const char *animation_type_open;
-	const char *animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t is_in_scratchpad;
 	int32_t iscustomsize;
 	int32_t iscustompos;
 	int32_t iscustom_scroller_proportion;
 	int32_t iscustom_scroller_proportion_single;
-	int32_t is_scratchpad_show;
 	int32_t isglobal;
 	int32_t isnoborder;
 	int32_t isnoshadow;
@@ -182,6 +185,7 @@ struct Client {
 	bool is_clip_to_hide;
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
+	bool scratchpad_tagin;
 	bool fake_no_border;
 	int32_t nofocus;
 	int32_t nofadein;
@@ -207,6 +211,7 @@ struct Client {
 	float scroller_proportion_single;
 	bool isfocusing;
 	char jump_char;
+	MultiKeycode jump_keycodes;
 	bool enable_drop_area_draw;
 	int32_t drop_direction;
 	struct wlr_box drag_tile_float_backup_geom;
@@ -242,6 +247,7 @@ bool xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
 void xwayland_apply_scale(Client *c);
 void xwayland_logical_to_x11(struct wlr_box *box, float scale);
 void xwayland_x11_to_logical(struct wlr_box *box, float scale);
+void xwayland_screen_origin(int32_t *x, int32_t *y);
 void fix_xwayland_coordinate(struct wlr_box *geom);
 Monitor *xwayland_monitor(Client *c);
 #endif
@@ -267,6 +273,8 @@ int32_t client_is_unmanaged(Client *c);
 void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb);
 void client_send_close(Client *c);
 void client_set_border_color(Client *c, const float color[4]);
+void client_set_state_colors(Client *c, const float border_color[4],
+							 const float dim_color[4]);
 void client_set_fullscreen(Client *c, int32_t fullscreen);
 void client_set_scale(struct wlr_surface *s, float scale);
 
@@ -319,6 +327,7 @@ Client *direction_select(const Arg *arg);
 Client *client_focus_top(Monitor *m);
 Client *get_next_stack_client(Client *c, bool reverse);
 float *get_border_color(Client *c);
+float *get_dim_color(Client *c);
 
 int32_t is_single_bit_set(uint32_t x);
 bool client_only_in_one_tag(Client *c);
@@ -358,6 +367,7 @@ void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer, int32_t sx,
 								int32_t sy, void *data);
 void client_set_opacity(Client *c, double opacity);
 void client_focus(Client *c, int32_t lift);
+void client_ensure_constraint(Client *c);
 void client_active(Client *c);
 void client_view_on_monitor(const Arg *arg, bool want_animation, Monitor *m,
 							bool changefocus);
@@ -387,9 +397,12 @@ void show_scratchpad(Client *c);
 bool switch_scratchpad_client_state(Client *c);
 void apply_named_scratchpad(Client *target_client);
 void client_update_border_color(Client *c);
+void client_add_dim_node(Client *c);
 void client_exchange(Client *c1, Client *c2);
 void client_replace(Client *c, Client *w, bool is_group_change_member,
 					bool is_swallow);
+bool client_jump_to_monitor(Client *c, Monitor *m, int32_t dir);
+void client_move_to_monitor(Client *c, Client *target, int32_t dir);
 void client_update_oldmonname_record(Client *c, Monitor *m);
 void client_apply_bounds(Client *c, struct wlr_box *bbox);
 void client_swap_layout_properties(Client *c1, Client *c2);

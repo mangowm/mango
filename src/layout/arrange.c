@@ -1168,7 +1168,7 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 			client_add_jump_label_node(c);
 		}
 
-		if (c->group_bar->scene_buffer->node.enabled) {
+		if (c->group_bar->scene->node.enabled) {
 			client_check_tab_node_visible(c);
 		}
 
@@ -1248,6 +1248,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 			} else if (special_keep_bg_client(m, c)) {
 				wlr_scene_node_set_enabled(&c->scene->node, true);
 				c->animation.running = false;
+				c->animation.tagining = false;
+				c->animation.tagouting = false;
 			} else if (!only_calculate && c != server.grab_client) {
 				set_arrange_hidden(m, c, want_animation);
 			}
@@ -1429,8 +1431,7 @@ bool special_handle_empty_view(Monitor *m, bool from_view) {
 	}
 	return false;
 }
-void // 17
-arrange(Monitor *m, bool want_animation, bool from_view) {
+void arrange(Monitor *m, bool want_animation, bool from_view) {
 
 	if (!m || m->iscleanuping)
 		return;

@@ -1,5 +1,5 @@
 project('mango', ['c'],
-  version : '0.16.3',
+  version : '0.17.2',
 )
 
 subdir('protocols')
@@ -29,6 +29,7 @@ libm = cc.find_library('m')
 libdrm = dependency('libdrm')
 xcb = dependency('xcb', required : get_option('xwayland'))
 xlibs = dependency('xcb-icccm', required : get_option('xwayland'))
+xcb_randr = dependency('xcb-randr', required : get_option('xwayland'))
 wayland_server_dep = dependency('wayland-server',version: '>=1.23.1')
 wlroots_dep = dependency('wlroots-0.20',version: '>=0.20.0')
 xkbcommon_dep = dependency('xkbcommon')
@@ -114,6 +115,7 @@ executable('mango',
     libdrm,
     xcb,
     xlibs,
+    xcb_randr,
     libscenefx_dep,
     wayland_server_dep,
     wlroots_dep,
@@ -177,6 +179,13 @@ portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
 install_data('assets/mango.desktop', install_dir : desktop_install_dir)
 install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
 install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+
+# Ship mango-session.target so that systemd user services declaring
+# WantedBy=graphical-session.target (portals, panels, ...) are started together
+# with the session. mango activates the target itself, see
+# set_activation_env() in src/main.c
+install_data('assets/mango-session.target',
+  install_dir : join_paths(prefix, 'lib/systemd/user'))
 
 # generate the mmsg man page at build time so the version always
 # matches the project version

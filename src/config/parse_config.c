@@ -20,6 +20,7 @@
 #include "mango/layout/arrange.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
+#include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
 #include <linux/input-event-codes.h>
@@ -30,6 +31,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard_group.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 
@@ -275,9 +277,30 @@ int32_t parse_direction(const char *str) {
 		return LEFT;
 	} else if (strcmp(lowerStr, "right") == 0) {
 		return RIGHT;
+	} else if (strcmp(lowerStr, "alldir") == 0) {
+		return ALLDIR;
 	} else {
 		return UNDIR;
 	}
+}
+
+int32_t parse_monitor_arg(const char *str) {
+	int32_t dir = parse_direction(str);
+
+	char lowerStr[10];
+	int32_t i = 0;
+	while (str[i] && i < 9) {
+		lowerStr[i] = tolower(str[i]);
+		i++;
+	}
+	lowerStr[i] = '\0';
+
+	if (strcmp(lowerStr, "next") == 0) {
+		return MON_NEXT;
+	} else if (strcmp(lowerStr, "prev") == 0) {
+		return MON_PREV;
+	}
+	return dir;
 }
 
 int64_t parse_color(const char *hex_str) {
@@ -302,11 +325,25 @@ bool starts_with_ignore_case(const char *str, const char *prefix) {
 	return true;
 }
 
-// Helper: finds all keycodes for a keysym in the keymap.
+static struct xkb_keymap *reference_keymap_instance = NULL;
+
+static struct xkb_keymap *reference_keymap(void) {
+	if (reference_keymap_instance == NULL && config.ctx != NULL) {
+		reference_keymap_instance = xkb_keymap_new_from_names(
+			config.ctx, &xkb_fallback_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	}
+
+	return reference_keymap_instance;
+}
+
 void cleanup_config_keymap(void) {
 	if (config.keymap != NULL) {
 		xkb_keymap_unref(config.keymap);
 		config.keymap = NULL;
+	}
+	if (reference_keymap_instance != NULL) {
+		xkb_keymap_unref(reference_keymap_instance);
+		reference_keymap_instance = NULL;
 	}
 	if (config.ctx != NULL) {
 		xkb_context_unref(config.ctx);
@@ -379,6 +416,20 @@ void run_exec_once() {
 		spawn_shell(&arg);
 	}
 }
+int32_t animation_type_from_string(const char *value) {
+	if (!value || !value[0])
+		return ANIM_TYPE_UNSET;
+	if (strcmp(value, "none") == 0)
+		return ANIM_TYPE_NONE;
+	if (strcmp(value, "fade") == 0)
+		return ANIM_TYPE_FADE;
+	if (strcmp(value, "slide") == 0)
+		return ANIM_TYPE_SLIDE;
+	if (strcmp(value, "zoom") == 0)
+		return ANIM_TYPE_ZOOM;
+	return ANIM_TYPE_UNKNOWN;
+}
+
 bool parse_option(Config *config, char *key, char *value, int line_number) {
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
@@ -387,21 +438,13 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 	} else if (strcmp(key, "layer_animations") == 0) {
 		config->layer_animations = atoi(value);
 	} else if (strcmp(key, "animation_type_open") == 0) {
-		snprintf(config->animation_type_open,
-				 sizeof(config->animation_type_open), "%.9s",
-				 value); // string limit to 9 char
+		config->animation_type_open = animation_type_from_string(value);
 	} else if (strcmp(key, "animation_type_close") == 0) {
-		snprintf(config->animation_type_close,
-				 sizeof(config->animation_type_close), "%.9s",
-				 value); // string limit to 9 char
+		config->animation_type_close = animation_type_from_string(value);
 	} else if (strcmp(key, "layer_animation_type_open") == 0) {
-		snprintf(config->layer_animation_type_open,
-				 sizeof(config->layer_animation_type_open), "%.9s",
-				 value); // string limit to 9 char
+		config->layer_animation_type_open = animation_type_from_string(value);
 	} else if (strcmp(key, "layer_animation_type_close") == 0) {
-		snprintf(config->layer_animation_type_close,
-				 sizeof(config->layer_animation_type_close), "%.9s",
-				 value); // string limit to 9 char
+		config->layer_animation_type_close = animation_type_from_string(value);
 	} else if (strcmp(key, "animation_fade_in") == 0) {
 		config->animation_fade_in = atoi(value);
 	} else if (strcmp(key, "animation_fade_out") == 0) {
@@ -589,6 +632,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->snap_distance = atoi(value);
 	} else if (strcmp(key, "enable_floating_snap") == 0) {
 		config->enable_floating_snap = atoi(value);
+	} else if (strcmp(key, "float_full_to_top") == 0) {
+		config->float_full_to_top = atoi(value);
 	} else if (strcmp(key, "drag_tile_to_tile") == 0) {
 		config->drag_tile_to_tile = atoi(value);
 	} else if (strcmp(key, "drag_tile_small") == 0) {
@@ -816,6 +861,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->hotarea_corner = atoi(value);
 	} else if (strcmp(key, "enable_hotarea") == 0) {
 		config->enable_hotarea = atoi(value);
+	} else if (strcmp(key, "hotarea_disable_on_fullscreen") == 0) {
+		config->hotarea_disable_on_fullscreen = atoi(value);
 	} else if (strcmp(key, "overviewgappi") == 0) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overviewgappo") == 0) {
@@ -838,6 +885,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->numlockon = atoi(value);
 	} else if (strcmp(key, "idleinhibit_ignore_visible") == 0) {
 		config->idleinhibit_ignore_visible = atoi(value);
+	} else if (strcmp(key, "idleinhibit_when_fullscreen") == 0) {
+		config->idleinhibit_when_fullscreen = atoi(value);
 	} else if (strcmp(key, "sloppyfocus") == 0) {
 		config->sloppyfocus = atoi(value);
 	} else if (strcmp(key, "warpcursor") == 0) {
@@ -858,10 +907,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->touch_enable = atoi(value);
 	} else if (strcmp(key, "touch_enable_mouse_emulation") == 0) {
 		config->touch_enable_mouse_emulation = atoi(value);
-	} else if (strcmp(key, "touch_map_to_mon") == 0) {
-		if (config->touch_map_to_mon)
-			free(config->touch_map_to_mon);
-		config->touch_map_to_mon = value[0] ? strdup(value) : NULL;
 	} else if (strcmp(key, "tap_to_click") == 0) {
 		config->tap_to_click = atoi(value);
 	} else if (strcmp(key, "tap_and_drag") == 0) {
@@ -1062,10 +1107,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->button_map = atoi(value);
 	} else if (strcmp(key, "axis_scroll_factor") == 0) {
 		config->axis_scroll_factor = atof(value);
-	} else if (strcmp(key, "tablet_map_to_mon") == 0) {
-		if (config->tablet_map_to_mon)
-			free(config->tablet_map_to_mon);
-		config->tablet_map_to_mon = strdup(value);
 	} else if (strcmp(key, "trackpad_scroll_factor") == 0) {
 		config->trackpad_scroll_factor = atof(value);
 	} else if (strcmp(key, "gappih") == 0) {
@@ -1117,6 +1158,30 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			return false;
 		} else {
 			convert_hex_to_rgba(config->shadowscolor, color);
+		}
+	} else if (strcmp(key, "dim_enable") == 0) {
+		config->dim_enable = atoi(value);
+	} else if (strcmp(key, "dim_focused_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid dim_focused_color "
+						"format: %s\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->dim_focused_color, color);
+		}
+	} else if (strcmp(key, "dim_unfocused_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid dim_unfocused_color "
+						"format: %s\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->dim_unfocused_color, color);
 		}
 	} else if (strcmp(key, "bordercolor") == 0) {
 		int64_t color = parse_color(value);
@@ -1446,8 +1511,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		// Sets default values.
 		rule->layer_name = NULL;
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
+		rule->animation_type_open = ANIM_TYPE_UNSET;
+		rule->animation_type_close = ANIM_TYPE_UNSET;
 		rule->shield_when_capture = 0;
 		rule->noblur = 0;
 		rule->noanim = 0;
@@ -1468,9 +1533,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				if (strcmp(key, "layer_name") == 0) {
 					rule->layer_name = strdup(val);
 				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
+					rule->animation_type_open = animation_type_from_string(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
+					rule->animation_type_close =
+						animation_type_from_string(val);
 				} else if (strcmp(key, "shield_when_capture") == 0) {
 					rule->shield_when_capture = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "noblur") == 0) {
@@ -1558,8 +1624,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->no_force_center = -1;
 
 		// string rule value, relay to a client property
-		rule->animation_type_open = NULL;
-		rule->animation_type_close = NULL;
+		rule->animation_type_open = ANIM_TYPE_UNSET;
+		rule->animation_type_close = ANIM_TYPE_UNSET;
 
 		// float rule value, relay to a client property
 		rule->focused_opacity = 0;
@@ -1598,9 +1664,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				} else if (strcmp(key, "appid") == 0) {
 					rule->id = strdup(val);
 				} else if (strcmp(key, "animation_type_open") == 0) {
-					rule->animation_type_open = strdup(val);
+					rule->animation_type_open = animation_type_from_string(val);
 				} else if (strcmp(key, "animation_type_close") == 0) {
-					rule->animation_type_close = strdup(val);
+					rule->animation_type_close =
+						animation_type_from_string(val);
 				} else if (strcmp(key, "tags") == 0) {
 					rule->tags = parse_tag_mask(val);
 				} else if (strcmp(key, "monitor") == 0) {
@@ -1764,7 +1831,20 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				if (strcmp(key, "name") == 0) {
 					rule->name = strdup(val);
 				} else if (strcmp(key, "type") == 0) {
-					snprintf(rule->type, sizeof(rule->type), "%s", val);
+					/* "touchpad" was the historical name of this device
+					 * type; keep it as a deprecated alias so existing
+					 * rules are not silently dropped. */
+					if (strcmp(val, "touchpad") == 0) {
+						mango_error(false, WLR_INFO,
+									"\033[1;33m[WARN]\033[0m device rule "
+									"type \033[1;36mtouchpad\033[0m is "
+									"deprecated, use \033[1;36mtrackpad\033[0m "
+									"instead\n");
+						snprintf(rule->type, sizeof(rule->type), "%s",
+								 "trackpad");
+					} else {
+						snprintf(rule->type, sizeof(rule->type), "%s", val);
+					}
 				} else if (strcmp(key, "repeat_rate") == 0) {
 					rule->repeat_rate = CLAMP_INT(atoi(val), 0, 1000);
 				} else if (strcmp(key, "repeat_delay") == 0) {
@@ -1810,6 +1890,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->button_map = (uint32_t)atoi(val);
 				} else if (strcmp(key, "disable_while_typing") == 0) {
 					rule->disable_while_typing = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "monitor") == 0) {
+					snprintf(rule->monitor, sizeof(rule->monitor), "%s", val);
 				} else {
 					mango_error(false, WLR_ERROR,
 								"Unknown device rule option: %s\n", key);
@@ -2100,16 +2182,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		binding->arg.v2 = NULL;
 		binding->arg.v3 = NULL;
 		binding->arg.tc = NULL;
-
-		// TODO: remove this in next version
-		if (binding->mod == 0 &&
-			(binding->button == BTN_LEFT || binding->button == BTN_RIGHT)) {
-			mango_error(false, WLR_ERROR,
-						"\033[31m%s\033[33m can't "
-						"bind to \033[31m%s\033[33m mod key\033[0m\n",
-						button_str, mod_str);
-			return false;
-		}
 
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
@@ -2446,7 +2518,8 @@ bool same_mousebind_key(const void *a, const void *b) {
 bool same_axisbind_key(const void *a, const void *b) {
 	const AxisBinding *aa = (const AxisBinding *)a;
 	const AxisBinding *ab = (const AxisBinding *)b;
-	return aa->mod == ab->mod && aa->dir == ab->dir;
+	return aa->mod == ab->mod &&
+		   (aa->dir == ALLDIR || ab->dir == ALLDIR || aa->dir == ab->dir);
 }
 
 bool same_switchbind_key(const void *a, const void *b) {
@@ -2458,8 +2531,9 @@ bool same_switchbind_key(const void *a, const void *b) {
 bool same_gesturebind_key(const void *a, const void *b) {
 	const GestureBinding *ga = (const GestureBinding *)a;
 	const GestureBinding *gb = (const GestureBinding *)b;
-	return ga->mod == gb->mod && ga->motion == gb->motion &&
-		   ga->fingers_count == gb->fingers_count;
+	return ga->mod == gb->mod && ga->fingers_count == gb->fingers_count &&
+		   (ga->motion == ALLDIR || gb->motion == ALLDIR ||
+			ga->motion == gb->motion);
 }
 
 void get_mousebind_meta(const void *elem, BindingConflictMeta *meta) {
@@ -2750,18 +2824,22 @@ uint32_t parse_mod(const char *mod_str) {
 				case 133:
 				case 134:
 					mod |= WLR_MODIFIER_LOGO;
+					match_success = true;
 					break;
 				case 37:
 				case 105:
 					mod |= WLR_MODIFIER_CTRL;
+					match_success = true;
 					break;
 				case 50:
 				case 62:
 					mod |= WLR_MODIFIER_SHIFT;
+					match_success = true;
 					break;
 				case 64:
 				case 108:
 					mod |= WLR_MODIFIER_ALT;
+					match_success = true;
 					break;
 				default:
 					mango_error(false, WLR_ERROR,
@@ -2816,45 +2894,99 @@ uint32_t parse_mod(const char *mod_str) {
 	return mod;
 }
 
-// Helper: finds all keycodes for a keysym in the keymap.
-int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
-								 MultiKeycode *multi_kc) {
+static int32_t find_keycodes_in_layout(struct xkb_keymap *keymap,
+									   xkb_layout_index_t layout,
+									   xkb_keysym_t sym,
+									   MultiKeycode *multi_kc) {
 	xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
 	xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
+	int32_t found_count = 0;
 
+	for (xkb_keycode_t keycode = min_keycode;
+		 keycode <= max_keycode && found_count < 3; keycode++) {
+		xkb_level_index_t levels =
+			xkb_keymap_num_levels_for_key(keymap, keycode, layout);
+		bool matched = false;
+
+		for (xkb_level_index_t level = 0; level < levels && !matched; level++) {
+			const xkb_keysym_t *syms;
+			int32_t num_syms = xkb_keymap_key_get_syms_by_level(
+				keymap, keycode, layout, level, &syms);
+
+			for (int32_t i = 0; i < num_syms; i++) {
+				if (syms[i] == sym) {
+					matched = true;
+					break;
+				}
+			}
+		}
+
+		if (!matched)
+			continue;
+
+		switch (found_count) {
+		case 0:
+			multi_kc->keycode1 = keycode;
+			break;
+		case 1:
+			multi_kc->keycode2 = keycode;
+			break;
+		case 2:
+			multi_kc->keycode3 = keycode;
+			break;
+		}
+		found_count++;
+	}
+
+	return found_count;
+}
+
+int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
+								 MultiKeycode *multi_kc) {
 	multi_kc->keycode1 = 0;
 	multi_kc->keycode2 = 0;
 	multi_kc->keycode3 = 0;
 
 	int32_t found_count = 0;
 
-	for (xkb_keycode_t keycode = min_keycode;
-		 keycode <= max_keycode && found_count < 3; keycode++) {
-		// Uses layout 0 and level 0.
-		const xkb_keysym_t *syms;
-		int32_t num_syms =
-			xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
+	if (keymap != NULL) {
+		xkb_layout_index_t layouts = xkb_keymap_num_layouts(keymap);
 
-		for (int32_t i = 0; i < num_syms; i++) {
-			if (syms[i] == sym) {
-				switch (found_count) {
-				case 0:
-					multi_kc->keycode1 = keycode;
-					break;
-				case 1:
-					multi_kc->keycode2 = keycode;
-					break;
-				case 2:
-					multi_kc->keycode3 = keycode;
-					break;
-				}
-				found_count++;
-				break;
+		for (xkb_layout_index_t layout = 0;
+			 layout < layouts && found_count == 0; layout++) {
+			found_count =
+				find_keycodes_in_layout(keymap, layout, sym, multi_kc);
+		}
+	}
+
+	if (found_count == 0) {
+		struct xkb_keymap *fallback = reference_keymap();
+
+		if (fallback != NULL && fallback != keymap) {
+			xkb_layout_index_t layouts = xkb_keymap_num_layouts(fallback);
+
+			for (xkb_layout_index_t layout = 0;
+				 layout < layouts && found_count == 0; layout++) {
+				found_count =
+					find_keycodes_in_layout(fallback, layout, sym, multi_kc);
 			}
 		}
 	}
 
 	return found_count;
+}
+
+int32_t find_keycodes_for_char(char c_char, MultiKeycode *multi_kc) {
+	multi_kc->keycode1 = 0;
+	multi_kc->keycode2 = 0;
+	multi_kc->keycode3 = 0;
+
+	if (c_char == '\0')
+		return 0;
+
+	return find_keycodes_for_keysym(
+		config.keymap, xkb_utf32_to_keysym((uint32_t)(unsigned char)c_char),
+		multi_kc);
 }
 
 KeySymCode parse_key(const char *key_str, bool isbindsym) {
@@ -2898,6 +3030,7 @@ KeySymCode parse_key(const char *key_str, bool isbindsym) {
 		} else {
 			kc.type = KEY_TYPE_SYM;
 			kc.keysym = sym;
+			kc.unresolved = true;
 			// keycode field stays 0.
 		}
 	} else {
@@ -3303,16 +3436,12 @@ void free_config(void) {
 				free((void *)rule->id);
 			if (rule->title)
 				free((void *)rule->title);
-			if (rule->animation_type_open)
-				free((void *)rule->animation_type_open);
-			if (rule->animation_type_close)
-				free((void *)rule->animation_type_close);
 			if (rule->monitor)
 				free((void *)rule->monitor);
 			rule->id = NULL;
 			rule->title = NULL;
-			rule->animation_type_open = NULL;
-			rule->animation_type_close = NULL;
+			rule->animation_type_open = ANIM_TYPE_UNSET;
+			rule->animation_type_close = ANIM_TYPE_UNSET;
 			rule->monitor = NULL;
 			// Frees arg.v of globalkeybinding if dynamically allocated.
 			if (rule->globalkeybinding.arg.v) {
@@ -3483,10 +3612,8 @@ void free_config(void) {
 		for (int32_t i = 0; i < config.layer_rules_count; i++) {
 			if (config.layer_rules[i].layer_name)
 				free((void *)config.layer_rules[i].layer_name);
-			if (config.layer_rules[i].animation_type_open)
-				free((void *)config.layer_rules[i].animation_type_open);
-			if (config.layer_rules[i].animation_type_close)
-				free((void *)config.layer_rules[i].animation_type_close);
+			config.layer_rules[i].animation_type_open = ANIM_TYPE_UNSET;
+			config.layer_rules[i].animation_type_close = ANIM_TYPE_UNSET;
 		}
 		free(config.layer_rules);
 		config.layer_rules = NULL;
@@ -3551,16 +3678,6 @@ void free_config(void) {
 		config.groupbardata.font_desc = NULL;
 	}
 
-	if (config.tablet_map_to_mon) {
-		free(config.tablet_map_to_mon);
-		config.tablet_map_to_mon = NULL;
-	}
-
-	if (config.touch_map_to_mon) {
-		free(config.touch_map_to_mon);
-		config.touch_map_to_mon = NULL;
-	}
-
 	if (config.jump_labels) {
 		free(config.jump_labels);
 		config.jump_labels = NULL;
@@ -3578,6 +3695,73 @@ void free_config(void) {
 
 void update_global_var(void) {
 	server.tagmask = ((uint32_t)1 << config.tag_num) - 1;
+}
+
+static void resolve_keybinding_layout(struct xkb_keymap *keymap,
+									  KeyBinding *binding) {
+	if (binding->keysymcode.keysym == XKB_KEY_NoSymbol)
+		return;
+
+	if (binding->keysymcode.type != KEY_TYPE_CODE &&
+		!binding->keysymcode.unresolved) {
+		return;
+	}
+
+	MultiKeycode keycode = {0};
+
+	if (find_keycodes_for_keysym(keymap, binding->keysymcode.keysym, &keycode) >
+		0) {
+		binding->keysymcode.keycode = keycode;
+		binding->keysymcode.type = KEY_TYPE_CODE;
+		binding->keysymcode.unresolved = false;
+		return;
+	}
+
+	if (!binding->keysymcode.unresolved)
+		return;
+
+	char name[64] = {0};
+
+	xkb_keysym_get_name(binding->keysymcode.keysym, name, sizeof(name));
+	mango_error(false, WLR_ERROR,
+				"Key '%s' has no keycode in the configured layouts; it is "
+				"matched by keysym, which depends on the active layout\n",
+				name);
+}
+
+static void resolve_bindings_to_configured_layouts(Config *config) {
+	if (config->keymap != NULL) {
+		xkb_keymap_unref(config->keymap);
+		config->keymap = NULL;
+	}
+
+	if (config->ctx != NULL) {
+		config->keymap = xkb_keymap_new_from_names(
+			config->ctx, &config->xkb_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	}
+
+	if (config->keymap == NULL) {
+		mango_error(false, WLR_ERROR,
+					"Invalid xkb_rules_* layout; key names are resolved with "
+					"the us layout\n");
+
+		if (config->ctx != NULL) {
+			config->keymap = xkb_keymap_new_from_names(
+				config->ctx, &xkb_fallback_rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+		}
+	}
+
+	for (int32_t i = 0; i < config->key_bindings_count; i++) {
+		resolve_keybinding_layout(config->keymap, &config->key_bindings[i]);
+	}
+
+	for (int32_t i = 0; i < config->window_rules_count; i++) {
+		ConfigWinRule *rule = &config->window_rules[i];
+
+		if (rule->globalkeybinding.mod != 0) {
+			resolve_keybinding_layout(config->keymap, &rule->globalkeybinding);
+		}
+	}
 }
 
 void override_config(void) {
@@ -3644,6 +3828,8 @@ void override_config(void) {
 	config.hotarea_size = CLAMP_INT(config.hotarea_size, 1, 1000);
 	config.hotarea_corner = CLAMP_INT(config.hotarea_corner, 0, 3);
 	config.enable_hotarea = CLAMP_INT(config.enable_hotarea, 0, 1);
+	config.hotarea_disable_on_fullscreen =
+		CLAMP_INT(config.hotarea_disable_on_fullscreen, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
 	config.overcircle_center_ratio =
@@ -3669,6 +3855,8 @@ void override_config(void) {
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
 	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
+	config.idleinhibit_when_fullscreen =
+		CLAMP_INT(config.idleinhibit_when_fullscreen, 0, 1);
 	config.sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
 	config.warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
@@ -3683,6 +3871,7 @@ void override_config(void) {
 	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
 	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
 	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
+	config.float_full_to_top = CLAMP_INT(config.float_full_to_top, 0, 1);
 	config.snap_distance = CLAMP_INT(config.snap_distance, 0, 99999);
 	config.cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
 	config.no_border_when_single =
@@ -3795,6 +3984,7 @@ void override_config(void) {
 	config.focused_opacity = CLAMP_FLOAT(config.focused_opacity, 0.0f, 1.0f);
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
+	config.dim_enable = CLAMP_INT(config.dim_enable, 0, 1);
 
 	config.groupbardata.border_width =
 		CLAMP_INT(config.groupbardata.border_width, 0, 100);
@@ -3820,6 +4010,10 @@ void override_config(void) {
 void set_value_default() {
 	config.animations = 1;
 	config.layer_animations = 0;
+	config.animation_type_open = ANIM_TYPE_UNSET;
+	config.animation_type_close = ANIM_TYPE_UNSET;
+	config.layer_animation_type_open = ANIM_TYPE_UNSET;
+	config.layer_animation_type_close = ANIM_TYPE_UNSET;
 	config.animation_fade_in = 1;
 	config.animation_fade_out = 1;
 	config.tag_animation_direction = HORIZONTAL;
@@ -3858,6 +4052,7 @@ void set_value_default() {
 	config.hotarea_size = 10;
 	config.hotarea_corner = BOTTOM_LEFT;
 	config.enable_hotarea = 0;
+	config.hotarea_disable_on_fullscreen = 1;
 	config.smartgaps = 0;
 	config.sloppyfocus = 1;
 	config.gappih = 5;
@@ -3906,13 +4101,15 @@ void set_value_default() {
 	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
 	config.enable_floating_snap = 0;
+	config.float_full_to_top = 0;
 	config.swipe_min_threshold = 1;
 	config.gesture_live = 1;
 	config.gesture_swipe_distance = 300;
 	config.gesture_swipe_cancel_ratio = 0.5;
-	config.gesture_swipe_min_speed_to_force = 30;
+	config.gesture_swipe_min_speed_to_force = 10;
 
 	config.idleinhibit_ignore_visible = 0;
+	config.idleinhibit_when_fullscreen = 0;
 
 	config.borderpx = 4;
 	config.group_bar_height = 50;
@@ -3982,6 +4179,16 @@ void set_value_default() {
 	config.shadowscolor[1] = 0.0f;
 	config.shadowscolor[2] = 0.0f;
 	config.shadowscolor[3] = 1.0f;
+
+	config.dim_enable = 0;
+	config.dim_focused_color[0] = 0.0f;
+	config.dim_focused_color[1] = 0.0f;
+	config.dim_focused_color[2] = 0.0f;
+	config.dim_focused_color[3] = 0.0f;
+	config.dim_unfocused_color[0] = 0.0f;
+	config.dim_unfocused_color[1] = 0.0f;
+	config.dim_unfocused_color[2] = 0.0f;
+	config.dim_unfocused_color[3] = 0x55 / 255.0f;
 
 	config.animation_curve_move[0] = 0.46;
 	config.animation_curve_move[1] = 1.0;
@@ -4181,8 +4388,6 @@ bool parse_config(void) {
 	config.cursor_theme = NULL;
 	config.jumplabeldata.font_desc = NULL;
 	config.groupbardata.font_desc = NULL;
-	config.tablet_map_to_mon = NULL;
-	config.touch_map_to_mon = NULL;
 	config.jump_labels = NULL;
 	strcpy(config.keymode, "default");
 
@@ -4213,6 +4418,7 @@ bool parse_config(void) {
 	bool keybindings_conflict = false;
 	set_value_default();
 	parse_correct = parse_config_file(&config, filename, true);
+	resolve_bindings_to_configured_layouts(&config);
 	set_default_key_bindings(&config);
 	override_config();
 
@@ -4245,6 +4451,7 @@ void reset_blur_params(void) {
 			m->blur =
 				wlr_scene_optimized_blur_create(&server.scene->tree, 0, 0);
 			wlr_scene_node_reparent(&m->blur->node, server.layers[LyrBlur]);
+			wlr_scene_node_set_position(&m->blur->node, m->m.x, m->m.y);
 			wlr_scene_optimized_blur_set_size(m->blur, m->m.width, m->m.height);
 			wlr_scene_set_blur_data(
 				server.scene, config.blur_params.num_passes,
@@ -4558,13 +4765,13 @@ void reset_tag(int old_tag_num) {
 	}
 }
 
-void reload_config(const Arg *arg) {
+int32_t reload_config(const Arg *arg) {
 	int old_tag_num = config.tag_num;
 	parse_config();
 	reset_tag(old_tag_num);
 	reset_option();
 	printstatus(IPC_WATCH_ARRANGGE);
-	return;
+	return 1;
 }
 
 FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
@@ -4614,6 +4821,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = zoom;
 	} else if (strcmp(func_name, "exchange_client") == 0) {
 		func = exchange_client;
+		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "move_client") == 0) {
+		func = move_client;
 		(*arg).i = parse_direction(arg_value);
 	} else if (strcmp(func_name, "exchange_stack_client") == 0) {
 		func = exchange_stack_client;
@@ -4770,13 +4980,13 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = toggle_render_border;
 	} else if (strcmp(func_name, "focusmon") == 0) {
 		func = focus_monitor;
-		(*arg).i = parse_direction(arg_value);
+		(*arg).i = parse_monitor_arg(arg_value);
 		if ((*arg).i == UNDIR) {
 			(*arg).v = strdup(arg_value);
 		}
 	} else if (strcmp(func_name, "tagmon") == 0) {
 		func = tag_monitor;
-		(*arg).i = parse_direction(arg_value);
+		(*arg).i = parse_monitor_arg(arg_value);
 		(*arg).i2 = atoi(arg_value2);
 		if ((*arg).i == UNDIR) {
 			(*arg).v = strdup(arg_value);
@@ -4807,6 +5017,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = quit;
 	} else if (strcmp(func_name, "create_virtual_output") == 0) {
 		func = create_virtual_output;
+		if (arg_value && arg_value[0] != '\0') {
+			(*arg).v = strdup(arg_value);
+		}
 	} else if (strcmp(func_name, "destroy_all_virtual_output") == 0) {
 		func = destroy_all_virtual_output;
 	} else if (strcmp(func_name, "moveresize") == 0) {

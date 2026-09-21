@@ -272,6 +272,22 @@ monitorrule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:0,scale:1.5
 # use dpi to scale xwayland(1.5 * 96 = 144)
 exec-once=echo "Xft.dpi: 144" | xrdb -merge
 ```
+
+### Blurry Electron and Chromium apps under fractional scaling
+
+Electron-based applications (VSCodium, Spotify, Discord, ...) and Chromium
+browsers can look blurry when the monitor uses a fractional `scale` (for
+example `scale:1.25`). This is a compatibility issue with fractional scaling,
+and such a window becomes sharp again once it is maximized or fullscreened.
+
+Add a window rule to open the affected applications maximized, which fixes the
+blur:
+
+```ini
+# VSCodium
+windowrule=force_fakemaximize:1,appid:codium
+```
+
 ---
 
 ## Virtual Monitors

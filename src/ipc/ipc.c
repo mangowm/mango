@@ -7,6 +7,7 @@
 #include "mango/input/keyboard.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
+#include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -25,6 +26,7 @@
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
 
 static struct wl_list ipc_watch_clients;
 static int ipc_device_watch_count;
@@ -42,7 +44,7 @@ const char *ipc_device_type_str(struct wlr_input_device *dev) {
 		return "keyboard";
 	case WLR_INPUT_DEVICE_POINTER:
 		return ld && libinput_device_config_tap_get_finger_count(ld) > 0
-				   ? "touchpad"
+				   ? "trackpad"
 				   : "pointer";
 	case WLR_INPUT_DEVICE_TOUCH:
 		return "touch";
@@ -172,6 +174,46 @@ cJSON *build_layouts_response(void) {
 	}
 	cJSON *resp = cJSON_CreateObject();
 	cJSON_AddItemToObject(resp, "layouts", arr);
+	return resp;
+}
+
+static const char *layer_enum_str(uint32_t layer) {
+	switch (layer) {
+	case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+		return "background";
+	case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
+		return "bottom";
+	case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
+		return "top";
+	case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
+		return "overlay";
+	default:
+		return "unknown";
+	}
+}
+
+cJSON *build_layers_response(void) {
+	cJSON *arr = cJSON_CreateArray();
+	Monitor *m;
+	wl_list_for_each(m, &server.monitors, link) {
+		for (uint32_t layer = 0; layer < LENGTH(m->layers); layer++) {
+			LayerSurface *l;
+			wl_list_for_each(l, &m->layers[layer], link) {
+				if (!l->mapped || l->being_unmapped)
+					continue;
+				cJSON *entry = cJSON_CreateObject();
+				cJSON_AddStringToObject(entry, "monitor", m->wlr_output->name);
+				cJSON_AddStringToObject(entry, "layer", layer_enum_str(layer));
+				cJSON_AddStringToObject(entry, "name",
+										l->layer_surface->namespace
+											? l->layer_surface->namespace
+											: "");
+				cJSON_AddItemToArray(arr, entry);
+			}
+		}
+	}
+	cJSON *resp = cJSON_CreateObject();
+	cJSON_AddItemToObject(resp, "layers", arr);
 	return resp;
 }
 
@@ -308,12 +350,27 @@ int ipc_handle_connection(int fd, uint32_t mask, void *data) {
 
 	// Sets O_NONBLOCK
 	int flags = fcntl(client_fd, F_GETFL, 0);
-	fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+	if (flags == -1 || fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+		mango_error(true, WLR_ERROR,
+					"failed to set O_NONBLOCK on IPC client socket");
+		close(client_fd);
+		return 0;
+	}
 	// Sets FD_CLOEXEC
 	flags = fcntl(client_fd, F_GETFD, 0);
-	fcntl(client_fd, F_SETFD, flags | FD_CLOEXEC);
+	if (flags == -1 || fcntl(client_fd, F_SETFD, flags | FD_CLOEXEC) == -1) {
+		mango_error(true, WLR_ERROR,
+					"failed to set FD_CLOEXEC on IPC client socket");
+		close(client_fd);
+		return 0;
+	}
 
 	struct ipc_client_state *client = calloc(1, sizeof(*client));
+	if (!client) {
+		mango_error(true, WLR_ERROR, "failed to allocate IPC client");
+		close(client_fd);
+		return 0;
+	}
 	client->fd = client_fd;
 	client->loop = loop;
 	client->source = wl_event_loop_add_fd(
@@ -772,6 +829,8 @@ void handle_command(int client_fd, const char *cmd_raw) {
 
 		resp = cJSON_CreateObject();
 		cJSON_AddItemToObject(resp, "devices", arr);
+	} else if (strcmp(cmd, "get all-layers") == 0) {
+		resp = build_layers_response();
 	} else if (strcmp(cmd, "get all-tags") == 0) {
 		resp = build_all_tags_response();
 	} else if (strncmp(cmd, "get tags ", 9) == 0) {
@@ -825,7 +884,7 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		}
 
 		Arg arg = {0};
-		void (*func)(const Arg *) = parse_func_name(
+		FuncType func = parse_func_name(
 			token_count > 0 ? tokens[0] : "", &arg,
 			token_count > 1 ? tokens[1] : "", token_count > 2 ? tokens[2] : "",
 			token_count > 3 ? tokens[3] : "", token_count > 4 ? tokens[4] : "",
@@ -1263,7 +1322,6 @@ void ipc_init(struct wl_event_loop *loop) {
 	if (ipc_socket_fd < 0)
 		return;
 
-	// Sets FD_CLOEXEC
 	int flags = fcntl(ipc_socket_fd, F_GETFD, 0);
 	if (flags == -1 ||
 		fcntl(ipc_socket_fd, F_SETFD, flags | FD_CLOEXEC) == -1) {

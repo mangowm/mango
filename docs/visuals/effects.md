@@ -80,3 +80,31 @@ focused_opacity=1.0
 # Opacity for inactive windows
 unfocused_opacity=1.0
 ```
+
+---
+
+## Dim Overlay
+
+Draws a translucent layer over the content of a window, so it can be shaded
+without changing the opacity of the application itself. The layer never takes
+pointer input: clicks and drags always go to the window below it. Its corners
+follow `border_radius`, and it is resized together with the window, including
+while windows are being animated.
+
+Colors use the usual `0xRRGGBBAA` format, so the last two digits set the
+transparency of the overlay.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `dim_enable` | `0` | Enable the dim overlay on windows. |
+| `dim_focused_color` | `0x00000000` | Dim color of the focused window. |
+| `dim_unfocused_color` | `0x00000055` | Dim color of the unfocused windows. |
+
+With just `dim_enable=1` the focused window stays untouched and the unfocused
+windows are shaded with `0x55` (about a third) black.
+
+```ini
+dim_enable=1
+dim_focused_color=0x00000000
+dim_unfocused_color=0x0000004d
+```

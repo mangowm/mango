@@ -9,6 +9,18 @@
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output.h>
 
+static int32_t layer_open_animation_type(const LayerSurface *l) {
+	return l->animation_type_open != ANIM_TYPE_UNSET
+			   ? l->animation_type_open
+			   : config.layer_animation_type_open;
+}
+
+static int32_t layer_close_animation_type(const LayerSurface *l) {
+	return l->animation_type_close != ANIM_TYPE_UNSET
+			   ? l->animation_type_close
+			   : config.layer_animation_type_close;
+}
+
 void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height) {
 	if (l->animation.running) {
 		*width = l->animation.current.width;
@@ -286,10 +298,7 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	buffer_data.width = width;
 	buffer_data.height = height;
 
-	if ((!l->animation_type_close &&
-		 strcmp(config.layer_animation_type_close, "zoom") == 0) ||
-		(l->animation_type_close &&
-		 strcmp(l->animation_type_close, "zoom") == 0)) {
+	if (layer_close_animation_type(l) == ANIM_TYPE_ZOOM) {
 		wlr_scene_node_for_each_buffer(&l->scene->node,
 									   layer_fadeout_scene_buffer_apply_effect,
 									   &buffer_data);
@@ -375,10 +384,7 @@ void layer_animation_next_tick(LayerSurface *l) {
 		buffer_data.height_scale = (float)height / (float)l->current.height;
 	}
 
-	if ((!l->animation_type_open &&
-		 strcmp(config.layer_animation_type_open, "zoom") == 0) ||
-		(l->animation_type_open &&
-		 strcmp(l->animation_type_open, "zoom") == 0)) {
+	if (layer_open_animation_type(l) == ANIM_TYPE_ZOOM) {
 		wlr_scene_node_for_each_buffer(
 			&l->scene->node, layer_scene_buffer_apply_effect, &buffer_data);
 	}
@@ -412,10 +418,7 @@ void init_fadeout_layers(LayerSurface *l) {
 		return;
 	}
 
-	if ((l->animation_type_close &&
-		 strcmp(l->animation_type_close, "none") == 0) ||
-		(!l->animation_type_close &&
-		 strcmp(config.layer_animation_type_close, "none") == 0)) {
+	if (layer_close_animation_type(l) == ANIM_TYPE_NONE) {
 		return;
 	}
 
@@ -453,10 +456,7 @@ void init_fadeout_layers(LayerSurface *l) {
 	fadeout_layer->animation.initial.x = 0;
 	fadeout_layer->animation.initial.y = 0;
 
-	if ((!l->animation_type_close &&
-		 strcmp(config.layer_animation_type_close, "zoom") == 0) ||
-		(l->animation_type_close &&
-		 strcmp(l->animation_type_close, "zoom") == 0)) {
+	if (layer_close_animation_type(l) == ANIM_TYPE_ZOOM) {
 		// Calculate the absolute coordinates and size to be set
 		fadeout_layer->current.width =
 			(float)l->animation.current.width * config.zoom_end_ratio;
@@ -474,10 +474,7 @@ void init_fadeout_layers(LayerSurface *l) {
 		fadeout_layer->current.y =
 			fadeout_layer->current.y - l->animation.current.y;
 
-	} else if ((!l->animation_type_close &&
-				strcmp(config.layer_animation_type_close, "slide") == 0) ||
-			   (l->animation_type_close &&
-				strcmp(l->animation_type_close, "slide") == 0)) {
+	} else if (layer_close_animation_type(l) == ANIM_TYPE_SLIDE) {
 		// Get the ending absolute coordinates and size of the slide animation
 		set_layer_dir_animaiton(l, &fadeout_layer->current);
 		// Also calculate the deviation coordinates and size that can be set
@@ -519,10 +516,7 @@ void layer_set_pending_state(LayerSurface *l) {
 
 	if (l->animation.action == OPEN && !l->animation.running) {
 
-		if ((!l->animation_type_open &&
-			 strcmp(config.layer_animation_type_open, "zoom") == 0) ||
-			(l->animation_type_open &&
-			 strcmp(l->animation_type_open, "zoom") == 0)) {
+		if (layer_open_animation_type(l) == ANIM_TYPE_ZOOM) {
 			l->animainit_geom.width = l->geom.width * config.zoom_initial_ratio;
 			l->animainit_geom.height =
 				l->geom.height * config.zoom_initial_ratio;
@@ -530,10 +524,7 @@ void layer_set_pending_state(LayerSurface *l) {
 								  l->animainit_geom.width / 2;
 			l->animainit_geom.y = usable_area.y + usable_area.height / 2 -
 								  l->animainit_geom.height / 2;
-		} else if ((!l->animation_type_open &&
-					strcmp(config.layer_animation_type_open, "slide") == 0) ||
-				   (l->animation_type_open &&
-					strcmp(l->animation_type_open, "slide") == 0)) {
+		} else if (layer_open_animation_type(l) == ANIM_TYPE_SLIDE) {
 
 			set_layer_dir_animaiton(l, &l->animainit_geom);
 		} else {
@@ -554,10 +545,7 @@ void layer_set_pending_state(LayerSurface *l) {
 		l->animation.should_animate = true;
 	}
 
-	if (((l->animation_type_open &&
-		  strcmp(l->animation_type_open, "none") == 0) ||
-		 (!l->animation_type_open &&
-		  strcmp(config.layer_animation_type_open, "none") == 0)) &&
+	if (layer_open_animation_type(l) == ANIM_TYPE_NONE &&
 		l->animation.action == OPEN) {
 		l->animation.should_animate = false;
 	}

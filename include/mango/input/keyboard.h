@@ -15,6 +15,8 @@
 	((KEY) == 133 || (KEY) == 37 || (KEY) == 64 || (KEY) == 50 ||              \
 	 (KEY) == 134 || (KEY) == 105 || (KEY) == 108 || (KEY) == 62)
 
+#define KEYBOARD_MAX_KEYSYMS 8
+
 typedef struct KeyboardGroup {
 	struct wlr_keyboard_group *wlr_group;
 	struct wlr_keyboard *keyboard; /* The keyboard actually in use (group or
@@ -25,8 +27,8 @@ typedef struct KeyboardGroup {
 								restored on destroy. */
 
 	int32_t nsyms;
-	const xkb_keysym_t *keysyms; /* invalid if nsyms == 0 */
-	uint32_t mods;				 /* invalid if nsyms == 0 */
+	xkb_keysym_t keysyms[KEYBOARD_MAX_KEYSYMS]; /* invalid if nsyms == 0 */
+	uint32_t mods;								/* invalid if nsyms == 0 */
 	uint32_t keycode;
 	struct wl_event_source *key_repeat_source;
 
@@ -65,6 +67,8 @@ bool is_keyboard_shortcut_inhibitor(struct wlr_surface *surface);
 
 int32_t keyboard_check_keybinding(uint32_t state, bool locked, uint32_t mods,
 								  xkb_keysym_t sym, uint32_t keycode);
+
+void keyboard_cancel_pending_release_bind(void);
 
 bool keyboard_process_global_keypress(struct wlr_surface *last_surface,
 									  struct wlr_keyboard *keyboard,

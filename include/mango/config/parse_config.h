@@ -30,14 +30,21 @@
 	if (rule->prop > 0.0f)                                                     \
 	obj->prop = rule->prop
 
-#define APPLY_STRING_PROP(obj, rule, prop)                                     \
-	if (rule->prop != NULL)                                                    \
-	obj->prop = rule->prop
-
 /* Tag animation / folding / global switch state. */
 enum { VERTICAL, HORIZONTAL };
 enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
+
+enum animation_type {
+	ANIM_TYPE_UNSET = -1,
+	ANIM_TYPE_NONE = 0,
+	ANIM_TYPE_FADE,
+	ANIM_TYPE_SLIDE,
+	ANIM_TYPE_ZOOM,
+	ANIM_TYPE_UNKNOWN,
+};
+
+int32_t animation_type_from_string(const char *value);
 
 enum tearing_mode {
 	TEARING_DISABLED = 0,
@@ -67,7 +74,7 @@ enum render_bit_depth {
 };
 
 /* Functions */
-typedef void (*FuncType)(const Arg *);
+typedef int32_t (*FuncType)(const Arg *);
 
 typedef struct {
 	uint32_t keycode1;
@@ -79,12 +86,13 @@ typedef struct {
 	xkb_keysym_t keysym;
 	MultiKeycode keycode;
 	int32_t type;
+	bool unresolved;
 } KeySymCode;
 
 typedef struct {
 	uint32_t mod;
 	KeySymCode keysymcode;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -107,10 +115,8 @@ typedef struct {
 	int32_t isfullscreen;
 	int32_t isfakefullscreen;
 	float scroller_proportion;
-	const char *animation_type_open;
-	const char *animation_type_close;
-	const char *layer_animation_type_open;
-	const char *layer_animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t isnoborder;
 	int32_t isnoshadow;
 	int32_t isnoradius;
@@ -198,8 +204,8 @@ typedef struct {
 
 typedef struct {
 	char *layer_name; // Layout name
-	char *animation_type_open;
-	char *animation_type_close;
+	int32_t animation_type_open;
+	int32_t animation_type_close;
 	int32_t shield_when_capture;
 	int32_t noblur;
 	int32_t noanim;
@@ -210,7 +216,7 @@ typedef struct {
 	/*
 	 * Match condition: name matches the device name or the vendor:product:name
 	 * identifier; type matches
-	 * keyboard/pointer/touchpad/touch/switch/tablet/pad.
+	 * keyboard/pointer/trackpad/touch/switch/tablet/pad.
 	 */
 	char *name;
 	char type[32];
@@ -225,7 +231,7 @@ typedef struct {
 	char kb_variant[128];
 	char kb_options[128];
 
-	/* Mouse / touchpad libinput parameters. */
+	/* Mouse / trackpad libinput parameters. */
 	int32_t natural_scrolling;
 	int32_t accel_profile;
 	double accel_speed;
@@ -240,12 +246,13 @@ typedef struct {
 	int32_t drag_lock;
 	uint32_t button_map;
 	int32_t disable_while_typing;
+	char monitor[128];
 } ConfigDeviceRule;
 
 typedef struct {
 	uint32_t mod;
 	uint32_t dir;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -258,7 +265,7 @@ typedef struct {
 	uint32_t mod;
 	uint32_t motion;
 	uint32_t fingers_count;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -269,7 +276,7 @@ typedef struct {
 
 typedef struct {
 	uint32_t fold;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -281,7 +288,7 @@ typedef struct {
 typedef struct {
 	uint32_t mod;
 	uint32_t button;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
 	bool iscommonmode;
@@ -293,10 +300,10 @@ typedef struct {
 typedef struct {
 	int32_t animations;
 	int32_t layer_animations;
-	char animation_type_open[10];
-	char animation_type_close[10];
-	char layer_animation_type_open[10];
-	char layer_animation_type_close[10];
+	int32_t animation_type_open;
+	int32_t animation_type_close;
+	int32_t layer_animation_type_open;
+	int32_t layer_animation_type_close;
 	int32_t animation_fade_in;
 	int32_t animation_fade_out;
 	int32_t tag_animation_direction;
@@ -336,6 +343,7 @@ typedef struct {
 	int32_t no_radius_when_single;
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
+	int32_t float_full_to_top;
 	int32_t drag_tile_to_tile;
 	int32_t drag_tile_small;
 	uint32_t swipe_min_threshold;
@@ -372,6 +380,7 @@ typedef struct {
 	int32_t hotarea_size;
 	int32_t hotarea_corner;
 	int32_t enable_hotarea;
+	int32_t hotarea_disable_on_fullscreen;
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
@@ -383,6 +392,7 @@ typedef struct {
 	uint32_t axis_bind_apply_timeout;
 	uint32_t focus_on_activate;
 	int32_t idleinhibit_ignore_visible;
+	int32_t idleinhibit_when_fullscreen;
 	int32_t sloppyfocus;
 	int32_t warpcursor;
 	int32_t drag_corner;
@@ -409,9 +419,6 @@ typedef struct {
 	uint32_t mouse_click_method;
 	uint32_t mouse_send_events_mode;
 
-	/* tablet */
-	char *tablet_map_to_mon;
-
 	/* Trackpad */
 	int32_t trackpad_natural_scrolling;
 	uint32_t trackpad_accel_profile;
@@ -422,7 +429,7 @@ typedef struct {
 	int32_t tap_and_drag;
 	int32_t drag_lock;
 	uint32_t button_map;
-	/* Touchpad-specific parameters. */
+	/* Trackpad-specific parameters. */
 	int32_t trackpad_left_handed;
 	int32_t trackpad_middle_button_emulation;
 	int32_t trackpad_disable_while_typing;
@@ -434,7 +441,6 @@ typedef struct {
 	/* touch */
 	int32_t touch_enable;
 	int32_t touch_enable_mouse_emulation;
-	char *touch_map_to_mon;
 
 	/* window effects */
 	int32_t blur;
@@ -451,6 +457,9 @@ typedef struct {
 	int32_t shadows_position_x;
 	int32_t shadows_position_y;
 	float shadowscolor[4];
+	int32_t dim_enable;
+	float dim_focused_color[4];
+	float dim_unfocused_color[4];
 
 	/* appearance */
 	int32_t smartgaps;
@@ -592,6 +601,8 @@ int32_t parse_circle_direction(const char *str);
 
 int32_t parse_direction(const char *str);
 
+int32_t parse_monitor_arg(const char *str);
+
 int32_t parse_force(const char *str);
 
 int32_t parse_fold_state(const char *str);
@@ -601,6 +612,11 @@ int64_t parse_color(const char *hex_str);
 uint32_t parse_mod(const char *mod_str);
 
 void cleanup_config_keymap(void);
+
+int32_t find_keycodes_for_keysym(struct xkb_keymap *keymap, xkb_keysym_t sym,
+								 MultiKeycode *multi_kc);
+
+int32_t find_keycodes_for_char(char c_char, MultiKeycode *multi_kc);
 
 KeySymCode parse_key(const char *key_str, bool isbindsym);
 
@@ -672,7 +688,7 @@ void reset_option(void);
 
 void reset_tag(int old_tag_num);
 
-void reload_config(const Arg *arg);
+int32_t reload_config(const Arg *arg);
 
 void tag_slot_set_defaults(Monitor *m, uint32_t tag);
 

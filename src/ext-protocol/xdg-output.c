@@ -1,6 +1,7 @@
 #include "mango/ext-protocol/xdg-output.h"
 #include "mango/common/server.h"
 #include "mango/config/parse_config.h"
+#include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
@@ -65,11 +66,17 @@ void xdg_output_get_values(struct MangoXDGOutput *output, int32_t *lx,
 	*lw = w;
 	*lh = h;
 
-	// xwayland-scaled coordinates must be mapped back to actual physical
-	// monitor coordinates to trick XWayland apps into thinking they are still
-	// at their original physical resolution.
-	*px = (int32_t)roundf(x * scale);
-	*py = (int32_t)roundf(y * scale);
+	/*
+	 * XWayland coordinates are physical (logical * scale) and relative to the
+	 * top-left corner of the layout, so the X11 screen has no dead space and
+	 * the root origin matches the top-left monitor.
+	 */
+	int32_t ox = 0, oy = 0;
+#ifdef XWAYLAND
+	xwayland_screen_origin(&ox, &oy);
+#endif
+	*px = (int32_t)roundf((x - ox) * scale);
+	*py = (int32_t)roundf((y - oy) * scale);
 	*pw = tw; // Uses the physical resolution width/height directly.
 	*ph = th;
 }
@@ -79,20 +86,30 @@ void xdg_output_send_details(struct MangoXDGOutput *output,
 	xdg_output_get_values(output, &lx, &ly, &lw, &lh, &px, &py, &pw, &ph);
 
 	int32_t x, y, w, h;
-	if (xdg_output_resource_is_xwayland(resource) &&
-		config.xwayland_ignore_scale) {
-		/*
-		 * Tricks XWayland: mango places X11 windows in a physical coordinate
-		 * space of logical*scale, so tell XWayland the screen origin is at
-		 * logical*scale and the rectangle is physical (rotation-aware).
-		 */
-		x = px;
-		y = py;
-		w = pw;
-		h = ph;
+	if (xdg_output_resource_is_xwayland(resource)) {
+		int32_t ox = 0, oy = 0;
+#ifdef XWAYLAND
+		xwayland_screen_origin(&ox, &oy);
+#endif
+		if (config.xwayland_ignore_scale) {
+			/*
+			 * Tricks XWayland: mango places X11 windows in a physical
+			 * coordinate space of logical*scale, so tell XWayland the screen is
+			 * physical (rotation-aware). px/py already are relative to the
+			 * layout origin.
+			 */
+			x = px;
+			y = py;
+			w = pw;
+			h = ph;
+		} else {
+			/* xwayland_ignore_scale=0: X11 uses logical sizes. */
+			x = lx - ox;
+			y = ly - oy;
+			w = lw;
+			h = lh;
+		}
 	} else {
-		/* xwayland_ignore_scale=0: use logical coordinates like normal clients.
-		 */
 		x = lx;
 		y = ly;
 		w = lw;

@@ -10,8 +10,10 @@
 #include "mango/manage/monitor.h"
 
 #include <ctype.h>
+#include <drm_fourcc.h>
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/session.h>
+#include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_drm_lease_v1.h>
@@ -21,6 +23,7 @@
 #include <wlr/types/wlr_idle_inhibit_v1.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_session_lock_v1.h>
@@ -540,10 +543,89 @@ void handle_session_destroy(struct wl_listener *listener, void *data) {
 	free(tracker);
 }
 
+/*
+ * wlroots announces a single SHM format for capture sources, the renderer's
+ * preferred read format (RGBx on GLES2). Clients that only accept the BGR
+ * family cannot negotiate it, so announce those variants as well.
+ */
+static bool capture_source_format_supported(struct wlr_renderer *renderer,
+											uint32_t format) {
+	const struct wlr_drm_format_set *formats =
+		wlr_renderer_get_texture_formats(renderer, WLR_BUFFER_CAP_DATA_PTR);
+	if (formats == NULL) {
+		return false;
+	}
+
+	for (size_t i = 0; i < formats->len; i++) {
+		if (formats->formats[i].format == format) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+capture_source_add_shm_format(struct wlr_ext_image_capture_source_v1 *source,
+							  uint32_t format) {
+	for (size_t i = 0; i < source->shm_formats_len; i++) {
+		if (source->shm_formats[i] == format) {
+			return false;
+		}
+	}
+
+	uint32_t *formats = realloc(
+		source->shm_formats, (source->shm_formats_len + 1) * sizeof(*formats));
+	if (formats == NULL) {
+		mango_error(true, WLR_ERROR,
+					"Failed to allocate capture source shm formats");
+		return false;
+	}
+
+	formats[source->shm_formats_len] = format;
+	source->shm_formats = formats;
+	source->shm_formats_len++;
+	return true;
+}
+
+static void capture_session_announce_bgr_shm_formats(
+	struct wlr_ext_image_copy_capture_session_v1 *session) {
+	struct wlr_ext_image_capture_source_v1 *source = session->source;
+	if (source == NULL) {
+		return;
+	}
+
+	struct wlr_output *output =
+		wlr_output_try_from_ext_image_capture_source_v1(source);
+	struct wlr_renderer *renderer = output != NULL && output->renderer != NULL
+										? output->renderer
+										: server.renderer;
+	if (renderer == NULL) {
+		return;
+	}
+
+	const uint32_t bgr_formats[] = {DRM_FORMAT_XRGB8888, DRM_FORMAT_ARGB8888};
+	bool updated = false;
+	for (size_t i = 0; i < sizeof(bgr_formats) / sizeof(bgr_formats[0]); i++) {
+		if (!capture_source_format_supported(renderer, bgr_formats[i])) {
+			continue;
+		}
+		if (capture_source_add_shm_format(source, bgr_formats[i])) {
+			updated = true;
+		}
+	}
+
+	if (updated) {
+		/* Let the clients of this source know about the new formats. */
+		wl_signal_emit_mutable(&source->events.constraints_update, NULL);
+	}
+}
+
 // Callback when a new capture session is created.
 void handle_ext_image_copy_capture_new_session(struct wl_listener *listener,
 											   void *data) {
 	struct wlr_ext_image_copy_capture_session_v1 *capture_session = data;
+
+	capture_session_announce_bgr_shm_formats(capture_session);
 
 	struct capture_session_tracker *tracker = calloc(1, sizeof(*tracker));
 	if (!tracker) {
@@ -604,7 +686,7 @@ void handle_request_set_primary_selection(struct wl_listener *listener,
 										  void *data) {
 	/* This event is raised by the seat when a client wants to set the
 	 * selection, usually when the user copies something. wlroots allows
-	 * compositors to ignore such requests if they so choose, but in dwl we
+	 * compositors to ignore such requests if they so choose, but in mango we
 	 * always honor
 	 */
 	struct wlr_seat_request_set_primary_selection_event *event = data;
@@ -614,15 +696,30 @@ void handle_request_set_primary_selection(struct wl_listener *listener,
 void handle_request_set_selection(struct wl_listener *listener, void *data) {
 	/* This event is raised by the seat when a client wants to set the
 	 * selection, usually when the user copies something. wlroots allows
-	 * compositors to ignore such requests if they so choose, but in dwl we
+	 * compositors to ignore such requests if they so choose, but in mango we
 	 * always honor
 	 */
 	struct wlr_seat_request_set_selection_event *event = data;
 	wlr_seat_set_selection(server.seat, event->source, event->serial);
 }
 
+static bool client_keep_idle_inhibit(Client *c) {
+	if (!c || !c->mon)
+		return false;
+
+	if (c->idleinhibit_when_focus)
+		return true;
+
+	if (config.idleinhibit_when_fullscreen && c->isfullscreen &&
+		VISIBLEON(c, c->mon)) {
+		return true;
+	}
+
+	return false;
+}
+
 void check_keep_idle_inhibit(Client *c) {
-	if (c && c->idleinhibit_when_focus && server.keep_idle_inhibit_source) {
+	if (server.keep_idle_inhibit_source && client_keep_idle_inhibit(c)) {
 		wl_event_source_timer_update(server.keep_idle_inhibit_source, 1000);
 	}
 }
@@ -638,8 +735,8 @@ int32_t idle_keep_inhibit(void *data) {
 		return 1;
 	}
 
-	if (!server.selected_monitor || !server.selected_monitor->sel ||
-		!server.selected_monitor->sel->idleinhibit_when_focus) {
+	if (!server.selected_monitor ||
+		!client_keep_idle_inhibit(server.selected_monitor->sel)) {
 		wl_event_source_timer_update(server.keep_idle_inhibit_source, 0);
 		return 1;
 	}

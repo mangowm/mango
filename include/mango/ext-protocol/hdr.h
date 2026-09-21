@@ -23,6 +23,6 @@ void output_state_setup_hdr(Monitor *m, bool silent,
 							struct wlr_output_state *state);
 /* togglehdr[,on|off|toggle][,<monitor name>|all] -- apply to one output */
 bool togglehdr_output(Monitor *target, bool want);
-void toggle_hdr(const Arg *arg);
+int32_t toggle_hdr(const Arg *arg);
 
 #endif

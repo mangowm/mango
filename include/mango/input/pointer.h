@@ -23,6 +23,7 @@ enum { AxisUp, AxisDown, AxisLeft, AxisRight };
 typedef struct PointerConstraint {
 	struct wlr_pointer_constraint_v1 *constraint;
 	struct wl_listener destroy;
+	struct wl_listener commit;
 } PointerConstraint;
 
 struct LastCursor {
@@ -50,6 +51,7 @@ void configure_pointer(struct wlr_input_device *wlr_device,
 					   struct libinput_device *device);
 void pointer_create(struct wlr_pointer *pointer);
 void handle_new_pointer_constraint(struct wl_listener *listener, void *data);
+void handle_pointer_constraint_commit(struct wl_listener *listener, void *data);
 void pointer_constrain_cursor(struct wlr_pointer_constraint_v1 *constraint);
 void handle_cursor_frame(struct wl_listener *listener, void *data);
 void pointer_warp_to_constraint_hint(void);
@@ -57,7 +59,9 @@ void handle_drag_icon_destroy(struct wl_listener *listener, void *data);
 void handle_pointer_constraint_destroy(struct wl_listener *listener,
 									   void *data);
 void handle_cursor_motion_absolute(struct wl_listener *listener, void *data);
-void pointer_resize_floating_window(Client *gc);
+void pointer_resize_floating_window(Client *gc, double x, double y);
+bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y);
+void pointer_end_grab_client(bool follow_pointer);
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,
 							double dy_unaccel);

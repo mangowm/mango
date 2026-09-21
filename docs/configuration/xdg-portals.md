@@ -18,7 +18,9 @@ To enable screen sharing (OBS, Discord, WebRTC), you need `xdg-desktop-portal-wl
 
 1. **Install Dependencies**
 
-   `pipewire`, `pipewire-pulse`, `xdg-desktop-portal-wlr`
+   `pipewire`, `pipewire-pulse`, `xdg-desktop-portal-wlr`, `rofi`
+
+   > **Note:** `xdg-desktop-portal-wlr` has no picker of its own. When an application asks to share a screen, it launches an external one and tries `slurp`, `wmenu`, `wofi`, `rofi`, `bemenu`, `mew` and `fuzzel` in that order. If none of them is installed the picker never appears and sharing just fails, so install at least one of them (`rofi` is the common choice). This is not needed if you skip the picker as described below.
 
 2. **Optional: Add to autostart**
 
@@ -31,6 +33,23 @@ To enable screen sharing (OBS, Discord, WebRTC), you need `xdg-desktop-portal-wl
 3. **Restart your computer** to apply changes.
 
 ### Known Issues
+
+- **Tencent Meeting asks for a screen but nothing happens:** `xdg-desktop-portal-wlr` opens its chooser during `SelectSources()` and only replies once you picked something, while Tencent Meeting calls `Start()` immediately and never waits for that reply. The portal frontend then rejects the start with `Sources not selected`, so the picker closes without sharing anything. Pick a fixed output and skip the chooser:
+
+  ```ini
+  # ~/.config/xdg-desktop-portal-wlr/config
+  [screencast]
+  output_name=eDP-1
+  chooser_type=none
+  ```
+
+  Replace `eDP-1` with your output name (see `mmsg get all-monitors`). The configuration is only read when the portal starts, so restart it afterwards (a re-login or reboot works too):
+
+  ```bash
+  systemctl --user restart xdg-desktop-portal-wlr
+  ```
+
+  This applies to every application: screen sharing always captures that output and never asks. Applications that do wait for the reply (OBS, Firefox, Chromium) also work with the default chooser, so only add this if you need it. Tencent Meeting additionally only gets the first share attempt per app start right, so restart it before sharing.
 
 - **Window screen sharing:** Some applications may have issues sharing individual windows. See [#184](https://github.com/mangowm/mango/pull/184) for workarounds.
 

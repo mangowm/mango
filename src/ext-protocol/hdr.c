@@ -207,7 +207,7 @@ bool togglehdr_output(Monitor *target, bool want) {
 									&target->m.height);
 	return true;
 }
-void toggle_hdr(const Arg *arg) {
+int32_t toggle_hdr(const Arg *arg) {
 	// arg->i: 1 = on, 0 = off, -1 = toggle (also the default when no argument
 	// was given, so a bare `togglehdr` binding does the obvious thing).
 	if (arg->v && strcmp(arg->v, "all") == 0) {
@@ -231,7 +231,7 @@ void toggle_hdr(const Arg *arg) {
 		}
 
 		wl_list_for_each(m, &server.monitors, link) togglehdr_output(m, want);
-		return;
+		return 0;
 	}
 
 	Monitor *m = NULL, *target = NULL;
@@ -246,16 +246,17 @@ void toggle_hdr(const Arg *arg) {
 		}
 		if (!target) {
 			wlr_log(WLR_ERROR, "togglehdr: no enabled output named %s", arg->v);
-			return;
+			return 0;
 		}
 	} else {
 		target = server.selected_monitor;
 	}
 
 	if (!target)
-		return;
+		return 0;
 
 	togglehdr_output(target, arg->i < 0 ? !target->hdr_enable : (arg->i != 0));
+	return 0;
 }
 
 static uint32_t output_formats_8bit[] = {

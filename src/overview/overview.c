@@ -238,7 +238,7 @@ void overview_update_jump_label(Client *c) {
 		!c->mon->isoverview || !c->mon->is_jump_mode || !c->jump_char)
 		return;
 
-	struct wlr_scene_node *label = &c->jump_label_node->scene_buffer->node;
+	struct wlr_scene_node *label = &c->jump_label_node->scene->node;
 	int32_t lw = c->jump_label_node->logical_width;
 	int32_t lh = c->jump_label_node->logical_height;
 	if (lw <= 0 || lh <= 0) {
@@ -317,8 +317,8 @@ void overview_backup_surface(Client *c) {
 
 	// The card tree is created at the scene top; enabled jump labels are raised
 	// above the cards.
-	if (c->jump_label_node && c->jump_label_node->scene_buffer->node.enabled)
-		wlr_scene_node_raise_to_top(&c->jump_label_node->scene_buffer->node);
+	if (c->jump_label_node && c->jump_label_node->scene->node.enabled)
+		wlr_scene_node_raise_to_top(&c->jump_label_node->scene->node);
 
 	overview_layout_card(c);
 

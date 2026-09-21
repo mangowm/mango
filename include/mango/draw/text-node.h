@@ -4,11 +4,15 @@
 #include <cairo.h>
 #include <pango/pango.h>
 #include <pango/pangocairo.h>
-#include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-// Original struct, assumed to already exist.
+#if defined(__has_include) && __has_include(<scenefx/types/wlr_scene.h>)
+#include <scenefx/types/wlr_scene.h>
+#else
+#include <wlr/types/wlr_scene.h>
+#endif
+
 typedef struct {
 	float fg_color[4];
 	float bg_color[4];
@@ -26,11 +30,22 @@ struct mango_text_buffer {
 	struct wlr_buffer base;
 	cairo_surface_t *surface;
 };
+
+struct mango_text_measure {
+	cairo_surface_t *surface;
+	cairo_t *cr;
+	PangoContext *context;
+	PangoLayout *layout;
+	float scale;
+};
+
 typedef struct MangoJumpLabel {
+	struct wlr_scene_tree *scene;
+	struct wlr_scene_rect *border;
+	struct wlr_scene_rect *bg;
 	struct wlr_scene_buffer *scene_buffer;
 	struct mango_text_buffer *buffer;
-	cairo_surface_t *surface;
-	int surface_pixel_w, surface_pixel_h;
+	struct mango_text_measure measure;
 
 	float fg_color[4];
 	float bg_color[4];
@@ -43,43 +58,32 @@ typedef struct MangoJumpLabel {
 	int32_t padding_y;
 	char *font_desc;
 
-	// Cache
 	char *cached_text;
 	char *cached_font_desc;
 	float cached_scale;
 	float cached_fg_color[4];
-	float cached_bg_color[4];
-	float cached_focus_fg_color[4];
-	float cached_focus_bg_color[4];
-	float cached_border_color[4];
-	int32_t cached_border_width;
-	int32_t cached_corner_radius;
-	int32_t cached_padding_x;
-	int32_t cached_padding_y;
 	bool cached_focused;
+	int32_t surface_pixel_w;
+	int32_t surface_pixel_h;
 
 	bool focused;
 
-	// Measurement
-	cairo_surface_t *measure_surface;
-	cairo_t *measure_cr;
-	PangoContext *measure_context;
-	PangoLayout *measure_layout;
-	float measure_scale;
-
+	int32_t text_logical_w;
+	int32_t text_logical_h;
 	int32_t logical_width;
 	int32_t logical_height;
 } MangoJumpLabel;
 
 typedef struct MangoGroupBar {
-	uint32_t type; // must at first in struct
+	uint32_t type;
+	struct wlr_scene_tree *scene;
+	struct wlr_scene_rect *border;
+	struct wlr_scene_rect *bg;
 	struct wlr_scene_buffer *scene_buffer;
 	struct mango_text_buffer *buffer;
-	cairo_surface_t *surface;
-	int surface_pixel_w, surface_pixel_h;
-	void *node_data; // Stores the window pointer
+	void *node_data;
+	struct mango_text_measure measure;
 
-	// Initial config
 	float fg_color[4];
 	float bg_color[4];
 	float focus_fg_color[4];
@@ -91,40 +95,25 @@ typedef struct MangoGroupBar {
 	int32_t padding_y;
 	char *font_desc;
 
-	// Dimensions
 	int32_t target_width;
 	int32_t target_height;
 
-	// Cache
 	char *cached_text;
 	char *cached_font_desc;
 	float cached_scale;
 	float cached_fg_color[4];
-	float cached_bg_color[4];
-	float cached_focus_fg_color[4];
-	float cached_focus_bg_color[4];
-	float cached_border_color[4];
-	int32_t cached_border_width;
-	int32_t cached_corner_radius;
-	int32_t cached_padding_x;
-	int32_t cached_padding_y;
-	int32_t cached_target_width;
-	int32_t cached_target_height;
 	bool cached_focused;
+	int32_t cached_clip_pixel_w;
+	int32_t surface_pixel_w;
+	int32_t surface_pixel_h;
 
 	bool focused;
 
-	// Last draw parameters (used to redraw on size changes)
 	char *last_text;
 	float last_scale;
 
-	// Measurement
-	cairo_surface_t *measure_surface;
-	cairo_t *measure_cr;
-	PangoContext *measure_context;
-	PangoLayout *measure_layout;
-	float measure_scale;
-
+	int32_t text_logical_w;
+	int32_t text_logical_h;
 	int32_t logical_width;
 	int32_t logical_height;
 } MangoGroupBar;

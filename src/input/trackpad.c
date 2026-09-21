@@ -65,7 +65,10 @@ static bool fire_gesture_motion(uint32_t motion, uint32_t fingers) {
 			 (g->isdefaultmode && server.key_mode.isdefault) ||
 			 (strcmp(server.key_mode.mode, g->mode) == 0)) &&
 			CLEANMASK(mods) == CLEANMASK(g->mod) &&
-			fingers == g->fingers_count && motion == g->motion && g->func) {
+			fingers == g->fingers_count && g->func &&
+			(g->motion == ALLDIR || motion == g->motion)) {
+			if (g->func == move_resize)
+				continue;
 			g->func(&g->arg);
 			handled = true;
 		}
@@ -85,11 +88,13 @@ static uint32_t swipe_opposite_motion(uint32_t motion) {
 }
 
 #define SWIPE_LOCK_DISTANCE 16
+#define SWIPE_FLICK_MAX_MS 200
 
 struct SwipeDrive {
 	bool active;
 	bool consumed;
 	bool pan;
+	bool drag;
 	Monitor *mon;
 	uint32_t fingers;
 	Client *start_sel;
@@ -99,8 +104,12 @@ struct SwipeDrive {
 	double prev_axis;
 	double avg_speed;
 	uint32_t speed_points;
+	uint32_t first_time;
+	uint32_t last_time;
+	double drag_prev_dx;
+	double drag_prev_dy;
 	uint32_t motion;
-	void (*func)(const Arg *);
+	int32_t (*func)(const Arg *);
 	Arg arg;
 };
 
@@ -109,7 +118,11 @@ static bool swipe_active;
 static bool swipe_locked;
 static bool swipe_horizontal;
 
-static void (*view_opposite_func(void (*func)(const Arg *)))(const Arg *) {
+bool trackpad_gesture_drag_active(void) {
+	return swipe_active && swipe_drive.drag && swipe_drive.active;
+}
+
+static FuncType view_opposite_func(FuncType func) {
 	if (func == view_to_left)
 		return view_to_right;
 	if (func == view_to_right)
@@ -125,11 +138,11 @@ static void (*view_opposite_func(void (*func)(const Arg *)))(const Arg *) {
 	return NULL;
 }
 
-static bool swipe_func_is_view(void (*func)(const Arg *)) {
+static bool swipe_func_is_view(FuncType func) {
 	return view_opposite_func(func) != NULL;
 }
 
-static bool swipe_func_is_overview(void (*func)(const Arg *)) {
+static bool swipe_func_is_overview(FuncType func) {
 	return func == toggle_overview || func == enter_overview ||
 		   func == leave_overview;
 }
@@ -153,8 +166,11 @@ static bool swipe_layout_is_scroller(Monitor *m, bool *vertical) {
 	return false;
 }
 
-static bool swipe_func_drivable(void (*func)(const Arg *), const Arg *arg,
-								uint32_t motion, Monitor *m) {
+static bool swipe_func_drivable(FuncType func, const Arg *arg, uint32_t motion,
+								Monitor *m) {
+	if (func == move_resize)
+		return true;
+
 	if (swipe_func_is_view(func))
 		return true;
 
@@ -198,7 +214,8 @@ static bool swipe_find_binding(uint32_t motion, uint32_t fingers,
 			 (g->isdefaultmode && server.key_mode.isdefault) ||
 			 (strcmp(server.key_mode.mode, g->mode) == 0)) &&
 			CLEANMASK(mods) == CLEANMASK(g->mod) &&
-			fingers == g->fingers_count && motion == g->motion && g->func) {
+			fingers == g->fingers_count && g->func &&
+			(g->motion == ALLDIR || motion == g->motion)) {
 			if (out)
 				*out = g;
 			return true;
@@ -271,50 +288,6 @@ static double swipe_drive_axis(void) {
 static void swipe_drive_apply(Monitor *m, double p) {
 	Client *c = NULL;
 
-	if (swipe_func_is_view(swipe_drive.func)) {
-		double extent = swipe_horizontal ? m->w.width : m->w.height;
-		int dir = (swipe_drive.motion == SWIPE_RIGHT ||
-				   swipe_drive.motion == SWIPE_DOWN)
-					  ? 1
-					  : -1;
-		int32_t shift = (int32_t)llround(p * dir * extent);
-		int32_t entry = (int32_t)llround((p - 1.0) * dir * extent);
-
-		wl_list_for_each(c, &server.clients, link) {
-			if (c->mon != m || !c->animation.running || !c->need_output_flush)
-				continue;
-			if (c->animation.action != TAG && c->animation.action != MOVE &&
-				c->animation.action != OVERVIEW && !c->animation.tagining &&
-				!c->animation.tagouting)
-				continue;
-
-			struct wlr_box box;
-			if (c->animation.tagouting) {
-				box = c->animation.initial;
-				if (swipe_horizontal)
-					box.x += shift;
-				else
-					box.y += shift;
-			} else if (c->animation.tagining) {
-				box = c->current;
-				if (swipe_horizontal)
-					box.x += entry;
-				else
-					box.y += entry;
-			} else {
-				client_animation_set_progress(c, p);
-				continue;
-			}
-
-			wlr_scene_node_set_position(&c->scene->node, box.x, box.y);
-			c->animation.current = box;
-			client_apply_clip(c, 1.0f);
-		}
-
-		request_fresh_all_monitors();
-		return;
-	}
-
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon != m || !c->animation.running || !c->need_output_flush)
 			continue;
@@ -324,6 +297,7 @@ static void swipe_drive_apply(Monitor *m, double p) {
 			continue;
 		client_animation_set_progress(c, p);
 	}
+
 	request_fresh_all_monitors();
 }
 
@@ -429,9 +403,52 @@ static double swipe_drive_pan_offset(Monitor *m, double raw) {
 	return raw;
 }
 
+static bool swipe_drive_pan_flick_target(Monitor *m, double dir,
+										 double *out_offset, Client **out) {
+	if (!m || !m->sel)
+		return false;
+
+	bool horizontal = swipe_horizontal;
+	double mon_origin = horizontal ? m->w.x : m->w.y;
+	double mon_center = (horizontal ? m->w.width : m->w.height) / 2.0;
+	double sel_center = horizontal ? m->sel->geom.x + m->sel->geom.width / 2.0
+								   : m->sel->geom.y + m->sel->geom.height / 2.0;
+	double base_offset = mon_center - (sel_center - mon_origin);
+
+	Client *best = NULL;
+	double best_delta = 0;
+	double best_offset = 0;
+	Client *c = NULL;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m || !VISIBLEON(c, m) || !ISSCROLLTILED(c) || c == m->sel)
+			continue;
+
+		double center = horizontal ? c->geom.x + c->geom.width / 2.0
+								   : c->geom.y + c->geom.height / 2.0;
+		double offset = mon_center - (center - mon_origin);
+		double delta = (offset - base_offset) * dir;
+		if (delta <= 0)
+			continue;
+		if (!best || delta < best_delta) {
+			best = c;
+			best_delta = delta;
+			best_offset = offset;
+		}
+	}
+
+	if (!best)
+		return false;
+
+	if (out_offset)
+		*out_offset = best_offset;
+	if (out)
+		*out = best;
+	return true;
+}
+
 static bool swipe_drive_begin(uint32_t fingers) {
 	Monitor *m = server.selected_monitor;
-	if (!m || !config.gesture_live)
+	if (!m)
 		return false;
 	Client *sel_before = m->sel;
 
@@ -444,8 +461,12 @@ static bool swipe_drive_begin(uint32_t fingers) {
 		!swipe_func_drivable(binding->func, &binding->arg, motion, m))
 		return false;
 
-	void (*exec_func)(const Arg *) = binding->func;
+	FuncType exec_func = binding->func;
 	Arg exec_arg = binding->arg;
+
+	bool drag = exec_func == move_resize;
+	if (!config.gesture_live && !drag)
+		return false;
 
 	swipe_drive.consumed = true;
 	swipe_drive.mon = m;
@@ -458,7 +479,27 @@ static bool swipe_drive_begin(uint32_t fingers) {
 	swipe_drive.arg = exec_arg;
 	swipe_drive.active = false;
 	swipe_drive.pan = false;
+	swipe_drive.drag = false;
 	swipe_drive.start_sel = sel_before;
+
+	if (drag) {
+		Client *target = m->sel;
+
+		if (!pointer_begin_move_resize(target, exec_arg.ui, server.cursor->x,
+									   server.cursor->y)) {
+			swipe_drive.consumed = false;
+			swipe_drive_log_state(m, "drag: no window to move", false,
+								  sel_before);
+			return false;
+		}
+
+		swipe_drive.drag = true;
+		swipe_drive.active = true;
+		swipe_drive.drag_prev_dx = server.swipe_dx;
+		swipe_drive.drag_prev_dy = server.swipe_dy;
+		swipe_drive_log_state(m, "dragging window", false, sel_before);
+		return true;
+	}
 
 	if (exec_func == focus_direction) {
 		swipe_drive.base = axis;
@@ -502,7 +543,7 @@ static bool swipe_drive_fire_opposite(void) {
 		return false;
 
 	if (swipe_func_is_view(swipe_drive.func)) {
-		void (*opposite)(const Arg *) = view_opposite_func(swipe_drive.func);
+		FuncType opposite = view_opposite_func(swipe_drive.func);
 		if (!opposite)
 			return false;
 		opposite(&swipe_drive.arg);
@@ -536,10 +577,33 @@ static bool swipe_drive_fire_opposite(void) {
 	return true;
 }
 
+static void swipe_drive_apply_drag(Monitor *m, uint32_t time) {
+	double distance = config.gesture_swipe_distance;
+	double scale_x, scale_y;
+	double dx, dy;
+
+	if (!server.grab_client || !m || distance <= 0)
+		return;
+
+	scale_x = (double)m->w.width / distance;
+	scale_y = (double)m->w.height / distance;
+
+	dx = (server.swipe_dx - swipe_drive.drag_prev_dx) * scale_x;
+	dy = (server.swipe_dy - swipe_drive.drag_prev_dy) * scale_y;
+	swipe_drive.drag_prev_dx = server.swipe_dx;
+	swipe_drive.drag_prev_dy = server.swipe_dy;
+
+	if (dx == 0.0 && dy == 0.0)
+		return;
+
+	pointer_process_motion(time, NULL, dx, dy, dx, dy);
+	request_fresh_all_monitors();
+}
+
 /* Advance the driven transition on every swipe update.  Returns true when the
  * compositor took over the gesture. */
-static bool swipe_drive_update(uint32_t fingers) {
-	if (!swipe_active || !config.gesture_live)
+static bool swipe_drive_update(uint32_t fingers, uint32_t time) {
+	if (!swipe_active)
 		return false;
 
 	double adx = fabs(server.swipe_dx);
@@ -549,7 +613,6 @@ static bool swipe_drive_update(uint32_t fingers) {
 			return false;
 		swipe_locked = true;
 		swipe_horizontal = adx >= ady;
-		swipe_drive.prev_axis = swipe_drive_axis();
 	}
 
 	double axis = swipe_drive_axis();
@@ -559,7 +622,10 @@ static bool swipe_drive_update(uint32_t fingers) {
 		swipe_drive.avg_speed =
 			(swipe_drive.avg_speed * swipe_drive.speed_points + step) /
 			(swipe_drive.speed_points + 1);
+		if (swipe_drive.speed_points == 0)
+			swipe_drive.first_time = time;
 		swipe_drive.speed_points++;
+		swipe_drive.last_time = time;
 	}
 
 	if (!swipe_drive.active) {
@@ -569,6 +635,12 @@ static bool swipe_drive_update(uint32_t fingers) {
 	}
 
 	Monitor *m = swipe_drive.mon;
+
+	if (swipe_drive.drag) {
+		swipe_drive_apply_drag(m, time);
+		return true;
+	}
+
 	double distance = config.gesture_swipe_distance;
 	double delta = (axis - swipe_drive.base) * swipe_drive.dir;
 	double p = delta / distance;
@@ -588,9 +660,16 @@ static bool swipe_drive_update(uint32_t fingers) {
 
 	if (delta <= -SWIPE_LOCK_DISTANCE) {
 		swipe_drive.base = axis;
+
+		uint32_t tagset_before = m->tagset[m->seltags];
+		bool overview_before = m->isoverview;
+
 		if (!swipe_drive_fire_opposite())
 			return true;
-		if (!swipe_has_running_transition(m)) {
+
+		bool reversed = m->tagset[m->seltags] != tagset_before ||
+						m->isoverview != overview_before;
+		if (!reversed || !swipe_has_running_transition(m)) {
 			swipe_drive.active = false;
 			swipe_drive_unfreeze();
 			return true;
@@ -611,6 +690,16 @@ static bool swipe_drive_update(uint32_t fingers) {
 static void swipe_drive_end(void) {
 	Monitor *m = swipe_drive.mon;
 
+	if (swipe_drive.drag) {
+		pointer_end_grab_client(false);
+		swipe_drive.drag = false;
+		swipe_drive.active = false;
+		swipe_drive.consumed = false;
+		swipe_drive.speed_points = 0;
+		swipe_drive.avg_speed = 0;
+		return;
+	}
+
 	if (swipe_drive.active && m) {
 		if (swipe_drive.pan) {
 			double axis = swipe_drive_axis();
@@ -623,6 +712,23 @@ static void swipe_drive_end(void) {
 
 			Client *target = NULL;
 			swipe_drive_pan_target(m, offset, &target);
+
+			uint32_t dur = swipe_drive.last_time - swipe_drive.first_time;
+			bool speed_hit = swipe_drive.speed_points > 0 &&
+							 swipe_drive.avg_speed >=
+								 config.gesture_swipe_min_speed_to_force;
+			bool quick_hit =
+				swipe_drive.speed_points > 0 && dur <= SWIPE_FLICK_MAX_MS;
+
+			if (target == swipe_drive.start_sel && (speed_hit || quick_hit)) {
+				double dir = raw < 0 ? -1.0 : 1.0;
+				double flick_offset = offset;
+
+				if (swipe_drive_pan_flick_target(m, dir, &flick_offset,
+												 &target))
+					offset = flick_offset;
+			}
+
 			if (target && target != swipe_drive.start_sel) {
 				mango_error(true, WLR_DEBUG,
 							"swipe drive: pan commit, offset=%.0f target=%p\n",
@@ -666,17 +772,18 @@ static void swipe_drive_end(void) {
 		if (p > 1.0)
 			p = 1.0;
 
-		bool commit =
-			swipe_func_is_overview(swipe_drive.func) ||
-			delta >= distance * config.gesture_swipe_cancel_ratio ||
-			(swipe_drive.speed_points > 0 &&
-			 swipe_drive.avg_speed >= config.gesture_swipe_min_speed_to_force);
+		uint32_t dur = swipe_drive.last_time - swipe_drive.first_time;
+		bool commit = swipe_func_is_overview(swipe_drive.func) ||
+					  delta >= distance * config.gesture_swipe_cancel_ratio ||
+					  (swipe_drive.speed_points > 0 &&
+					   (swipe_drive.avg_speed >=
+							config.gesture_swipe_min_speed_to_force ||
+						dur <= SWIPE_FLICK_MAX_MS));
 
 		swipe_drive_unfreeze();
 
 		if (commit) {
 			Client *c = NULL;
-			bool mirror_view = swipe_func_is_view(swipe_drive.func);
 			mango_error(true, WLR_DEBUG,
 						"swipe drive: commit, p=%.2f speed=%.1f\n", p,
 						swipe_drive.avg_speed);
@@ -689,41 +796,7 @@ static void swipe_drive_end(void) {
 					!c->animation.tagouting)
 					continue;
 
-				if (mirror_view &&
-					(c->animation.tagouting || c->animation.tagining)) {
-					double extent = swipe_horizontal ? m->w.width : m->w.height;
-					int dir = (swipe_drive.motion == SWIPE_RIGHT ||
-							   swipe_drive.motion == SWIPE_DOWN)
-								  ? 1
-								  : -1;
-					int32_t shift = (int32_t)llround(dir * extent);
-					double remain = 1.0 - p;
-					if (remain < 0.05)
-						remain = 0.05;
-
-					struct wlr_box target;
-					if (c->animation.tagouting) {
-						target = c->animation.initial;
-						if (swipe_horizontal)
-							target.x += shift;
-						else
-							target.y += shift;
-					} else {
-						target = c->geom;
-					}
-
-					c->animation.initial = c->animation.current;
-					c->current = target;
-					c->pending = target;
-					c->animation.duration = (uint32_t)MANGO_MAX(
-						1, (int32_t)(c->animation.duration * remain));
-					c->animation.time_started = get_now_in_ms();
-					c->animation.action = TAG;
-					c->animation.running = true;
-					c->need_output_flush = true;
-				} else {
-					client_animation_resume(c, 1.0 - p);
-				}
+				client_animation_resume(c, 1.0 - p);
 			}
 			request_fresh_all_monitors();
 			if (!config.animations)
@@ -749,6 +822,8 @@ void handle_cursor_swipe_begin(struct wl_listener *listener, void *data) {
 	if (!trackpad_enabled()) {
 		return;
 	}
+
+	keyboard_cancel_pending_release_bind();
 
 	swipe_drive_unfreeze();
 	swipe_active = true;
@@ -776,7 +851,7 @@ void handle_cursor_swipe_update(struct wl_listener *listener, void *data) {
 	server.swipe_dx += event->dx;
 	server.swipe_dy += event->dy;
 
-	swipe_drive_update(event->fingers);
+	swipe_drive_update(event->fingers, event->time_msec);
 
 	// Forward swipe update event to client
 	wlr_pointer_gestures_v1_send_swipe_update(server.pointer_gestures,
@@ -816,6 +891,8 @@ void handle_cursor_pinch_begin(struct wl_listener *listener, void *data) {
 		return;
 	}
 
+	keyboard_cancel_pending_release_bind();
+
 	// Forward pinch begin event to client
 	wlr_pointer_gestures_v1_send_pinch_begin(
 		server.pointer_gestures, server.seat, event->time_msec, event->fingers);
@@ -852,6 +929,8 @@ void handle_cursor_hold_begin(struct wl_listener *listener, void *data) {
 	if (!trackpad_enabled()) {
 		return;
 	}
+
+	keyboard_cancel_pending_release_bind();
 
 	// Forward hold begin event to client
 	wlr_pointer_gestures_v1_send_hold_begin(

@@ -70,6 +70,26 @@ windowrule=force_tearing:1,title:Counter-Strike 2
 
 ---
 
+### A game ignores the mouse or the cursor is not hidden when using a fullscreen window rule
+
+Some games (Proton/Wine titles) open a short-lived helper window (a splash/loading window showing the app id) before the real game window. A rule like
+
+```ini
+windowrule=isfullscreen:1,appid:steam_app_526870
+```
+
+matches **every** window of that app, including that helper window, so mango forces it to fullscreen as well. The helper window then gets `_NET_WM_STATE_FULLSCREEN` and a resize to the whole monitor, and when the real game window maps mango's "a new tiled window kicks the fullscreen window out of fullscreen" logic un-fullscreens and re-tiles it again. Wine ties its mouse capture and cursor visibility to those window states, so after this churn the game ends up with a broken capture state: the cursor is not hidden, the pointer lock is created and dropped repeatedly, and the game's own cursor and the compositor cursor disagree (e.g. the menu cursor is not where the game thinks it is).
+
+Restrict `isfullscreen` to the real game window with `title:` (the helper window has no title):
+
+```ini
+windowrule=isfullscreen:1,appid:steam_app_526870,title:Satisfactory
+```
+
+Rules match on `appid` **and** `title` when both are given, so only the main window is made fullscreen.
+
+---
+
 ### How do I use pipes `|` in spawn commands?
 
 The standard `spawn` command does not support shell pipes directly. You must use `spawn_shell` instead.

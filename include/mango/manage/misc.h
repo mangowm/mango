@@ -3,6 +3,7 @@
 
 #include "mango/common/types.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 pid_t get_parent_process(pid_t p);

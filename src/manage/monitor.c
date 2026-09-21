@@ -20,6 +20,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
+#include "mango/manage/xwayland_primary.h"
 #include <fcntl.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/wlr_scene.h>
@@ -99,6 +100,24 @@ Monitor *monitor_from_direction(enum wlr_direction dir) {
 			 server.selected_monitor->m.y)))
 		return next->data;
 	return server.selected_monitor;
+}
+
+Monitor *monitor_from_cycle(int32_t dir) {
+	if (!server.selected_monitor)
+		return NULL;
+
+	Monitor *m = server.selected_monitor;
+	int32_t nmons = wl_list_length(&server.monitors);
+
+	for (int32_t i = 0; i < nmons; i++) {
+		if (dir == MON_NEXT)
+			m = wl_container_of(m->link.next, m, link);
+		else
+			m = wl_container_of(m->link.prev, m, link);
+		if (m != server.selected_monitor && m->wlr_output->enabled)
+			return m;
+	}
+	return NULL;
 }
 
 bool is_scroller_layout(Monitor *m) {
@@ -299,6 +318,19 @@ bool match_monitor_spec(char *spec, Monitor *m) {
 	free(serial_rule);
 
 	return match;
+}
+
+Monitor *device_target_monitor(struct wlr_input_device *device) {
+	ConfigDeviceRule *rule = find_device_rule(device);
+	if (rule && rule->monitor[0]) {
+		Monitor *m = NULL;
+		wl_list_for_each(m, &server.monitors, link) {
+			if (match_monitor_spec(rule->monitor, m))
+				return m;
+		}
+	}
+
+	return server.selected_monitor;
 }
 
 bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
@@ -551,6 +583,11 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	Monitor *m = NULL;
 	bool custom_monitor_mode = false;
 
+	if (server.pending_headless_output_name != NULL &&
+		wlr_output_is_headless(wlr_output)) {
+		wlr_output_set_name(wlr_output, server.pending_headless_output_name);
+	}
+
 	if (!wlr_output_init_render(wlr_output, server.allocator, server.renderer))
 		return;
 
@@ -564,6 +601,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 
 	struct wl_event_loop *loop = wl_display_get_event_loop(server.display);
 	m = wlr_output->data = ecalloc(1, sizeof(*m));
+	wlr_output_state_init(&m->pending);
 
 	m->iscleanuping = false;
 	m->skip_frame_timeout =
@@ -725,8 +763,9 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	wlr_scene_output_layout_add_output(server.scene_layout, layout_output,
 									   m->scene_output);
 
-	// Gets the effective resolution.
-	wlr_output_effective_resolution(wlr_output, &m->m.width, &m->m.height);
+	// Gets the position and effective resolution from the layout, replacing the
+	// INT32_MAX "auto placement" sentinel before the nodes below are created.
+	wlr_output_layout_get_box(server.output_layout, wlr_output, &m->m);
 
 	// Adds it to the global monitor list.
 	wl_list_insert(&server.monitors, &m->link);
@@ -841,8 +880,17 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 
 	wlr_color_transform_unref(m->icc_transform);
 	m->icc_transform = NULL;
+	wlr_output_state_finish(&m->pending);
 	free(m->pertag);
 	free(m);
+}
+
+void set_selected_monitor(Monitor *m) {
+	server.selected_monitor = m;
+#ifdef XWAYLAND
+	/* Keep the X11 primary output on the current monitor. */
+	xwayland_primary_set(m);
+#endif
 }
 
 void monitor_close(Monitor *m) {
@@ -861,15 +909,13 @@ void monitor_close(Monitor *m) {
 	}
 
 	if (!nmons) {
-		server.selected_monitor = NULL;
+		set_selected_monitor(NULL);
 	} else if (m == server.selected_monitor) {
+		Monitor *next;
 		do /* don't switch to disabled monitors */
-			server.selected_monitor = wl_container_of(
-				server.monitors.next, server.selected_monitor, link);
-		while (!server.selected_monitor->wlr_output->enabled && i++ < nmons);
-
-		if (!server.selected_monitor->wlr_output->enabled)
-			server.selected_monitor = NULL;
+			next = wl_container_of(server.monitors.next, next, link);
+		while (!next->wlr_output->enabled && i++ < nmons);
+		set_selected_monitor(next->wlr_output->enabled ? next : NULL);
 	}
 
 	wl_list_for_each(c, &server.clients, link) {
@@ -998,7 +1044,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 	wlr_scene_rect_set_size(server.root_bg, server.scene_geometry.width,
 							server.scene_geometry.height);
 
-	/* Make sure the clients are hidden when dwl is locked */
+	/* Make sure the clients are hidden when mango is locked */
 	wlr_scene_node_set_position(&server.locked_bg->node,
 								server.scene_geometry.x,
 								server.scene_geometry.y);
@@ -1078,7 +1124,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 		config_head->state.y = m->m.y;
 
 		if (!server.selected_monitor)
-			server.selected_monitor = m;
+			set_selected_monitor(m);
 	}
 
 	if (server.selected_monitor &&
@@ -1115,6 +1161,12 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 
 	/* Updates xdg-output details after layout changes. */
 	xdg_output_update_all();
+
+#ifdef XWAYLAND
+	/* XWayland's output list may have changed (hotplug or DPMS). Reapply the
+	 * primary output once; the helper itself is single-flight. */
+	xwayland_primary_invalidate();
+#endif
 }
 
 void handle_output_manager_apply(struct wl_listener *listener, void *data) {
@@ -1122,9 +1174,8 @@ void handle_output_manager_apply(struct wl_listener *listener, void *data) {
 	output_manager_apply_or_test(config, 0);
 }
 
-void // 0.7 custom
-output_manager_apply_or_test(struct wlr_output_configuration_v1 *config,
-							 int32_t test) {
+void output_manager_apply_or_test(struct wlr_output_configuration_v1 *config,
+								  int32_t test) {
 	/*
 	 * Called when a client such as wlr-randr requests a change in output
 	 * configuration. This is only one way that the layout can be changed,
@@ -1186,7 +1237,6 @@ output_manager_apply_or_test(struct wlr_output_configuration_v1 *config,
 		wlr_output_configuration_v1_send_failed(config);
 	wlr_output_configuration_v1_destroy(config);
 
-	/* https://codeberg.org/dwl/dwl/issues/577 */
 	handle_output_layout_change(NULL, NULL);
 }
 

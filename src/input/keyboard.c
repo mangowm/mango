@@ -70,7 +70,7 @@ ConfigDeviceRule *find_device_rule(struct wlr_input_device *device) {
 				wlr_libinput_get_device_handle(device);
 			if (libinput_dev &&
 				libinput_device_config_tap_get_finger_count(libinput_dev) > 0)
-				type = "touchpad";
+				type = "trackpad";
 			else
 				type = "pointer";
 		} else {
@@ -546,9 +546,8 @@ void keyboard_group_destroy(struct wl_listener *listener, void *data) {
 	free(group);
 }
 
-int32_t // 17
-keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
-						  xkb_keysym_t sym, uint32_t keycode) {
+int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
+								  xkb_keysym_t sym, uint32_t keycode) {
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
 	 * processing keys, rather than passing them on to the client for its
@@ -603,7 +602,8 @@ keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			else
 				handled = 0;
 
-			k->func(&k->arg);
+			if (k->func(&k->arg))
+				break;
 
 			// only match the first keybind
 			if (!k->isallowconflict)
@@ -612,6 +612,31 @@ keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 	}
 	return handled;
 }
+
+void keyboard_cancel_pending_release_bind(void) {
+	/* Keycodes are always >= 8, so 0 means "no key is eligible for a release
+	 * binding". A held modifier that was already used for something else must
+	 * not act as a modifier-only (tap) release bind. */
+	server.last_hold_keycode = 0;
+}
+
+static Client *keyboard_find_jump_client(Monitor *m, uint32_t keycode) {
+	Client *c;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m)
+			continue;
+
+		if (keycode == c->jump_keycodes.keycode1 ||
+			keycode == c->jump_keycodes.keycode2 ||
+			keycode == c->jump_keycodes.keycode3) {
+			return c;
+		}
+	}
+
+	return NULL;
+}
+
 void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	int32_t i;
 	/* This event is raised when a key is pressed or released. */
@@ -642,6 +667,11 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	const xkb_keysym_t *syms;
 	int32_t nsyms =
 		xkb_state_key_get_syms(group->keyboard->xkb_state, keycode, &syms);
+	if (nsyms > KEYBOARD_MAX_KEYSYMS)
+		nsyms = KEYBOARD_MAX_KEYSYMS;
+	if (nsyms > 0)
+		memcpy(group->keysyms, syms, sizeof(group->keysyms[0]) * nsyms);
+	syms = group->keysyms;
 
 	int32_t handled = 0;
 	uint32_t mods = wlr_keyboard_get_modifiers(group->keyboard);
@@ -690,7 +720,6 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	if (handled && group->keyboard->repeat_info.delay > 0 &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
-		group->keysyms = syms;
 		group->keycode = keycode;
 		group->nsyms = nsyms;
 		wl_event_source_timer_update(group->key_repeat_source,
@@ -705,28 +734,19 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	if (server.selected_monitor && server.selected_monitor->is_jump_mode &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-		for (i = 0; i < nsyms; i++) {
+		Monitor *m = server.selected_monitor;
+
+		for (i = 0; i < nsyms; i++)
 			if (syms[i] == XKB_KEY_Escape) {
 				toggle_jump(&(Arg){0});
 				return;
 			}
-			// Converts the keysym to a character and matches it against
-			// jump_labels (letters ignore case).
-			uint32_t cp = xkb_keysym_to_utf32(syms[i]);
-			if (!cp || cp >= 0x80)
-				continue;
-			char c_char = (char)cp;
-			Client *c;
-			wl_list_for_each(c, &server.clients, link) {
-				if (c->mon == server.selected_monitor && c->jump_char != '\0' &&
-					(c_char == c->jump_char ||
-					 toupper((unsigned char)c_char) ==
-						 toupper((unsigned char)c->jump_char))) {
-					client_focus(c, 1);
-					toggle_overview(&(Arg){.tc = c});
-					return;
-				}
-			}
+
+		Client *target = keyboard_find_jump_client(m, keycode);
+		if (target != NULL) {
+			client_focus(target, 1);
+			toggle_overview(&(Arg){.tc = target});
+			return;
 		}
 	}
 

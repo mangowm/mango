@@ -452,12 +452,12 @@ void switcher_cycle(int dir) {
 	switcher_apply_highlight();
 }
 
-void switcher(const Arg *arg) {
+int32_t switcher(const Arg *arg) {
 	int dir = arg && arg->i == PREV ? -1 : 1;
 	int scope = arg ? arg->i2 : SW_CURRENT_TAG;
 	if (server.session_locked || !server.selected_monitor ||
 		server.selected_monitor->is_jump_mode)
-		return;
+		return 0;
 	if (switcher_is_active()) {
 		if (scope != switcher_state.scope) {
 			switcher_close();
@@ -468,6 +468,7 @@ void switcher(const Arg *arg) {
 	} else {
 		switcher_open(scope, dir);
 	}
+	return 0;
 }
 bool switcher_is_active(void) { return switcher_state.tree != NULL; }
 

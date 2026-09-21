@@ -1,6 +1,7 @@
 #include "mango/layout/dwindle.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/layout/arrange.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <wlr/types/wlr_cursor.h>
@@ -326,16 +327,60 @@ void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 	}
 }
 
-void dwindle_move_client(DwindleNode **root, Client *c, Client *target,
-						 float ratio, int32_t dir) {
-	if (!c || !target || c == target)
+void dwindle_move_next_to(Client *c, Client *target, float ratio, int32_t dir) {
+	if (!c || !c->mon || c == target)
 		return;
-	if (!dwindle_find_leaf(*root, c) || !dwindle_find_leaf(*root, target))
+
+	if (!target) {
+		client_jump_to_monitor(c, monitor_from_direction(dir), dir);
 		return;
+	}
+
+	bool crossed = c->mon != target->mon;
+	int32_t c_cx = c->geom.x + c->geom.width / 2;
+	int32_t c_cy = c->geom.y + c->geom.height / 2;
+	struct wlr_box tgeom = target->geom;
+
+	if (!client_jump_to_monitor(c, target->mon, dir) && c->mon != target->mon)
+		return;
+
+	Monitor *m = c->mon;
+	DwindleNode **root = &m->pertag->dwindle_root[get_mon_curtag(m)];
+	DwindleNode *c_leaf = dwindle_find_leaf(*root, c);
+	DwindleNode *target_leaf = dwindle_find_leaf(*root, target);
+	if (!c_leaf || !target_leaf)
+		return;
+
+	if (!crossed && c_leaf->parent && c_leaf->parent == target_leaf->parent) {
+		DwindleNode *split = c_leaf->parent;
+		DwindleNode *first = split->first;
+		split->first = split->second;
+		split->second = first;
+		arrange(m, false, false);
+		return;
+	}
+
+	struct wlr_box area = tgeom;
+	DwindleNode *parent = c_leaf->parent;
+	if (!crossed && parent) {
+		DwindleNode *sibling =
+			(parent->first == c_leaf) ? parent->second : parent->first;
+		if (parent->container_w > 0 && parent->container_h > 0 &&
+			dwindle_find_leaf(sibling, target)) {
+			area.x = parent->container_x;
+			area.y = parent->container_y;
+			area.width = parent->container_w;
+			area.height = parent->container_h;
+		}
+	}
+
+	bool split_h = area.width >= area.height;
+	bool as_first = split_h ? c_cx < (tgeom.x + tgeom.width / 2)
+							: c_cy < (tgeom.y + tgeom.height / 2);
+
 	dwindle_remove(root, c);
-	bool as_first = (dir == UP || dir == LEFT);
-	bool split_h = (dir == LEFT || dir == RIGHT);
 	dwindle_insert(root, c, target, ratio, as_first, split_h, true);
+	arrange(m, false, false);
 }
 
 void dwindle_swap_clients(Client *c1, Client *c2) {

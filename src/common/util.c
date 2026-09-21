@@ -39,6 +39,21 @@ void *ecalloc(size_t nmemb, size_t size) {
 	return p;
 }
 
+static void utf8_strlcpy(char *dst, const char *src, size_t size) {
+	size_t len = strnlen(src, size - 1);
+
+	while (len > 0 && ((unsigned char)src[len] & 0xc0) == 0x80)
+		len--;
+
+	memcpy(dst, src, len);
+	dst[len] = '\0';
+}
+
+const char *wayland_string_set(struct wayland_string *dst, const char *src) {
+	utf8_strlcpy(dst->data, src ? src : "", sizeof(dst->data));
+	return dst->data;
+}
+
 int32_t fd_set_nonblock(int32_t fd) {
 	int32_t flags = fcntl(fd, F_GETFL);
 	if (flags < 0) {
