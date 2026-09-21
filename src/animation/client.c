@@ -280,8 +280,7 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 
 	if (!c->group_next && !c->group_prev) {
 		if (c->group_bar->scene->node.enabled)
-			wlr_scene_node_set_enabled(&c->group_bar->scene->node,
-									   false);
+			wlr_scene_node_set_enabled(&c->group_bar->scene->node, false);
 		return;
 	}
 
@@ -325,8 +324,7 @@ void client_draw_groupbar(Client *c, struct ivec2 offsets) {
 		cur = head;
 		while (cur) {
 			if (cur->group_bar)
-				wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
-										   false);
+				wlr_scene_node_set_enabled(&cur->group_bar->scene->node, false);
 			cur = cur->group_next;
 		}
 		return;

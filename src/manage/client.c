@@ -3558,8 +3558,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	}
 
 	if (w->jump_label_node) {
-		wlr_scene_node_set_enabled(&w->jump_label_node->scene->node,
-								   false);
+		wlr_scene_node_set_enabled(&w->jump_label_node->scene->node, false);
 	}
 
 	wlr_scene_node_set_enabled(&w->scene->node, false);
@@ -3960,11 +3959,9 @@ void client_check_tab_node_visible(Client *c) {
 		if (!c->mon->isoverview && cur->group_bar &&
 			(cur->group_next || cur->group_prev) && TAGMATCH(c, c->mon) &&
 			ISNORMAL(c) && !c->isfullscreen) {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
-									   true);
+			wlr_scene_node_set_enabled(&cur->group_bar->scene->node, true);
 		} else {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene->node,
-									   false);
+			wlr_scene_node_set_enabled(&cur->group_bar->scene->node, false);
 		}
 		cur = cur->group_next;
 	}

@@ -113,8 +113,7 @@ static void layout_configure(PangoLayout *layout, const char *font_desc,
 }
 
 static void measure_init(struct mango_text_measure *measure) {
-	measure->surface =
-		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+	measure->surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
 	measure->cr = cairo_create(measure->surface);
 	measure->context = pango_cairo_create_context(measure->cr);
 	measure->layout = pango_layout_new(measure->context);
@@ -677,8 +676,8 @@ void mango_group_bar_update(MangoGroupBar *node, const char *text,
 	int32_t avail_pixel_w = (int32_t)(avail_w * scale + 0.5f);
 
 	int32_t natural_pixel_w = 0, natural_pixel_h = 0;
-	measure_text(&node->measure, node->font_desc, text, scale,
-				 &natural_pixel_w, &natural_pixel_h);
+	measure_text(&node->measure, node->font_desc, text, scale, &natural_pixel_w,
+				 &natural_pixel_h);
 
 	bool overlong = avail_pixel_w > 0 && natural_pixel_w > avail_pixel_w;
 	int32_t clip_pixel_w = overlong ? avail_pixel_w : 0;
