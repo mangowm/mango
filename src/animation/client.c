@@ -1235,8 +1235,6 @@ void client_animation_resume(Client *c, double remaining) {
 	}
 
 	c->animation.initial = c->animation.current;
-	c->animation.duration =
-		(uint32_t)MANGO_MAX(1, (int32_t)(c->animation.duration * remaining));
 	c->animation.time_started = get_now_in_ms();
 	c->animation.running = true;
 	c->need_output_flush = true;
