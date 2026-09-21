@@ -288,14 +288,6 @@ static void swipe_drive_apply(Monitor *m, double p) {
 	Client *c = NULL;
 
 	if (swipe_func_is_view(swipe_drive.func)) {
-		double extent = swipe_horizontal ? m->w.width : m->w.height;
-		int dir = (swipe_drive.motion == SWIPE_RIGHT ||
-				   swipe_drive.motion == SWIPE_DOWN)
-					  ? 1
-					  : -1;
-		int32_t shift = (int32_t)llround(p * dir * extent);
-		int32_t entry = (int32_t)llround((p - 1.0) * dir * extent);
-
 		wl_list_for_each(c, &server.clients, link) {
 			if (c->mon != m || !c->animation.running || !c->need_output_flush)
 				continue;
@@ -304,27 +296,7 @@ static void swipe_drive_apply(Monitor *m, double p) {
 				!c->animation.tagouting)
 				continue;
 
-			struct wlr_box box;
-			if (c->animation.tagouting) {
-				box = c->animation.initial;
-				if (swipe_horizontal)
-					box.x += shift;
-				else
-					box.y += shift;
-			} else if (c->animation.tagining) {
-				box = c->current;
-				if (swipe_horizontal)
-					box.x += entry;
-				else
-					box.y += entry;
-			} else {
-				client_animation_set_progress(c, p);
-				continue;
-			}
-
-			wlr_scene_node_set_position(&c->scene->node, box.x, box.y);
-			c->animation.current = box;
-			client_apply_clip(c, 1.0f);
+			client_animation_set_progress(c, p);
 		}
 
 		request_fresh_all_monitors();
