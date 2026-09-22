@@ -242,7 +242,10 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		if (layer == LyrFadeOut)
 			continue;
 
-		node = wlr_scene_node_at(&server.layers[layer]->node, x, y, nx, ny);
+		/* Only layers_wrap carries the real layer stacking order;
+		 * layers[] are the content nodes that get inserted dynamically. */
+		node =
+			wlr_scene_node_at(&server.layers_wrap[layer]->node, x, y, nx, ny);
 		if (!node)
 			continue;
 

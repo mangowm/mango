@@ -428,11 +428,13 @@ void setup(void) {
 	server.scene = wlr_scene_create();
 	server.root_bg =
 		wlr_scene_rect_create(&server.scene->tree, 0, 0, config.rootcolor);
-	for (i = 0; i < NUM_LAYERS; i++)
-		server.layers[i] = wlr_scene_tree_create(&server.scene->tree);
+	for (i = 0; i < NUM_LAYERS; i++) {
+		server.layers_wrap[i] = wlr_scene_tree_create(&server.scene->tree);
+		server.layers[i] = wlr_scene_tree_create(server.layers_wrap[i]);
+	}
 	server.drag_icon = wlr_scene_tree_create(&server.scene->tree);
 	wlr_scene_node_place_below(&server.drag_icon->node,
-							   &server.layers[LyrBlock]->node);
+							   &server.layers_wrap[LyrBlock]->node);
 
 	/* Create a renderer with the default implementation */
 	if (!(server.renderer = wlr_renderer_autocreate(server.backend)))

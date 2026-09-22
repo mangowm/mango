@@ -1241,15 +1241,17 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 					i++;
 				}
 
-				if (!only_calculate)
+				if (!only_calculate) {
 					set_arrange_visible(m, c, want_animation);
-				if (!only_calculate)
 					client_sync_layer(c);
+				}
 			} else if (special_keep_bg_client(m, c)) {
 				wlr_scene_node_set_enabled(&c->scene->node, true);
 				c->animation.running = false;
 				c->animation.tagining = false;
 				c->animation.tagouting = false;
+				if (!only_calculate)
+					client_sync_layer(c);
 			} else if (!only_calculate && c != server.grab_client) {
 				set_arrange_hidden(m, c, want_animation);
 			}
@@ -1449,6 +1451,7 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	pre_calculate_before_arrange(m, want_animation, from_view, false);
 
 	bool is_tag0 = is_special_active(m);
+	special_sync_top_layer(is_tag0);
 	int32_t saved_oh = m->gappoh, saved_ov = m->gappov;
 	int32_t saved_ih = m->gappih, saved_iv = m->gappiv;
 
