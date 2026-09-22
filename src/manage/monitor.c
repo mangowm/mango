@@ -143,6 +143,16 @@ bool is_centertile_layout(Monitor *m) {
 	return false;
 }
 
+void special_sync_top_layer(bool special_active) {
+	if (special_active) {
+		wlr_scene_node_reparent(&server.layers[LyrTop]->node,
+								server.layers_wrap[LyrSpecialTop]);
+	} else {
+		wlr_scene_node_reparent(&server.layers[LyrTop]->node,
+								server.layers_wrap[LyrTop]);
+	}
+}
+
 // sync the special overlay dim layer to the monitor and view state
 void special_update_dim(Monitor *m) {
 	if (!m || !m->special_dim_rect)

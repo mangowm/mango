@@ -3856,9 +3856,15 @@ uint32_t client_target_layer(Client *c) {
 
 	if (config.float_full_to_top) {
 		if (special_overlay)
-			return c->isfloating || c->isfullscreen ? LyrSpecialTop
+			return c->isfloating || c->isfullscreen ? LyrTop
 				   : c->ismaximizescreen			? LyrSpecialMaximize
 													: LyrSpecialTile;
+
+		if (is_special_active(c->mon))
+			return c->isfullscreen		 ? LyrFullscreen
+				   : c->isfloating		 ? LyrFloat
+				   : c->ismaximizescreen ? LyrMaximize
+										 : LyrTile;
 
 		return c->isfloating || c->isfullscreen ? LyrTop
 			   : c->ismaximizescreen			? LyrMaximize

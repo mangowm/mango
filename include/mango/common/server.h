@@ -47,6 +47,7 @@ struct MangoServer {
 	const char *pending_headless_output_name;
 	struct wlr_scene *scene;
 	struct wlr_scene_tree *layers[NUM_LAYERS];
+	struct wlr_scene_tree *layers_wrap[NUM_LAYERS];
 	struct wlr_renderer *renderer;
 	struct wlr_allocator *allocator;
 	struct wlr_compositor *compositor;
