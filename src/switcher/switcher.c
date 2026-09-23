@@ -414,7 +414,9 @@ void switcher_open(int scope, int dir) {
 		switcher_state.tile_h = MANGO_MAX(switcher_state.tile_h, h);
 	}
 
-	switcher_state.tree = wlr_scene_tree_create(server.layers[LyrOverlay]);
+	switcher_state.tree = wlr_scene_tree_create(
+		server.layers[is_special_active(switcher_state.mon) ? LyrSpecialOverlay
+															: LyrOverlay]);
 	switcher_state.bg =
 		wlr_scene_rect_create(switcher_state.tree, 1, 1, switcher_panel_color);
 	switcher_state.tiles = ecalloc(n, sizeof(*switcher_state.tiles));

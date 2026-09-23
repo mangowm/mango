@@ -1626,7 +1626,8 @@ void client_apply_rules(Client *c) {
 
 	// apply overlay rule
 	if (c->isoverlay && c->scene) {
-		wlr_scene_node_reparent(&c->scene->node, server.layers[LyrOverlay]);
+		wlr_scene_node_reparent(&c->scene->node,
+								server.layers[client_target_layer(c)]);
 	}
 }
 
@@ -3848,11 +3849,11 @@ void client_add_jump_label_node(Client *c) {
 // scene layer a client belongs to; shown scratchpads join the special
 // layers while the special workspace is active
 uint32_t client_target_layer(Client *c) {
-	if (c->isoverlay)
-		return LyrOverlay;
-
 	bool special_overlay = (c->tags & TAG0_MASK) ||
 						   (is_special_active(c->mon) && SCRATCHPAD_SHOWN(c));
+
+	if (c->isoverlay)
+		return special_overlay ? LyrSpecialOverlay : LyrOverlay;
 
 	if (config.float_full_to_top) {
 		if (special_overlay)
