@@ -474,6 +474,7 @@ void handle_xwayland_surface_set_hints(struct wl_listener *listener,
 void handle_xwayland_ready(struct wl_listener *listener, void *data);
 void handle_xwayland_surface_set_geometry(struct wl_listener *listener,
 										  void *data);
+void client_update_all_borders(void);
 
 #endif
 

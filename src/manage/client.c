@@ -7,6 +7,7 @@
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/text-input.h"
 #include "mango/input/pointer.h"
+#include "mango/input/keyboard.h"
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
@@ -1111,8 +1112,11 @@ Client *get_next_stack_client(Client *c, bool reverse) {
 }
 
 float *get_border_color(Client *c) {
+	uint32_t layout = keyboard_get_current_layout();
 
 	if (c->mon != server.selected_monitor) {
+		if (config.xkb_layout_bordercolors_count > 0 && layout < (uint32_t)config.xkb_layout_bordercolors_count)
+			return config.xkb_layout_bordercolors[layout];
 		return config.bordercolor;
 	} else if (c->isurgent) {
 		return config.urgentcolor;
@@ -1129,8 +1133,12 @@ float *get_border_color(Client *c) {
 			   c == server.selected_monitor->sel) {
 		return config.maximizescreencolor;
 	} else if (server.selected_monitor && c == server.selected_monitor->sel) {
+		if (config.xkb_layout_focuscolors_count > 0 && layout < (uint32_t)config.xkb_layout_focuscolors_count)
+			return config.xkb_layout_focuscolors[layout];
 		return config.focuscolor;
 	} else {
+		if (config.xkb_layout_bordercolors_count > 0 && layout < (uint32_t)config.xkb_layout_bordercolors_count)
+			return config.xkb_layout_bordercolors[layout];
 		return config.bordercolor;
 	}
 }
@@ -3488,6 +3496,13 @@ void client_update_border_color(Client *c) {
 	memcpy(c->opacity_animation.target_dim_color, dim_color,
 		   sizeof(c->opacity_animation.target_dim_color));
 	client_set_state_colors(c, border_color, dim_color);
+}
+
+void client_update_all_borders(void) {
+	Client *c;
+	wl_list_for_each(c, &server.clients, link) {
+		client_update_border_color(c);
+	}
 }
 
 void client_add_dim_node(Client *c) {
