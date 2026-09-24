@@ -241,6 +241,7 @@ typedef struct {
 	uint32_t button_map;
 	int32_t disable_while_typing;
 	char monitor[128];
+	int32_t map_focus_monitor;
 } ConfigDeviceRule;
 
 typedef struct {

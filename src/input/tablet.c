@@ -331,12 +331,17 @@ void handle_tablet_tool_proximity(struct wl_listener *listener, void *data) {
 		wl_signal_add(&tool->tool_v2->events.set_cursor, &tool->set_cursor);
 	}
 
-	Monitor *target = device_target_monitor(&event->tablet->base);
-	if (target) {
-		wlr_cursor_map_input_to_output(server.cursor, &event->tablet->base,
-									   target->wlr_output);
-		mango_error(true, WLR_DEBUG, "Mapping tablet %s to output %s",
-					event->tablet->base.name, target->wlr_output->name);
+	ConfigDeviceRule *rule = find_device_rule(&event->tablet->base);
+	bool should_map =
+		rule && (rule->monitor[0] || rule->map_focus_monitor == 1);
+	if (should_map) {
+		Monitor *target = device_target_monitor(&event->tablet->base);
+		if (target) {
+			wlr_cursor_map_input_to_output(server.cursor, &event->tablet->base,
+										   target->wlr_output);
+			mango_error(true, WLR_DEBUG, "Mapping tablet %s to output %s",
+						event->tablet->base.name, target->wlr_output->name);
+		}
 	}
 
 	switch (event->state) {

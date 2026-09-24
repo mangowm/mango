@@ -99,8 +99,9 @@ By default a touchscreen is restricted to the current screen (the monitor that
 currently has focus). To pin a specific touch device to a fixed output, use the
 `monitor` [device rule](#device-rules-advanced) option.
 
-Tablet (pen) devices follow the same rule: they target the current screen
-unless a device rule pins them to a fixed output.
+Tablet (pen) devices are not restricted to a monitor by default. Use a device
+rule to pin a tablet to a fixed output with `monitor`, or set
+`map_focus_monitor:1` to make it follow the currently focused monitor.
 
 ---
 
@@ -267,6 +268,7 @@ the XKB defaults), so a rule like `kb_layout:pt` is not affected by a global
 | Common | `send_events_mode` | `0` enabled, `1` disabled, `2` disabled with external mouse |
 | Common | `scroll_button` / `click_method` / `drag_lock` / `button_map` | libinput settings, see descriptions below |
 | Touch / tablet | `monitor` | Pin the touch or tablet device to one output. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format); unset follows the current screen |
+| Tablet | `map_focus_monitor` | `1` makes the tablet follow the currently focused monitor. Off by default, so a tablet stays unmapped unless `monitor` is also set |
 
 > **Info:** If a rule's keyboard layout fails to compile (e.g. `kb_layout:ru`
 > with `kb_variant:dvorak`), mango logs an error and falls back to the global

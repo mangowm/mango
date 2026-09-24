@@ -1752,6 +1752,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->drag_lock = -1;
 		rule->button_map = UINT32_MAX;
 		rule->disable_while_typing = -1;
+		rule->map_focus_monitor = -1;
 		rule->accel_speed = NAN;
 
 		bool parse_error = false;
@@ -1830,6 +1831,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->disable_while_typing = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "monitor") == 0) {
 					snprintf(rule->monitor, sizeof(rule->monitor), "%s", val);
+				} else if (strcmp(key, "map_focus_monitor") == 0) {
+					rule->map_focus_monitor = CLAMP_INT(atoi(val), 0, 1);
 				} else {
 					mango_error(false, WLR_ERROR,
 								"Unknown device rule option: %s\n", key);
