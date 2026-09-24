@@ -16,7 +16,7 @@
 #include <wlr/types/wlr_xdg_shell.h>
 
 /* Maps the wlr_layer_shell layer enum to scene layers. */
-static const int32_t layermap[] = {LyrBg, LyrBottom, LyrTop, LyrOverlay};
+static const int32_t layermap[] = {LyrBg, LyrBottom, LyrTop, LyrSpecialOverlay};
 
 void arrange_layer(Monitor *m, struct wl_list *list,
 				   struct wlr_box *usable_area, int32_t exclusive) {
