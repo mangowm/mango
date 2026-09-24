@@ -103,6 +103,7 @@ typedef struct {
 	bool isallowconflict;
 	int line_number;
 	int file_index;
+	char *spec;
 } KeyBinding;
 
 typedef struct {
@@ -158,6 +159,7 @@ typedef struct {
 	uint32_t passmod;
 	xkb_keysym_t keysym;
 	KeyBinding globalkeybinding;
+	char *spec;
 } ConfigWinRule;
 
 typedef struct {
@@ -182,6 +184,7 @@ typedef struct {
 	int32_t hdr_force;			 // ignore EDID-derived HDR capability checks
 	char *icc;					 // ICC profile path
 	int32_t disable;			 // prefer disable
+	char *spec;
 } ConfigMonitorRule;
 
 typedef struct {
@@ -200,6 +203,7 @@ typedef struct {
 	int32_t no_render_border;
 	int32_t open_as_floating;
 	int32_t no_hide;
+	char *spec;
 } ConfigTagRule;
 
 typedef struct {
@@ -210,6 +214,7 @@ typedef struct {
 	int32_t noblur;
 	int32_t noanim;
 	int32_t noshadow;
+	char *spec;
 } ConfigLayerRule;
 
 typedef struct {
@@ -247,6 +252,7 @@ typedef struct {
 	uint32_t button_map;
 	int32_t disable_while_typing;
 	char monitor[128];
+	char *spec;
 } ConfigDeviceRule;
 
 typedef struct {
@@ -259,6 +265,7 @@ typedef struct {
 	bool isdefaultmode;
 	int line_number;
 	int file_index;
+	char *spec;
 } AxisBinding;
 
 typedef struct {
@@ -272,6 +279,7 @@ typedef struct {
 	bool isdefaultmode;
 	int line_number;
 	int file_index;
+	char *spec;
 } GestureBinding;
 
 typedef struct {
@@ -283,6 +291,7 @@ typedef struct {
 	bool isdefaultmode;
 	int line_number;
 	int file_index;
+	char *spec;
 } SwitchBinding;
 
 typedef struct {
@@ -295,6 +304,7 @@ typedef struct {
 	bool isdefaultmode;
 	int line_number;
 	int file_index;
+	char *spec;
 } MouseBinding;
 
 typedef struct {
@@ -683,7 +693,9 @@ bool parse_config_line(Config *config, const char *line, int line_number);
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
 void reapply_tagrule(void);
+void reapply_window_rules(void);
 
+void reset_option_apply(void);
 void reset_option(void);
 
 void reset_tag(int old_tag_num);
@@ -706,4 +718,25 @@ bool check_simple_binding_conflicts(void *arr, size_t count, size_t elem_size,
 									bool (*same_key)(const void *,
 													 const void *),
 									BindingMetaFunc get_meta, const char *kind);
+
+void record_option_value(const char *key, const char *value);
+const char *get_option_value(const char *key);
+const char *get_option_key(int index);
+int get_option_count(void);
+const char *mod_to_string(uint32_t mod);
+bool unset_key_binding(const char *mode, const char *mod_str,
+					   const char *keysym_str, bool isbindsym);
+bool unset_mouse_binding(const char *mode, const char *mod_str,
+						 const char *button_str);
+bool unset_axis_binding(const char *mode, const char *mod_str,
+						const char *dir_str);
+bool unset_switch_binding(const char *mode, const char *fold_str);
+bool unset_gesture_binding(const char *mode, const char *mod_str,
+						   const char *motion_str, const char *fingers_str);
+bool unset_window_rule(const char *spec);
+bool unset_layer_rule(const char *spec);
+bool unset_monitor_rule(const char *spec);
+bool unset_tag_rule(const char *spec);
+bool unset_device_rule(const char *spec);
+
 #endif

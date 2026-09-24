@@ -39,6 +39,13 @@ static void usage(void) {
 	printf("  get layouts                              List all available "
 		   "layouts\n");
 	printf(
+		"  get option <key>                          Show an option value\n");
+	printf("  get options                               List all options\n");
+	printf("  get binds                                 List key/mouse/axis/"
+		   "switch/gesture binds\n");
+	printf("  get rules                                 List active window/"
+		   "layer/monitor/tag/device rules\n");
+	printf(
 		"  get tags <monitor>                       List tags for a monitor\n");
 	printf("  dispatch <func>[,arg...] [client,<id>]   Call a compositor "
 		   "function\n");
@@ -50,6 +57,20 @@ static void usage(void) {
 	printf("       dispatch movewin,10,100\n");
 	printf("       dispatch movewin,10,100 client,4\n");
 	printf("Persistent streams (watch):\n");
+	printf("  setoption <key> <value>                   Set an option at "
+		   "runtime\n");
+	printf("     Example:  mmsg setoption animations 0\n");
+	printf("     Escape commas inside values with '\\,'.\n");
+	printf("  unset bind <keymode> <mod> <keysym> <family>\n");
+	printf("  unset mousebind <keymode> <mod> <button>\n");
+	printf("  unset axisbind <keymode> <mod> <dir>\n");
+	printf("  unset switchbind <keymode> <fold>\n");
+	printf("  unset gesturebind <keymode> <mod> <motion> <fingers>\n");
+	printf("  unset windowrule <spec>\n");
+	printf("  unset layerrule <spec>\n");
+	printf("  unset monitorrule <spec>\n");
+	printf("  unset tagrule <spec>\n");
+	printf("  unset devicerule <spec>\n");
 	printf(
 		"  watch monitor <name>                     Stream monitor changes\n");
 	printf("  watch focusing-client                    Stream focused client "

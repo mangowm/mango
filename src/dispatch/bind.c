@@ -2204,7 +2204,7 @@ int32_t zoom(const Arg *arg) {
 int32_t setoption(const Arg *arg) {
 	parse_option(&config, arg->v, arg->v2, 0);
 	override_config();
-	reset_option();
+	reset_option_apply();
 	return 0;
 }
 

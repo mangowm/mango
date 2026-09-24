@@ -42,6 +42,15 @@
 /* Global config instance. */
 Config config;
 
+/* live option get cache*/
+struct option_slot {
+	char *key;
+	char *value;
+};
+
+static struct option_slot *option_store;
+static int option_store_count;
+
 /* Default jump-label character sequence (used when jump_labels is not
  * configured). */
 const char default_jump_labels[] = "HJKLASDFGQWERTYUIOPZXCVBNM";
@@ -70,6 +79,51 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state);
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule);
 void sync_workspaces_to_tag_num(Monitor *m);
+
+// config option readback helpers
+static void option_store_clear(void) {
+	for (int index = 0; index < option_store_count; index++) {
+		free(option_store[index].key);
+		free(option_store[index].value);
+	}
+	free(option_store);
+	option_store = NULL;
+	option_store_count = 0;
+}
+
+void record_option_value(const char *key, const char *value) {
+	// update if exists
+	for (int index = 0; index < option_store_count; index++) {
+		if (strcmp(option_store[index].key, key) == 0) {
+			free(option_store[index].value);
+			option_store[index].value = strdup(value);
+			return;
+		}
+	}
+	// add if not
+	option_store =
+		realloc(option_store, (option_store_count + 1) * sizeof(*option_store));
+	if (!option_store)
+		return;
+	option_store[option_store_count].key = strdup(key);
+	option_store[option_store_count].value = strdup(value);
+	option_store_count++;
+}
+
+const char *get_option_value(const char *key) {
+	for (int index = 0; index < option_store_count; index++)
+		if (strcmp(option_store[index].key, key) == 0)
+			return option_store[index].value;
+	return NULL;
+}
+
+const char *get_option_key(int index) {
+	if (index < 0 || index >= option_store_count)
+		return NULL;
+	return option_store[index].key;
+}
+
+int get_option_count(void) { return option_store_count; }
 
 // Helper function to trim whitespace from start and end of a string
 void trim_whitespace(char *str) {
@@ -431,6 +485,7 @@ int32_t animation_type_from_string(const char *value) {
 }
 
 bool parse_option(Config *config, char *key, char *value, int line_number) {
+
 	if (strcmp(key, "keymode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
 	} else if (strcmp(key, "animations") == 0) {
@@ -1298,6 +1353,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		ConfigMonitorRule *rule =
 			&config->monitor_rules[config->monitor_rules_count];
 		memset(rule, 0, sizeof(ConfigMonitorRule));
+		rule->spec = strdup(value);
+		config->monitor_rules_count++;
 
 		// Sets default values.
 		rule->name = NULL;
@@ -1397,7 +1454,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			return false;
 		}
 
-		config->monitor_rules_count++;
 		return !parse_error;
 	} else if (strcmp(key, "tagrule") == 0) {
 		config->tag_rules =
@@ -1412,6 +1468,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		ConfigTagRule *rule = &config->tag_rules[config->tag_rules_count];
 		memset(rule, 0, sizeof(ConfigTagRule));
+		rule->spec = strdup(value);
 
 		// Sets default values.
 		rule->id = 0;
@@ -1508,6 +1565,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		ConfigLayerRule *rule = &config->layer_rules[config->layer_rules_count];
 		memset(rule, 0, sizeof(ConfigLayerRule));
+		rule->spec = strdup(value);
 
 		// Sets default values.
 		rule->layer_name = NULL;
@@ -1578,6 +1636,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		ConfigWinRule *rule = &config->window_rules[config->window_rules_count];
 		memset(rule, 0, sizeof(ConfigWinRule));
+		rule->spec = strdup(value);
+		config->window_rules_count++;
 
 		// int32_t rule value, relay to a client property
 
@@ -1780,7 +1840,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			}
 			token = strtok(NULL, ",");
 		}
-		config->window_rules_count++;
 		return !parse_error;
 	} else if (strcmp(key, "devicerule") == 0) {
 		config->device_rules =
@@ -1796,6 +1855,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		ConfigDeviceRule *rule =
 			&config->device_rules[config->device_rules_count];
 		memset(rule, 0, sizeof(ConfigDeviceRule));
+		rule->spec = strdup(value);
 
 		// Defaults: -1 / UINT32_MAX / empty string mean unset and fall back to
 		// the global config.
@@ -2122,6 +2182,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 							func_name);
 			return false;
 		} else {
+			binding->spec = strdup(value);
 			config->key_bindings_count++;
 		}
 
@@ -2209,6 +2270,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 							func_name);
 			return false;
 		} else {
+			binding->spec = strdup(value);
 			config->mouse_bindings_count++;
 		}
 	} else if (strncmp(key, "axisbind", 8) == 0) {
@@ -2287,6 +2349,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 							func_name);
 			return false;
 		} else {
+			binding->spec = strdup(value);
 			config->axis_bindings_count++;
 		}
 
@@ -2359,6 +2422,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						func_name);
 			return false;
 		} else {
+			binding->spec = strdup(value);
 			config->switch_bindings_count++;
 		}
 
@@ -2446,6 +2510,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 							func_name);
 			return false;
 		} else {
+			binding->spec = strdup(value);
 			config->gesture_bindings_count++;
 		}
 
@@ -2460,7 +2525,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					key);
 		return false;
 	}
-
+	record_option_value(key, value);
 	return true;
 }
 bool parse_config_line(Config *config, const char *line, int line_number) {
@@ -2676,14 +2741,19 @@ void reapply_tagrule(void) {
 	}
 }
 
-void reset_option(void) {
+void reapply_window_rules(void) {
+	Client *c;
+	wl_list_for_each(c, &server.clients, link) client_apply_rules(c);
+	arrange(server.selected_monitor, false, false);
+}
+
+void reset_option_apply(void) {
 	init_baked_points();
 	pointer_cursor_activity();
 	reset_keyboard_layout();
 	reset_blur_params();
 	set_env_without_display();
 	set_env_display();
-	run_exec();
 
 	reapply_cursor_style();
 	reapply_property();
@@ -2696,6 +2766,13 @@ void reset_option(void) {
 	reapply_monitor_rules();
 
 	arrange(server.selected_monitor, false, false);
+}
+
+// split out run_exec to only run on *certain* re-applications of options (avoid
+// re-exec on setoption dispatcher)
+void reset_option(void) {
+	reset_option_apply();
+	run_exec();
 }
 
 int32_t parse_force(const char *str) {
@@ -3424,30 +3501,291 @@ void free_baked_points(void) {
 	}
 }
 
+static void free_window_rule(ConfigWinRule *rule) {
+	if (rule->id)
+		free((void *)rule->id);
+	if (rule->title)
+		free((void *)rule->title);
+	if (rule->monitor)
+		free((void *)rule->monitor);
+	rule->id = NULL;
+	rule->title = NULL;
+	rule->animation_type_open = ANIM_TYPE_UNSET;
+	rule->animation_type_close = ANIM_TYPE_UNSET;
+	rule->monitor = NULL;
+	// Frees arg.v of globalkeybinding if dynamically allocated.
+	if (rule->globalkeybinding.arg.v) {
+		free((void *)rule->globalkeybinding.arg.v);
+		}
+	free(rule->spec);
+	memset(rule, 0, sizeof(*rule));
+}
+
+static void free_key_binding(KeyBinding *b) {
+	if (b->arg.v)
+		free(b->arg.v);
+	if (b->arg.v2)
+		free(b->arg.v2);
+	if (b->arg.v3)
+		free(b->arg.v3);
+	free(b->spec);
+	memset(b, 0, sizeof(*b));
+}
+static void free_mouse_binding(MouseBinding *b) {
+	if (b->arg.v)
+		free(b->arg.v);
+	if (b->arg.v2)
+		free(b->arg.v2);
+	if (b->arg.v3)
+		free(b->arg.v3);
+	free(b->spec);
+	memset(b, 0, sizeof(*b));
+}
+
+static void free_axis_binding(AxisBinding *b) {
+	if (b->arg.v)
+		free(b->arg.v);
+	if (b->arg.v2)
+		free(b->arg.v2);
+	if (b->arg.v3)
+		free(b->arg.v3);
+	free(b->spec);
+	memset(b, 0, sizeof(*b));
+}
+
+static void free_switch_binding(SwitchBinding *b) {
+	if (b->arg.v)
+		free(b->arg.v);
+	if (b->arg.v2)
+		free(b->arg.v2);
+	if (b->arg.v3)
+		free(b->arg.v3);
+	free(b->spec);
+	memset(b, 0, sizeof(*b));
+}
+
+static void free_gesture_binding(GestureBinding *b) {
+	if (b->arg.v)
+		free(b->arg.v);
+	if (b->arg.v2)
+		free(b->arg.v2);
+	if (b->arg.v3)
+		free(b->arg.v3);
+	free(b->spec);
+	memset(b, 0, sizeof(*b));
+}
+
+static void free_monitor_rule(ConfigMonitorRule *r) {
+	if (r->name)
+		free((void *)r->name);
+	if (r->make)
+		free((void *)r->make);
+	if (r->model)
+		free((void *)r->model);
+	if (r->serial)
+		free((void *)r->serial);
+	if (r->icc)
+		free((void *)r->icc);
+	free(r->spec);
+	memset(r, 0, sizeof(*r));
+}
+
+static void free_tag_rule(ConfigTagRule *r) {
+	if (r->layout_name)
+		free(r->layout_name);
+	if (r->monitor_name)
+		free((void *)r->monitor_name);
+	if (r->monitor_make)
+		free((void *)r->monitor_make);
+	if (r->monitor_model)
+		free((void *)r->monitor_model);
+	if (r->monitor_serial)
+		free((void *)r->monitor_serial);
+	free(r->spec);
+	memset(r, 0, sizeof(*r));
+}
+
+static void free_layer_rule(ConfigLayerRule *r) {
+	if (r->layer_name)
+		free(r->layer_name);
+	r->animation_type_open = ANIM_TYPE_UNSET;
+	r->animation_type_close = ANIM_TYPE_UNSET;
+	free(r->spec);
+	memset(r, 0, sizeof(*r));
+}
+
+static void free_device_rule(ConfigDeviceRule *r) {
+	if (r->name)
+		free(r->name);
+	free(r->spec);
+	memset(r, 0, sizeof(*r));
+}
+
+bool unset_monitor_rule(const char *spec) {
+	for (int i = 0; i < config.monitor_rules_count; i++) {
+		if (!config.monitor_rules[i].spec ||
+			strcmp(config.monitor_rules[i].spec, spec) != 0)
+			continue;
+		free_monitor_rule(&config.monitor_rules[i]);
+		memmove(&config.monitor_rules[i], &config.monitor_rules[i + 1],
+				(config.monitor_rules_count - i - 1) *
+					sizeof(ConfigMonitorRule));
+		config.monitor_rules_count--;
+		return true;
+	}
+	return false;
+}
+bool unset_window_rule(const char *spec) {
+	for (int i = 0; i < config.window_rules_count; i++) {
+		if (!config.window_rules[i].spec ||
+			strcmp(config.window_rules[i].spec, spec) != 0)
+			continue;
+		free_window_rule(&config.window_rules[i]);
+		memmove(&config.window_rules[i], &config.window_rules[i + 1],
+				(config.window_rules_count - i - 1) * sizeof(ConfigWinRule));
+		config.window_rules_count--;
+		return true;
+	}
+	return false;
+}
+bool unset_layer_rule(const char *spec) {
+	for (int i = 0; i < config.layer_rules_count; i++) {
+		if (!config.layer_rules[i].spec ||
+			strcmp(config.layer_rules[i].spec, spec) != 0)
+			continue;
+		free_layer_rule(&config.layer_rules[i]);
+		memmove(&config.layer_rules[i], &config.layer_rules[i + 1],
+				(config.layer_rules_count - i - 1) * sizeof(ConfigLayerRule));
+		config.layer_rules_count--;
+		return true;
+	}
+	return false;
+}
+bool unset_tag_rule(const char *spec) {
+	for (int i = 0; i < config.tag_rules_count; i++) {
+		if (!config.tag_rules[i].spec ||
+			strcmp(config.tag_rules[i].spec, spec) != 0)
+			continue;
+		free_tag_rule(&config.tag_rules[i]);
+		memmove(&config.tag_rules[i], &config.tag_rules[i + 1],
+				(config.tag_rules_count - i - 1) * sizeof(ConfigTagRule));
+		config.tag_rules_count--;
+		return true;
+	}
+	return false;
+}
+bool unset_device_rule(const char *spec) {
+	for (int i = 0; i < config.device_rules_count; i++) {
+		if (!config.device_rules[i].spec ||
+			strcmp(config.device_rules[i].spec, spec) != 0)
+			continue;
+		free_device_rule(&config.device_rules[i]);
+		memmove(&config.device_rules[i], &config.device_rules[i + 1],
+				(config.device_rules_count - i - 1) * sizeof(ConfigDeviceRule));
+		config.device_rules_count--;
+		return true;
+	}
+	return false;
+}
+
+bool unset_key_binding(const char *mode, const char *mod_str,
+					   const char *keysym_str, bool isbindsym) {
+	KeyBinding tmp = {0};
+	tmp.mod = parse_mod(mod_str);
+	tmp.keysymcode = parse_key(keysym_str, isbindsym);
+	for (int i = 0; i < config.key_bindings_count; i++) {
+		if (strcmp(config.key_bindings[i].mode, mode) != 0 ||
+			!same_key(&config.key_bindings[i], &tmp))
+			continue;
+		free_key_binding(&config.key_bindings[i]);
+		memmove(&config.key_bindings[i], &config.key_bindings[i + 1],
+				(config.key_bindings_count - i - 1) * sizeof(KeyBinding));
+		config.key_bindings_count--;
+		return true;
+	}
+	return false;
+}
+
+bool unset_mouse_binding(const char *mode, const char *mod_str,
+						 const char *button_str) {
+	uint32_t mod = parse_mod(mod_str);
+	uint32_t button = parse_button(button_str);
+	for (int i = 0; i < config.mouse_bindings_count; i++) {
+		if (strcmp(config.mouse_bindings[i].mode, mode) != 0 ||
+			config.mouse_bindings[i].mod != mod ||
+			config.mouse_bindings[i].button != button)
+			continue;
+		free_mouse_binding(&config.mouse_bindings[i]);
+		memmove(&config.mouse_bindings[i], &config.mouse_bindings[i + 1],
+				(config.mouse_bindings_count - i - 1) * sizeof(MouseBinding));
+		config.mouse_bindings_count--;
+		return true;
+	}
+	return false;
+}
+
+bool unset_axis_binding(const char *mode, const char *mod_str,
+						const char *dir_str) {
+	uint32_t mod = parse_mod(mod_str);
+	int32_t dir = parse_direction(dir_str);
+	for (int i = 0; i < config.axis_bindings_count; i++) {
+		if (strcmp(config.axis_bindings[i].mode, mode) != 0 ||
+			config.axis_bindings[i].mod != mod ||
+			(int32_t)config.axis_bindings[i].dir != dir)
+			continue;
+		free_axis_binding(&config.axis_bindings[i]);
+		memmove(&config.axis_bindings[i], &config.axis_bindings[i + 1],
+				(config.axis_bindings_count - i - 1) * sizeof(AxisBinding));
+		config.axis_bindings_count--;
+		return true;
+	}
+	return false;
+}
+
+bool unset_switch_binding(const char *mode, const char *fold_str) {
+	int32_t fold = parse_fold_state(fold_str);
+	for (int i = 0; i < config.switch_bindings_count; i++) {
+		if (strcmp(config.switch_bindings[i].mode, mode) != 0 ||
+			(int32_t)config.switch_bindings[i].fold != fold)
+			continue;
+		free_switch_binding(&config.switch_bindings[i]);
+		memmove(&config.switch_bindings[i], &config.switch_bindings[i + 1],
+				(config.switch_bindings_count - i - 1) * sizeof(SwitchBinding));
+		config.switch_bindings_count--;
+		return true;
+	}
+	return false;
+}
+
+bool unset_gesture_binding(const char *mode, const char *mod_str,
+						   const char *motion_str, const char *fingers_str) {
+	uint32_t mod = parse_mod(mod_str);
+	int32_t motion = parse_direction(motion_str);
+	uint32_t fingers = (uint32_t)atoi(fingers_str);
+	for (int i = 0; i < config.gesture_bindings_count; i++) {
+		if (strcmp(config.gesture_bindings[i].mode, mode) != 0 ||
+			config.gesture_bindings[i].mod != mod ||
+			(int32_t)config.gesture_bindings[i].motion != motion ||
+			config.gesture_bindings[i].fingers_count != fingers)
+			continue;
+		free_gesture_binding(&config.gesture_bindings[i]);
+		memmove(&config.gesture_bindings[i], &config.gesture_bindings[i + 1],
+				(config.gesture_bindings_count - i - 1) *
+					sizeof(GestureBinding));
+		config.gesture_bindings_count--;
+		return true;
+	}
+	return false;
+}
+
 void free_config(void) {
 	// Frees memory.
 	int32_t i;
 
 	// Frees window_rules.
 	if (config.window_rules) {
-		for (int32_t i = 0; i < config.window_rules_count; i++) {
-			ConfigWinRule *rule = &config.window_rules[i];
-			if (rule->id)
-				free((void *)rule->id);
-			if (rule->title)
-				free((void *)rule->title);
-			if (rule->monitor)
-				free((void *)rule->monitor);
-			rule->id = NULL;
-			rule->title = NULL;
-			rule->animation_type_open = ANIM_TYPE_UNSET;
-			rule->animation_type_close = ANIM_TYPE_UNSET;
-			rule->monitor = NULL;
-			// Frees arg.v of globalkeybinding if dynamically allocated.
-			if (rule->globalkeybinding.arg.v) {
-				free((void *)rule->globalkeybinding.arg.v);
-			}
-		}
+		for (int32_t i = 0; i < config.window_rules_count; i++)
+			free_window_rule(&config.window_rules[i]);
 		free(config.window_rules);
 		config.window_rules = NULL;
 		config.window_rules_count = 0;
@@ -3455,10 +3793,8 @@ void free_config(void) {
 
 	// Frees device_rules.
 	if (config.device_rules) {
-		for (i = 0; i < config.device_rules_count; i++) {
-			if (config.device_rules[i].name)
-				free(config.device_rules[i].name);
-		}
+		for (i = 0; i < config.device_rules_count; i++)
+			free_device_rule(&config.device_rules[i]);
 		free(config.device_rules);
 		config.device_rules = NULL;
 		config.device_rules_count = 0;
@@ -3466,20 +3802,8 @@ void free_config(void) {
 
 	// Frees key_bindings.
 	if (config.key_bindings) {
-		for (i = 0; i < config.key_bindings_count; i++) {
-			if (config.key_bindings[i].arg.v) {
-				free((void *)config.key_bindings[i].arg.v);
-				config.key_bindings[i].arg.v = NULL;
-			}
-			if (config.key_bindings[i].arg.v2) {
-				free((void *)config.key_bindings[i].arg.v2);
-				config.key_bindings[i].arg.v2 = NULL;
-			}
-			if (config.key_bindings[i].arg.v3) {
-				free((void *)config.key_bindings[i].arg.v3);
-				config.key_bindings[i].arg.v3 = NULL;
-			}
-		}
+		for (i = 0; i < config.key_bindings_count; i++)
+			free_key_binding(&config.key_bindings[i]);
 		free(config.key_bindings);
 		config.key_bindings = NULL;
 		config.key_bindings_count = 0;
@@ -3487,20 +3811,8 @@ void free_config(void) {
 
 	// Frees mouse_bindings.
 	if (config.mouse_bindings) {
-		for (i = 0; i < config.mouse_bindings_count; i++) {
-			if (config.mouse_bindings[i].arg.v) {
-				free((void *)config.mouse_bindings[i].arg.v);
-				config.mouse_bindings[i].arg.v = NULL;
-			}
-			if (config.mouse_bindings[i].arg.v2) {
-				free((void *)config.mouse_bindings[i].arg.v2);
-				config.mouse_bindings[i].arg.v2 = NULL;
-			}
-			if (config.mouse_bindings[i].arg.v3) {
-				free((void *)config.mouse_bindings[i].arg.v3);
-				config.mouse_bindings[i].arg.v3 = NULL;
-			}
-		}
+		for (i = 0; i < config.mouse_bindings_count; i++)
+			free_mouse_binding(&config.mouse_bindings[i]);
 		free(config.mouse_bindings);
 		config.mouse_bindings = NULL;
 		config.mouse_bindings_count = 0;
@@ -3508,20 +3820,8 @@ void free_config(void) {
 
 	// Frees axis_bindings.
 	if (config.axis_bindings) {
-		for (i = 0; i < config.axis_bindings_count; i++) {
-			if (config.axis_bindings[i].arg.v) {
-				free((void *)config.axis_bindings[i].arg.v);
-				config.axis_bindings[i].arg.v = NULL;
-			}
-			if (config.axis_bindings[i].arg.v2) {
-				free((void *)config.axis_bindings[i].arg.v2);
-				config.axis_bindings[i].arg.v2 = NULL;
-			}
-			if (config.axis_bindings[i].arg.v3) {
-				free((void *)config.axis_bindings[i].arg.v3);
-				config.axis_bindings[i].arg.v3 = NULL;
-			}
-		}
+		for (i = 0; i < config.axis_bindings_count; i++)
+			free_axis_binding(&config.axis_bindings[i]);
 		free(config.axis_bindings);
 		config.axis_bindings = NULL;
 		config.axis_bindings_count = 0;
@@ -3529,20 +3829,8 @@ void free_config(void) {
 
 	// Frees switch_bindings.
 	if (config.switch_bindings) {
-		for (i = 0; i < config.switch_bindings_count; i++) {
-			if (config.switch_bindings[i].arg.v) {
-				free((void *)config.switch_bindings[i].arg.v);
-				config.switch_bindings[i].arg.v = NULL;
-			}
-			if (config.switch_bindings[i].arg.v2) {
-				free((void *)config.switch_bindings[i].arg.v2);
-				config.switch_bindings[i].arg.v2 = NULL;
-			}
-			if (config.switch_bindings[i].arg.v3) {
-				free((void *)config.switch_bindings[i].arg.v3);
-				config.switch_bindings[i].arg.v3 = NULL;
-			}
-		}
+		for (i = 0; i < config.switch_bindings_count; i++)
+			free_switch_binding(&config.switch_bindings[i]);
 		free(config.switch_bindings);
 		config.switch_bindings = NULL;
 		config.switch_bindings_count = 0;
@@ -3550,20 +3838,8 @@ void free_config(void) {
 
 	// Frees gesture_bindings.
 	if (config.gesture_bindings) {
-		for (i = 0; i < config.gesture_bindings_count; i++) {
-			if (config.gesture_bindings[i].arg.v) {
-				free((void *)config.gesture_bindings[i].arg.v);
-				config.gesture_bindings[i].arg.v = NULL;
-			}
-			if (config.gesture_bindings[i].arg.v2) {
-				free((void *)config.gesture_bindings[i].arg.v2);
-				config.gesture_bindings[i].arg.v2 = NULL;
-			}
-			if (config.gesture_bindings[i].arg.v3) {
-				free((void *)config.gesture_bindings[i].arg.v3);
-				config.gesture_bindings[i].arg.v3 = NULL;
-			}
-		}
+		for (i = 0; i < config.gesture_bindings_count; i++)
+			free_gesture_binding(&config.gesture_bindings[i]);
 		free(config.gesture_bindings);
 		config.gesture_bindings = NULL;
 		config.gesture_bindings_count = 0;
@@ -3571,18 +3847,8 @@ void free_config(void) {
 
 	// Frees tag_rules.
 	if (config.tag_rules) {
-		for (int32_t i = 0; i < config.tag_rules_count; i++) {
-			if (config.tag_rules[i].layout_name)
-				free((void *)config.tag_rules[i].layout_name);
-			if (config.tag_rules[i].monitor_name)
-				free((void *)config.tag_rules[i].monitor_name);
-			if (config.tag_rules[i].monitor_make)
-				free((void *)config.tag_rules[i].monitor_make);
-			if (config.tag_rules[i].monitor_model)
-				free((void *)config.tag_rules[i].monitor_model);
-			if (config.tag_rules[i].monitor_serial)
-				free((void *)config.tag_rules[i].monitor_serial);
-		}
+		for (int32_t i = 0; i < config.tag_rules_count; i++)
+			free_tag_rule(&config.tag_rules[i]);
 		free(config.tag_rules);
 		config.tag_rules = NULL;
 		config.tag_rules_count = 0;
@@ -3591,16 +3857,7 @@ void free_config(void) {
 	// Frees monitor_rules.
 	if (config.monitor_rules) {
 		for (int32_t i = 0; i < config.monitor_rules_count; i++) {
-			if (config.monitor_rules[i].name)
-				free((void *)config.monitor_rules[i].name);
-			if (config.monitor_rules[i].make)
-				free((void *)config.monitor_rules[i].make);
-			if (config.monitor_rules[i].model)
-				free((void *)config.monitor_rules[i].model);
-			if (config.monitor_rules[i].serial)
-				free((void *)config.monitor_rules[i].serial);
-			if (config.monitor_rules[i].icc)
-				free((void *)config.monitor_rules[i].icc);
+			free_monitor_rule(&config.monitor_rules[i]);
 		}
 		free(config.monitor_rules);
 		config.monitor_rules = NULL;
@@ -3610,10 +3867,7 @@ void free_config(void) {
 	// Frees layer_rules.
 	if (config.layer_rules) {
 		for (int32_t i = 0; i < config.layer_rules_count; i++) {
-			if (config.layer_rules[i].layer_name)
-				free((void *)config.layer_rules[i].layer_name);
-			config.layer_rules[i].animation_type_open = ANIM_TYPE_UNSET;
-			config.layer_rules[i].animation_type_close = ANIM_TYPE_UNSET;
+			free_layer_rule(&config.layer_rules[i]);
 		}
 		free(config.layer_rules);
 		config.layer_rules = NULL;
@@ -4346,6 +4600,7 @@ bool parse_config(void) {
 	char filename[1024];
 
 	free_config();
+	option_store_clear();
 
 	memset(&config, 0, sizeof(config));
 

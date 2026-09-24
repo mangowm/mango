@@ -1,4 +1,5 @@
 #include "mango/ipc/ipc.h"
+#include "cJSON.h"
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
@@ -618,6 +619,120 @@ cJSON *build_monitor_json(Monitor *m) {
 						  cJSON_CreateString(ipc_get_layout_str()));
 	return resp;
 }
+
+// rule/bind get helpers
+static cJSON *find_or_create_keymode_group(cJSON *array, const char *mode) {
+	cJSON *item = NULL;
+	cJSON_ArrayForEach(item, array) {
+		cJSON *mode_obj = cJSON_GetObjectItemCaseSensitive(item, "keymode");
+		if (mode_obj && strcmp(mode_obj->valuestring, mode) == 0)
+			return item;
+	}
+	item = cJSON_CreateObject();
+	cJSON_AddStringToObject(item, "keymode", mode);
+	cJSON_AddItemToObject(item, "binds", cJSON_CreateArray());
+	cJSON_AddItemToArray(array, item);
+	return item;
+}
+
+static cJSON *key_bind_entry(const KeyBinding *b) {
+	cJSON *entry = cJSON_CreateObject();
+	char family[16] = "bind";
+	if (b->keysymcode.type == KEY_TYPE_SYM)
+		strcat(family, "s");
+	if (b->islockapply)
+		strcat(family, "l");
+	if (b->isreleaseapply)
+		strcat(family, "r");
+	if (b->ispassapply)
+		strcat(family, "p");
+	if (b->isallowconflict)
+		strcat(family, "c");
+	cJSON_AddStringToObject(entry, "family", family);
+	cJSON_AddStringToObject(entry, "mod", mod_to_string(b->mod));
+	char keysym_str[128];
+	if (b->keysymcode.type == KEY_TYPE_CODE &&
+		b->keysymcode.keysym == XKB_KEY_NoSymbol)
+		snprintf(keysym_str, sizeof(keysym_str), "code:%u",
+				 b->keysymcode.keycode.keycode1);
+	else
+		xkb_keysym_get_name(b->keysymcode.keysym, keysym_str,
+							sizeof(keysym_str));
+	cJSON_AddStringToObject(entry, "keysym", keysym_str);
+	cJSON_AddStringToObject(entry, "spec", b->spec ? b->spec : "");
+	return entry;
+}
+
+static const char *direction_name(int32_t dir) {
+	switch (dir) {
+	case UP:
+		return "up";
+	case DOWN:
+		return "down";
+	case LEFT:
+		return "left";
+	case RIGHT:
+		return "right";
+	case ALLDIR:
+		return "alldir";
+	default:
+		return "undir";
+	}
+}
+
+static const char *fold_state_name(int32_t state) {
+	switch (state) {
+	case FOLD:
+		return "fold";
+	case UNFOLD:
+		return "unfold";
+	default:
+		return "invalid";
+	}
+}
+
+static cJSON *mouse_bind_entry(const MouseBinding *b) {
+	cJSON *entry = cJSON_CreateObject();
+	char button_str[64];
+	snprintf(button_str, sizeof(button_str), "code:%u", b->button);
+	cJSON_AddStringToObject(entry, "mod", mod_to_string(b->mod));
+	cJSON_AddStringToObject(entry, "button", button_str);
+	cJSON_AddStringToObject(entry, "spec", b->spec ? b->spec : "");
+	return entry;
+}
+static cJSON *axis_bind_entry(const AxisBinding *b) {
+	cJSON *entry = cJSON_CreateObject();
+	cJSON_AddStringToObject(entry, "mod", mod_to_string(b->mod));
+	cJSON_AddStringToObject(entry, "dir", direction_name(b->dir));
+	cJSON_AddStringToObject(entry, "spec", b->spec ? b->spec : "");
+	return entry;
+}
+
+static cJSON *switch_bind_entry(const SwitchBinding *b) {
+	cJSON *entry = cJSON_CreateObject();
+	cJSON_AddStringToObject(entry, "fold", fold_state_name(b->fold));
+	cJSON_AddStringToObject(entry, "spec", b->spec ? b->spec : "");
+	return entry;
+}
+
+static cJSON *gesture_bind_entry(const GestureBinding *b) {
+	cJSON *entry = cJSON_CreateObject();
+	char fingers_str[16];
+	snprintf(fingers_str, sizeof(fingers_str), "%u", b->fingers_count);
+	cJSON_AddStringToObject(entry, "mod", mod_to_string(b->mod));
+	cJSON_AddStringToObject(entry, "motion", direction_name(b->motion));
+	cJSON_AddStringToObject(entry, "fingers_count", fingers_str);
+	cJSON_AddStringToObject(entry, "spec", b->spec ? b->spec : "");
+	return entry;
+}
+
+static void add_rule_entry(cJSON *arr, const char *kind, const char *spec) {
+	cJSON *entry = cJSON_CreateObject();
+	cJSON_AddStringToObject(entry, "rule", kind);
+	cJSON_AddStringToObject(entry, "spec", spec ? spec : "");
+	cJSON_AddItemToArray(arr, entry);
+}
+
 void handle_command(int client_fd, const char *cmd_raw) {
 	cJSON *resp = NULL;
 	char *json_str = NULL;
@@ -842,6 +957,199 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		resp = build_monitor_tags_response(m);
 	} else if (strcmp(cmd, "get layouts") == 0) {
 		resp = build_layouts_response();
+
+	} else if (strncmp(cmd, "get option ", 11) == 0) {
+		const char *value = get_option_value(cmd + 11);
+		if (!value) {
+			send_static_json(client_fd, "{\"error\":\"option not found\"}\n");
+			return;
+		}
+		resp = cJSON_CreateObject();
+		cJSON_AddStringToObject(resp, "option", cmd + 11);
+		cJSON_AddStringToObject(resp, "value", value);
+
+	} else if (strcmp(cmd, "get options") == 0) {
+		cJSON *array = cJSON_CreateArray();
+		for (int index = 0; index < get_option_count(); index++) {
+			cJSON *entry = cJSON_CreateObject();
+			cJSON_AddStringToObject(entry, "option", get_option_key(index));
+			cJSON_AddStringToObject(entry, "value",
+									get_option_value(get_option_key(index)));
+			cJSON_AddItemToArray(array, entry);
+		}
+		resp = cJSON_CreateObject();
+		cJSON_AddItemToObject(resp, "options", array);
+	} else if (strncmp(cmd, "setoption ", 10) == 0) {
+		char *copy = strdup(cmd_raw);
+		char *key = copy + 10;
+		char *separator = strchr(key, ' ');
+		if (!separator) {
+			free(copy);
+			send_static_json(
+				client_fd, "{\"error\":\"usage: setoption <key> <value>\"}\n");
+			return;
+		}
+		*separator = '\0';
+		char *value = separator + 1;
+		trim_whitespace(key);
+		trim_whitespace(value);
+		for (char *p = value; *p; p++) {
+			if (*p == '\\' && p[1] == ',')
+				memmove(p, p + 1, strlen(p));
+		}
+		bool ok = parse_option(&config, key, value, 0);
+		if (!ok) {
+			free(copy);
+			send_static_json(
+				client_fd, "{\"error\":\"unknown option or invalid value\"}\n");
+			return;
+		}
+		override_config();
+		reset_option_apply();
+		free(copy);
+		send_static_json(client_fd, "{\"success\": true}\n");
+		return;
+
+	} else if (strcmp(cmd, "get binds") == 0) {
+		cJSON *groups[5] = {cJSON_CreateArray(), cJSON_CreateArray(),
+							cJSON_CreateArray(), cJSON_CreateArray(),
+							cJSON_CreateArray()};
+		for (int index = 0; index < config.key_bindings_count; index++) {
+			const KeyBinding *b = &config.key_bindings[index];
+			cJSON *group = find_or_create_keymode_group(groups[0], b->mode);
+			cJSON_AddItemToArray(
+				cJSON_GetObjectItemCaseSensitive(group, "binds"),
+				key_bind_entry(b));
+		}
+		for (int index = 0; index < config.mouse_bindings_count; index++) {
+			const MouseBinding *b = &config.mouse_bindings[index];
+			cJSON *group = find_or_create_keymode_group(groups[1], b->mode);
+			cJSON_AddItemToArray(
+				cJSON_GetObjectItemCaseSensitive(group, "binds"),
+				mouse_bind_entry(b));
+		}
+		for (int index = 0; index < config.axis_bindings_count; index++) {
+			const AxisBinding *b = &config.axis_bindings[index];
+			cJSON *group = find_or_create_keymode_group(groups[2], b->mode);
+			cJSON_AddItemToArray(
+				cJSON_GetObjectItemCaseSensitive(group, "binds"),
+				axis_bind_entry(b));
+		}
+		for (int index = 0; index < config.switch_bindings_count; index++) {
+			const SwitchBinding *b = &config.switch_bindings[index];
+			cJSON *group = find_or_create_keymode_group(groups[3], b->mode);
+			cJSON_AddItemToArray(
+				cJSON_GetObjectItemCaseSensitive(group, "binds"),
+				switch_bind_entry(b));
+		}
+		for (int index = 0; index < config.gesture_bindings_count; index++) {
+			const GestureBinding *b = &config.gesture_bindings[index];
+			cJSON *group = find_or_create_keymode_group(groups[4], b->mode);
+			cJSON_AddItemToArray(
+				cJSON_GetObjectItemCaseSensitive(group, "binds"),
+				gesture_bind_entry(b));
+		}
+		resp = cJSON_CreateObject();
+		cJSON_AddItemToObject(resp, "binds", groups[0]);
+		cJSON_AddItemToObject(resp, "mouse", groups[1]);
+		cJSON_AddItemToObject(resp, "axis", groups[2]);
+		cJSON_AddItemToObject(resp, "switch", groups[3]);
+		cJSON_AddItemToObject(resp, "gesture", groups[4]);
+
+	} else if (strcmp(cmd, "get rules") == 0) {
+		cJSON *rules_arr = cJSON_CreateArray();
+		for (int index = 0; index < config.window_rules_count; index++)
+			add_rule_entry(rules_arr,
+						   config.window_rules[index].is_once
+							   ? "windowrule-once"
+							   : "windowrule",
+						   config.window_rules[index].spec);
+		for (int index = 0; index < config.layer_rules_count; index++)
+			add_rule_entry(rules_arr, "layerrule",
+						   config.layer_rules[index].spec);
+		for (int index = 0; index < config.monitor_rules_count; index++)
+			add_rule_entry(rules_arr, "monitorrule",
+						   config.monitor_rules[index].spec);
+		for (int index = 0; index < config.tag_rules_count; index++)
+			add_rule_entry(rules_arr, "tagrule", config.tag_rules[index].spec);
+		for (int index = 0; index < config.device_rules_count; index++)
+			add_rule_entry(rules_arr, "devicerule",
+						   config.device_rules[index].spec);
+		resp = cJSON_CreateObject();
+		cJSON_AddItemToObject(resp, "rules", rules_arr);
+
+	} else if (strncmp(cmd, "unset ", 6) == 0 &&
+			   (strncmp(cmd + 6, "bind ", 5) == 0 ||
+				strncmp(cmd + 6, "mousebind ", 10) == 0 ||
+				strncmp(cmd + 6, "axisbind ", 9) == 0 ||
+				strncmp(cmd + 6, "switchbind ", 11) == 0 ||
+				strncmp(cmd + 6, "gesturebind ", 12) == 0)) {
+		char *copy = strdup(cmd + 6);
+		char *saveptr = NULL;
+		char *kind = strtok_r(copy, " \t", &saveptr);
+		char *mode = strtok_r(NULL, " \t", &saveptr);
+		char *a1 = strtok_r(NULL, " \t", &saveptr);
+		char *a2 = strtok_r(NULL, " \t", &saveptr);
+		char *a3 = strtok_r(NULL, " \t", &saveptr);
+		bool ok = false;
+		if (kind && mode) {
+			if (strcmp(kind, "bind") == 0 && a1 && a2 && a3)
+				ok = unset_key_binding(mode, a1, a2, strchr(a3, 's') != NULL);
+			else if (strcmp(kind, "mousebind") == 0 && a1 && a2)
+				ok = unset_mouse_binding(mode, a1, a2);
+			else if (strcmp(kind, "axisbind") == 0 && a1 && a2)
+				ok = unset_axis_binding(mode, a1, a2);
+			else if (strcmp(kind, "switchbind") == 0 && a1)
+				ok = unset_switch_binding(mode, a1);
+			else if (strcmp(kind, "gesturebind") == 0 && a1 && a2 && a3)
+				ok = unset_gesture_binding(mode, a1, a2, a3);
+		}
+		free(copy);
+		send_static_json(client_fd, ok ? "{\"success\":true}\n"
+									   : "{\"error\":\"not found\"}\n");
+		return;
+
+	} else if (strncmp(cmd, "unset windowrule ", 17) == 0 ||
+			   strncmp(cmd, "unset layerrule ", 16) == 0 ||
+			   strncmp(cmd, "unset monitorrule ", 18) == 0 ||
+strncmp(cmd, "unset tagrule ", 14) == 0 ||
+		   strncmp(cmd, "unset devicerule ", 17) == 0) {
+		char *copy = strdup(cmd_raw);
+		char *spec = strchr(copy + 6, ' ') + 1;
+		while (*spec == ' ' || *spec == '\t')
+			spec++;
+		for (char *p = spec; *p; p++) {
+			if (*p == '\\' && p[1] == ',')
+				memmove(p, p + 1, strlen(p));
+		}
+		bool ok = false;
+		if (strncmp(cmd, "unset windowrule ", 17) == 0)
+			ok = unset_window_rule(spec);
+		else if (strncmp(cmd, "unset layerrule ", 16) == 0)
+			ok = unset_layer_rule(spec);
+		else if (strncmp(cmd, "unset monitorrule ", 18) == 0)
+			ok = unset_monitor_rule(spec);
+		else if (strncmp(cmd, "unset tagrule ", 14) == 0)
+			ok = unset_tag_rule(spec);
+		else if (strncmp(cmd, "unset devicerule ", 17) == 0)
+			ok = unset_device_rule(spec);
+		if (ok) {
+			if (strncmp(cmd, "unset windowrule ", 17) == 0)
+				reapply_window_rules();
+			else if (strncmp(cmd, "unset monitorrule ", 18) == 0)
+				reapply_monitor_rules();
+			else if (strncmp(cmd, "unset tagrule ", 14) == 0)
+				reapply_tagrule();
+			else if (strncmp(cmd, "unset devicerule ", 17) == 0) {
+				reapply_keyboard();
+				reapply_pointer();
+			}
+		}
+		free(copy);
+		send_static_json(client_fd, ok ? "{\"success\":true}\n"
+									   : "{\"error\":\"not found\"}\n");
+		return;
+
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
@@ -866,21 +1174,40 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		}
 		*out = '\0';
 
-		char *tokens[6] = {NULL};
+		char *tokens[16] = {NULL};
 		int token_count = 0;
-		char *saveptr;
-		char *token = strtok_r(dispatch_copy, ",", &saveptr);
-		while (token && token_count < 6) {
+		char *tok = dispatch_copy;
+		char *cur = dispatch_copy;
+		while (*cur && token_count < 16) {
+			if (*cur == '\\' && cur[1] == ',') {
+				memmove(cur, cur + 1, strlen(cur));
+				cur++;
+				continue;
+			}
+			if (*cur == ',') {
+				*cur++ = '\0';
+				char *token = tok;
+				while (*token == ' ' || *token == '\t')
+					token++;
+				char *end = token + strlen(token) - 1;
+				while (end >= token && (*end == ' ' || *end == '\t'))
+					*end-- = '\0';
+				if (*token)
+					tokens[token_count++] = token;
+				tok = cur;
+				continue;
+			}
+			cur++;
+		}
+		if (token_count < 16 && *tok) {
+			char *token = tok;
 			while (*token == ' ' || *token == '\t')
 				token++;
 			char *end = token + strlen(token) - 1;
 			while (end >= token && (*end == ' ' || *end == '\t'))
 				*end-- = '\0';
-			tokens[token_count++] = token;
-			if (token_count >= 5)
-				token = saveptr;
-			else
-				token = strtok_r(NULL, ",", &saveptr);
+			if (*token)
+				tokens[token_count++] = token;
 		}
 
 		Arg arg = {0};
