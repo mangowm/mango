@@ -1074,7 +1074,8 @@ void client_animation_next_tick(Client *c) {
 		struct wlr_surface *surface =
 			pointer_c && pointer_c == c ? client_surface(pointer_c) : NULL;
 
-		if (surface && pointer_c == server.selected_monitor->sel &&
+		if (surface && server.selected_monitor &&
+			pointer_c == server.selected_monitor->sel &&
 			!server.selected_monitor->isoverview)
 			wlr_seat_pointer_notify_enter(server.seat, surface, sx, sy);
 
@@ -1545,9 +1546,10 @@ bool client_apply_focus_opacity(Client *c) {
 		float percent = config.animation_fade_in && !c->nofadein
 							? opacity_eased_progress
 							: 1.0;
-		float opacity = c == server.selected_monitor->sel
-							? c->focused_opacity
-							: c->unfocused_opacity;
+		float opacity =
+			(server.selected_monitor && c == server.selected_monitor->sel)
+				? c->focused_opacity
+				: c->unfocused_opacity;
 		float target_opacity = percent * (1.0 - config.fadein_begin_opacity) +
 							   config.fadein_begin_opacity;
 
@@ -1594,7 +1596,7 @@ bool client_apply_focus_opacity(Client *c) {
 
 		if (client_step_focus_animation(c, linear_progress))
 			return true;
-	} else if (c == server.selected_monitor->sel) {
+	} else if (server.selected_monitor && c == server.selected_monitor->sel) {
 		c->opacity_animation.running = false;
 		c->opacity_animation.current_opacity = c->focused_opacity;
 		memcpy(c->opacity_animation.current_border_color, border_color,
