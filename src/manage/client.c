@@ -457,15 +457,9 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
 		struct wlr_xwayland_surface *surface = c->surface.xwayland;
 		struct wlr_surface_state *state = &surface->surface->current;
 
-		/* Configure uses physical sizes (logical * xscale) so X11 renders 1:1.
-		 */
-		struct wlr_box xgeo = {
-			.x = c->geom.x + (int32_t)c->bw,
-			.y = c->geom.y + (int32_t)c->bw,
-			.width = c->geom.width - 2 * (int32_t)c->bw,
-			.height = c->geom.height - 2 * (int32_t)c->bw,
-		};
-		xwayland_logical_to_x11(&xgeo, c->xwayland_scale);
+		/* Configure uses physical sizes (see client_get_x11_geometry). */
+		struct wlr_box xgeo;
+		client_get_x11_geometry(c, &xgeo);
 		int32_t xw = xgeo.width;
 		int32_t xh = xgeo.height;
 		int32_t xx = xgeo.x;
@@ -4187,6 +4181,32 @@ void xwayland_x11_to_logical(struct wlr_box *box, float scale) {
 	box->height = (int32_t)roundf(box->height / scale);
 }
 
+/* X11 (physical) geometry a client window is configured with. Fullscreen X11
+ * windows take the output's physical (rotation-aware) resolution: the truncated
+ * layout box scaled back (2560 / 1.5 -> 1706 -> 2559) is 1px short of it. */
+void client_get_x11_geometry(Client *c, struct wlr_box *xgeo) {
+	if (config.xwayland_ignore_scale && c->isfullscreen && c->mon &&
+		!client_is_unmanaged(c)) {
+		/* Fullscreen: the window is exactly the output, so configure it with
+		 * the physical resolution. */
+		int32_t width, height, ox, oy;
+		wlr_output_transformed_resolution(c->mon->wlr_output, &width, &height);
+		xwayland_screen_origin(&ox, &oy);
+		xgeo->x = (int32_t)roundf((c->mon->m.x - ox) * c->xwayland_scale);
+		xgeo->y = (int32_t)roundf((c->mon->m.y - oy) * c->xwayland_scale);
+		xgeo->width = width;
+		xgeo->height = height;
+	} else {
+		/* Others (non-fullscreen, xwayland_ignore_scale off, unmanaged):
+		 * logical geometry -> physical coordinates, X11 renders 1:1. */
+		xgeo->x = c->geom.x + (int32_t)c->bw;
+		xgeo->y = c->geom.y + (int32_t)c->bw;
+		xgeo->width = c->geom.width - 2 * (int32_t)c->bw;
+		xgeo->height = c->geom.height - 2 * (int32_t)c->bw;
+		xwayland_logical_to_x11(xgeo, c->xwayland_scale);
+	}
+}
+
 void fix_xwayland_coordinate(struct wlr_box *geom) {
 	if (!server.selected_monitor)
 		return;
@@ -4339,16 +4359,9 @@ void handle_xwayland_surface_commit(struct wl_listener *listener, void *data) {
 	/* Overview card nodes are independent scene_surfaces that auto-update on
 	 * commit. */
 
-	/* Compares the acked X11 geometry with the one mango configured: sizes are
-	 * physical (logical * scale), positions are relative to the screen origin.
-	 */
-	struct wlr_box xgeo = {
-		.x = c->geom.x + (int32_t)c->bw,
-		.y = c->geom.y + (int32_t)c->bw,
-		.width = c->geom.width - 2 * (int32_t)c->bw,
-		.height = c->geom.height - 2 * (int32_t)c->bw,
-	};
-	xwayland_logical_to_x11(&xgeo, c->xwayland_scale);
+	/* Compares the acked X11 geometry with the one mango configured. */
+	struct wlr_box xgeo;
+	client_get_x11_geometry(c, &xgeo);
 
 	if (xgeo.width == (int32_t)state->width &&
 		xgeo.height == (int32_t)state->height &&
