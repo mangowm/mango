@@ -1,10 +1,13 @@
 /* See LICENSE.dwm file for copyright and license details. */
+#include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <wlr/util/log.h>
 
@@ -250,4 +253,34 @@ void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2) {
 	wl_list_remove(l2);
 	wl_list_init(l2);
 	wl_list_insert(l1, l2);
+}
+
+int32_t mango_exec(const char *cmd) {
+	if (!cmd)
+		return -1;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		mango_error(true, WLR_ERROR, "mango: failed to fork: %s\n",
+					strerror(errno));
+		return -1;
+	}
+
+	if (pid == 0) {
+		dup2(STDERR_FILENO, STDOUT_FILENO);
+		setsid();
+
+		execlp("sh", "sh", "-c", cmd, (char *)NULL);
+		execlp("bash", "bash", "-c", cmd, (char *)NULL);
+
+		mango_error(true, WLR_DEBUG,
+					"mango: failed to execute command '%s' with shell: %s\n",
+					cmd, strerror(errno));
+		_exit(EXIT_FAILURE);
+	}
+
+	int32_t status;
+	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+		;
+	return 0;
 }
