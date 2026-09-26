@@ -4644,6 +4644,32 @@ void reapply_master(void) {
 	}
 }
 
+bool is_gap_setting(const char *key) {
+	return strcmp(key, "gappih") == 0 || strcmp(key, "gappiv") == 0 ||
+		   strcmp(key, "gappoh") == 0 || strcmp(key, "gappov") == 0 ||
+		   strcmp(key, "special_gappih") == 0 ||
+		   strcmp(key, "special_gappiv") == 0 ||
+		   strcmp(key, "special_gappoh") == 0 ||
+		   strcmp(key, "special_gappov") == 0;
+}
+
+void reapply_gaps(void) {
+	Monitor *m = NULL;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (!m->wlr_output->enabled) {
+			continue;
+		}
+		m->gappih = config.gappih;
+		m->gappiv = config.gappiv;
+		m->gappoh = config.gappoh;
+		m->gappov = config.gappov;
+		m->special_gappih = config.special_gappih;
+		m->special_gappiv = config.special_gappiv;
+		m->special_gappoh = config.special_gappoh;
+		m->special_gappov = config.special_gappov;
+	}
+}
+
 // Reset a pertag slot to defaults.
 void tag_slot_set_defaults(Monitor *m, uint32_t tag) {
 	m->pertag->nmasters[tag] = config.default_nmaster;

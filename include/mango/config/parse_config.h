@@ -672,6 +672,10 @@ void reapply_pointer(void);
 
 void reapply_master(void);
 
+bool is_gap_setting(const char *key);
+
+void reapply_gaps(void);
+
 void parse_tagrule(Monitor *m);
 
 void run_exec();

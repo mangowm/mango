@@ -2202,9 +2202,18 @@ int32_t zoom(const Arg *arg) {
 }
 
 int32_t setoption(const Arg *arg) {
-	parse_option(&config, arg->v, arg->v2, 0);
+	if (!arg->v || !arg->v2 || !parse_option(&config, arg->v, arg->v2, 0))
+		return -1;
+
 	override_config();
-	reset_option();
+
+	if (is_gap_setting(arg->v)) {
+		reapply_gaps();
+		arrange(server.selected_monitor, false, false);
+		printstatus(IPC_WATCH_ARRANGGE);
+	} else {
+		reset_option();
+	}
 	return 0;
 }
 
