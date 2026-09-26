@@ -393,6 +393,49 @@ void handle_new_idle_inhibitor(struct wl_listener *listener, void *data) {
 	check_idle_inhibitor(NULL);
 }
 
+static struct wlr_surface *session_lock_focus_target(void) {
+	Monitor *m;
+
+	if (server.selected_monitor && server.selected_monitor->lock_surface)
+		return server.selected_monitor->lock_surface->surface;
+
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->wlr_output->enabled && m->lock_surface)
+			return m->lock_surface->surface;
+	}
+
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->lock_surface)
+			return m->lock_surface->surface;
+	}
+
+	return NULL;
+}
+
+void session_lock_focus_restore(void) {
+	struct wlr_surface *target;
+
+	if (!server.session_locked || !server.current_lock)
+		return;
+
+	target = session_lock_focus_target();
+	if (!target || server.seat->keyboard_state.focused_surface == target)
+		return;
+
+	client_notify_enter(target, wlr_seat_get_keyboard(server.seat));
+}
+
+bool session_lock_focus_missing(void) {
+	struct wlr_surface *target;
+
+	if (!server.session_locked || !server.current_lock)
+		return false;
+
+	target = session_lock_focus_target();
+
+	return target && server.seat->keyboard_state.focused_surface != target;
+}
+
 void handle_session_lock_new_surface(struct wl_listener *listener, void *data) {
 	SessionLock *lock = wl_container_of(listener, lock, new_surface);
 	struct wlr_session_lock_surface_v1 *lock_surface = data;
@@ -408,9 +451,7 @@ void handle_session_lock_new_surface(struct wl_listener *listener, void *data) {
 	LISTEN(&lock_surface->events.destroy, &m->destroy_lock_surface,
 		   handle_session_lock_surface_destroy);
 
-	if (m == server.selected_monitor)
-		client_notify_enter(lock_surface->surface,
-							wlr_seat_get_keyboard(server.seat));
+	session_lock_focus_restore();
 }
 
 void handle_idle_inhibitor_destroy(struct wl_listener *listener, void *data) {
@@ -447,8 +488,7 @@ destroy:
 void handle_session_lock_surface_destroy(struct wl_listener *listener,
 										 void *data) {
 	Monitor *m = wl_container_of(listener, m, destroy_lock_surface);
-	struct wlr_session_lock_surface_v1 *surface,
-		*lock_surface = m->lock_surface;
+	struct wlr_session_lock_surface_v1 *lock_surface = m->lock_surface;
 
 	m->lock_surface = NULL;
 	wl_list_remove(&m->destroy_lock_surface.link);
@@ -460,16 +500,10 @@ void handle_session_lock_surface_destroy(struct wl_listener *listener,
 		return;
 	}
 
-	if (server.session_locked && server.current_lock &&
-		!wl_list_empty(&server.current_lock->surfaces)) {
-		surface =
-			wl_container_of(server.current_lock->surfaces.next, surface, link);
-		client_notify_enter(surface->surface,
-							wlr_seat_get_keyboard(server.seat));
-	} else if (!server.session_locked) {
-		reset_exclusive_layers_focus(server.selected_monitor);
+	if (server.session_locked) {
+		session_lock_focus_restore();
 	} else {
-		wlr_seat_keyboard_clear_focus(server.seat);
+		reset_exclusive_layers_focus(server.selected_monitor);
 	}
 }
 

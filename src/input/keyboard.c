@@ -9,6 +9,7 @@
 #include "mango/input/pointer.h"
 #include "mango/ipc/ipc.h"
 #include "mango/manage/client.h"
+#include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
 #include <wlr/backend/libinput.h>
@@ -643,6 +644,9 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	KeyboardGroup *group = wl_container_of(listener, group, key);
 	struct wlr_keyboard_key_event *event = data;
 
+	if (session_lock_focus_missing())
+		session_lock_focus_restore();
+
 	struct wlr_surface *last_surface =
 		server.seat->keyboard_state.focused_surface;
 	struct wlr_xdg_surface *xdg_surface =
@@ -788,6 +792,9 @@ void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
 	KeyboardGroup *group = wl_container_of(listener, group, modifiers);
+
+	if (session_lock_focus_missing())
+		session_lock_focus_restore();
 
 	if (!group->keyboard->xkb_state)
 		return;
