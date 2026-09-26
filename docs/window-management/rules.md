@@ -64,6 +64,7 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
 | `noblur` | integer | `0` / `1` | Window does not have blur effect |
+| `nodim` | integer | `0` / `1` | Set to `1` to never dim the window when inactive |
 | `isnoborder` | integer | `0` / `1` | Remove window border |
 | `isnoshadow` | integer | `0` / `1` | Not apply shadow |
 | `isnoradius` | integer | `0` / `1` | Not apply corner radius |
@@ -144,6 +145,9 @@ windowrule=unfocused_opacity:0.6,appid:foot
 
 # Disable blur for selection tools
 windowrule=noblur:1,appid:slurp
+
+# Never dim this window when inactive
+windowrule=nodim:1,appid:mpv
 
 # Position windows relative to screen center
 windowrule=offsetx:20,offsety:-30,width:800,height:600,appid:alacritty
