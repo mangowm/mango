@@ -331,6 +331,7 @@ typedef struct {
 	int32_t scroller_ignore_proportion_single;
 	int32_t scroller_focus_center;
 	int32_t scroller_prefer_center;
+	int32_t scroller_start_left;
 	int32_t scroller_prefer_overspread;
 	int32_t edge_scroller_pointer_focus;
 	double edge_scroller_focus_allow_speed;
