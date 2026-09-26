@@ -363,7 +363,9 @@ void scroller(Monitor *m) {
 		struct wlr_box target_geom;
 		target_geom.height = m->w.height - 2 * cur_gappov;
 		target_geom.width = (m->w.width - 2 * cur_gappoh) * single_proportion;
-		target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
+		target_geom.x = config.scroller_start_left
+							? m->w.x + config.scroller_structs
+							: m->w.x + (m->w.width - target_geom.width) / 2;
 		target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
 		horizontal_check_scroller_root_inside_mon(head->client, &target_geom);
 		arrange_stack_node(head, target_geom, cur_gappiv);
@@ -475,7 +477,9 @@ void scroller(Monitor *m) {
 												  &target_geom);
 		arrange_stack_node(heads[focus_index], target_geom, cur_gappiv);
 	} else if (need_scroller) {
-		if (need_apply_center) {
+		if (n_heads == 1 && config.scroller_start_left) {
+			target_geom.x = m->w.x + config.scroller_structs;
+		} else if (need_apply_center) {
 			target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
 		} else if (need_apply_overspread) {
 			if (over_overspread_to_left) {

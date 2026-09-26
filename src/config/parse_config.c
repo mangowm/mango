@@ -552,6 +552,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->scroller_prefer_center = atoi(value);
 	} else if (strcmp(key, "scroller_prefer_overspread") == 0) {
 		config->scroller_prefer_overspread = atoi(value);
+	} else if (strcmp(key, "scroller_start_left") == 0) {
+		config->scroller_start_left = atoi(value);
 	} else if (strcmp(key, "edge_scroller_pointer_focus") == 0) {
 		config->edge_scroller_pointer_focus = atoi(value);
 	} else if (strcmp(key, "edge_scroller_focus_allow_speed") == 0) {
@@ -3803,6 +3805,7 @@ void override_config(void) {
 		CLAMP_INT(config.scroller_prefer_center, 0, 1);
 	config.scroller_prefer_overspread =
 		CLAMP_INT(config.scroller_prefer_overspread, 0, 1);
+	config.scroller_start_left = CLAMP_INT(config.scroller_start_left, 0, 1);
 	config.edge_scroller_pointer_focus =
 		CLAMP_INT(config.edge_scroller_pointer_focus, 0, 1);
 	config.edge_scroller_focus_allow_speed =
@@ -4077,6 +4080,7 @@ void set_value_default() {
 	config.scroller_focus_center = 0;
 	config.scroller_prefer_center = 0;
 	config.scroller_prefer_overspread = 1;
+	config.scroller_start_left = 0;
 	config.edge_scroller_pointer_focus = 1;
 	config.edge_scroller_focus_allow_speed = 0.0f;
 	config.focus_cross_monitor = 0;
