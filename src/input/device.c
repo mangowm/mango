@@ -40,6 +40,80 @@ void handle_input_device_destroy(struct wl_listener *listener, void *data) {
 	free(input_dev);
 }
 
+typedef struct SeatDevice {
+	struct wl_list link;
+	struct wlr_input_device *device;
+	struct wl_listener destroy;
+} SeatDevice;
+
+static bool seat_device_provides_capability(
+	const struct wlr_input_device *device, uint32_t capability) {
+	switch (device->type) {
+	case WLR_INPUT_DEVICE_POINTER:
+	case WLR_INPUT_DEVICE_TABLET:
+		return capability == WL_SEAT_CAPABILITY_POINTER;
+	case WLR_INPUT_DEVICE_TOUCH:
+		if (capability == WL_SEAT_CAPABILITY_TOUCH)
+			return config.touch_enable != 0;
+		return capability == WL_SEAT_CAPABILITY_POINTER &&
+			   config.touch_enable && config.touch_enable_mouse_emulation;
+	case WLR_INPUT_DEVICE_KEYBOARD:
+		return capability == WL_SEAT_CAPABILITY_KEYBOARD;
+	default:
+		return false;
+	}
+}
+
+static bool seat_has_capability(uint32_t capability) {
+	SeatDevice *seat_device;
+
+	wl_list_for_each(seat_device, &server.seat_devices, link) {
+		if (seat_device_provides_capability(seat_device->device, capability))
+			return true;
+	}
+	return false;
+}
+
+void update_seat_capabilities(void) {
+	uint32_t caps = 0;
+
+	if (!server.seat)
+		return;
+
+	/*
+	 * seat_has_capability() is also influenced by config.touch_enable and
+	 * config.touch_enable_mouse_emulation, so reload_config() re-runs this.
+	 */
+	if (seat_has_capability(WL_SEAT_CAPABILITY_POINTER))
+		caps |= WL_SEAT_CAPABILITY_POINTER;
+	if (seat_has_capability(WL_SEAT_CAPABILITY_KEYBOARD))
+		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+	if (seat_has_capability(WL_SEAT_CAPABILITY_TOUCH))
+		caps |= WL_SEAT_CAPABILITY_TOUCH;
+	wlr_seat_set_capabilities(server.seat, caps);
+}
+
+static void handle_seat_device_destroy(struct wl_listener *listener,
+									   void *data) {
+	SeatDevice *seat_device = wl_container_of(listener, seat_device, destroy);
+
+	wl_list_remove(&seat_device->destroy.link);
+	wl_list_remove(&seat_device->link);
+	free(seat_device);
+	update_seat_capabilities();
+}
+
+void seat_device_add(struct wlr_input_device *device) {
+	SeatDevice *seat_device = calloc(1, sizeof(*seat_device));
+
+	seat_device->device = device;
+	seat_device->destroy.notify = handle_seat_device_destroy;
+	wl_signal_add(&device->events.destroy, &seat_device->destroy);
+	wl_list_insert(&server.seat_devices, &seat_device->link);
+
+	update_seat_capabilities();
+}
+
 void handle_new_input_device(struct wl_listener *listener, void *data) {
 	/* This event is raised by the backend when a new input device becomes
 	 * available.
@@ -47,7 +121,6 @@ void handle_new_input_device(struct wl_listener *listener, void *data) {
 	 * triggered.
 	 */
 	struct wlr_input_device *device = data;
-	uint32_t caps;
 
 	switch (device->type) {
 	case WLR_INPUT_DEVICE_KEYBOARD:
@@ -73,14 +146,5 @@ void handle_new_input_device(struct wl_listener *listener, void *data) {
 		break;
 	}
 
-	/* We need to let the wlr_seat know what our capabilities are, which is
-	 * communiciated to the client. In mango we always have a cursor, even if
-	 * there are no pointer devices, so we always include that capability.
-	 */
-	/* TODO do we actually require a cursor? */
-	caps = WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_TOUCH;
-	if (!wl_list_empty(&server.keyboard_group->wlr_group->devices) ||
-		!wl_list_empty(&server.standalone_keyboards))
-		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
-	wlr_seat_set_capabilities(server.seat, caps);
+	seat_device_add(device);
 }

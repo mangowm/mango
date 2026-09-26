@@ -4632,6 +4632,7 @@ int32_t reload_config(const Arg *arg) {
 	parse_config();
 	reset_tag(old_tag_num);
 	reset_option();
+	update_seat_capabilities();
 	printstatus(IPC_WATCH_ARRANGGE);
 	return 1;
 }

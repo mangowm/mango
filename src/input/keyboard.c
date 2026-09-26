@@ -924,8 +924,7 @@ void handle_new_virtual_keyboard(struct wl_listener *listener, void *data) {
 	// Virtual keyboards do not join the physical keyboard group, and a single
 	// keyboard does not need a wlr group; handle them as standalone keyboards
 	// and distinguish them with the virtual_keyboard field.
-	wlr_seat_set_capabilities(server.seat, server.seat->capabilities |
-											   WL_SEAT_CAPABILITY_KEYBOARD);
+	seat_device_add(&kb->keyboard.base);
 	struct wlr_keyboard *prev = wlr_seat_get_keyboard(server.seat);
 
 	KeyboardGroup *group = ecalloc(1, sizeof(*group));

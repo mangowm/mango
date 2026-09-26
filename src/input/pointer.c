@@ -1283,8 +1283,8 @@ void pointer_warp_to_monitor(Monitor *m) {
 void handle_new_virtual_pointer(struct wl_listener *listener, void *data) {
 	struct wlr_virtual_pointer_v1_new_pointer_event *event = data;
 	struct wlr_input_device *device = &event->new_pointer->pointer.base;
-	wlr_seat_set_capabilities(server.seat, server.seat->capabilities |
-											   WL_SEAT_CAPABILITY_POINTER);
+
+	seat_device_add(device);
 	wlr_cursor_attach_input_device(server.cursor, device);
 	if (event->suggested_output)
 		wlr_cursor_map_input_to_output(server.cursor, device,

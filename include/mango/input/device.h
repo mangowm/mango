@@ -21,4 +21,8 @@ void handle_input_device_destroy(struct wl_listener *listener, void *data);
 
 void handle_new_input_device(struct wl_listener *listener, void *data);
 
+void seat_device_add(struct wlr_input_device *device);
+
+void update_seat_capabilities(void);
+
 #endif
