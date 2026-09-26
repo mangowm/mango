@@ -788,6 +788,13 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	}
 }
 
+uint32_t keyboard_get_current_layout(void) {
+	struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
+	if (kb && kb->xkb_state)
+		return xkb_state_serialize_layout(kb->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
+	return 0;
+}
+
 void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 	/* This event is raised when a modifier key, such as shift or alt, is
 	 * pressed. We simply communicate this to the client. */
@@ -822,6 +829,7 @@ void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 	if (current != group->layout_index) {
 		group->layout_index = current;
 		printstatus(IPC_WATCH_KB_LAYOUT);
+		client_update_all_borders();
 	}
 }
 
@@ -918,6 +926,7 @@ void reset_keyboard_layout(void) {
 
 cleanup_context:
 	xkb_context_unref(context);
+	client_update_all_borders();
 }
 void handle_new_virtual_keyboard(struct wl_listener *listener, void *data) {
 	struct wlr_virtual_keyboard_v1 *kb = data;

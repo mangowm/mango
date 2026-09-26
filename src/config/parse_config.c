@@ -1227,6 +1227,44 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->focuscolor, color);
 		}
+	} else if (strcmp(key, "xkb_layout_focuscolors") == 0) {
+			char *value_copy = strdup(value);
+			char *token = strtok(value_copy, ",");
+			config->xkb_layout_focuscolors_count = 0;
+			while (token != NULL && config->xkb_layout_focuscolors_count < 8) {
+				trim_whitespace(token);
+				int64_t color = parse_color(token);
+				if (color == -1) {
+					mango_error(false, WLR_ERROR,
+								"Invalid xkb_layout_focuscolors format: %s\n",
+								token);
+					free(value_copy);
+					return false;
+				}
+				convert_hex_to_rgba(config->xkb_layout_focuscolors[config->xkb_layout_focuscolors_count], color);
+				config->xkb_layout_focuscolors_count++;
+				token = strtok(NULL, ",");
+			}
+			free(value_copy);
+		} else if (strcmp(key, "xkb_layout_bordercolors") == 0) {
+			char *value_copy = strdup(value);
+			char *token = strtok(value_copy, ",");
+			config->xkb_layout_bordercolors_count = 0;
+			while (token != NULL && config->xkb_layout_bordercolors_count < 8) {
+				trim_whitespace(token);
+				int64_t color = parse_color(token);
+				if (color == -1) {
+					mango_error(false, WLR_ERROR,
+								"Invalid xkb_layout_bordercolors format: %s\n",
+								token);
+					free(value_copy);
+					return false;
+				}
+				convert_hex_to_rgba(config->xkb_layout_bordercolors[config->xkb_layout_bordercolors_count], color);
+				config->xkb_layout_bordercolors_count++;
+				token = strtok(NULL, ",");
+			}
+			free(value_copy);
 	} else if (strcmp(key, "maximizescreencolor") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
