@@ -31,6 +31,9 @@
 static struct wl_list ipc_watch_clients;
 static int ipc_device_watch_count;
 
+#define CLIENT_PREFIX "client,"
+#define CLIENT_PREFIX_LEN (sizeof(CLIENT_PREFIX) - 1)
+
 const char *ipc_device_type_str(struct wlr_input_device *dev) {
 	if (!dev)
 		return "unknown";
@@ -846,15 +849,24 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		char *dispatch_copy = strdup(cmd_raw + 9);
 		char *out = dispatch_copy, *ptr = dispatch_copy;
 		int client_id = -1;
+		bool field_start = true;
 
 		while (*ptr) {
-			while (*ptr == ' ' || *ptr == '\t')
+			while (*ptr == ' ' || *ptr == '\t') {
 				*out++ = *ptr++;
+				field_start = true;
+			}
+			if (*ptr == '\0')
+				break;
 
-			if (strncmp(ptr, "client,", 7) == 0) {
+			// "client,<id>" must start a field, otherwise it would match the
+			// tail of a name like "viewtoleft_have_client,1".
+			if (field_start &&
+				strncmp(ptr, CLIENT_PREFIX, CLIENT_PREFIX_LEN) == 0) {
 				char *end;
-				long id = strtol(ptr + 7, &end, 10);
-				if (id > 0 && end > ptr + 7 && (*end == '\0' || *end == ',')) {
+				long id = strtol(ptr + CLIENT_PREFIX_LEN, &end, 10);
+				if (id > 0 && end > ptr + CLIENT_PREFIX_LEN &&
+					(*end == '\0' || *end == ',')) {
 					client_id = (int)id;
 					ptr = end;
 					if (*ptr == ',')
@@ -862,6 +874,7 @@ void handle_command(int client_fd, const char *cmd_raw) {
 					continue;
 				}
 			}
+			field_start = *ptr == ',';
 			*out++ = *ptr++;
 		}
 		*out = '\0';
