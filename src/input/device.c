@@ -5,6 +5,7 @@
 #include "mango/input/switch.h"
 #include "mango/input/tablet.h"
 #include "mango/input/touch.h"
+#include "mango/manage/misc.h"
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
@@ -80,7 +81,13 @@ void handle_new_input_device(struct wl_listener *listener, void *data) {
 	/* TODO do we actually require a cursor? */
 	caps = WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_TOUCH;
 	if (!wl_list_empty(&server.keyboard_group->wlr_group->devices) ||
-		!wl_list_empty(&server.standalone_keyboards))
+		!wl_list_empty(&server.standalone_keyboards) ||
+		!wl_list_empty(&server.virtual_keyboards))
+		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+	if (server.seat->capabilities & WL_SEAT_CAPABILITY_KEYBOARD)
 		caps |= WL_SEAT_CAPABILITY_KEYBOARD;
 	wlr_seat_set_capabilities(server.seat, caps);
+
+	if (server.session_locked)
+		session_lock_focus_restore();
 }

@@ -9,6 +9,7 @@
 #include "mango/input/pointer.h"
 #include "mango/ipc/ipc.h"
 #include "mango/manage/client.h"
+#include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
 #include <wlr/backend/libinput.h>
@@ -140,6 +141,9 @@ void keyboard_create(struct wlr_keyboard *keyboard) {
 
 	/* Add the new keyboard to the group */
 	wlr_keyboard_group_add_keyboard(server.keyboard_group->wlr_group, keyboard);
+
+	if (!wlr_seat_get_keyboard(server.seat))
+		wlr_seat_set_keyboard(server.seat, server.keyboard_group->keyboard);
 }
 
 bool device_rule_has_keyboard_settings(ConfigDeviceRule *rule) {
@@ -642,6 +646,9 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	/* This event is raised when a key is pressed or released. */
 	KeyboardGroup *group = wl_container_of(listener, group, key);
 	struct wlr_keyboard_key_event *event = data;
+
+	if (server.session_locked)
+		session_lock_focus_restore();
 
 	struct wlr_surface *last_surface =
 		server.seat->keyboard_state.focused_surface;

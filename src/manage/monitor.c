@@ -1164,6 +1164,9 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 		}
 	}
 
+	if (server.session_locked)
+		session_lock_focus_restore();
+
 	/* FIXME: figure out why the cursor image is at 0,0 after turning all
 	 * the monitors on.
 	 * Move the cursor image where it used to be. It does not generate a

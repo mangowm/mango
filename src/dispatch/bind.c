@@ -472,6 +472,10 @@ int32_t focus_monitor(const Arg *arg) {
 	if (config.warpcursor) {
 		pointer_warp_to_monitor(server.selected_monitor);
 	}
+	if (server.session_locked) {
+		session_lock_focus_restore();
+		return 0;
+	}
 	c = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 	if (!c) {
 		server.selected_monitor->sel = NULL;

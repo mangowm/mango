@@ -41,6 +41,9 @@ void arrange_layer(Monitor *m, struct wl_list *list,
 }
 
 void layer_focus(LayerSurface *l) {
+	if (server.session_locked)
+		return;
+
 	client_focus(NULL, 0);
 	mango_im_relay_set_focus(server.input_method_relay,
 							 l->layer_surface->surface);
