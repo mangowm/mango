@@ -94,6 +94,8 @@ typedef struct {
 	KeySymCode keysymcode;
 	int32_t (*func)(const Arg *);
 	Arg arg;
+	char *description;
+	char *raw_args;
 	char mode[28];
 	bool iscommonmode;
 	bool isdefaultmode;
@@ -101,6 +103,7 @@ typedef struct {
 	bool isreleaseapply;
 	bool ispassapply;
 	bool isallowconflict;
+	bool isdescriptionapply;
 	int line_number;
 	int file_index;
 } KeyBinding;
@@ -703,6 +706,11 @@ void set_env_display();
 FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						 char *arg_value2, char *arg_value3, char *arg_value4,
 						 char *arg_value5);
+
+const char *func_to_name(FuncType func);
+
+void mod_to_string(uint32_t mod, char *buf, size_t buf_size);
+
 bool check_simple_binding_conflicts(void *arr, size_t count, size_t elem_size,
 									bool (*same_key)(const void *,
 													 const void *),

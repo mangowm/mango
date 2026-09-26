@@ -23,6 +23,7 @@ bind[flags]=MODIFIERS,KEY,COMMAND,PARAMETERS
 - `r`: Triggers on key release instead of press.
 - `p`: Pass key event to client.
 - `c`: allow keybind conflict(need set in all conflict key).
+- `d`: Attach a human-readable description to the binding for IPC exposure.
 
 > **Info:** `c` has no effect on the `reload_config` and `load_config_file` dispatches, which always stop the current key event.
 
@@ -48,6 +49,21 @@ bind=alt,shift_l,switch_keyboard_layout
 # Allow keybind conflict
 bindc=SUPER,a,resizewin,+10,0
 bindc=SUPER,a,centerwin
+```
+
+### Description Flag (`d`)
+
+Use `bindd` to attach a description to any binding. The description is exposed via IPC (`mmsg get binds`) for use in cheat sheets, which-key menus, and other tools.
+
+```ini
+# Basic description
+bindd=SUPER,Q,Kill the focused window,killclient
+
+# Combined with other flags
+bindld=SUPER,L,Lock the screen,spawn,swaylock
+
+# Quoted description with commas
+bindd=SUPER,Return,"Launch terminal, floating",spawn,foot
 ```
 
 ## Key Modes (Submaps)

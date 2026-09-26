@@ -199,6 +199,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 		case 'c':
 			kb->isallowconflict = true;
 			break;
+		case 'd':
+			kb->isdescriptionapply = true;
+			break;
 		default:
 			mango_error(false, WLR_ERROR, "Unknown bind flag: %c\n", suffix[i]);
 			break;
@@ -2032,7 +2035,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		config->exec_once_count++;
 
-	} else if (regex_match("^bind[s|l|r|p|c]*$", key)) {
+	} else if (regex_match("^bind[s|l|r|p|c|d]*$", key)) {
 		config->key_bindings =
 			realloc(config->key_bindings,
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
@@ -2048,30 +2051,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		binding->line_number = line_number;
 		binding->file_index = current_file_index;
 
-		char mod_str[256], keysym_str[256], func_name[256],
-			arg_value[256] = "0\0", arg_value2[256] = "0\0",
-			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
-			arg_value5[256] = "0\0";
-		if (sscanf(value,
-				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
-				   ",],%255["
-				   "^,],%255[^\n]",
-				   mod_str, keysym_str, func_name, arg_value, arg_value2,
-				   arg_value3, arg_value4, arg_value5) < 3) {
-			mango_error(false, WLR_ERROR,
-						"Invalid bind format: "
-						"\033[1m\033[31m%s\n",
-						value);
-			return false;
-		}
-		trim_whitespace(mod_str);
-		trim_whitespace(keysym_str);
-		trim_whitespace(func_name);
-		trim_whitespace(arg_value);
-		trim_whitespace(arg_value2);
-		trim_whitespace(arg_value3);
-		trim_whitespace(arg_value4);
-		trim_whitespace(arg_value5);
+		parse_bind_flags(key, binding);
 
 		strcpy(binding->mode, config->keymode);
 		if (strcmp(binding->mode, "common") == 0) {
@@ -2085,7 +2065,167 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			binding->iscommonmode = false;
 		}
 
-		parse_bind_flags(key, binding);
+		char mod_str[256], keysym_str[256], func_name[256],
+			arg_value[256] = "0\0", arg_value2[256] = "0\0",
+			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
+			arg_value5[256] = "0\0";
+		int num_args = 0;
+
+		if (binding->isdescriptionapply) {
+			/* Quote-aware tokenizer for bindd lines:
+			 *   bindd=MOD,KEY,DESCRIPTION,FUNC,ARG1,ARG2,...
+			 * The DESCRIPTION field may be quoted to allow commas.
+			 */
+			char *dup = strdup(value);
+			if (!dup)
+				return false;
+
+			/* Tokenize: up to 9 tokens (mod, key, desc, func,
+			 * arg1..arg5) */
+			char *tokens[9] = {NULL};
+			int token_count = 0;
+			char *p = dup;
+
+			while (*p && token_count < 9) {
+				/* Skip leading whitespace */
+				while (*p == ' ' || *p == '\t')
+					p++;
+
+				if (*p == '\0')
+					break;
+
+				char *tok_start;
+				/* token_count == 2 is the description slot — handle
+				 * quotes */
+				if (token_count == 2 && (*p == '"' || *p == '\'')) {
+					char quote = *p;
+					p++; /* skip opening quote */
+					tok_start = p;
+					while (*p && *p != quote)
+						p++;
+					if (*p == quote)
+						*p++ = '\0'; /* terminate and skip closing
+								quote */
+					/* skip comma after closing quote */
+					if (*p == ',')
+						p++;
+				} else {
+					tok_start = p;
+					/* For the last token slot, consume the rest */
+					if (token_count >= 8) {
+						/* last slot: consume everything */
+					} else {
+						while (*p && *p != ',')
+							p++;
+						if (*p == ',')
+							*p++ = '\0';
+					}
+				}
+				tokens[token_count++] = tok_start;
+			}
+
+			/* Need at least 4 tokens: mod, key, description, func */
+			if (token_count < 4) {
+				mango_error(false, WLR_ERROR,
+							"Invalid bindd format: "
+							"\033[1m\033[31m%s\n",
+							value);
+				free(dup);
+				return false;
+			}
+
+			strncpy(mod_str, tokens[0], sizeof(mod_str) - 1);
+			mod_str[sizeof(mod_str) - 1] = '\0';
+			strncpy(keysym_str, tokens[1], sizeof(keysym_str) - 1);
+			keysym_str[sizeof(keysym_str) - 1] = '\0';
+
+			/* Store description (strip surrounding whitespace) */
+			char desc_buf[256];
+			strncpy(desc_buf, tokens[2], sizeof(desc_buf) - 1);
+			desc_buf[sizeof(desc_buf) - 1] = '\0';
+			trim_whitespace(desc_buf);
+			binding->description = strdup(desc_buf);
+
+			strncpy(func_name, tokens[3], sizeof(func_name) - 1);
+			func_name[sizeof(func_name) - 1] = '\0';
+
+			if (token_count > 4) {
+				strncpy(arg_value, tokens[4], sizeof(arg_value) - 1);
+				arg_value[sizeof(arg_value) - 1] = '\0';
+			}
+			if (token_count > 5) {
+				strncpy(arg_value2, tokens[5], sizeof(arg_value2) - 1);
+				arg_value2[sizeof(arg_value2) - 1] = '\0';
+			}
+			if (token_count > 6) {
+				strncpy(arg_value3, tokens[6], sizeof(arg_value3) - 1);
+				arg_value3[sizeof(arg_value3) - 1] = '\0';
+			}
+			if (token_count > 7) {
+				strncpy(arg_value4, tokens[7], sizeof(arg_value4) - 1);
+				arg_value4[sizeof(arg_value4) - 1] = '\0';
+			}
+			if (token_count > 8) {
+				strncpy(arg_value5, tokens[8], sizeof(arg_value5) - 1);
+				arg_value5[sizeof(arg_value5) - 1] = '\0';
+			}
+			num_args = token_count - 4;
+
+			free(dup);
+		} else {
+			int matched =
+				sscanf(value,
+					   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
+					   ",],%255["
+					   "^,],%255[^\n]",
+					   mod_str, keysym_str, func_name, arg_value, arg_value2,
+					   arg_value3, arg_value4, arg_value5);
+			if (matched < 3) {
+				mango_error(false, WLR_ERROR,
+							"Invalid bind format: "
+							"\033[1m\033[31m%s\n",
+							value);
+				return false;
+			}
+			num_args = matched - 3;
+		}
+
+		trim_whitespace(mod_str);
+		trim_whitespace(keysym_str);
+		trim_whitespace(func_name);
+		trim_whitespace(arg_value);
+		trim_whitespace(arg_value2);
+		trim_whitespace(arg_value3);
+		trim_whitespace(arg_value4);
+		trim_whitespace(arg_value5);
+
+		/* Build raw_args string for IPC serialization based on actual args
+		 * present */
+		if (num_args > 0) {
+			const char *parts[] = {arg_value, arg_value2, arg_value3,
+								   arg_value4, arg_value5};
+			int count = num_args > 5 ? 5 : num_args;
+			size_t total_len = 0;
+			for (int i = 0; i < count; i++) {
+				if (i > 0)
+					total_len++; /* comma */
+				total_len += strlen(parts[i]);
+			}
+			char *raw = malloc(total_len + 1);
+			if (raw) {
+				char *cursor = raw;
+				for (int i = 0; i < count; i++) {
+					if (i > 0)
+						*cursor++ = ',';
+					size_t plen = strlen(parts[i]);
+					memcpy(cursor, parts[i], plen);
+					cursor += plen;
+				}
+				*cursor = '\0';
+				binding->raw_args = raw;
+			}
+		}
+
 		binding->keysymcode =
 			parse_key(keysym_str, binding->keysymcode.type == KEY_TYPE_SYM);
 		binding->mod = parse_mod(mod_str);
@@ -2117,6 +2257,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				free(binding->arg.v3);
 				binding->arg.v3 = NULL;
 			}
+			free(binding->description);
+			binding->description = NULL;
+			free(binding->raw_args);
+			binding->raw_args = NULL;
 			if (!binding->func)
 				mango_error(false, WLR_ERROR,
 							"Unknown "
@@ -3258,27 +3402,6 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	return parse_correct;
 }
 
-const char *mod_to_string(uint32_t mod) {
-	static char buf[128];
-	buf[0] = '\0';
-	if (mod & WLR_MODIFIER_LOGO)
-		strcat(buf, "Super+");
-	if (mod & WLR_MODIFIER_CTRL)
-		strcat(buf, "Ctrl+");
-	if (mod & WLR_MODIFIER_ALT)
-		strcat(buf, "Alt+");
-	if (mod & WLR_MODIFIER_SHIFT)
-		strcat(buf, "Shift+");
-	if (mod & WLR_MODIFIER_MOD3)
-		strcat(buf, "Hyper+");
-	size_t len = strlen(buf);
-	if (len > 0)
-		buf[len - 1] = '\0';
-	else
-		strcpy(buf, "None");
-	return buf;
-}
-
 bool check_key_binding_conflicts(Config *config) {
 	int n = config->key_bindings_count;
 	if (n < 2)
@@ -3482,6 +3605,10 @@ void free_config(void) {
 				free((void *)config.key_bindings[i].arg.v3);
 				config.key_bindings[i].arg.v3 = NULL;
 			}
+			free(config.key_bindings[i].description);
+			config.key_bindings[i].description = NULL;
+			free(config.key_bindings[i].raw_args);
+			config.key_bindings[i].raw_args = NULL;
 		}
 		free(config.key_bindings);
 		config.key_bindings = NULL;
@@ -4337,6 +4464,9 @@ void set_default_key_bindings(Config *config) {
 		b = &config->key_bindings[config->key_bindings_count + i];
 		b->iscommonmode = true;
 		b->islockapply = true;
+		b->isdescriptionapply = false;
+		b->description = NULL;
+		b->raw_args = NULL;
 		b->line_number = 0;
 		strcpy(b->mode, "common");
 	}
@@ -4775,6 +4905,149 @@ int32_t reload_config(const Arg *arg) {
 	reset_option();
 	printstatus(IPC_WATCH_ARRANGGE);
 	return 1;
+}
+/* ---------- Unified dispatch name table ---------- */
+/* Single source of truth for dispatcher name ↔ function pointer mapping.
+ * Used by both parse_func_name (forward lookup) and func_to_name (reverse). */
+static const struct {
+	const char *name;
+	FuncType func;
+} func_name_table[] = {
+	{"focusstack", focus_stack},
+	{"overcircle", over_circle},
+	{"groupfocus", group_focus},
+	{"focusdir", focus_direction},
+	{"focus_window_or_workspace", focus_window_or_workspace},
+	{"groupjoin", group_join},
+	{"groupleave", group_leave},
+	{"focusid", focus_by_id},
+	{"incnmaster", inc_nmaster},
+	{"setmfact", set_master_factor},
+	{"zoom", zoom},
+	{"exchange_client", exchange_client},
+	{"move_client", move_client},
+	{"exchange_stack_client", exchange_stack_client},
+	{"toggleglobal", toggle_global},
+	{"togglehdr", toggle_hdr},
+	{"toggleoverview", toggle_overview},
+	{"enteroverview", enter_overview},
+	{"leaveoverview", leave_overview},
+	{"togglejump", toggle_jump},
+	{"set_proportion", set_proportion},
+	{"switch_proportion_preset", switch_proportion_preset},
+	{"viewtoleft", view_to_left},
+	{"viewtoright", view_to_right},
+	{"view_insert", view_insert},
+	{"tagsilent", tag_silent},
+	{"tagtoleft", tag_to_left},
+	{"tagtoright", tag_to_right},
+	{"killclient", kill_client},
+	{"centerwin", center_window},
+	{"focuslast", focus_last},
+	{"switcher", switcher},
+	{"toggle_trackpad_enable", toggle_trackpad_enable},
+	{"setoption", setoption},
+	{"setkeymode", set_key_mode},
+	{"switch_keyboard_layout", switch_keyboard_layout},
+	{"setlayout", set_layout},
+	{"switch_layout", switch_layout},
+	{"togglefloating", toggle_floating},
+	{"togglefullscreen", toggle_fullscreen},
+	{"togglefakefullscreen", toggle_fake_fullscreen},
+	{"toggleoverlay", toggle_overlay},
+	{"minimized", minimize_window},
+	{"restore_minimized", restore_minimized},
+	{"toggle_scratchpad", toggle_scratchpad},
+	{"toggle_render_border", toggle_render_border},
+	{"focusmon", focus_monitor},
+	{"tagmon", tag_monitor},
+	{"incgaps", increase_gaps},
+	{"togglegaps", toggle_gaps},
+	{"chvt", change_vt},
+	{"spawn", spawn},
+	{"spawn_shell", spawn_shell},
+	{"spawn_on_empty", spawn_on_empty},
+	{"quit", quit},
+	{"create_virtual_output", create_virtual_output},
+	{"destroy_all_virtual_output", destroy_all_virtual_output},
+	{"moveresize", move_resize},
+	{"togglemaximizescreen", toggle_maximize_screen},
+	{"viewprev_have_client", viewprev_have_client},
+	{"viewnext_have_client", viewnext_have_client},
+	{"viewtoleft_have_client", view_to_left_have_client},
+	{"viewtoright_have_client", view_to_right_have_client},
+	{"reload_config", reload_config},
+	{"load_config_file", load_config_file},
+	{"tag", tag},
+	{"view", bind_to_view},
+	{"viewcrossmon", view_cross_monitor},
+	{"tagcrossmon", tag_cross_monitor},
+	{"toggletag", toggle_tag},
+	{"toggleview", toggle_view},
+	{"comboview", combo_view},
+	{"smartmovewin", smart_move_window},
+	{"smartresizewin", smart_resize_window},
+	{"resizewin", resize_window},
+	{"movewin", move_window},
+	{"toggle_named_scratchpad", toggle_named_scratchpad},
+	{"toggle_special_tag", toggle_special_tag},
+	{"tag_special_tag", tag_special_tag},
+	{"tag_special_silent", tag_special_silent},
+	{"disable_monitor", disable_monitor},
+	{"enable_monitor", enable_monitor},
+	{"toggle_monitor", toggle_monitor},
+	{"sleep_monitor", sleep_monitor},
+	{"wakeup_monitor", wakeup_monitor},
+	{"sleep_toggle_monitor", sleep_toggle_monitor},
+	{"scroller_stack", scroller_stack},
+	{"toggle_all_floating", toggle_all_floating},
+	{"dwindle_toggle_split_direction", dwindle_toggle_split_direction},
+	{"dwindle_split_horizontal", dwindle_split_horizontal},
+	{"dwindle_split_vertical", dwindle_split_vertical},
+	{"dwindle_toggle_current_split", dwindle_toggle_current_split},
+	{"increase_inner_gap", increase_inner_gap},
+	{"increase_inner_horizontal_gap", increase_inner_horizontal_gap},
+	{"increase_inner_vertical_gap", increase_inner_vertical_gap},
+	{"increase_outer_gap", increase_outer_gap},
+	{"increase_outer_horizontal_gap", increase_outer_horizontal_gap},
+	{"increase_outer_vertical_gap", increase_outer_vertical_gap},
+	{"resetgaps", reset_gaps},
+};
+
+const char *func_to_name(FuncType func) {
+	if (!func)
+		return "";
+	for (size_t i = 0; i < sizeof(func_name_table) / sizeof(func_name_table[0]);
+		 i++) {
+		if (func_name_table[i].func == func)
+			return func_name_table[i].name;
+	}
+	return "unknown";
+}
+
+void mod_to_string(uint32_t mod, char *buf, size_t buf_size) {
+	buf[0] = '\0';
+	size_t offset = 0;
+
+	struct {
+		uint32_t bit;
+		const char *name;
+	} mods[] = {
+		{WLR_MODIFIER_LOGO, "SUPER"}, {WLR_MODIFIER_CTRL, "CTRL"},
+		{WLR_MODIFIER_ALT, "ALT"},	  {WLR_MODIFIER_SHIFT, "SHIFT"},
+		{WLR_MODIFIER_MOD2, "MOD2"},  {WLR_MODIFIER_MOD3, "MOD3"},
+		{WLR_MODIFIER_MOD5, "MOD5"},  {WLR_MODIFIER_CAPS, "CAPS"},
+	};
+
+	for (size_t i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
+		if (mod & mods[i].bit) {
+			int n = snprintf(buf + offset, buf_size - offset, "%s%s",
+							 offset > 0 ? "+" : "", mods[i].name);
+			if (n < 0 || (size_t)n >= buf_size - offset)
+				break;
+			offset += n;
+		}
+	}
 }
 
 FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
