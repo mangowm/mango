@@ -301,6 +301,7 @@ typedef struct {
 typedef struct {
 	int32_t animations;
 	int32_t layer_animations;
+	int32_t tag_animations;
 	int32_t animation_type_open;
 	int32_t animation_type_close;
 	int32_t layer_animation_type_open;

@@ -43,6 +43,12 @@ bool client_animations_enabled(const Client *c) {
 	return client_gesture_driven(c);
 }
 
+bool client_tag_animations_enabled(const Client *c) {
+	if (config.animations && config.tag_animations)
+		return true;
+	return client_gesture_driven(c);
+}
+
 bool client_is_ignore_output_clip(Client *c) {
 	return c == server.grab_client ||
 		   (!ISSCROLLTILED(c) && !c->animation.tagining &&

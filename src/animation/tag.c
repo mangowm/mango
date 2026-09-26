@@ -57,7 +57,8 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 					wlr_box_equal(&c->animation.current, &c->geom);
 	bool tag_switch = !in_place && !c->animation.tag_from_rule &&
 					  want_animation && m->pertag->prevtag != 0 &&
-					  m->pertag->curtag != 0 && client_animations_enabled(c);
+					  m->pertag->curtag != 0 &&
+					  client_tag_animations_enabled(c);
 
 	if (!ISTILED(c) || (!c->is_clip_to_hide || !is_scroller_layout(c->mon))) {
 		c->is_clip_to_hide = false;
@@ -76,7 +77,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		/* Reverse an in-flight hide instead of restarting from the top. */
 		bool reversing = c->animation.tagouting && c->animation.running;
 		c->animation.tagouting = false;
-		if (client_animations_enabled(c)) {
+		if (client_tag_animations_enabled(c)) {
 			c->animation.tagining = true;
 			c->animainit_geom = c->geom;
 			if (reversing) {
@@ -99,7 +100,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		c->animation.tag_from_rule = false;
 		c->animation.tagouting = false;
 		c->animation.tagouted = false;
-		if (want_animation && client_animations_enabled(c)) {
+		if (want_animation && client_tag_animations_enabled(c)) {
 			c->animation.tagining = true;
 			c->animainit_geom = c->geom;
 			c->animainit_geom.y = c->mon->m.y - c->geom.height;
@@ -178,7 +179,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 
 	/* Scratchpad windows slide up and out when hidden */
 	if (!(c->tags & TAG0_MASK) && c->is_in_scratchpad && c->isminimized) {
-		if (client_animations_enabled(c) && !c->animation.tagouted) {
+		if (client_tag_animations_enabled(c) && !c->animation.tagouted) {
 			c->animation.tagouting = true;
 			c->animation.tagining = false;
 			c->pending = c->geom;
@@ -198,7 +199,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 	/* Special workspace windows should animate out or hide when special
 	 * workspace is not active */
 	if (c->tags & TAG0_MASK) {
-		if (want_animation && client_animations_enabled(c) &&
+		if (want_animation && client_tag_animations_enabled(c) &&
 			!c->animation.tagouted) {
 			c->animation.tagouting = true;
 			c->animation.tagining = false;
@@ -218,7 +219,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 
 	if ((c->tags & (1 << (m->pertag->prevtag - 1))) &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
-		client_animations_enabled(c)) {
+		client_tag_animations_enabled(c)) {
 		c->animation.tagouting = true;
 		c->animation.tagining = false;
 		set_tagout_animation(m, c);

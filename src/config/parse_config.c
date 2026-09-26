@@ -437,6 +437,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->animations = atoi(value);
 	} else if (strcmp(key, "layer_animations") == 0) {
 		config->layer_animations = atoi(value);
+	} else if (strcmp(key, "tag_animations") == 0) {
+		config->tag_animations = atoi(value);
 	} else if (strcmp(key, "animation_type_open") == 0) {
 		config->animation_type_open = animation_type_from_string(value);
 	} else if (strcmp(key, "animation_type_close") == 0) {
@@ -3770,6 +3772,7 @@ static void resolve_bindings_to_configured_layouts(Config *config) {
 void override_config(void) {
 	config.animations = CLAMP_INT(config.animations, 0, 1);
 	config.layer_animations = CLAMP_INT(config.layer_animations, 0, 1);
+	config.tag_animations = CLAMP_INT(config.tag_animations, 0, 1);
 	config.tag_animation_direction =
 		CLAMP_INT(config.tag_animation_direction, 0, 1);
 	config.animation_fade_in = CLAMP_INT(config.animation_fade_in, 0, 1);
@@ -4013,6 +4016,7 @@ void override_config(void) {
 void set_value_default() {
 	config.animations = 1;
 	config.layer_animations = 0;
+	config.tag_animations = 1;
 	config.animation_type_open = ANIM_TYPE_UNSET;
 	config.animation_type_close = ANIM_TYPE_UNSET;
 	config.layer_animation_type_open = ANIM_TYPE_UNSET;
