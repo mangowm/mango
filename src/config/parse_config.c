@@ -4848,14 +4848,19 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 						!(strlen(arg_value2) == 1 && arg_value2[0] == '0');
 		(*arg).v = has_name ? strdup(arg_value2) : NULL;
 	} else if (strcmp(func_name, "toggleoverview") == 0) {
+		/* toggleoverview[,<1|0>][,<appid[+appid...]>] */
 		func = toggle_overview;
 		(*arg).i = atoi(arg_value) == 1;
+		(*arg).v = combine_args_until_empty((char *[]){arg_value2}, 1);
 	} else if (strcmp(func_name, "enteroverview") == 0) {
 		func = enter_overview;
 	} else if (strcmp(func_name, "leaveoverview") == 0) {
 		func = leave_overview;
 	} else if (strcmp(func_name, "togglejump") == 0) {
+		/* togglejump[,<1|0>][,<appid[+appid...]>] */
 		func = toggle_jump;
+		(*arg).i = atoi(arg_value) == 1;
+		(*arg).v = combine_args_until_empty((char *[]){arg_value2}, 1);
 	} else if (strcmp(func_name, "set_proportion") == 0) {
 		func = set_proportion;
 		(*arg).f = atof(arg_value);

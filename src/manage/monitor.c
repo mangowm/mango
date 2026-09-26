@@ -891,6 +891,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 	wlr_color_transform_unref(m->icc_transform);
 	m->icc_transform = NULL;
 	wlr_output_state_finish(&m->pending);
+	free(m->overview_appid_filter);
 	free(m->pertag);
 	free(m);
 }

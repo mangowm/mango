@@ -2250,8 +2250,14 @@ static void set_overview(const Arg *arg, bool enter) {
 
 	if (!enter) {
 		server.selected_monitor->ov_tab_layout = 0;
+		free(server.selected_monitor->overview_appid_filter);
+		server.selected_monitor->overview_appid_filter = NULL;
 		if (server.selected_monitor->is_jump_mode)
 			finish_jump_mode(server.selected_monitor);
+	} else {
+		free(server.selected_monitor->overview_appid_filter);
+		server.selected_monitor->overview_appid_filter =
+			(arg && arg->v && arg->v[0]) ? strdup(arg->v) : NULL;
 	}
 
 	if (enter) {
@@ -2263,6 +2269,7 @@ static void set_overview(const Arg *arg, bool enter) {
 				continue;
 			if (!client_is_unmanaged(c) && !client_is_x11_popup(c) &&
 				!c->isminimized && !c->isunglobal && !(c->tags & TAG0_MASK) &&
+				overview_appid_match(c, server.selected_monitor) &&
 				overview_client_on_current_tags(c, only_current, current_tags))
 				visible_client_number++;
 		}
@@ -2277,6 +2284,8 @@ static void set_overview(const Arg *arg, bool enter) {
 		} else {
 			server.selected_monitor->isoverview = false;
 			server.selected_monitor->ov_tab_layout = 0;
+			free(server.selected_monitor->overview_appid_filter);
+			server.selected_monitor->overview_appid_filter = NULL;
 			return;
 		}
 	} else if (sel && (sel->tags & TAGMASK) != 0) {
@@ -2308,6 +2317,7 @@ static void set_overview(const Arg *arg, bool enter) {
 			if (client_is_unmanaged(c) || client_is_x11_popup(c) ||
 				c->isunglobal || c->isminimized || (c->tags & TAG0_MASK) ||
 				!client_surface(c)->mapped ||
+				!overview_appid_match(c, server.selected_monitor) ||
 				!overview_client_on_current_tags(c, only_current, current_tags))
 				continue;
 			c->animation.overining = true;
