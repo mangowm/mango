@@ -4441,7 +4441,7 @@ bool parse_config(void) {
 		file_paths_count = 0;
 	}
 
-	return parse_correct || keybindings_conflict;
+	return parse_correct && !keybindings_conflict;
 }
 
 void reset_blur_params(void) {
