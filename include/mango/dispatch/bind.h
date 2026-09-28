@@ -79,6 +79,7 @@ int32_t toggle_global(const Arg *arg);
 int32_t inc_nmaster(const Arg *arg);
 int32_t focus_monitor(const Arg *arg);
 int32_t focus_stack(const Arg *arg);
+int32_t focus_first_tiled(const Arg *arg);
 int32_t over_circle(const Arg *arg);
 int32_t group_focus(const Arg *arg);
 int32_t change_vt(const Arg *arg);
