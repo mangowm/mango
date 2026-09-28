@@ -95,4 +95,5 @@ int32_t keyboard_sync_keymap(void *data);
 // not trigger mouse bindings.
 uint32_t keyboard_hard_modifiers(void);
 
+uint32_t keyboard_get_current_layout(void);
 #endif
