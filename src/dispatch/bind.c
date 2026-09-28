@@ -275,9 +275,6 @@ int32_t focus_window_or_workspace(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
 
-	if (server.selected_monitor->isoverview)
-		return 0;
-
 	Client *c = NULL;
 
 	c = direction_select(arg);
@@ -290,7 +287,8 @@ int32_t focus_window_or_workspace(const Arg *arg) {
 		return 0;
 	}
 
-	if (!is_special_active(server.selected_monitor)) {
+	if (!is_special_active(server.selected_monitor) &&
+		!server.selected_monitor->isoverview) {
 		int dir = arg->i;
 
 		if (dir == LEFT || dir == UP) {
