@@ -55,6 +55,7 @@ void handle_pointer_constraint_commit(struct wl_listener *listener, void *data);
 void pointer_constrain_cursor(struct wlr_pointer_constraint_v1 *constraint);
 void pointer_check_confine_client(void);
 void pointer_client_destroyed(Client *c);
+void pointer_cancel_pending_drag(void);
 void handle_cursor_frame(struct wl_listener *listener, void *data);
 void pointer_warp_to_constraint_hint(void);
 void handle_drag_icon_destroy(struct wl_listener *listener, void *data);
@@ -62,7 +63,8 @@ void handle_pointer_constraint_destroy(struct wl_listener *listener,
 									   void *data);
 void handle_cursor_motion_absolute(struct wl_listener *listener, void *data);
 void pointer_resize_floating_window(Client *gc, double x, double y);
-bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y);
+bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
+							   int32_t corner);
 void pointer_end_grab_client(bool follow_pointer);
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,

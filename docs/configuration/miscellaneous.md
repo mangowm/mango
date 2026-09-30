@@ -27,6 +27,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `drag_tile_small` | `1` | Allow dragging a tiled window temporarily to small size.|
 | `drag_corner` | `3` | Corner for drag-to-tile detection (0: none, 1–3: corners, 4: auto-detect). |
 | `drag_warp_cursor` | `1` | Warp cursor when dragging windows to tile. |
+| `leftdrag_border_margin` | `4` | Extra distance in pixels beyond the window border that arms the left-drag resize (see `leftdrag_resize`). |
 | `axis_bind_apply_timeout` | `100` | Timeout (ms) for detecting consecutive scroll events for axis bindings. |
 
 ## Multi-Monitor & Tags

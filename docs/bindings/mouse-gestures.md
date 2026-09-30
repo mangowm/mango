@@ -33,6 +33,39 @@ mousebind=NONE,code:273,togglemaximizescreen,0
 
 ---
 
+## Left-Drag Resize
+
+Enable resizing windows by dragging the **left** mouse button from a window's
+border — no modifier required. A plain left click (press and release without
+moving) is still delivered to the application, so in-app clicking, text
+selection and buttons keep working.
+
+```ini
+# 1 to enable (default 0)
+leftdrag_resize=1
+
+# Extra distance in pixels beyond the window border that still arms
+# the resize (default 4)
+leftdrag_border_margin=4
+```
+
+Behavior:
+
+- Press the left button within `leftdrag_border_margin` pixels of a
+  window's edge (border width included).
+- Move the pointer more than a small threshold to start resizing
+  (tiled windows adjust their master/stack proportion; floating windows
+  resize from the corner nearest to the grabbed edge, so all four
+  edges are resizable).
+- Release without moving to perform a normal click.
+- A resize cursor is shown while hovering the border zone.
+- A keypress or another button press cancels a pending drag.
+
+> **Note:** Only drags that *start* in the border zone are intercepted;
+> drags starting elsewhere in the window are left to the application.
+
+---
+
 ## Axis Bindings
 
 Map scroll wheel movements to actions for workspace and window navigation.

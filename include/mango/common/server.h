@@ -137,6 +137,15 @@ struct MangoServer {
 	bool start_drag_window;
 	int32_t last_apply_drag_time;
 
+	/* Left-drag resize pending grab (click vs drag disambiguation) */
+	bool pending_drag_active;
+	/* True while the compositor shows a resize cursor from hovering the
+	 * border zone; used to restore the client's cursor when leaving it. */
+	bool cursor_resize_hover;
+	Client *pending_drag_client;
+	double pending_drag_x, pending_drag_y;
+	uint32_t pending_drag_time;
+
 	/* Outputs / monitors */
 	struct wlr_output_layout *output_layout;
 	struct wlr_box scene_geometry;

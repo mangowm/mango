@@ -647,6 +647,11 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	if (session_lock_focus_missing())
 		session_lock_focus_restore();
 
+	/* A keypress cancels a pending left-drag resize so the buffered
+	 * click is not delivered after keyboard interaction. */
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+		pointer_cancel_pending_drag();
+
 	struct wlr_surface *last_surface =
 		server.seat->keyboard_state.focused_surface;
 	struct wlr_xdg_surface *xdg_surface =

@@ -30,12 +30,76 @@
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
+#include <wlr/types/wlr_xcursor_manager.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
 #endif
 #include <wlr/util/region.h>
 
 static struct LastCursor last_cursor;
+
+/* Left-drag resize: a left button press inside the border zone of a window
+ * is buffered; moving beyond LEFTDRAG_THRESHOLD commits a resize, releasing
+ * without moving forwards a normal click to the client. */
+#define LEFTDRAG_THRESHOLD 5.0
+
+/* Returns true when (x, y) is inside the border zone of the client
+ * (within leftdrag_border_margin + border width of any edge).
+ * *edge_out receives the nearest edge (0=top, 1=bottom, 2=left, 3=right). */
+static bool client_border_zone(Client *c, double x, double y,
+							   int32_t *edge_out) {
+	double margin = config.leftdrag_border_margin + c->bw;
+	if (x < c->geom.x - margin || x > c->geom.x + c->geom.width + margin ||
+		y < c->geom.y - margin || y > c->geom.y + c->geom.height + margin)
+		return false;
+	double left = x - c->geom.x;
+	double right = (c->geom.x + c->geom.width) - x;
+	double top = y - c->geom.y;
+	double bottom = (c->geom.y + c->geom.height) - y;
+	bool in_zone =
+		left <= margin || right <= margin || top <= margin || bottom <= margin;
+	if (!in_zone)
+		return false;
+	if (edge_out) {
+		double nearest = left;
+		int32_t edge = 2;
+		if (right < nearest) {
+			nearest = right;
+			edge = 3;
+		}
+		if (top < nearest) {
+			nearest = top;
+			edge = 0;
+		}
+		if (bottom < nearest)
+			edge = 1;
+		*edge_out = edge;
+	}
+	return true;
+}
+
+void pointer_cancel_pending_drag(void) {
+	if (server.pending_drag_active) {
+		server.pending_drag_active = false;
+		server.pending_drag_client = NULL;
+	}
+}
+
+/* Restore the cursor the client last requested (falling back to the
+ * default arrow). Used after the compositor's left-drag resize hover
+ * cursor is no longer applicable. */
+static void pointer_restore_client_cursor(void) {
+	if (server.cursor_hidden)
+		return;
+	if (last_cursor.shape)
+		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
+							   wlr_cursor_shape_v1_name(last_cursor.shape));
+	else if (last_cursor.surface)
+		wlr_cursor_set_surface(server.cursor, last_cursor.surface,
+							   last_cursor.hotspot_x, last_cursor.hotspot_y);
+	else
+		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
+}
 
 static double pointer_surface_scale(Client *c) {
 #ifdef XWAYLAND
@@ -210,6 +274,8 @@ void pointer_client_destroyed(Client *c) {
 	if (confine_pointer_last == c) {
 		confine_pointer_last = NULL;
 	}
+	if (server.pending_drag_client == c)
+		pointer_cancel_pending_drag();
 }
 
 static bool pointer_constraint_surface_visible(
@@ -829,7 +895,26 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 	server.grab_offset_y += cdy;
 }
 
-bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y) {
+/* Derive the resize corner (0=nw, 1=ne, 2=sw, 3=se) for a left-drag
+ * resize that started on the given edge of the client. */
+static int32_t leftdrag_corner_for_edge(int32_t edge, Client *c, double x,
+										double y) {
+	bool left = x < c->geom.x + c->geom.width / 2.0;
+	bool top = y < c->geom.y + c->geom.height / 2.0;
+	switch (edge) {
+	case 0:
+		return left ? 0 : 1;
+	case 1:
+		return left ? 2 : 3;
+	case 2:
+		return top ? 0 : 2;
+	default:
+		return top ? 1 : 3;
+	}
+}
+
+bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
+							   int32_t corner) {
 	const char *cursors[] = {"nw-resize", "ne-resize", "sw-resize",
 							 "se-resize"};
 
@@ -871,7 +956,8 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y) {
 		break;
 	case CurResize:
 		if (gc->isfloating) {
-			server.resize_corner = config.drag_corner;
+			server.resize_corner =
+				(corner >= 0 && corner <= 3) ? corner : config.drag_corner;
 			server.grab_offset_x = (int32_t)round(x);
 			server.grab_offset_y = (int32_t)round(y);
 			if (server.resize_corner == 4)
@@ -1073,6 +1159,38 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 								(int32_t)round(server.cursor->x),
 								(int32_t)round(server.cursor->y));
 
+	/* Left-drag resize pending: commit the resize once the pointer moves
+	 * beyond the threshold; otherwise keep pointer focus on the pressed
+	 * window so a plain click is delivered to it. */
+	if (server.pending_drag_active) {
+		Client *pc = server.pending_drag_client;
+		double pdx = server.cursor->x - server.pending_drag_x;
+		double pdy = server.cursor->y - server.pending_drag_y;
+		if (pc && pc->scene && pc->scene->node.enabled &&
+			pdx * pdx + pdy * pdy > LEFTDRAG_THRESHOLD * LEFTDRAG_THRESHOLD) {
+			double px = server.pending_drag_x;
+			double py = server.pending_drag_y;
+			pointer_cancel_pending_drag();
+			/* Anchor the resize to the corner nearest to the grabbed edge
+			 * so top/left edges are resizable, not just bottom-right. */
+			int32_t edge = 0;
+			client_border_zone(pc, px, py, &edge);
+			if (pointer_begin_move_resize(
+					pc, CurResize, px, py,
+					leftdrag_corner_for_edge(edge, pc, px, py))) {
+				/* Apply the first resize immediately so the window follows
+				 * the pointer from the start of the drag. */
+				if (pc->isfloating) {
+					pointer_resize_floating_window(pc, server.cursor->x,
+												   server.cursor->y);
+				} else {
+					resize_tile_client(pc, true, 0, 0, time);
+				}
+			}
+		}
+		return;
+	}
+
 	/* If we are currently grabbing the mouse, handle and return */
 	if (server.cursor_mode == CurMove) {
 		/* Move the grabbed client to the new position. */
@@ -1121,9 +1239,48 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 
 	/* If there's no client surface under the cursor, set the cursor image
 	 * to a default. This is what makes the cursor image appear when you
-	 * move it off of a client or over its border. */
-	if (!surface && !server.seat->drag && !server.cursor_hidden)
+	 * move it off of a client or over its border. While a window is being
+	 * dragged/resized the pointer is usually over a gap or border, so keep
+	 * the grab/resize cursor instead. */
+	if (!surface && !server.seat->drag && !server.cursor_hidden &&
+		!(server.grab_client &&
+		  (server.cursor_mode == CurMove || server.cursor_mode == CurResize)))
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
+
+	/* Left-drag resize: show a resize cursor while hovering the border zone
+	 * of a managed client; restore the client's cursor when leaving it. */
+	bool show_resize_cursor = false;
+	int32_t edge = 0;
+	if (config.leftdrag_resize && !server.seat->drag && !server.cursor_hidden &&
+		(server.cursor_mode == CurNormal || server.cursor_mode == CurPressed) &&
+		c && c->mon && c->scene && c->scene->node.enabled &&
+		!client_is_unmanaged(c) && !c->isfullscreen && !c->ismaximizescreen &&
+		!c->mon->isoverview) {
+		show_resize_cursor =
+			client_border_zone(c, server.cursor->x, server.cursor->y, &edge);
+	}
+	if (show_resize_cursor) {
+		/* Top/bottom edges resize vertically, left/right edges
+		 * horizontally. */
+		const char *cursors[] = {"top_side", "bottom_side", "left_side",
+								 "right_side"};
+		/* Fall back to the classic two-headed cursors if the active
+		 * theme lacks the single-headed ones. */
+		if (!wlr_xcursor_manager_get_xcursor(server.cursor_manager,
+											 cursors[edge],
+											 c->mon->wlr_output->scale))
+			cursors[edge] = (edge <= 1) ? "ns-resize" : "ew-resize";
+		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
+							   cursors[edge]);
+		server.cursor_resize_hover = true;
+	} else if (server.cursor_resize_hover &&
+			   (server.cursor_mode == CurNormal ||
+				server.cursor_mode == CurPressed)) {
+		/* Left the border zone (e.g. moved into the window interior, where
+		 * the client does not re-request its cursor shape). */
+		server.cursor_resize_hover = false;
+		pointer_restore_client_cursor();
+	}
 
 	if (c && c->mon && !c->animation.running &&
 		(INSIDEMON(c) || !ISSCROLLTILED(c))) {
@@ -1312,6 +1469,21 @@ void pointer_cursor_activity(void) {
 
 	server.cursor_hidden = false;
 
+	/* While a window is being dragged/resized, keep the grab/resize
+	 * cursor instead of restoring the client's cursor. */
+	if (server.grab_client &&
+		(server.cursor_mode == CurMove || server.cursor_mode == CurResize)) {
+		const char *cursors[] = {"nw-resize", "ne-resize", "sw-resize",
+								 "se-resize"};
+		if (server.cursor_mode == CurResize && server.grab_client->isfloating)
+			wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
+								   cursors[server.resize_corner]);
+		else
+			wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
+								   "grab");
+		return;
+	}
+
 	if (last_cursor.shape)
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
 							   wlr_cursor_shape_v1_name(last_cursor.shape));
@@ -1321,6 +1493,10 @@ void pointer_cursor_activity(void) {
 }
 
 int32_t pointer_hide_cursor(void *data) {
+	/* Keep the grab/resize cursor visible for the whole drag. */
+	if (server.grab_client &&
+		(server.cursor_mode == CurMove || server.cursor_mode == CurResize))
+		return 1;
 	wlr_cursor_unset_image(server.cursor);
 	server.cursor_hidden = true;
 	return 1;
@@ -1542,8 +1718,48 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 				return true;
 			}
 		}
+
+		/* Left-drag resize: buffer the press when it lands in the border
+		 * zone of a managed client; motion past the threshold commits a
+		 * resize, release without motion forwards a normal click. */
+		if (server.pending_drag_active && event->button != BTN_LEFT) {
+			pointer_cancel_pending_drag();
+		} else if (config.leftdrag_resize && event->button == BTN_LEFT &&
+				   CLEANMASK(mods) == 0 && !server.session_locked &&
+				   !server.pending_drag_active && c && c->scene &&
+				   c->scene->node.enabled && !client_is_unmanaged(c) &&
+				   !c->isfullscreen && !c->ismaximizescreen &&
+				   !(server.selected_monitor &&
+					 server.selected_monitor->isoverview)) {
+			int32_t edge;
+			if (client_border_zone(c, server.cursor->x, server.cursor->y,
+								   &edge)) {
+				server.pending_drag_active = true;
+				server.pending_drag_client = c;
+				server.pending_drag_x = server.cursor->x;
+				server.pending_drag_y = server.cursor->y;
+				server.pending_drag_time = event->time_msec;
+				return true;
+			}
+		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		/* Left-drag resize pending: no drag started, forward a normal
+		 * click (press + release) to the client. */
+		if (server.pending_drag_active && event->button == BTN_LEFT) {
+			Client *pc = server.pending_drag_client;
+			uint32_t press_time = server.pending_drag_time;
+			pointer_cancel_pending_drag();
+			if (!server.session_locked && pc) {
+				wlr_seat_pointer_notify_button(server.seat, press_time,
+											   BTN_LEFT,
+											   WL_POINTER_BUTTON_STATE_PRESSED);
+				wlr_seat_pointer_notify_button(
+					server.seat, event->time_msec, BTN_LEFT,
+					WL_POINTER_BUTTON_STATE_RELEASED);
+			}
+			return true;
+		}
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		if (!server.session_locked && server.cursor_mode != CurNormal &&
 			server.cursor_mode != CurPressed) {

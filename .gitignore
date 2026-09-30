@@ -13,3 +13,4 @@ util.o
 
 .envrc
 .direnv
+CODEBASE.md
