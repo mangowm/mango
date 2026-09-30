@@ -24,9 +24,15 @@ sudo moss install mangowm
 
 ### Arch Linux
 
-mangowm is available in the **Arch User Repository (AUR)**.
+mangowm is available in the **Arch Package repository** and the **Arch User Repository (AUR)**.
 
-You can install it using an AUR helper like `yay` or `paru`:
+You can install it using the `pacman` package manager:
+
+```bash
+sudo pacman -S mangowm
+```
+
+You can also install it using an AUR helper like `yay` or `paru`:
 
 ```bash
 yay -S mangowm-git
