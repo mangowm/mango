@@ -28,7 +28,7 @@ typedef struct PointerConstraint PointerConstraint;
 typedef struct SnapshotMetadata SnapshotMetadata;
 typedef struct LastCursor LastCursor;
 typedef struct MangoJumpLabel MangoJumpLabel;
-typedef struct MangoGroupBar MangoGroupBar;
+typedef struct MangoBarDecoration MangoBarDecoration;
 
 /*
  * Forward declarations for libwayland / wlroots / scenefx structs referenced by

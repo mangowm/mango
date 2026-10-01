@@ -26,7 +26,7 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 void buffer_set_effect(Client *c, BufferData data);
 
 void client_draw_shadow(Client *c, struct ivec2 offsets);
-void client_draw_groupbar(Client *c, struct ivec2 offsets);
+void client_draw_group_bar(Client *c, struct ivec2 offsets);
 void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 						   int32_t height);
 void client_draw_shield(Client *c, struct ivec2 clip_box);

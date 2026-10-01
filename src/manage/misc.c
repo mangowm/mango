@@ -219,13 +219,13 @@ bool layer_ignores_focus(LayerSurface *l) {
 }
 
 void node_at_point(double x, double y, struct wlr_surface **psurface,
-				   Client **pc, LayerSurface **pl, MangoGroupBar **gb,
+				   Client **pc, LayerSurface **pl, MangoBarDecoration **bar,
 				   double *nx, double *ny) {
 	struct wlr_scene_node *node = NULL, *pnode = NULL;
 	struct wlr_surface *surface = NULL;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
-	MangoGroupBar *mangogroupbar = NULL;
+	MangoBarDecoration *mangobar = NULL;
 	int32_t layer;
 	Client *ovc = NULL;
 
@@ -235,8 +235,8 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		*pc = NULL;
 	if (pl)
 		*pl = NULL;
-	if (gb)
-		*gb = NULL;
+	if (bar)
+		*bar = NULL;
 
 	for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
 		if (layer == LyrFadeOut)
@@ -255,7 +255,7 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 			c = NULL;
 			l = NULL;
 			surface = NULL;
-			mangogroupbar = NULL;
+			mangobar = NULL;
 			break;
 		}
 
@@ -284,8 +284,8 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 				Client *temp_c = (Client *)data;
 				if (temp_c->type == LayerShell) {
 					l = (LayerSurface *)temp_c;
-				} else if (temp_c->type == GroupBar) {
-					mangogroupbar = (MangoGroupBar *)temp_c;
+				} else if (temp_c->type == GroupBar || temp_c->type == TabBar) {
+					mangobar = (MangoBarDecoration *)temp_c;
 				} else if (temp_c->type == XDGShell || temp_c->type == X11) {
 					c = temp_c;
 				}
@@ -311,8 +311,8 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		*pc = c;
 	if (pl)
 		*pl = l;
-	if (gb)
-		*gb = mangogroupbar;
+	if (bar)
+		*bar = mangobar;
 
 	if (server.selected_monitor && server.selected_monitor->isoverview) {
 		ovc = client_at_point(x, y);
@@ -324,8 +324,8 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 				*psurface = ovc ? client_surface(ovc) : NULL;
 			if (pl)
 				*pl = NULL;
-			if (gb)
-				*gb = NULL;
+			if (bar)
+				*bar = NULL;
 		}
 	}
 }

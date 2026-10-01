@@ -6,6 +6,7 @@
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_xdg_shell.h>
@@ -299,12 +300,11 @@ void overview_backup_surface(Client *c) {
 
 	// Disables the real surface tree.
 	c->overview_scene_surface = c->scene_surface;
-	wlr_scene_node_set_enabled(&c->scene_surface->node, false);
 
 	// In overview every tag window must show its card and must not be disabled
 	// by the subtree hiding logic.
 	c->is_clip_to_hide = false;
-	wlr_scene_node_set_enabled(&c->scene->node, true);
+	client_update_visibility(c);
 
 	c->ov_card_tree = wlr_scene_tree_create(c->scene);
 	if (!c->ov_card_tree)
@@ -376,7 +376,7 @@ void overview_restore(Client *c, const Arg *arg) {
 	if (c->overview_scene_surface) {
 		c->scene_surface = c->overview_scene_surface;
 		c->overview_scene_surface = NULL;
-		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+		client_update_visibility(c);
 	}
 
 	if (c->isfloating) {

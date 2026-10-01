@@ -3,6 +3,7 @@
 #include "mango/common/util.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 
 void tile(Monitor *m) {
 	int32_t i, n = 0, h, r, ie = server.enable_gaps, mw, my, ty;
@@ -583,7 +584,6 @@ void deck(Monitor *m) {
 							   0);
 			my += h;
 		} else {
-			// Stack area clients
 			c->master_mfact_per = mfact;
 			client_tile_resize(
 				c,
@@ -593,6 +593,7 @@ void deck(Monitor *m) {
 										  cur_gappih,
 								 .height = m->w.height - 2 * cur_gappov},
 				0);
+			client_update_visibility(c);
 		}
 		i++;
 	}
@@ -620,6 +621,7 @@ void monocle(Monitor *m) {
 		geom.width = m->w.width - 2 * cur_gappoh;
 		geom.height = m->w.height - 2 * cur_gappov;
 		client_tile_resize(c, geom, 0);
+		client_update_visibility(c);
 	}
 }
 

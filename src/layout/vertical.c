@@ -3,6 +3,7 @@
 #include "mango/common/util.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 
 void vertical_tile(Monitor *m) {
 	int32_t i, n = 0, w, r, ie = server.enable_gaps, mh, mx, tx;
@@ -182,6 +183,7 @@ void vertical_deck(Monitor *m) {
 								 .height = m->w.height - mh - 2 * cur_gappov -
 										   cur_gappiv},
 				0);
+			client_update_visibility(c);
 		}
 		i++;
 	}

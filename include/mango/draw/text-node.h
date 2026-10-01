@@ -74,8 +74,9 @@ typedef struct MangoJumpLabel {
 	int32_t logical_height;
 } MangoJumpLabel;
 
-typedef struct MangoGroupBar {
+typedef struct MangoBarDecoration {
 	uint32_t type;
+	bool is_tab;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border;
 	struct wlr_scene_rect *bg;
@@ -116,7 +117,7 @@ typedef struct MangoGroupBar {
 	int32_t text_logical_h;
 	int32_t logical_width;
 	int32_t logical_height;
-} MangoGroupBar;
+} MangoBarDecoration;
 
 void mango_text_global_finish(void);
 MangoJumpLabel *mango_jump_label_node_create(struct wlr_scene_tree *parent,
@@ -132,22 +133,24 @@ void mango_jump_label_node_set_padding(MangoJumpLabel *node, int32_t pad_x,
 void mango_jump_label_node_update(MangoJumpLabel *node, const char *text,
 								  float scale);
 
-MangoGroupBar *mango_group_bar_create(void *cdata, uint32_t type,
-									  struct wlr_scene_tree *parent,
-									  DecorateDrawData data, int32_t width,
-									  int32_t height);
-void mango_group_bar_destroy(MangoGroupBar *node);
-void mango_group_bar_set_size(MangoGroupBar *node, int32_t width,
-							  int32_t height);
-void mango_group_bar_update(MangoGroupBar *node, const char *text, float scale);
+MangoBarDecoration *mango_bar_decoration_create(void *cdata, uint32_t type,
+												bool is_tab,
+												struct wlr_scene_tree *parent,
+												DecorateDrawData data,
+												int32_t width, int32_t height);
+void mango_bar_decoration_destroy(MangoBarDecoration *node);
+void mango_bar_decoration_set_size(MangoBarDecoration *node, int32_t width,
+								   int32_t height);
+void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
+								 float scale);
 
 void mango_jump_label_node_set_focus(MangoJumpLabel *node, bool focused);
-void mango_group_bar_set_focus(MangoGroupBar *node, bool focused);
+void mango_bar_decoration_set_focus(MangoBarDecoration *node, bool focused);
 
-void mango_group_bar_set_colors(MangoGroupBar *node, const float fg[4],
-								const float bg[4]);
+void mango_bar_decoration_set_colors(MangoBarDecoration *node,
+									 const float fg[4], const float bg[4]);
 void mango_jump_label_node_apply_config(MangoJumpLabel *node,
 										const DecorateDrawData *data);
-void mango_group_bar_apply_config(MangoGroupBar *node,
-								  const DecorateDrawData *data);
+void mango_bar_decoration_apply_config(MangoBarDecoration *node,
+									   const DecorateDrawData *data);
 #endif // jump_label_node_H

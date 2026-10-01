@@ -69,17 +69,34 @@ You can also color-code windows based on their state:
 ### Tab Bar For Monocle Layout
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `group_bar_height` | `50` | Height of the tab bar for monocle layout. |
-| `group_bar_decorate_fg_color` | `0xc4939dff` | text color.
-| `group_bar_decorate_bg_color` | `0x201b14ff` | background color.|
-| `group_bar_decorate_focus_fg_color` | `0x201b14ff` | text color for focus. |
-| `group_bar_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
-| `group_bar_decorate_border_color` | `0x8BAA9Bff` | border color.|
+| `group_bar_height` | `25` | Height of the tab bar for monocle layout. |
+| `group_bar_decorate_fg_color` | `0xc0caf5ff` | text color.
+| `group_bar_decorate_bg_color` | `0x1a1b26ff` | background color.|
+| `group_bar_decorate_focus_fg_color` | `0x1a1b26ff` | text color for focus. |
+| `group_bar_decorate_focus_bg_color` | `0x9ece6aff` | background color for focus.|
+| `group_bar_decorate_border_color` | `0x3b4261ff` | border color.|
 | `group_bar_decorate_border_width` | `4` | border width.|
 | `group_bar_decorate_corner_radius` | `5` | corner radius.|
 | `group_bar_decorate_padding_x` | `0` | horizontal padding.|
 | `group_bar_decorate_padding_y` | `0` | vertical padding.|
-| `group_bar_decorate_font_desc` | `monospace Bold 16` | font set.|
+| `group_bar_decorate_font_desc` | `monospace Bold 10` | font set.|
+
+### Auto Tab Bar
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `monocle_tab_mode` | `0` | Auto merge stacked windows into a tab in monocle layout. |
+| `deck_tab_mode` | `0` | Auto merge stack area windows into a tab in deck layout. |
+| `tab_bar_height` | `25` | Height of the auto tab bar. |
+| `tab_bar_decorate_fg_color` | `0xc0caf5ff` | text color.
+| `tab_bar_decorate_bg_color` | `0x1a1b26ff` | background color.|
+| `tab_bar_decorate_focus_fg_color` | `0x1a1b26ff` | text color for focus. |
+| `tab_bar_decorate_focus_bg_color` | `0x7aa2f7ff` | background color for focus.|
+| `tab_bar_decorate_border_color` | `0x3b4261ff` | border color.|
+| `tab_bar_decorate_border_width` | `4` | border width.|
+| `tab_bar_decorate_corner_radius` | `5` | corner radius.|
+| `tab_bar_decorate_padding_x` | `0` | horizontal padding.|
+| `tab_bar_decorate_padding_y` | `0` | vertical padding.|
+| `tab_bar_decorate_font_desc` | `monospace Bold 10` | font set.|
 
 ## Borders
 

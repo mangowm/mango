@@ -466,6 +466,8 @@ typedef struct {
 
 	/* appearance */
 	int32_t smartgaps;
+	int32_t monocle_tab_mode;
+	int32_t deck_tab_mode;
 	uint32_t gappih;
 	uint32_t gappiv;
 	uint32_t gappoh;
@@ -476,6 +478,7 @@ typedef struct {
 	uint32_t special_gappov;
 	uint32_t borderpx;
 	uint32_t group_bar_height;
+	uint32_t tab_bar_height;
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
 	float special_dim;
@@ -560,6 +563,7 @@ typedef struct {
 	struct xkb_keymap *keymap;
 	DecorateDrawData jumplabeldata;
 	DecorateDrawData groupbardata;
+	DecorateDrawData tabbardata;
 
 	int32_t hdr_depth;
 } Config;

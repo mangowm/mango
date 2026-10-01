@@ -16,6 +16,7 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
 #include <linux/input-event-codes.h>
 #include <scenefx/types/wlr_scene.h>
@@ -1448,7 +1449,7 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	uint32_t mods;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
-	MangoGroupBar *gb = NULL;
+	MangoBarDecoration *bar = NULL;
 	struct wlr_surface *surface;
 	int32_t ji;
 	const MouseBinding *m;
@@ -1491,7 +1492,7 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 
 		node_at_point(server.cursor->x, server.cursor->y, &surface, NULL, NULL,
-					  &gb, NULL, NULL);
+					  &bar, NULL, NULL);
 		if (toplevel_from_wlr_surface(surface, &c, &l) >= 0) {
 			if (c && c->scene && c->scene->node.enabled &&
 				VISIBLEON(c, c->mon) &&
@@ -1526,7 +1527,7 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 
 		// handle click on tile node
-		client_handle_decorate_click(gb);
+		client_handle_decorate_click(bar);
 
 		mods = keyboard_hard_modifiers();
 

@@ -11,6 +11,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 #include <assert.h>
 #include <wlr/types/wlr_cursor.h>
 
@@ -1246,7 +1247,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 					client_sync_layer(c);
 				}
 			} else if (special_keep_bg_client(m, c)) {
-				wlr_scene_node_set_enabled(&c->scene->node, true);
+				c->tag_visible = true;
+				client_update_visibility(c);
 				c->animation.running = false;
 				c->animation.tagining = false;
 				c->animation.tagouting = false;
@@ -1449,6 +1451,9 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 		return;
 
 	pre_calculate_before_arrange(m, want_animation, from_view, false);
+	/* Must run after pre_calculate: global windows get their tags rewritten
+	 * there. */
+	tab_sync_monitor(m);
 
 	bool is_tag0 = is_special_active(m);
 	special_sync_top_layer(is_tag0);

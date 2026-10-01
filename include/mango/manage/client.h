@@ -5,6 +5,7 @@
 #include "mango/common/types.h"
 #include "mango/config/parse_config.h"
 #include "mango/draw/dim-node.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <wayland-server-core.h>
@@ -19,7 +20,8 @@ enum {
 	Snapshot,
 	XdgPopup,
 	XdgImPopup,
-	GroupBar
+	GroupBar,
+	TabBar
 }; /* client types */
 
 #ifdef XWAYLAND
@@ -80,7 +82,6 @@ struct Client {
 	struct wlr_scene_surface *image_capture_scene_surface;
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
-	MangoGroupBar *group_bar;
 	MangoDimNode *dim_node;
 	struct wl_list link;
 	struct wl_list flink;
@@ -223,10 +224,31 @@ struct Client {
 	int32_t grid_col_idx;
 	int32_t grid_row_idx;
 	uint32_t id;
+	/* manual group chain */
+	MangoBarDecoration *group_bar;
 	Client *group_prev;
 	Client *group_next;
-	bool isgroupfocusing;
+	bool is_group_focus;
+
+	/* auto tab chain; state kept fully separate from group */
+	MangoBarDecoration *tab_bar;
+	Client *tab_prev;
+	Client *tab_next;
+	bool is_tab_focus;
+	bool is_tab_hidden;
+
+	/* arrange verdict: window belongs to the current view */
+	bool tag_visible;
+	/* temporary override while snapshotting a closing window */
+	bool snapshot_temp_visible;
+	/* per-frame: surface clipped away by the draw path */
+	bool is_surface_hidden;
 };
+
+#define CLIENT_GROUP_PREV_OFF offsetof(Client, group_prev)
+#define CLIENT_GROUP_NEXT_OFF offsetof(Client, group_next)
+#define CLIENT_TAB_PREV_OFF offsetof(Client, tab_prev)
+#define CLIENT_TAB_NEXT_OFF offsetof(Client, tab_next)
 
 void client_update_geometry(Client *c);
 void client_init_xwayland(Client *c);
@@ -417,15 +439,25 @@ void client_add_jump_label_node(Client *c);
 uint32_t client_target_layer(Client *c);
 void client_sync_layer(Client *c);
 void client_add_group_bar(Client *c);
+void client_update_group_bar_title(Client *c);
+void client_apply_group_bar_config(Client *c);
+void client_remove_group_bar(Client *c);
 void client_focus_group_member(Client *c);
 void client_check_tab_node_visible(Client *c);
 void client_raise_group(Client *c);
 void client_reparent_group(Client *c);
-void client_handle_decorate_click(MangoGroupBar *gb);
+void client_handle_decorate_click(MangoBarDecoration *gb);
 void client_set_group_mon(Client *c, Monitor *m);
 void client_set_group_config(Client *c);
 void client_group_detach(Client *c);
 void client_group_replace(Client *old, Client *new);
+
+Client *client_chain_head(Client *c, size_t prev_off);
+void client_chain_unlink(Client *c, size_t prev_off, size_t next_off);
+
+bool client_gesture_driven(const Client *c);
+bool client_should_visible(Client *c);
+void client_update_visibility(Client *c);
 void mango_surface_frame_done(struct wlr_surface *surface, int sx, int sy,
 							  void *data);
 // Feeds frame callbacks to all surfaces (including subsurfaces) of hidden

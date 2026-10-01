@@ -15,6 +15,7 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 #include "mango/manage/xwayland_primary.h"
 #include "mango/overview/overview.h"
 #include "mango/switcher/switcher.h"
@@ -1258,7 +1259,7 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 		return true;
 
 	if (id == MONOCLE) {
-		return true;
+		return !tc->is_tab_hidden;
 	}
 
 	if (id == SCROLLER || id == VERTICAL_SCROLLER) {
@@ -1276,6 +1277,8 @@ bool client_is_in_same_stack(Client *sc, Client *tc, Client *fc) {
 
 	if (id == TILE || id == VERTICAL_TILE || id == DECK ||
 		id == VERTICAL_DECK || id == RIGHT_TILE) {
+		if (tc->tab_prev || tc->tab_next)
+			return !tc->is_tab_hidden;
 		if (tc->ismaster ^ sc->ismaster)
 			return false;
 		if (fc && !(fc->ismaster ^ sc->ismaster))
@@ -1980,13 +1983,21 @@ void init_client_properties(Client *c) {
 	c->xwl_req_h = 0;
 #endif
 	c->blur_opacity = 1.0f;
-	c->isgroupfocusing = false;
+	c->is_group_focus = false;
 	c->group_prev = NULL;
 	c->group_next = NULL;
+	c->is_tab_focus = false;
+	c->is_tab_hidden = false;
+	c->tab_prev = NULL;
+	c->tab_next = NULL;
+	c->tag_visible = false;
+	c->snapshot_temp_visible = false;
+	c->is_surface_hidden = false;
 	c->grid_col_per = 1.0f;
 	c->grid_row_per = 1.0f;
 	c->jump_label_node = NULL;
 	c->group_bar = NULL;
+	c->tab_bar = NULL;
 	c->dim_node = NULL;
 	c->overview_scene_surface = NULL;
 	c->drop_direction = UNDIR;
@@ -2183,6 +2194,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	}
 
 	client_add_group_bar(c);
+	client_add_tab_bar(c);
 	client_add_dim_node(c);
 
 	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
@@ -2361,6 +2373,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
 	c->iskilling = 1;
+	if (c->tab_prev || c->tab_next)
+		tab_detach_client(c);
 	switcher_remove_client(c);
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(
@@ -2380,7 +2394,7 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	if (c->swallowing) {
 		c->swallowing->mon = c->mon;
 		client_replace(c->swallowing, c, false, true);
-	} else if ((c->group_next || c->group_prev) && c->isgroupfocusing) {
+	} else if ((c->group_next || c->group_prev) && c->is_group_focus) {
 		Client *group_replacement =
 			c->group_next ? c->group_next : c->group_prev;
 		group_replacement->mon = c->mon;
@@ -2501,10 +2515,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		c->jump_label_node = NULL;
 	}
 
-	if (c->group_bar) {
-		mango_group_bar_destroy(c->group_bar);
-		c->group_bar = NULL;
-	}
+	client_remove_group_bar(c);
+	client_remove_tab_bar(c);
 
 	if (c->dim_node) {
 		mango_dim_node_destroy(c->dim_node);
@@ -2613,8 +2625,8 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 		return;
 
 	const char *title = client_get_title(c);
-	mango_group_bar_update(c->group_bar, title,
-						   c->mon ? c->mon->wlr_output->scale : 1.0f);
+	client_update_group_bar_title(c);
+	client_update_tab_bar_title(c);
 
 	struct wayland_string wayland_title;
 	const char *clamped_title = wayland_string_set(&wayland_title, title);
@@ -2736,6 +2748,7 @@ void client_focus(Client *c, int32_t lift) {
 	/* Raise client in stacking order if requested */
 	if (c && lift) {
 		client_raise_group(c);
+		client_raise_tab(c);
 	}
 
 	if (c && client_surface(c) == old_keyboard_focus_surface &&
@@ -2760,6 +2773,8 @@ void client_focus(Client *c, int32_t lift) {
 		server.selected_monitor->sel = c;
 		c->isfocusing = true;
 
+		tab_sync_focus(c);
+
 		check_keep_idle_inhibit(c);
 		check_vrr_enable(c);
 
@@ -2782,7 +2797,8 @@ void client_focus(Client *c, int32_t lift) {
 					 server.selected_monitor) &&
 			TAGMATCH(c, server.selected_monitor) && !c->isfloating &&
 			(is_scroller_layout(server.selected_monitor) ||
-			 is_monocle_layout(server.selected_monitor))) {
+			 is_monocle_layout(server.selected_monitor) || c->tab_prev ||
+			 c->tab_next)) {
 			arrange(server.selected_monitor, false, false);
 		}
 
@@ -3639,6 +3655,8 @@ static void client_unlink(Client *c) {
 }
 
 void client_park(Client *c) {
+	if (c && (c->tab_prev || c->tab_next))
+		tab_detach_client(c);
 	client_unlink(c);
 	if (!c)
 		return;
@@ -3680,8 +3698,10 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 		client_group_replace(w, c);
 	}
 
+	tab_replace_client(w, c);
+
 	client_unpark(c, w);
-	mango_group_bar_set_focus(c->group_bar, c->isgroupfocusing);
+	mango_bar_decoration_set_focus(c->group_bar, c->is_group_focus);
 
 	/* If the old window is in overview, destroy its card tree. */
 	overview_destroy_card(w);
@@ -3701,13 +3721,10 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 		wlr_scene_node_set_enabled(&w->jump_label_node->scene->node, false);
 	}
 
-	wlr_scene_node_set_enabled(&w->scene->node, false);
-
-	wlr_scene_node_set_enabled(&c->scene->node, true);
-	/* In overview the real surface tree is replaced by the card tree, so it
-	 * stays disabled. */
-	if (!c->ov_card_tree)
-		wlr_scene_node_set_enabled(&c->scene_surface->node, true);
+	c->tag_visible = w->tag_visible;
+	w->tag_visible = false;
+	client_update_visibility(w);
+	client_update_visibility(c);
 
 	if (w->foreign_toplevel) {
 		wlr_foreign_toplevel_handle_v1_output_leave(w->foreign_toplevel,
@@ -3958,6 +3975,12 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 		geo.height -= config.group_bar_height;
 	}
 
+	if (!c->mon->isoverview && !c->isfullscreen && config.tab_bar_height > 0 &&
+		(c->tab_prev || c->tab_next)) {
+		geo.y = geo.y + (int32_t)config.tab_bar_height;
+		geo.height -= (int32_t)config.tab_bar_height;
+	}
+
 	if ((!c->isfullscreen && !c->ismaximizescreen) ||
 		is_scroller_layout(c->mon)) {
 		resize(c, geo, interact);
@@ -3965,6 +3988,57 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 }
 
 uint32_t generate_client_id(void) { return ++server.next_client_id; }
+
+bool client_gesture_driven(const Client *c) {
+	return server.gesture_drive_active && c &&
+		   c->mon == server.gesture_drive_mon;
+}
+
+/* Single place judging whether a window's nodes should be enabled.
+ * Each flag below is owned by the mechanism that sets it; this only reads. */
+bool client_should_visible(Client *c) {
+	if (!c || !c->scene)
+		return false;
+
+	if (c->ov_card_tree || (c->mon && c->mon->isoverview))
+		return true;
+
+	if (c->snapshot_temp_visible)
+		return true;
+
+	if (c->is_clip_to_hide)
+		return false;
+
+	if (c->is_tab_hidden)
+		return false;
+
+	if (c->iskilling)
+		return false;
+
+	if (c->animation.tagouting)
+		return true;
+
+	if (client_gesture_driven(c))
+		return true;
+
+	return c->tag_visible;
+}
+
+void client_update_visibility(Client *c) {
+	if (!c || !c->scene)
+		return;
+
+	bool show = client_should_visible(c);
+
+	if (c->scene->node.enabled != show)
+		wlr_scene_node_set_enabled(&c->scene->node, show);
+
+	bool surface_show =
+		!c->is_surface_hidden && !c->ov_card_tree && !c->overview_scene_surface;
+
+	if (c->scene_surface && c->scene_surface->node.enabled != surface_show)
+		wlr_scene_node_set_enabled(&c->scene_surface->node, surface_show);
+}
 
 void client_pending_force_kill(Client *c) {
 	if (!c)
@@ -4039,22 +4113,41 @@ void client_add_group_bar(Client *c) {
 
 	uint32_t layer = client_target_layer(c);
 
-	c->group_bar = mango_group_bar_create(c, GroupBar, server.layers[layer],
-										  config.groupbardata, 0, 0);
+	c->group_bar = mango_bar_decoration_create(
+		c, GroupBar, false, server.layers[layer], config.groupbardata, 0, 0);
 	wlr_scene_node_lower_to_bottom(&c->group_bar->scene->node);
 	wlr_scene_node_set_enabled(&c->group_bar->scene->node, false);
-	mango_group_bar_update(c->group_bar, client_get_title(c),
-						   c->mon ? c->mon->wlr_output->scale
-						   : server.selected_monitor
-							   ? server.selected_monitor->wlr_output->scale
-							   : 1.0f);
+	client_update_group_bar_title(c);
+}
+
+void client_update_group_bar_title(Client *c) {
+	if (!c || !c->group_bar)
+		return;
+	mango_bar_decoration_update(c->group_bar, client_get_title(c),
+								c->mon ? c->mon->wlr_output->scale
+								: server.selected_monitor
+									? server.selected_monitor->wlr_output->scale
+									: 1.0f);
+}
+
+void client_apply_group_bar_config(Client *c) {
+	if (!c || !c->group_bar)
+		return;
+	mango_bar_decoration_apply_config(c->group_bar, &config.groupbardata);
+}
+
+void client_remove_group_bar(Client *c) {
+	if (!c || !c->group_bar)
+		return;
+	mango_bar_decoration_destroy(c->group_bar);
+	c->group_bar = NULL;
 }
 
 void client_focus_group_member(Client *c) {
 	if (!c->group_prev && !c->group_next)
 		return;
 
-	if (c->isgroupfocusing)
+	if (c->is_group_focus)
 		return;
 
 	Client *head = c;
@@ -4063,7 +4156,7 @@ void client_focus_group_member(Client *c) {
 
 	Client *cur_focusing = NULL;
 	while (head) {
-		if (head->isgroupfocusing) {
+		if (head->is_group_focus) {
 			cur_focusing = head;
 			break;
 		}
@@ -4076,13 +4169,13 @@ void client_focus_group_member(Client *c) {
 	if (cur_focusing && cur_focusing->mon->isoverview)
 		return;
 
-	cur_focusing->isgroupfocusing = false;
+	cur_focusing->is_group_focus = false;
 	c->mon = cur_focusing->mon;
 	client_replace(c, cur_focusing, true, false);
-	mango_group_bar_set_focus(cur_focusing->group_bar, false);
+	mango_bar_decoration_set_focus(cur_focusing->group_bar, false);
 
-	c->isgroupfocusing = true;
-	mango_group_bar_set_focus(c->group_bar, true);
+	c->is_group_focus = true;
+	mango_bar_decoration_set_focus(c->group_bar, true);
 
 	client_reparent_group(c);
 
@@ -4150,17 +4243,22 @@ void client_reparent_group(Client *c) {
 		wlr_scene_node_reparent(&cur->scene->node, server.layers[layer]);
 		cur = cur->group_next;
 	}
+
+	if (c->tab_prev || c->tab_next) {
+		client_reparent_tab(c);
+	}
 }
 
-void client_handle_decorate_click(MangoGroupBar *gb) {
+void client_handle_decorate_click(MangoBarDecoration *bar) {
 
-	if (!gb)
+	if (!bar || !bar->node_data)
 		return;
 
-	if (gb->node_data) {
-		Client *c = gb->node_data;
+	Client *c = bar->node_data;
+	if (bar->is_tab)
+		tab_focus_member(c);
+	else
 		client_focus_group_member(c);
-	}
 }
 
 void client_set_group_mon(Client *c, Monitor *m) {
@@ -4188,19 +4286,42 @@ void client_set_group_config(Client *c) {
 		wlr_scene_rect_set_color(cur->droparea, config.dropcolor);
 		wlr_scene_rect_set_color(cur->splitindicator[0], config.splitcolor);
 		wlr_scene_rect_set_color(cur->splitindicator[1], config.splitcolor);
-		mango_group_bar_apply_config(cur->group_bar, &config.groupbardata);
+		client_apply_group_bar_config(cur);
 		cur = cur->group_next;
 	}
 }
 
+Client *client_chain_head(Client *c, size_t prev_off) {
+	if (!c)
+		return NULL;
+	Client *head = c;
+	for (;;) {
+		Client *prev = *(Client **)((char *)head + prev_off);
+		if (!prev)
+			break;
+		head = prev;
+	}
+	return head;
+}
+
+void client_chain_unlink(Client *c, size_t prev_off, size_t next_off) {
+	if (!c)
+		return;
+	Client *prev = *(Client **)((char *)c + prev_off);
+	Client *next = *(Client **)((char *)c + next_off);
+	if (prev)
+		*(Client **)((char *)prev + next_off) = next;
+	if (next)
+		*(Client **)((char *)next + prev_off) = prev;
+	*(Client **)((char *)c + prev_off) = NULL;
+	*(Client **)((char *)c + next_off) = NULL;
+}
+
 void client_group_detach(Client *c) {
-	if (c->group_prev)
-		c->group_prev->group_next = c->group_next;
-	if (c->group_next)
-		c->group_next->group_prev = c->group_prev;
-	c->group_prev = NULL;
-	c->group_next = NULL;
-	c->isgroupfocusing = false;
+	if (!c)
+		return;
+	client_chain_unlink(c, CLIENT_GROUP_PREV_OFF, CLIENT_GROUP_NEXT_OFF);
+	c->is_group_focus = false;
 }
 
 void client_group_replace(Client *old, Client *new) {
@@ -4216,9 +4337,9 @@ void client_group_replace(Client *old, Client *new) {
 	old->group_next = NULL;
 
 	if (client_is_parked(old) || (!new->group_prev && !new->group_next)) {
-		new->isgroupfocusing = false;
+		new->is_group_focus = false;
 	} else {
-		new->isgroupfocusing = old->isgroupfocusing;
+		new->is_group_focus = old->is_group_focus;
 	}
 }
 

@@ -338,7 +338,7 @@ int32_t group_join(const Arg *arg) {
 	}
 
 	if (!need_replace_client->group_prev && !need_replace_client->group_next) {
-		need_replace_client->isgroupfocusing = true;
+		need_replace_client->is_group_focus = true;
 	}
 
 	need_join_client->group_next = need_replace_client;
@@ -367,7 +367,7 @@ int32_t group_leave(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
 	Client *tc = arg->tc ? arg->tc : server.selected_monitor->sel;
-	if (!tc || !tc->mon || !tc->isgroupfocusing)
+	if (!tc || !tc->mon || !tc->is_group_focus)
 		return 0;
 	if (!tc->group_next && !tc->group_prev) {
 		return 0;
@@ -381,7 +381,7 @@ int32_t group_leave(const Arg *arg) {
 	client_focus_group_member(rc);
 	client_group_detach(tc);
 
-	tc->isgroupfocusing = false;
+	tc->is_group_focus = false;
 	tc->mon = rc->mon;
 	client_unpark(tc, rc);
 	/* rc stays focused: put tc right behind it in the focus stack. */
@@ -389,7 +389,7 @@ int32_t group_leave(const Arg *arg) {
 	wl_list_insert(rc->flink.next, &tc->flink);
 
 	if (!rc->group_prev && !rc->group_next) {
-		rc->isgroupfocusing = false;
+		rc->is_group_focus = false;
 	}
 
 	arrange(tc->mon, false, false);

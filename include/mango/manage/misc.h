@@ -12,7 +12,7 @@ void get_layout_abbr(char *abbr, const char *full_name);
 Client *client_at_point(double x, double y);
 bool layer_ignores_focus(LayerSurface *l);
 void node_at_point(double x, double y, struct wlr_surface **psurface,
-				   Client **pc, LayerSurface **pl, MangoGroupBar **gb,
+				   Client **pc, LayerSurface **pl, MangoBarDecoration **bar,
 				   double *nx, double *ny);
 
 /*
