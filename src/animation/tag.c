@@ -165,6 +165,21 @@ void set_tagout_animation(Monitor *m, Client *c) {
 	}
 }
 void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
+	/* Overview app-id filter: windows outside the filter must be hidden
+	 * immediately (no tag-out animation) so they cannot occlude the filtered
+	 * cards shown in overview/jump mode. */
+	if (m->isoverview && !overview_appid_match(c, m)) {
+		c->is_clip_to_hide = false;
+		c->animation.running = false;
+		c->animation.tagining = false;
+		c->animation.tagouting = false;
+		c->animation.tagouted = false;
+		wlr_scene_node_set_enabled(&c->scene->node, false);
+		c->animainit_geom = c->current = c->pending = c->animation.current =
+			c->geom;
+		return;
+	}
+
 	/* In overview every tag window must show its card and must not be disabled
 	 * by the hiding logic. */
 	if (c->ov_card_tree) {

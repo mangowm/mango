@@ -195,10 +195,10 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `reload_config` | - | Hot-reload configuration. Does not support keybind conflict (`c` flag). |
 | `load_config_file` | `file path` | Load configuration from the specified file. Empty path resets to default config location. Does not support keybind conflict (`c` flag). |
 | `quit` | - | Exit mangowm. |
-| `toggleoverview` | `[1]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. |
+| `toggleoverview` | `[1][,appid[+appid...]]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. The optional second argument filters the shown windows by app-id (multiple app-ids separated by `+`); it is AND-combined with the tag filter. |
 | `enteroverview` | - | Enter overview mode. |
 | `leaveoverview` | - | Leave overview mode. |
-| `togglejump` | - | Toggle overview with jump mode. |
+| `togglejump` | `[1][,appid[+appid...]]` | Toggle overview with jump mode. Accepts the same tag/app-id filters as `toggleoverview`. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |
 | `toggleoverlay` | - | Toggle overlay state for the focused window. |

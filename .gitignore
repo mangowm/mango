@@ -1,15 +1,25 @@
 /.cache
 /.vscode
 /result
+/result-*
 /build
 /mango-wlonly
 config.h
+/config
+/config-ord
 /mango
 mango.o
+pkg.nix
 util.o
+/log
 *-protocol.h
 *-protocol.c
 *-protocol.o
+
+# AI / session notes and docs (local only, not for upstream)
+/AGENTS.md
+/AI.md
+/AIDOC/
 
 .envrc
 .direnv

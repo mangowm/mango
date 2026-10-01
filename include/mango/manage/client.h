@@ -47,10 +47,14 @@ enum { UP, DOWN, LEFT, RIGHT, UNDIR, ALLDIR }; /* smartmovewin */
 #define ISFAKETILED(A)                                                         \
 	(A && !(A)->isfloating && !(A)->isminimized && !(A)->iskilling &&          \
 	 !(A)->isunglobal)
+/* Overview app-id filter: returns true when M has no filter or C's app-id is
+ * one of the '+'-separated entries. Declared here so VISIBLEON can reach it. */
+bool overview_appid_match(Client *c, Monitor *m);
 #define VISIBLEON(C, M)                                                        \
 	((C) && (M) && (C)->mon == (M) && !(C)->isminimized &&                     \
 	 (((C)->tags & (M)->tagset[(M)->seltags] || (C)->isglobal ||               \
-	   (C)->isunglobal)))
+	   (C)->isunglobal)) &&                                                    \
+	 overview_appid_match((C), (M)))
 #define TAGMATCH(C, M)                                                         \
 	((C) && (M) && (C)->mon == (M) && !(C)->isminimized &&                     \
 	 (((C)->tags & (M)->tagset[(M)->seltags])))

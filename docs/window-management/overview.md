@@ -32,6 +32,13 @@ By default overview temporarily views every tag on the monitor. Use
 `overcircle` with `current_next`/`current_prev`, or run `toggleoverview,1`, to
 keep the overview restricted to the current tagset's windows.
 
+An optional second argument filters the shown windows by app-id. Separate
+multiple app-ids with `+`, e.g. `toggleoverview,0,firefox+kitty`. This app-id
+filter is independent from the tag filter and both are AND-combined, so
+`toggleoverview,1,firefox` shows only Firefox windows on the current tagset.
+The same arguments work with `togglejump`, and via IPC with
+`mmsg dispatch toggleoverview,1,firefox`.
+
 ### Mouse Interaction in Overview
 
 When in overview mode:

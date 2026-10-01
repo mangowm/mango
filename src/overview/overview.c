@@ -7,6 +7,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <scenefx/types/wlr_scene.h>
+#include <string.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/edges.h>
@@ -27,6 +28,30 @@ struct ov_card_surface {
 	struct wl_listener
 		destroy; /* Removes the node when the surface is destroyed. */
 };
+
+/* Overview app-id filter: matches when the monitor has no filter or the
+ * client's app-id equals one of the '+'-separated tokens. Used by VISIBLEON. */
+bool overview_appid_match(Client *c, Monitor *m) {
+	if (!c || !m || !m->overview_appid_filter || !m->overview_appid_filter[0])
+		return true;
+
+	const char *appid = client_get_appid(c);
+	if (!appid || !appid[0])
+		return false;
+
+	size_t appid_len = strlen(appid);
+	const char *filter = m->overview_appid_filter;
+	while (*filter) {
+		const char *sep = strchr(filter, '+');
+		size_t len = sep ? (size_t)(sep - filter) : strlen(filter);
+		if (len == appid_len && strncmp(filter, appid, len) == 0)
+			return true;
+		if (!sep)
+			break;
+		filter = sep + 1;
+	}
+	return false;
+}
 
 // Returns 0 when the target window shares its tag with other windows.
 uint32_t want_restore_fullscreen(Client *target_client) {
