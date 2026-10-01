@@ -2,6 +2,7 @@
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/config/parse_config.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
@@ -27,6 +28,7 @@
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
+#include <xkbcommon/xkbcommon.h>
 
 static struct wl_list ipc_watch_clients;
 static int ipc_device_watch_count;
@@ -618,6 +620,71 @@ cJSON *build_monitor_json(Monitor *m) {
 						  cJSON_CreateString(ipc_get_layout_str()));
 	return resp;
 }
+
+cJSON *build_binds_response(void) {
+	cJSON *arr = cJSON_CreateArray();
+	for (int i = 0; i < config.key_bindings_count; i++) {
+		KeyBinding *kb = &config.key_bindings[i];
+		cJSON *obj = cJSON_CreateObject();
+
+		/* Modifiers */
+		char mod_buf[128];
+		mod_to_string(kb->mod, mod_buf, sizeof(mod_buf));
+		cJSON_AddStringToObject(obj, "modifiers", mod_buf);
+
+		/* Key */
+		if (kb->keysymcode.keysym != XKB_KEY_NoSymbol &&
+			kb->keysymcode.keysym != 0) {
+			char keysym_name[64];
+			xkb_keysym_get_name(kb->keysymcode.keysym, keysym_name,
+								sizeof(keysym_name));
+			cJSON_AddStringToObject(obj, "key", keysym_name);
+			cJSON_AddStringToObject(
+				obj, "key_type",
+				kb->keysymcode.type == KEY_TYPE_SYM ? "sym" : "code");
+		} else {
+			char code_buf[32];
+			snprintf(code_buf, sizeof(code_buf), "code:%u",
+					 kb->keysymcode.keycode.keycode1);
+			cJSON_AddStringToObject(obj, "key", code_buf);
+			cJSON_AddStringToObject(obj, "key_type", "code");
+		}
+		if (kb->keysymcode.keycode.keycode1 > 0)
+			cJSON_AddNumberToObject(obj, "keycode",
+									kb->keysymcode.keycode.keycode1);
+
+		/* Dispatcher */
+		cJSON_AddStringToObject(obj, "dispatcher", func_to_name(kb->func));
+
+		/* Args */
+		cJSON_AddStringToObject(obj, "args", kb->raw_args ? kb->raw_args : "");
+
+		/* Description */
+		cJSON_AddStringToObject(obj, "description",
+								kb->description ? kb->description : "");
+
+		/* Flags */
+		cJSON *flags = cJSON_CreateObject();
+		cJSON_AddBoolToObject(flags, "lock", kb->islockapply);
+		cJSON_AddBoolToObject(flags, "release", kb->isreleaseapply);
+		cJSON_AddBoolToObject(flags, "pass", kb->ispassapply);
+		cJSON_AddBoolToObject(flags, "allow_conflict", kb->isallowconflict);
+		cJSON_AddBoolToObject(flags, "has_description", kb->isdescriptionapply);
+		cJSON_AddItemToObject(obj, "flags", flags);
+
+		/* Mode */
+		cJSON_AddStringToObject(obj, "mode", kb->mode);
+
+		/* Source */
+		cJSON_AddNumberToObject(obj, "source_line", kb->line_number);
+
+		cJSON_AddItemToArray(arr, obj);
+	}
+	cJSON *resp = cJSON_CreateObject();
+	cJSON_AddItemToObject(resp, "binds", arr);
+	return resp;
+}
+
 void handle_command(int client_fd, const char *cmd_raw) {
 	cJSON *resp = NULL;
 	char *json_str = NULL;
@@ -840,6 +907,9 @@ void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 		resp = build_monitor_tags_response(m);
+	} else if (strcmp(cmd, "get binds") == 0 ||
+			   strcmp(cmd, "get all-binds") == 0) {
+		resp = build_binds_response();
 	} else if (strcmp(cmd, "get layouts") == 0) {
 		resp = build_layouts_response();
 	} else if (strncmp(cmd, "dispatch ", 9) == 0) {

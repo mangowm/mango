@@ -36,6 +36,8 @@ static void usage(void) {
 		   "surfaces\n");
 	printf("  get all-tags                             List all tags (all "
 		   "monitors)\n");
+	printf("  get binds                                List all registered key "
+		   "bindings\n");
 	printf("  get layouts                              List all available "
 		   "layouts\n");
 	printf(
