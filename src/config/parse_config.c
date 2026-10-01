@@ -1609,6 +1609,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->allow_shortcuts_inhibit = -1;
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
+		rule->ignore_fullscreen = -1;
 		rule->isnosizehint = -1;
 		rule->idleinhibit_when_focus = -1;
 		rule->vrr_only_fullscreen = -1;
@@ -1726,6 +1727,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->ignore_maximize = atoi(val);
 				} else if (strcmp(key, "ignore_minimize") == 0) {
 					rule->ignore_minimize = atoi(val);
+				} else if (strcmp(key, "ignore_fullscreen") == 0) {
+					rule->ignore_fullscreen = atoi(val);
 				} else if (strcmp(key, "isnosizehint") == 0) {
 					rule->isnosizehint = atoi(val);
 				} else if (strcmp(key, "idleinhibit_when_focus") == 0) {

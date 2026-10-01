@@ -35,6 +35,7 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `force_fakemaximize` | integer | `0` / `1` (default 1) | The state of client set to fake maximized |
 | `ignore_maximize` | integer | `0` / `1` (default 1) | Don't handle maximize request from client |
 | `ignore_minimize` | integer | `0` / `1` (default 1) | Don't handle minimize request from client |
+| `ignore_fullscreen` | integer | `0` / `1` (default 0) | Don't handle fullscreen request from client |
 | `force_tiled_state` | integer | `0` / `1` | Deceive the window into thinking it is tiling, so it better adheres to assigned dimensions |
 | `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |

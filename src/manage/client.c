@@ -1434,6 +1434,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, shield_when_capture);
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
+	APPLY_INT_PROP(c, r, ignore_fullscreen);
 	APPLY_INT_PROP(c, r, isnosizehint);
 	APPLY_INT_PROP(c, r, idleinhibit_when_focus);
 	APPLY_INT_PROP(c, r, vrr_only_fullscreen);
@@ -1662,7 +1663,8 @@ void client_apply_rules(Client *c) {
 	}
 
 	int32_t fullscreen_state_backup =
-		c->isfullscreen || client_wants_fullscreen(c);
+		c->isfullscreen ||
+		(!c->ignore_fullscreen && client_wants_fullscreen(c));
 
 	bool should_init_get_focus =
 		!c->isopensilent &&
@@ -2043,6 +2045,7 @@ void init_client_properties(Client *c) {
 	c->isnoshadow = 0;
 	c->ignore_maximize = 1;
 	c->ignore_minimize = 1;
+	c->ignore_fullscreen = 0;
 	c->iscustomsize = 0;
 	c->iscustompos = 0;
 	c->iscustom_scroller_proportion = 0;
@@ -2565,6 +2568,14 @@ void handle_client_request_fullscreen(struct wl_listener *listener,
 
 	if (!c || c->iskilling || client_is_parked(c))
 		return;
+
+	if (c->ignore_fullscreen) {
+		if (c->isfullscreen)
+			client_set_fullscreen(c, 1);
+		else
+			client_set_fake_fullscreen(c, client_wants_fullscreen(c));
+		return;
+	}
 
 	client_apply_fullscreen(c, client_wants_fullscreen(c), true);
 }

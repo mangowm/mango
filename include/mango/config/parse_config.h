@@ -131,6 +131,7 @@ typedef struct {
 	int32_t allow_shortcuts_inhibit;
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
+	int32_t ignore_fullscreen;
 	int32_t isnosizehint;
 	int32_t idleinhibit_when_focus;
 	int32_t vrr_only_fullscreen;
