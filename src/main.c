@@ -5,6 +5,7 @@
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/config/config_watcher.h"
 #include "mango/config/parse_config.h"
 #include "mango/dispatch/bind.h"
 #include "mango/draw/text-node.h"
@@ -204,6 +205,7 @@ void cleanup(void) {
 	unset_activation_env();
 
 	ipc_cleanup();
+	config_watcher_destroy();
 	cleanup_listeners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(server.xwayland);
@@ -463,6 +465,7 @@ void setup(void) {
 	server.event_loop = wl_display_get_event_loop(server.display);
 
 	ipc_init(server.event_loop);
+	config_watcher_init(server.event_loop);
 
 	server.tablet_manager = wlr_tablet_v2_create(server.display);
 	/* The backend is a wlroots feature which abstracts the underlying input

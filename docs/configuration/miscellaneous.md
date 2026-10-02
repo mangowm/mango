@@ -12,6 +12,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `syncobj_enable` | `1` | Enable `drm_syncobj` timeline support (helps with gaming stutter/lag). **Requires restart.** |
 | `allow_lock_transparent` | `0` | Allow the lock screen to be transparent. |
 | `allow_shortcuts_inhibit` | `1` | Allow shortcuts to be inhibited by clients. |
+| `auto_reload_config` | `1` | Watch the main config file and every `source`/`source-optional` file, then reload immediately after any of them changes. |
 
 ## Focus & Input
 

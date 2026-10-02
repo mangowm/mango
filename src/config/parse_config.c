@@ -11,6 +11,7 @@
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/config/config_watcher.h"
 #include "mango/dispatch/bind.h"
 #include "mango/ext-protocol/hdr.h"
 #include "mango/input/device.h"
@@ -624,6 +625,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->allow_shortcuts_inhibit = atoi(value);
 	} else if (strcmp(key, "allow_lock_transparent") == 0) {
 		config->allow_lock_transparent = atoi(value);
+	} else if (strcmp(key, "auto_reload_config") == 0) {
+		config->auto_reload_config = atoi(value);
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
@@ -3213,6 +3216,7 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 
 	} else {
 		// Absolute path
+		snprintf(full_path, sizeof(full_path), "%s", file_path);
 		file = fopen(file_path, "r");
 	}
 
@@ -3222,7 +3226,7 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	// Adds the file path to the global list.
 	file_paths = realloc(file_paths, (file_paths_count + 1) * sizeof(char *));
 	file_paths[file_paths_count] =
-		strdup(file_path); // Needs strdup for independent memory.
+		strdup(full_path); // Needs strdup for independent memory.
 	current_file_index = file_paths_count;
 	file_paths_count++;
 
@@ -3859,6 +3863,7 @@ void override_config(void) {
 		CLAMP_INT(config.allow_shortcuts_inhibit, 0, 1);
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
+	config.auto_reload_config = CLAMP_INT(config.auto_reload_config, 0, 1);
 	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
@@ -4104,6 +4109,7 @@ void set_value_default() {
 	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_10;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
 	config.allow_lock_transparent = 0;
+	config.auto_reload_config = 1;
 	config.no_border_when_single = 0;
 	config.no_radius_when_single = 0;
 	config.snap_distance = 30;
@@ -4354,6 +4360,15 @@ void set_default_key_bindings(Config *config) {
 bool parse_config(void) {
 	char filename[1024];
 
+	if (file_paths) {
+		for (int i = 0; i < file_paths_count; i++) {
+			free(file_paths[i]);
+		}
+		free(file_paths);
+		file_paths = NULL;
+		file_paths_count = 0;
+	}
+
 	free_config();
 
 	memset(&config, 0, sizeof(config));
@@ -4437,17 +4452,14 @@ bool parse_config(void) {
 	keybindings_conflict |= check_switch_binding_conflicts(&config);
 	keybindings_conflict |= check_gesture_binding_conflicts(&config);
 
-	// Frees the file path list.
-	if (file_paths) {
-		for (int i = 0; i < file_paths_count; i++) {
-			free(file_paths[i]);
-		}
-		free(file_paths);
-		file_paths = NULL;
-		file_paths_count = 0;
-	}
-
 	return parse_correct || keybindings_conflict;
+}
+
+char **config_get_file_paths(int *count) {
+	if (count) {
+		*count = file_paths_count;
+	}
+	return file_paths;
 }
 
 void reset_blur_params(void) {
@@ -4781,6 +4793,7 @@ int32_t reload_config(const Arg *arg) {
 	reset_option();
 	update_seat_capabilities();
 	printstatus(IPC_WATCH_ARRANGGE);
+	config_watcher_update();
 	return 1;
 }
 

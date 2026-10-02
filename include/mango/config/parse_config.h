@@ -545,6 +545,7 @@ typedef struct {
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t allow_lock_transparent;
+	int32_t auto_reload_config;
 
 	struct xkb_rule_names xkb_rules;
 	char xkb_rules_rules[128];
@@ -685,6 +686,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number);
 bool parse_config_line(Config *config, const char *line, int line_number);
 
 bool parse_config_file(Config *config, const char *file_path, bool must_exist);
+char **config_get_file_paths(int *count);
 void reapply_tagrule(void);
 
 void reset_option(void);
