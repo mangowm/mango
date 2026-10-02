@@ -58,6 +58,7 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | `tags` | mask | `0-9` / `1\|3\|5` | Assign to specific one tag (use `0` for special workspace overlay) or multiple tags (use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
+| `aspect_ratio` | ratio / float / `auto` | `16:9`, `1.7778`, `auto` | Lock the aspect ratio of a floating window. Accepts a `width:height` ratio, a plain float, or `auto` to use the size the window first opens with. Ignored while the window is tiled |
 
 ### Visuals & Decoration
 
@@ -123,6 +124,10 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 ```ini
 # Set specific window size and position
 windowrule=width:1000,height:900,appid:yesplaymusic,title:Demons
+
+# Keep floating windows at a fixed or spawn aspect ratio
+windowrule=isfloating:1,aspect_ratio:16:9,appid:some-video-player
+windowrule=isfloating:1,aspect_ratio:auto,appid:mpv
 
 # Global keybindings for OBS Studio
 windowrule=globalkeybinding:ctrl+alt-o,appid:com.obsproject.Studio

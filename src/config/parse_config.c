@@ -1728,6 +1728,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->offsety = 0;
 		rule->width = 0;
 		rule->height = 0;
+		rule->aspect_ratio = 0.0f;
 		rule->monitor = NULL;
 		rule->id = NULL;
 		rule->title = NULL;
@@ -1777,6 +1778,25 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->width = atof(val);
 				} else if (strcmp(key, "height") == 0) {
 					rule->height = atof(val);
+				} else if (strcmp(key, "aspect_ratio") == 0) {
+					/* Keep the spawn ratio for auto or an empty value. Also
+					 * accepts 16:9 or a plain float. */
+					if (val[0] == '\0' || strcmp(val, "auto") == 0) {
+						rule->aspect_ratio = -1.0f;
+					} else {
+						float ar_w = 0.0f, ar_h = 0.0f;
+						if (sscanf(val, "%f:%f", &ar_w, &ar_h) == 2 &&
+							ar_w > 0.0f && ar_h > 0.0f) {
+							rule->aspect_ratio = ar_w / ar_h;
+						} else if (atof(val) > 0.0) {
+							rule->aspect_ratio = atof(val);
+						} else {
+							mango_error(false, WLR_ERROR,
+										"Invalid aspect_ratio value: %s\n",
+										val);
+							parse_error = true;
+						}
+					}
 				} else if (strcmp(key, "isnoborder") == 0) {
 					rule->isnoborder = atoi(val);
 				} else if (strcmp(key, "isnoshadow") == 0) {

@@ -172,6 +172,7 @@ struct Client {
 	bool is_pending_open_animation;
 	bool is_restoring_from_ov;
 	float scroller_proportion;
+	float aspect_ratio; /* Locked floating aspect ratio, 0 means off. */
 	float stack_proportion;
 	float old_stack_proportion;
 	bool need_output_flush;
@@ -331,6 +332,7 @@ int32_t client_wants_fullscreen(Client *c);
 bool client_request_minimize(Client *c, void *data);
 bool client_request_maximize(Client *c, void *data);
 void client_set_size_bound(Client *c);
+void client_apply_aspect_ratio(Client *c, struct wlr_box *geo);
 bool check_hit_no_border(Client *c);
 Client *client_find_terminal(Client *w);
 Client *get_client_by_id_or_title(const char *arg_id, const char *arg_title);

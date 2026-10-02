@@ -1508,6 +1508,11 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	c->need_output_flush = true;
 	c->dirty = true;
 
+	/* The grab client handles its own ratio while dragging. */
+	if (c->isfloating && c != server.grab_client && c->aspect_ratio > 0.0f &&
+		!c->isfullscreen && !c->ismaximizescreen && !c->isfakefullscreen)
+		client_apply_aspect_ratio(c, &geo);
+
 	struct wlr_box *bbox = (opts.interact || c->isfloating || c->isfullscreen)
 							   ? &server.scene_geometry
 							   : &c->mon->w;

@@ -141,6 +141,7 @@ typedef struct {
 	int32_t offsety;
 	float width;
 	float height;
+	float aspect_ratio;
 	int32_t nofocus;
 	int32_t nofadein;
 	int32_t nofadeout;

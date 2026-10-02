@@ -817,11 +817,31 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 			  ? 0
 			  : cdy;
 
-	const struct wlr_box box = {
+	struct wlr_box box = {
 		.x = gc->geom.x + (server.resize_corner & 1 ? 0 : cdx),
 		.y = gc->geom.y + (server.resize_corner & 2 ? 0 : cdy),
 		.width = gc->geom.width + (server.resize_corner & 1 ? cdx : -cdx),
 		.height = gc->geom.height + (server.resize_corner & 2 ? cdy : -cdy)};
+
+	if (gc->aspect_ratio > 0.0f && box.width > 0 && box.height > 0) {
+		/* Use the dominant cursor axis, then pin the edges opposite the
+		 * grabbed corner. */
+		int32_t adx = cdx < 0 ? -cdx : cdx;
+		int32_t ady = cdy < 0 ? -cdy : cdy;
+
+		if (adx >= ady)
+			box.height = (int32_t)((float)box.width / gc->aspect_ratio + 0.5f);
+		else
+			box.width = (int32_t)((float)box.height * gc->aspect_ratio + 0.5f);
+
+		box.width = MANGO_MAX(box.width, 1);
+		box.height = MANGO_MAX(box.height, 1);
+
+		if (!(server.resize_corner & 1))
+			box.x = gc->geom.x + gc->geom.width - box.width;
+		if (!(server.resize_corner & 2))
+			box.y = gc->geom.y + gc->geom.height - box.height;
+	}
 
 	gc->float_geom = box;
 

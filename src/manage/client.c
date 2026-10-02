@@ -1520,6 +1520,23 @@ void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	}
 }
 
+/* Fit a floating box to its aspect ratio. */
+void client_apply_aspect_ratio(Client *c, struct wlr_box *geo) {
+	if (!c || c->aspect_ratio <= 0.0f || geo->width <= 0 || geo->height <= 0)
+		return;
+
+	int32_t w = geo->width;
+	int32_t h = geo->height;
+
+	if ((float)w / (float)h > c->aspect_ratio)
+		w = (int32_t)roundf((float)h * c->aspect_ratio);
+	else
+		h = (int32_t)roundf((float)w / c->aspect_ratio);
+
+	geo->width = MANGO_MAX(w, 1);
+	geo->height = MANGO_MAX(h, 1);
+}
+
 void client_apply_rules(Client *c) {
 	/* rule matching */
 	const char *appid, *title;
@@ -1540,6 +1557,11 @@ void client_apply_rules(Client *c) {
 	c->isfloating = client_is_float_type(c) || parent;
 
 	client_update_geometry(c);
+
+	/* Spawn ratio used by the auto rule value. */
+	float natural_aspect = c->geom.width > 0 && c->geom.height > 0
+							   ? (float)c->geom.width / (float)c->geom.height
+							   : 0.0f;
 
 	if (!(appid = client_get_appid(c)))
 		appid = broken;
@@ -1565,6 +1587,13 @@ void client_apply_rules(Client *c) {
 
 		// set general properties
 		apply_rule_properties(c, r);
+
+		/* A value of -1 resolves to the spawn ratio. */
+		if (r->aspect_ratio > 0.0f) {
+			c->aspect_ratio = r->aspect_ratio;
+		} else if (r->aspect_ratio < 0.0f && c->aspect_ratio <= 0.0f) {
+			c->aspect_ratio = natural_aspect;
+		}
 
 		// // set tags
 		if (r->tags) {
@@ -1618,6 +1647,10 @@ void client_apply_rules(Client *c) {
 						  : c->geom;
 			if (!c->isnosizehint)
 				client_set_size_bound(c);
+			if (c->aspect_ratio > 0.0f) {
+				client_apply_aspect_ratio(c, &c->geom);
+				c->float_geom = c->geom;
+			}
 		}
 	}
 
@@ -2050,6 +2083,7 @@ void init_client_properties(Client *c) {
 	c->no_force_center = 0;
 	c->isnoborder = 0;
 	c->isnosizehint = 0;
+	c->aspect_ratio = 0.0f;
 	c->isnoradius = 0;
 	c->isnoshadow = 0;
 	c->ignore_maximize = 1;
