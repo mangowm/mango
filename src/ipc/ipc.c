@@ -9,10 +9,12 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libinput.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +78,17 @@ Client *client_by_id(uint32_t id) {
 			return c;
 	}
 	return NULL;
+}
+
+static bool parse_client_id(const char *str, uint32_t *id) {
+	char *end;
+	errno = 0;
+	unsigned long v = strtoul(str, &end, 10);
+	if (end == str || *end != '\0' || errno == ERANGE || v > UINT32_MAX ||
+		!isdigit((unsigned char)*str))
+		return false;
+	*id = (uint32_t)v;
+	return true;
 }
 
 const char *ipc_get_layout_str(void) {
@@ -678,7 +691,12 @@ void handle_command(int client_fd, const char *cmd_raw) {
 			return;
 		}
 	} else if (strncmp(cmd, "get client ", 11) == 0) {
-		Client *c = client_by_id((uint32_t)atoi(cmd + 11));
+		uint32_t id;
+		if (!parse_client_id(cmd + 11, &id)) {
+			send_static_json(client_fd, "{\"error\":\"invalid client id\"}\n");
+			return;
+		}
+		Client *c = client_by_id(id);
 		if (!c) {
 			send_static_json(client_fd, "{\"error\":\"client not found\"}\n");
 			return;
@@ -946,7 +964,8 @@ bool handle_watch_command(int fd, const char *cmd,
 		type = IPC_WATCH_FOCUSING_CLIENT;
 	} else if (strncmp(cmd, "watch client ", 13) == 0) {
 		type = IPC_WATCH_CLIENT;
-		client_id = (uint32_t)atoi(cmd + 13);
+		if (!parse_client_id(cmd + 13, &client_id))
+			return false;
 	} else if (strncmp(cmd, "watch tags ", 11) == 0) {
 		type = IPC_WATCH_TAGS;
 		arg = cmd + 11;
