@@ -695,7 +695,8 @@ int32_t move_resize(const Arg *arg) {
 
 	node_at_point(server.cursor->x, server.cursor->y, NULL, &c, NULL, NULL,
 				  NULL, NULL);
-	pointer_begin_move_resize(c, arg->ui, server.cursor->x, server.cursor->y);
+	pointer_begin_move_resize(c, arg->ui, server.cursor->x, server.cursor->y,
+							  -1);
 	return 0;
 }
 

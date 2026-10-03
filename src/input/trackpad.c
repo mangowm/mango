@@ -487,7 +487,7 @@ static bool swipe_drive_begin(uint32_t fingers) {
 		Client *target = m->sel;
 
 		if (!pointer_begin_move_resize(target, exec_arg.ui, server.cursor->x,
-									   server.cursor->y)) {
+									   server.cursor->y, -1)) {
 			swipe_drive.consumed = false;
 			swipe_drive_log_state(m, "drag: no window to move", false,
 								  sel_before);

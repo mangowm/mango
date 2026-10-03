@@ -902,6 +902,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->drag_corner = atoi(value);
 	} else if (strcmp(key, "drag_warp_cursor") == 0) {
 		config->drag_warp_cursor = atoi(value);
+	} else if (strcmp(key, "leftdrag_resize") == 0) {
+		config->leftdrag_resize = atoi(value);
+	} else if (strcmp(key, "leftdrag_border_margin") == 0) {
+		config->leftdrag_border_margin = atoi(value);
 	} else if (strcmp(key, "smartgaps") == 0) {
 		config->smartgaps = atoi(value);
 	} else if (strcmp(key, "monocle_tab_mode") == 0) {
@@ -3964,6 +3968,9 @@ void override_config(void) {
 	config.warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
+	config.leftdrag_resize = CLAMP_INT(config.leftdrag_resize, 0, 1);
+	config.leftdrag_border_margin =
+		CLAMP_INT(config.leftdrag_border_margin, 0, 100);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
 	config.focusdir_only_zone_overlap =
 		CLAMP_INT(config.focusdir_only_zone_overlap, 0, 1);
@@ -4240,6 +4247,8 @@ void set_value_default() {
 	config.warpcursor = 1;
 	config.drag_corner = 3;
 	config.drag_warp_cursor = 1;
+	config.leftdrag_resize = 0;
+	config.leftdrag_border_margin = 4;
 
 	config.repeat_rate = 25;
 	config.repeat_delay = 600;
