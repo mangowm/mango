@@ -2065,9 +2065,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 		env->type = strdup(env_type);
-		config->env = realloc(config->env,
-							  (config->env_count + 1) * sizeof(*config->env));
-		if (!config->env) {
+		ConfigEnv **new_env = realloc(config->env, (config->env_count + 1) *
+													   sizeof(*config->env));
+		if (!new_env) {
 			free(env->type);
 			free(env->value);
 			free(env);
@@ -2076,6 +2076,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						"allocate memory for env\n");
 			return false;
 		}
+		config->env = new_env;
 
 		config->env[config->env_count] = env;
 		config->env_count++;
@@ -2385,15 +2386,16 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 	} else if (strncmp(key, "switchbind", 10) == 0) {
-		config->switch_bindings = realloc(config->switch_bindings,
-										  (config->switch_bindings_count + 1) *
-											  sizeof(SwitchBinding));
-		if (!config->switch_bindings) {
+		SwitchBinding *new_switch_bindings = realloc(
+			config->switch_bindings,
+			(config->switch_bindings_count + 1) * sizeof(SwitchBinding));
+		if (!new_switch_bindings) {
 			mango_error(false, WLR_ERROR,
 						"Failed to allocate "
 						"memory for switch bindings\n");
 			return false;
 		}
+		config->switch_bindings = new_switch_bindings;
 
 		SwitchBinding *binding =
 			&config->switch_bindings[config->switch_bindings_count];
@@ -3307,7 +3309,16 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	int saved_file_index = current_file_index;
 
 	// Adds the file path to the global list.
-	file_paths = realloc(file_paths, (file_paths_count + 1) * sizeof(char *));
+	char **new_file_paths =
+		realloc(file_paths, (file_paths_count + 1) * sizeof(char *));
+	if (!new_file_paths) {
+		mango_error(false, WLR_ERROR,
+					"Failed to allocate memory for config file path\n");
+		if (file)
+			fclose(file);
+		return false;
+	}
+	file_paths = new_file_paths;
 	file_paths[file_paths_count] =
 		strdup(full_path); // Needs strdup for independent memory.
 	current_file_index = file_paths_count;
