@@ -76,6 +76,8 @@ mmsg watch all-tags
 Allows sending commands to the compositor to alter its state.
 * `dispatch <func_name>,[args...] [client,<id>]`
 
+`setoption` sets a config option at runtime, e.g. `dispatch setoption,borderpx,10`.
+
 *Example:* 
 ```bash   
 # operate specific client by id

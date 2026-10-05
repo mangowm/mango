@@ -898,8 +898,10 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		}
 
 		if (func) {
-			func(&arg);
-			send_static_json(client_fd, "{\"success\":true}\n");
+			if (func(&arg) < 0)
+				send_static_json(client_fd, "{\"error\":\"unknown option\"}\n");
+			else
+				send_static_json(client_fd, "{\"success\":true}\n");
 		} else {
 			send_static_json(client_fd, "{\"error\":\"unknown function\"}\n");
 		}
