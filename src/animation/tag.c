@@ -73,7 +73,9 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		c->animation.tag_from_rule = false;
 		c->animation.tagouted = false;
 		/* Reverse an in-flight hide instead of restarting from the top. */
-		bool reversing = c->animation.tagouting && c->animation.running;
+		bool reversing =
+			c->animation.tagouting && c->animation.running &&
+			!wlr_box_equal(&c->animation.current, &c->animation.initial);
 		c->animation.tagouting = false;
 		if (client_animations_enabled(c)) {
 			c->animation.tagining = true;
@@ -199,7 +201,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 	/* Special workspace windows should animate out or hide when special
 	 * workspace is not active */
 	if (c->tags & TAG0_MASK) {
-		if (want_animation && client_animations_enabled(c) &&
+		if (want_animation && !m->isoverview && client_animations_enabled(c) &&
 			!c->animation.tagouted) {
 			c->animation.tagouting = true;
 			c->animation.tagining = false;

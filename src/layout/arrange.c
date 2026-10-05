@@ -1387,29 +1387,32 @@ void tag_gather_apply(Monitor *m) {
 		tag_gather_reset_slot(m, i);
 }
 
-Layout overviewlayout = {"󰃇", overview, "overview"};
+Layout overviewlayout = {"󰃇", overview, NULL, "overview"};
 
 Layout layouts[] = {
 	// At least two are required; fewer than two cannot be removed.
 	/* symbol     arrange function   name */
-	{"T", tile, "tile", TILE},						 // Tiled layout
-	{"S", scroller, "scroller", SCROLLER},			 // Scroll layout
-	{"G", grid, "grid", GRID},						 // Grid layout
-	{"M", monocle, "monocle", MONOCLE},				 // Single layout
-	{"K", deck, "deck", DECK},						 // Card layout
-	{"CT", center_tile, "center_tile", CENTER_TILE}, // Centered layout
-	{"RT", right_tile, "right_tile", RIGHT_TILE},	 // Right layout
-	{"VS", vertical_scroller, "vertical_scroller",
+	{"T", tile, tile_predict, "tile", TILE},				 // Tiled layout
+	{"S", scroller, scroller_predict, "scroller", SCROLLER}, // Scroll layout
+	{"G", grid, grid_predict, "grid", GRID},				 // Grid layout
+	{"M", monocle, monocle_predict, "monocle", MONOCLE},	 // Single layout
+	{"K", deck, deck_predict, "deck", DECK},				 // Card layout
+	{"CT", center_tile, center_tile_predict, "center_tile",
+	 CENTER_TILE}, // Centered layout
+	{"RT", right_tile, right_tile_predict, "right_tile",
+	 RIGHT_TILE}, // Right layout
+	{"VS", vertical_scroller, vertical_scroller_predict, "vertical_scroller",
 	 VERTICAL_SCROLLER}, // Vertical scroll layout
-	{"VT", vertical_tile, "vertical_tile",
+	{"VT", vertical_tile, vertical_tile_predict, "vertical_tile",
 	 VERTICAL_TILE}, // Vertical tiled layout
-	{"VG", vertical_grid, "vertical_grid",
+	{"VG", vertical_grid, vertical_grid_predict, "vertical_grid",
 	 VERTICAL_GRID}, // Vertical grid layout
-	{"VK", vertical_deck, "vertical_deck",
+	{"VK", vertical_deck, vertical_deck_predict, "vertical_deck",
 	 VERTICAL_DECK}, // Vertical card layout
-	{"DW", dwindle, "dwindle", DWINDLE},
-	{"F", fair, "fair", FAIR},
-	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
+	{"DW", dwindle, dwindle_predict, "dwindle", DWINDLE},
+	{"F", fair, fair_predict, "fair", FAIR},
+	{"VF", vertical_fair, vertical_fair_predict, "vertical_fair",
+	 VERTICAL_FAIR},
 };
 
 bool special_handle_empty_view(Monitor *m, bool from_view) {

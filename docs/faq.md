@@ -44,7 +44,7 @@ blur_optimized=0
 Try enabling **SyncObj** timeline support.
 
 ```ini
-syncobj_enable=1
+sync_obj_enable=1
 ```
 
 ---
@@ -62,7 +62,7 @@ allow_tearing=1
 Then force it for your specific game:
 
 ```ini
-windowrule=force_tearing:1,title:Counter-Strike 2
+window_rule=force_tearing:1,title:Counter-Strike 2
 ```
 
 > **Warning:** Some graphics cards require setting `env=WLR_DRM_NO_ATOMIC,1` in config before mango starts for tearing to work. 
@@ -77,10 +77,10 @@ Some X11 games (typically Proton/Wine titles, e.g. Satisfactory) capture the mou
 Add a window rule to force the cursor to stay inside the game window while it is focused:
 
 ```ini
-windowrule=confine_pointer:1,appid:steam_app_526870
+window_rule=confine_pointer:1,app_id:steam_app_526870
 ```
 
-Use `appid:` or `title:` to match your game — see [Window Rules](/docs/window-management/rules) for the available matching options.
+Use `app_id:` or `title:` to match your game — see [Window Rules](/docs/window-management/rules) for the available matching options.
 
 `confine_pointer=1` keeps the cursor 5px inside the window's surface whenever that window is the focused, visible window. The confinement is released as soon as the window loses focus, gets hidden, minimized, or moved to a hidden tag. It does not rely on the pointer constraints protocol.
 
@@ -91,19 +91,19 @@ Use `appid:` or `title:` to match your game — see [Window Rules](/docs/window-
 Some games (Proton/Wine titles) open a short-lived helper window (a splash/loading window showing the app id) before the real game window. A rule like
 
 ```ini
-windowrule=confine_pointer:1,isfullscreen:1,appid:steam_app_526870
+window_rule=confine_pointer:1,is_fullscreen:1,app_id:steam_app_526870
 ```
 
 matches **every** window of that app, including that helper window, so mango forces it to fullscreen as well. The helper window then gets `_NET_WM_STATE_FULLSCREEN` and a resize to the whole monitor, and when the real game window maps mango's "a new tiled window kicks the fullscreen window out of fullscreen" logic un-fullscreens and re-tiles it again. Wine ties its mouse capture and cursor visibility to those window states, so after this churn the game ends up with a broken capture state: the cursor is not hidden, the pointer lock is created and dropped repeatedly, and the game's own cursor and the compositor cursor disagree (e.g. the menu cursor is not where the game thinks it is).
 
-Restrict `isfullscreen` to the real game window with `title:` (the helper window has no title):
+Restrict `is_fullscreen` to the real game window with `title:` (the helper window has no title):
 
 ```ini
-windowrule=confine_pointer:1,appid:steam_app_526870
-windowrule=isfullscreen:1,appid:steam_app_526870,title:Satisfactory
+window_rule=confine_pointer:1,app_id:steam_app_526870
+window_rule=is_fullscreen:1,app_id:steam_app_526870,title:Satisfactory
 ```
 
-Rules match on `appid` **and** `title` when both are given, so only the main window is made fullscreen.
+Rules match on `app_id` **and** `title` when both are given, so only the main window is made fullscreen.
 
 ---
 

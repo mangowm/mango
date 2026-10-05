@@ -2,6 +2,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/layout/arrange.h"
+#include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <wlr/types/wlr_cursor.h>
@@ -162,7 +163,8 @@ void dwindle_remove(DwindleNode **root, Client *c) {
 }
 
 void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
-					int32_t ah, int32_t gap_h, int32_t gap_v) {
+					int32_t ah, int32_t gap_h, int32_t gap_v,
+					const LayoutContext *ctx) {
 	if (!node)
 		return;
 
@@ -172,7 +174,12 @@ void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
 				!node->client->ismaximizescreen) {
 				struct wlr_box box = {ax, ay, MANGO_MAX(1, aw),
 									  MANGO_MAX(1, ah)};
-				client_tile_resize(node->client, box, 0);
+				if (ctx && ctx->probe) {
+					if (node->client == ctx->probe && ctx->out)
+						*ctx->out = box;
+				} else {
+					client_tile_resize(node->client, box, 0, NULL);
+				}
 			}
 		}
 		return;
@@ -186,14 +193,14 @@ void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
 	node->container_h = ah;
 	if (node->split_h) {
 		int32_t w1 = MANGO_MAX(1, (int32_t)(aw * node->ratio) - gap_h / 2);
-		dwindle_assign(node->first, ax, ay, w1, ah, gap_h, gap_v);
+		dwindle_assign(node->first, ax, ay, w1, ah, gap_h, gap_v, ctx);
 		dwindle_assign(node->second, ax + w1 + gap_h, ay, aw - w1 - gap_h, ah,
-					   gap_h, gap_v);
+					   gap_h, gap_v, ctx);
 	} else {
 		int32_t h1 = MANGO_MAX(1, (int32_t)(ah * node->ratio) - gap_v / 2);
-		dwindle_assign(node->first, ax, ay, aw, h1, gap_h, gap_v);
+		dwindle_assign(node->first, ax, ay, aw, h1, gap_h, gap_v, ctx);
 		dwindle_assign(node->second, ax, ay + h1 + gap_v, aw, ah - h1 - gap_v,
-					   gap_h, gap_v);
+					   gap_h, gap_v, ctx);
 	}
 }
 
@@ -485,7 +492,7 @@ void dwindle_resize_client(Monitor *m, Client *c) {
 
 	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
 				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
+				   m->w.height - 2 * gap_ov, gap_ih, gap_iv, NULL);
 }
 
 void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
@@ -533,7 +540,7 @@ void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
 
 	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
 				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
+				   m->w.height - 2 * gap_ov, gap_ih, gap_iv, NULL);
 }
 
 void dwindle_remove_client(Client *c) {
@@ -636,7 +643,7 @@ void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 	dwindle_insert(root, new_c, focused, ratio, as_first, split_h, lock);
 }
 
-void dwindle(Monitor *m) {
+static void dwindle_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t n = m->visible_tiling_clients;
 	if (n == 0)
 		return;
@@ -724,7 +731,7 @@ void dwindle(Monitor *m) {
 
 	dwindle_assign(*root, m->w.x + gap_oh, m->w.y + gap_ov,
 				   m->w.width - 2 * gap_oh, m->w.height - 2 * gap_ov, gap_ih,
-				   gap_iv);
+				   gap_iv, ctx);
 
 	free(vis);
 	free(leaves);
@@ -734,4 +741,18 @@ void dwindle(Monitor *m) {
 void cleanup_monitor_dwindle(Monitor *m) {
 	for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
+}
+
+void dwindle(Monitor *m) { dwindle_core(m, NULL); }
+
+bool dwindle_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	uint32_t tag = get_mon_curtag(m);
+	DwindleNode **root = &m->pertag->dwindle_root[tag];
+
+	layout_predict_box(dwindle_core, m, c, out);
+
+	if (dwindle_find_leaf(*root, c))
+		dwindle_remove(root, c);
+
+	return out->width > 0 && out->height > 0;
 }

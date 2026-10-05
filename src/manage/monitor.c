@@ -360,7 +360,8 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 		state->committed &
 		(WLR_OUTPUT_STATE_MODE | WLR_OUTPUT_STATE_SCALE |
 		 WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_ENABLED |
-		 WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED);
+		 WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED |
+		 WLR_OUTPUT_STATE_IMAGE_DESCRIPTION);
 	if (!state_changed && !wlr_scene_output_needs_frame(scene_output))
 		return true;
 
@@ -580,6 +581,7 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	} else {
 		disable_adaptive_sync(m, state);
 	}
+	wlr_output_state_set_enabled(state, !m->prefer_disable);
 	wlr_output_state_set_scale(state, rule->scale);
 	wlr_output_state_set_transform(state, rule->rr);
 	return mode_set;
@@ -659,6 +661,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	enum wl_output_transform rr = WL_OUTPUT_TRANSFORM_NORMAL;
 	wlr_output_state_set_scale(&pending, scale);
 	wlr_output_state_set_transform(&pending, rr);
+	wlr_output_state_set_enabled(&pending, true);
 
 	for (ji = 0; ji < config.monitor_rules_count; ji++) {
 		r = &config.monitor_rules[ji];
@@ -699,11 +702,8 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	wlr_output_state_init(&state);
 
 	// Enable/disable
-	if (m->prefer_disable) {
-		wlr_output_state_set_enabled(&state, false);
-	} else {
-		wlr_output_state_set_enabled(&state, true);
-	}
+	if (pending.committed & WLR_OUTPUT_STATE_ENABLED)
+		wlr_output_state_set_enabled(&state, pending.enabled);
 
 	// Mode setting
 	if (pending.committed & WLR_OUTPUT_STATE_MODE) {
@@ -883,7 +883,6 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		m->skip_frame_timeout = NULL;
 	}
 	m->wlr_output->data = NULL;
-	xdg_output_cleanup_output(m->wlr_output);
 
 	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);

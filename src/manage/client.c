@@ -1,5 +1,6 @@
 #include "mango/manage/client.h"
 #include "mango/animation/client.h"
+#include "mango/common/input-event-codes.h"
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
@@ -20,7 +21,6 @@
 #include "mango/overview/overview.h"
 #include "mango/switcher/switcher.h"
 #include <fcntl.h>
-#include <linux/input-event-codes.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/blur_data.h>
 #include <scenefx/types/fx/clipped_region.h>
@@ -846,7 +846,7 @@ bool check_hit_no_border(Client *c) {
 Client *client_find_terminal(Client *w) {
 	Client *c = NULL;
 
-	if (!w->pid || w->isterm || w->noswallow)
+	if (!w->pid || w->isterm || w->no_swallow)
 		return NULL;
 
 	wl_list_for_each(c, &server.focus_stack, flink) {
@@ -1416,19 +1416,19 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, force_fakemaximize);
 	APPLY_INT_PROP(c, r, force_tiled_state);
 	APPLY_INT_PROP(c, r, force_tearing);
-	APPLY_INT_PROP(c, r, noswallow);
+	APPLY_INT_PROP(c, r, no_swallow);
 	APPLY_INT_PROP(c, r, confine_pointer);
-	APPLY_INT_PROP(c, r, nofocus);
-	APPLY_INT_PROP(c, r, nofadein);
-	APPLY_INT_PROP(c, r, nofadeout);
+	APPLY_INT_PROP(c, r, no_focus);
+	APPLY_INT_PROP(c, r, no_fade_in);
+	APPLY_INT_PROP(c, r, no_fade_out);
 	APPLY_INT_PROP(c, r, no_force_center);
 	APPLY_INT_PROP(c, r, isfloating);
 	APPLY_INT_PROP(c, r, isfullscreen);
 	APPLY_INT_PROP(c, r, isfakefullscreen);
-	APPLY_INT_PROP(c, r, isnoborder);
-	APPLY_INT_PROP(c, r, isnoshadow);
-	APPLY_INT_PROP(c, r, isnoradius);
-	APPLY_INT_PROP(c, r, isnoanimation);
+	APPLY_INT_PROP(c, r, no_border);
+	APPLY_INT_PROP(c, r, no_shadow);
+	APPLY_INT_PROP(c, r, no_radius);
+	APPLY_INT_PROP(c, r, no_animation);
 	APPLY_INT_PROP(c, r, isopensilent);
 	APPLY_INT_PROP(c, r, istagsilent);
 	APPLY_INT_PROP(c, r, isnamedscratchpad);
@@ -1437,13 +1437,13 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, shield_when_capture);
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
-	APPLY_INT_PROP(c, r, isnosizehint);
+	APPLY_INT_PROP(c, r, no_size_hint);
 	APPLY_INT_PROP(c, r, idleinhibit_when_focus);
 	APPLY_INT_PROP(c, r, vrr_only_fullscreen);
 	APPLY_INT_PROP(c, r, force_render);
 	APPLY_INT_PROP(c, r, activation_bypass);
 	APPLY_INT_PROP(c, r, isunglobal);
-	APPLY_INT_PROP(c, r, noblur);
+	APPLY_INT_PROP(c, r, no_blur);
 	APPLY_INT_PROP(c, r, allow_shortcuts_inhibit);
 
 	APPLY_FLOAT_PROP(c, r, scroller_proportion);
@@ -1520,7 +1520,7 @@ void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	}
 }
 
-void client_apply_rules(Client *c) {
+void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	/* rule matching */
 	const char *appid, *title;
 	uint32_t i, newtags = 0;
@@ -1616,7 +1616,7 @@ void client_apply_rules(Client *c) {
 			c->geom = c->float_geom.width > 0 && c->float_geom.height > 0
 						  ? c->float_geom
 						  : c->geom;
-			if (!c->isnosizehint)
+			if (!c->no_size_hint)
 				client_set_size_bound(c);
 		}
 	}
@@ -1646,12 +1646,17 @@ void client_apply_rules(Client *c) {
 
 	// rule action only apply after map not apply in the init commit
 	struct wlr_surface *surface = client_surface(c);
-	if (!surface || !surface->mapped)
+	if (!surface || !surface->mapped) {
+		if (rule_mon)
+			*rule_mon = mon;
+		if (rule_tags)
+			*rule_tags = newtags;
 		return;
+	}
 
 	// apply swallow rule
 	c->pid = client_get_pid(c);
-	if (!c->noswallow && !c->isfloating && !client_is_float_type(c) &&
+	if (!c->no_swallow && !c->isfloating && !client_is_float_type(c) &&
 		!c->surface.xdg->initial_commit) {
 		Client *p = client_find_terminal(c);
 		if (p && !p->isminimized) {
@@ -2005,12 +2010,12 @@ void init_client_properties(Client *c) {
 	c->isfocusing = false;
 	c->isfloating = 0;
 	c->isfakefullscreen = 0;
-	c->isnoanimation = 0;
+	c->no_animation = 0;
 	c->isopensilent = 0;
 	c->istagsilent = 0;
-	c->noswallow = 0;
+	c->no_swallow = 0;
 	c->isterm = 0;
-	c->noblur = 0;
+	c->no_blur = 0;
 	c->tearing_hint = 0;
 	c->overview_isfullscreenbak = 0;
 	c->overview_ismaximizescreenbak = 0;
@@ -2044,14 +2049,14 @@ void init_client_properties(Client *c) {
 	c->fake_no_border = false;
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
-	c->nofocus = 0;
-	c->nofadein = 0;
-	c->nofadeout = 0;
+	c->no_focus = 0;
+	c->no_fade_in = 0;
+	c->no_fade_out = 0;
 	c->no_force_center = 0;
-	c->isnoborder = 0;
-	c->isnosizehint = 0;
-	c->isnoradius = 0;
-	c->isnoshadow = 0;
+	c->no_border = 0;
+	c->no_size_hint = 0;
+	c->no_radius = 0;
+	c->no_shadow = 0;
 	c->ignore_maximize = 1;
 	c->ignore_minimize = 1;
 	c->iscustomsize = 0;
@@ -2111,9 +2116,101 @@ void init_client_properties(Client *c) {
 	wl_list_init(&c->flink);
 }
 
+static void client_insert_tiling_order(Client *c) {
+	Client *at_client = NULL;
+
+	if (config.new_is_master && server.selected_monitor &&
+		!is_scroller_layout(server.selected_monitor))
+		wl_list_insert(&server.clients, &c->link);
+	else if (server.selected_monitor &&
+			 is_scroller_layout(server.selected_monitor) &&
+			 server.selected_monitor->visible_scroll_tiling_clients > 0) {
+		if (server.selected_monitor->sel &&
+			ISSCROLLTILED(server.selected_monitor->sel) &&
+			VISIBLEON(server.selected_monitor->sel, server.selected_monitor)) {
+			at_client =
+				scroll_get_stack_tail_client(server.selected_monitor->sel);
+		} else {
+			at_client = center_tiled_select(server.selected_monitor);
+		}
+
+		if (at_client)
+			wl_list_insert(&at_client->link, &c->link);
+		else
+			wl_list_insert(server.clients.prev, &c->link);
+	} else
+		wl_list_insert(server.clients.prev, &c->link);
+}
+
+static void client_configure_size(Client *c, struct wlr_box geo, int32_t bw) {
+	if ((int32_t)geo.width <= 2 * bw || (int32_t)geo.height <= 2 * bw)
+		return;
+
+	client_set_size(c, (uint32_t)((int32_t)geo.width - 2 * bw),
+					(uint32_t)((int32_t)geo.height - 2 * bw));
+}
+
+static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
+										  uint32_t rule_tags) {
+	if (!c)
+		return;
+
+	Monitor *m =
+		rule_mon ? rule_mon : (c->mon ? c->mon : server.selected_monitor);
+	if (!m || m->isoverview)
+		return;
+
+	int32_t bw = (int32_t)c->bw;
+	Monitor *saved_mon = c->mon;
+	uint32_t saved_tags = c->tags;
+
+	c->mon = m;
+	client_reset_mon_tags(c, m, rule_tags);
+	check_match_tag_floating_rule(c, m);
+
+	if (c->isfloating || c->isfullscreen || c->ismaximizescreen ||
+		client_wants_fullscreen(c)) {
+		if (c->isfullscreen || client_wants_fullscreen(c))
+			client_configure_size(c, m->m, 0);
+		else if (c->ismaximizescreen)
+			client_configure_size(c, m->w, bw);
+		else
+			client_configure_size(c,
+								  c->float_geom.width > 0 &&
+										  c->float_geom.height > 0
+									  ? c->float_geom
+									  : c->geom,
+								  bw);
+		c->mon = saved_mon;
+		c->tags = saved_tags;
+		return;
+	}
+
+	uint32_t tag = get_mon_curtag(m);
+	const Layout *layout = m->pertag->ltidxs[tag];
+	if (!layout || !layout->predict) {
+		c->mon = saved_mon;
+		c->tags = saved_tags;
+		return;
+	}
+
+	client_insert_tiling_order(c);
+	pre_calculate_before_arrange(m, false, false, true);
+
+	struct wlr_box geo = {0};
+	if (layout->predict(m, c, &geo))
+		client_configure_size(c, geo, bw);
+
+	wl_list_remove(&c->link);
+	wl_list_init(&c->link);
+	pre_calculate_before_arrange(m, false, false, true);
+
+	c->mon = saved_mon;
+	c->tags = saved_tags;
+}
+
 void handle_client_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
-	Client *at_client = NULL;
 	Client *c = wl_container_of(listener, c, map);
 	int32_t i = 0;
 
@@ -2145,7 +2242,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	// set special window properties
 	if (client_is_unmanaged(c) || client_is_x11_popup(c)) {
 		c->bw = 0;
-		c->isnoborder = 1;
+		c->no_border = 1;
 	} else {
 		c->bw = config.borderpx;
 	}
@@ -2157,6 +2254,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	// init client geom
 	c->geom.width += 2 * c->bw;
 	c->geom.height += 2 * c->bw;
+	c->float_geom = c->geom;
 	c->overview_backup_geom = c->geom;
 
 	struct wayland_string appid, title;
@@ -2227,38 +2325,11 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	wlr_scene_node_lower_to_bottom(&c->shield->node);
 	wlr_scene_node_set_enabled(&c->shield->node, false);
 
-	if (config.new_is_master && server.selected_monitor &&
-		!is_scroller_layout(server.selected_monitor))
-		// tile at the top
-		wl_list_insert(&server.clients,
-					   &c->link); // The new window is master; its head is
-								  // pushed to the stack.
-	else if (server.selected_monitor &&
-			 is_scroller_layout(server.selected_monitor) &&
-			 server.selected_monitor->visible_scroll_tiling_clients > 0) {
-
-		if (server.selected_monitor->sel &&
-			ISSCROLLTILED(server.selected_monitor->sel) &&
-			VISIBLEON(server.selected_monitor->sel, server.selected_monitor)) {
-			at_client =
-				scroll_get_stack_tail_client(server.selected_monitor->sel);
-		} else {
-			at_client = center_tiled_select(server.selected_monitor);
-		}
-
-		if (at_client) {
-			wl_list_insert(&at_client->link, &c->link);
-		} else {
-			wl_list_insert(server.clients.prev,
-						   &c->link); // Pushed to the stack tail.
-		}
-	} else
-		wl_list_insert(server.clients.prev,
-					   &c->link); // Pushed to the stack tail.
+	client_insert_tiling_order(c);
 
 	wl_list_insert(&server.focus_stack, &c->flink);
 
-	client_apply_rules(c);
+	client_apply_rules(c, NULL, NULL);
 
 	client_apply_xwayland(c);
 
@@ -2302,7 +2373,10 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 	if (c->surface.xdg->initial_commit) {
 		// xdg client will first enter this before mapnotify
 		init_client_properties(c);
-		client_apply_rules(c);
+		Monitor *rule_mon = NULL;
+		uint32_t rule_tags = 0;
+		client_apply_rules(c, &rule_mon, &rule_tags);
+		client_negotiate_initial_size(c, rule_mon, rule_tags);
 		if (c->mon) {
 			client_set_scale(client_surface(c), c->mon->wlr_output->scale);
 		}
@@ -2689,7 +2763,7 @@ void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 	if (wlr_subsurface_try_from_wlr_surface(surface) != NULL)
 		return;
 
-	if (config.blur && c && !c->noblur) {
+	if (config.blur && c && !c->no_blur) {
 		if (config.blur_optimized) {
 			wlr_scene_blur_set_should_only_blur_bottom_layer(c->blur, true);
 		} else {
@@ -2743,7 +2817,7 @@ void client_focus(Client *c, int32_t lift) {
 	if (c && client_should_ignore_focus(c) && client_is_x11_popup(c))
 		return;
 
-	if (c && c->nofocus)
+	if (c && c->no_focus)
 		return;
 
 	/* Raise client in stacking order if requested */
@@ -3269,7 +3343,7 @@ void client_apply_fullscreen(
 			resize(c, c->mon->m, 1);
 
 	} else {
-		c->bw = c->isnoborder ? 0 : config.borderpx;
+		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
 			client_set_floating(c, 1);
 	}
@@ -3327,7 +3401,7 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 		if (!is_scroller_layout(c->mon) || c->isfloating)
 			resize(c, maximizescreen_box, 0);
 	} else {
-		c->bw = c->isnoborder ? 0 : config.borderpx;
+		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
 			client_set_floating(c, 1);
 	}
@@ -3482,7 +3556,7 @@ void show_scratchpad(Client *c) {
 	if (c->isfullscreen || c->ismaximizescreen) {
 		client_pending_fullscreen_state(c, 0);
 		client_pending_maximized_state(c, 0);
-		c->bw = c->isnoborder ? 0 : config.borderpx;
+		c->bw = c->no_border ? 0 : config.borderpx;
 	}
 
 	/* return if fullscreen */
@@ -3964,7 +4038,14 @@ void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,
 		pointer_warp_to_client(c1);
 }
 
-void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
+void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact,
+						const LayoutContext *ctx) {
+	if (ctx && ctx->probe) {
+		if (c == ctx->probe && ctx->out)
+			*ctx->out = geo;
+		return;
+	}
+
 	if (!ISFAKETILED(c) || !c->mon)
 		return;
 
@@ -3999,14 +4080,20 @@ bool client_should_visible(Client *c) {
 	if (!c || !c->scene)
 		return false;
 
-	if (c->ov_card_tree || (c->mon && c->mon->isoverview))
-		return true;
-
 	if (c->snapshot_temp_visible)
 		return true;
 
+	if (c->isminimized && !c->animation.tagouting)
+		return false;
+
 	if (c->is_clip_to_hide)
 		return false;
+
+	if (c->ov_card_tree)
+		return true;
+
+	if (c->mon && c->mon->isoverview && c->overview_scene_surface)
+		return true;
 
 	if (c->is_tab_hidden)
 		return false;
@@ -4344,8 +4431,6 @@ void client_group_replace(Client *old, Client *new) {
 
 void mango_surface_frame_done(struct wlr_surface *surface, int sx, int sy,
 							  void *data) {
-	(void)sx;
-	(void)sy;
 	wlr_surface_send_frame_done(surface, data);
 }
 // Feeds frame callbacks to all surfaces (including subsurfaces) of hidden

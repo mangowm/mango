@@ -71,6 +71,7 @@ c_args = [
   '-O2',
   '-U_FORTIFY_SOURCE',
   '-Wno-unused-function',
+  '-Wno-unused-parameter',
   '-Wno-unused-result',
   '-DWLR_USE_UNSTABLE',
   '-D_POSIX_C_SOURCE=200809L',
@@ -149,6 +150,7 @@ wayland_scanner_private_code = generator(
 # use generator in mmsg target
 executable('mmsg',
   'mmsg/mmsg.c',
+  'src/config/error_store.c',
   'src/common/log.c',
   'src/common/util.c',
 
@@ -169,7 +171,61 @@ executable('mmsg',
     '-O2',
     '-U_FORTIFY_SOURCE',
     '-Wno-unused-function',
+    '-Wno-unused-parameter',
     '-DWLR_USE_UNSTABLE',
+  ],
+)
+
+# build mangonag (layer-shell nag/notification client)
+
+mangonag_proto_h = custom_target('mangonag-layer-shell-client-proto',
+  input : 'protocols/wlr-layer-shell-unstable-v1.xml',
+  output : 'wlr-layer-shell-unstable-v1-client-protocol.h',
+  command : [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+
+mangonag_proto_c = custom_target('mangonag-layer-shell-private-code',
+  input : 'protocols/wlr-layer-shell-unstable-v1.xml',
+  output : 'wlr-layer-shell-unstable-v1-protocol.c',
+  command : [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
+mangonag_xdg_proto_h = custom_target('mangonag-xdg-shell-client-proto',
+  input : wl_protocol_dir + '/stable/xdg-shell/xdg-shell.xml',
+  output : 'xdg-shell-client-protocol.h',
+  command : [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+
+mangonag_xdg_proto_c = custom_target('mangonag-xdg-shell-private-code',
+  input : wl_protocol_dir + '/stable/xdg-shell/xdg-shell.xml',
+  output : 'xdg-shell-protocol.c',
+  command : [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
+executable('mangonag',
+  'mangonag/mangonag.c',
+  mangonag_proto_h,
+  mangonag_proto_c,
+  mangonag_xdg_proto_h,
+  mangonag_xdg_proto_c,
+
+  include_directories : mango_inc,
+
+  dependencies: [
+    libwayland_client_dep,
+    pangocairo_dep,
+  ],
+
+  install: true,
+
+  c_args: [
+    '-g',
+    '-O2',
+    '-U_FORTIFY_SOURCE',
+    '-Wno-unused-function',
+    '-Wno-unused-parameter',
+    '-DWLR_USE_UNSTABLE',
+    '-D_POSIX_C_SOURCE=200809L',
   ],
 )
 
@@ -179,6 +235,7 @@ portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
 install_data('assets/mango.desktop', install_dir : desktop_install_dir)
 install_data('assets/mango-portals.conf', install_dir : portal_install_dir)
 install_data('assets/config.conf', install_dir : join_paths(sysconfdir, 'mango'))
+install_data('assets/config.toml', install_dir : join_paths(sysconfdir, 'mango'))
 
 # Ship mango-session.target so that systemd user services declaring
 # WantedBy=graphical-session.target (portals, panels, ...) are started together
@@ -196,6 +253,19 @@ install_data(
     input : 'mmsg/mmsg.1.in',
     output : 'mmsg.1',
     configuration : mmsg_man_conf,
+  ),
+  install_dir : join_paths(mandir, 'man1'),
+)
+
+# generate the mangonag man page at build time so the version always
+# matches the project version
+mangonag_man_conf = configuration_data()
+mangonag_man_conf.set('VERSION', meson.project_version())
+install_data(
+  configure_file(
+    input : 'mangonag/mangonag.1.in',
+    output : 'mangonag.1',
+    configuration : mangonag_man_conf,
   ),
   install_dir : join_paths(mandir, 'man1'),
 )

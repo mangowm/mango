@@ -36,7 +36,7 @@ Drop shadows help distinguish floating windows from the background.
 | `shadows_blur` | `15` | Shadow blur amount. |
 | `shadows_position_x` | `0` | Shadow X offset. |
 | `shadows_position_y` | `0` | Shadow Y offset. |
-| `shadowscolor` | `0x000000ff` | Color of the shadow. |
+| `shadows_color` | `0x000000ff` | Color of the shadow. |
 
 ```ini
 # Example shadows configuration
@@ -47,7 +47,7 @@ shadows_size=12
 shadows_blur=15
 shadows_position_x=0
 shadows_position_y=0
-shadowscolor=0x000000ff
+shadows_color=0x000000ff
 ```
 
 ---

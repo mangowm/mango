@@ -11,8 +11,8 @@ description: Configure the overview mode for window navigation.
 | `enable_hotarea` | integer | `0` | Enable hot areas (0: disable, 1: enable). |
 | `hotarea_disable_on_fullscreen` | integer | `1` | Disable hot areas while a fullscreen window is focused (0: disable, 1: enable). |
 | `hotarea_corner` | integer | `2` | Hot area corner (0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right). |
-| `overviewgappi` | integer | `5` | Inner gap in overview mode. |
-| `overviewgappo` | integer | `30` | Outer gap in overview mode. |
+| `overview_gap_inner` | integer | `5` | Inner gap in overview mode. |
+| `overview_gap_outer` | integer | `30` | Outer gap in overview mode. |
 | `overcircle_center_ratio` | float | `0.5` | Width ratio of the centered window in the `overcircle` layout (0.1–0.9). |
 | `jump_labels` | string | `HJKLASDFGQWERTYUIOPZXCVBNM` | Character sequence used for jump hints in overview mode. |
 

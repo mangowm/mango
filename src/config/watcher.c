@@ -1,4 +1,4 @@
-#include "mango/config/config_watcher.h"
+#include "mango/config/watcher.h"
 
 #include <errno.h>
 #include <stdalign.h>
@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "mango/common/log.h"
-#include "mango/config/parse_config.h"
+#include "mango/config/parse.h"
 
 #if defined(__linux__)
 #define CONFIG_WATCH_INOTIFY 1
@@ -227,8 +227,6 @@ static bool event_matches(const struct inotify_event *event) {
 }
 
 static int on_inotify_event(int fd, uint32_t mask, void *data) {
-	(void)mask;
-	(void)data;
 	alignas(struct inotify_event) char buffer[4096];
 	bool pending = false;
 
@@ -322,8 +320,6 @@ static void add_file_watch(WatchedFile *file) {
 }
 
 static int on_kqueue_event(int fd, uint32_t mask, void *data) {
-	(void)mask;
-	(void)data;
 	struct kevent events[8];
 	struct timespec timeout = {0, 0};
 	bool pending = false;
@@ -382,10 +378,7 @@ static void backend_sync(void) {
 
 #else
 
-static bool backend_init(struct wl_event_loop *loop) {
-	(void)loop;
-	return false;
-}
+static bool backend_init(struct wl_event_loop *loop) { return false; }
 
 static void backend_destroy(void) {}
 
@@ -394,7 +387,6 @@ static void backend_sync(void) {}
 #endif
 
 static int on_watch_timer(void *data) {
-	(void)data;
 
 	bool changed = false;
 	for (int i = 0; i < watched_files_count; i++) {

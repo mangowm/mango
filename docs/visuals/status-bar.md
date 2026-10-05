@@ -30,7 +30,7 @@ sudo ninja -C build install
 Start `mangobar` in your mangowm configuration:
 
 ```ini
-exec-once=mangobar
+exec_once=mangobar
 ```
 
 It reads its configuration from `$MANGOBAR_CONFIG` or `~/.config/mangobar/config.jsonc`, and its styling from `~/.config/mangobar/style.css`. See the [mangobar repository](https://github.com/mangowm/mangobar) for a complete reference and example configuration.

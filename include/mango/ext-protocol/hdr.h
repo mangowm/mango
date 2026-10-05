@@ -2,7 +2,7 @@
 #define __EXT_PROTOCOL_HDR_H__ 1
 
 #include "mango/common/types.h"
-#include "mango/config/parse_config.h"
+#include "mango/config/parse.h"
 #include "mango/dispatch/bind.h"
 #include <drm_fourcc.h>
 #include <stdint.h>

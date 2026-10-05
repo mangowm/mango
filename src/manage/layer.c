@@ -122,6 +122,29 @@ void arrange_layers(Monitor *m) {
 	for (i = 3; i >= 0; i--)
 		arrange_layer(m, &m->layers[i], &usable_area, 1);
 
+	/* Recompute geometry for already-mapped exclusive layers so that an
+	 * existing layer does not keep a stale position (and animation target)
+	 * after another exclusive layer appears or leaves. */
+	for (i = 3; i >= 0; i--) {
+		LayerSurface *l;
+		wl_list_for_each(l, &m->layers[i], link) {
+			if (!l->mapped || l->being_unmapped)
+				continue;
+			if (l->layer_surface->current.exclusive_zone <= 0)
+				continue;
+			struct wlr_box box = l->geom;
+			get_layer_target_geometry(l, &box);
+			if (!wlr_box_equal(&box, &l->geom)) {
+				l->geom = box;
+				l->animainit_geom = l->animation.current = l->current =
+					l->pending = l->geom;
+				l->animation.initial = l->geom;
+				l->need_output_flush = true;
+				wlr_scene_node_set_position(&l->scene->node, box.x, box.y);
+			}
+		}
+	}
+
 	if (!wlr_box_equal(&usable_area, &m->w)) {
 		m->w = usable_area;
 		arrange(m, false, false);
@@ -186,10 +209,10 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	// Initializes the geometry position.
 	get_layer_target_geometry(l, &l->geom);
 
-	l->noanim = 0;
+	l->no_animation = 0;
 	l->dirty = false;
 	l->shield_when_capture = false;
-	l->noblur = 0;
+	l->no_blur = 0;
 	l->shadow = NULL;
 	l->need_output_flush = true;
 	l->animation_type_open = ANIM_TYPE_UNSET;
@@ -202,9 +225,9 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 
 			r = &config.layer_rules[ji];
 			APPLY_INT_PROP(l, r, shield_when_capture);
-			APPLY_INT_PROP(l, r, noblur);
-			APPLY_INT_PROP(l, r, noanim);
-			APPLY_INT_PROP(l, r, noshadow);
+			APPLY_INT_PROP(l, r, no_blur);
+			APPLY_INT_PROP(l, r, no_animation);
+			APPLY_INT_PROP(l, r, no_shadow);
 			APPLY_INT_PROP(l, r, animation_type_open);
 			APPLY_INT_PROP(l, r, animation_type_close);
 		}
@@ -233,7 +256,7 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	}
 
 	// Initializes the animation.
-	if (config.animations && config.layer_animations && !l->noanim) {
+	if (config.animations && config.layer_animations && !l->no_animation) {
 		l->animation.duration = config.animation_duration_open;
 		l->animation.action = OPEN;
 		layer_set_pending_state(l);
@@ -292,7 +315,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 		l->geom.width = box.width;
 		l->geom.height = box.height;
 
-		if (config.animations && config.layer_animations && !l->noanim &&
+		if (config.animations && config.layer_animations && !l->no_animation &&
 			l->mapped &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
@@ -310,7 +333,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 
 	if (config.blur_layer) {
 
-		if (!l->noblur &&
+		if (!l->no_blur &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
 				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND &&

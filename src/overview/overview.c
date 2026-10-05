@@ -350,7 +350,7 @@ void overview_backup(Client *c) {
 			c, 0); // Clears the window fullscreen flag.
 		client_pending_maximized_state(c, 0);
 	}
-	c->bw = c->isnoborder ? 0 : config.borderpx;
+	c->bw = c->no_border ? 0 : config.borderpx;
 
 	client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
 							WLR_EDGE_RIGHT);
@@ -402,7 +402,7 @@ void overview_restore(Client *c, const Arg *arg) {
 
 	if (c->bw == 0 && !c->isfullscreen) { // Windows created while in overview
 										  // mode have no bw record.
-		c->bw = c->isnoborder ? 0 : config.borderpx;
+		c->bw = c->no_border ? 0 : config.borderpx;
 	}
 
 	if (c->isfloating && !c->force_tiled_state) {

@@ -32,14 +32,14 @@ Control the fade-in and fade-out effects for animations.
 ```ini
 animation_fade_in=1
 animation_fade_out=1
-fadein_begin_opacity=0.5
-fadeout_begin_opacity=0.5
+fade_in_begin_opacity=0.5
+fade_out_begin_opacity=0.5
 ```
 
 - `animation_fade_in` — Enable fade-in effect (0: disable, 1: enable)
 - `animation_fade_out` — Enable fade-out effect (0: disable, 1: enable)
-- `fadein_begin_opacity` — Starting opacity for fade-in animations (0.0–1.0)
-- `fadeout_begin_opacity` — Starting opacity for fade-out animations (0.0–1.0)
+- `fade_in_begin_opacity` — Starting opacity for fade-in animations (0.0–1.0)
+- `fade_out_begin_opacity` — Starting opacity for fade-out animations (0.0–1.0)
 
 ## Zoom Settings
 
@@ -86,8 +86,8 @@ You can visualize and generate curve values using online tools like [cssportal.c
 | `animation_curve_tag` | string | `0.46,1.0,0.29,0.99` | Tag animation bezier curve |
 | `animation_curve_close` | string | `0.46,1.0,0.29,0.99` | Close animation bezier curve |
 | `animation_curve_focus` | string | `0.46,1.0,0.29,0.99` | Focus change (opacity transition) animation bezier curve |
-| `animation_curve_opafadein` | string | `0.46,1.0,0.29,0.99` | Open opacity animation bezier curve |
-| `animation_curve_opafadeout` | string | `0.5,0.5,0.5,0.5` | Close opacity animation bezier curve |
+| `animation_curve_opacity_fade_in` | string | `0.46,1.0,0.29,0.99` | Open opacity animation bezier curve |
+| `animation_curve_opacity_fade_out` | string | `0.5,0.5,0.5,0.5` | Close opacity animation bezier curve |
 
 ```ini
 animation_curve_open=0.46,1.0,0.29,0.99
@@ -95,8 +95,8 @@ animation_curve_move=0.46,1.0,0.29,0.99
 animation_curve_tag=0.46,1.0,0.29,0.99
 animation_curve_close=0.46,1.0,0.29,0.99
 animation_curve_focus=0.46,1.0,0.29,0.99
-animation_curve_opafadein=0.46,1.0,0.29,0.99
-animation_curve_opafadeout=0.5,0.5,0.5,0.5
+animation_curve_opacity_fade_in=0.46,1.0,0.29,0.99
+animation_curve_opacity_fade_out=0.5,0.5,0.5,0.5
 ```
 
 ## Tag Animation Direction

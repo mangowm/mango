@@ -109,8 +109,8 @@ in
           configuration syntax. Nested attributes are flattened with underscore separators.
           For example: `animation.duration_open = 400` becomes `animation_duration_open = 400`
 
-          Keymodes (submaps) are supported via the special `keymode` attribute. Each keymode
-          is a nested attribute set under `keymode` that contains its own bindings.
+          Keymodes (submaps) are supported via the special `key_mode` attribute. Each key_mode
+          is a nested attribute set under `key_mode` that contains its own bindings.
           :::
         '';
         example = lib.literalExpression ''
@@ -138,7 +138,7 @@ in
               close = "0.08,0.92,0,1";
             };
 
-            # Use lists for duplicate keys like bind and tagrule
+            # Use lists for duplicate keys like bind and tag_rule
             bind = [
               "SUPER,r,reload_config"
               "Alt,space,spawn,rofi -show drun"
@@ -146,13 +146,13 @@ in
               "ALT,R,setkeymode,resize"  # Enter resize mode
             ];
 
-            tagrule = [
+            tag_rule = [
               "id:1,layout_name:tile"
               "id:2,layout_name:scroller"
             ];
 
             # Keymodes (submaps) for modal keybindings
-            keymode = {
+            key_mode = {
               resize = {
                 bind = [
                   "NONE,Left,resizewin,-10,0"
@@ -199,7 +199,7 @@ in
           Shell script to run on mango startup. No shebang needed.
 
           When this option is set, the script will be written to
-          `~/.config/mango/autostart.sh` and an `exec-once` line
+          `~/.config/mango/autostart.sh` and an `exec_once` line
           will be automatically added to the config to execute it.
         '';
         type = types.lines;

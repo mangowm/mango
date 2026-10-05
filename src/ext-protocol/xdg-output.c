@@ -1,6 +1,6 @@
 #include "mango/ext-protocol/xdg-output.h"
 #include "mango/common/server.h"
-#include "mango/config/parse_config.h"
+#include "mango/config/parse.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #ifdef XWAYLAND
@@ -233,6 +233,25 @@ struct MangoXDGOutput *xdg_output_find(struct wlr_output *wlr_output) {
 	return NULL;
 }
 
+/*
+ * Stock wlroots scopes an xdg-output object to the output's layout entry
+ * (wlr_xdg_output_v1.c listens on layout_output->events.destroy), so it goes
+ * inert exactly when the entry is destroyed. wlr_output_layout_remove() emits
+ * this signal right before it destroys the wl_output global; without it, later
+ * layout changes keep sending geometry to proxies whose output is already
+ * gone. Owning the teardown here keeps callers out of xdg-output internals.
+ */
+static void
+handle_xdg_output_layout_output_destroy(struct wl_listener *listener,
+										void *data) {
+	struct MangoXDGOutput *output =
+		wl_container_of(listener, output, layout_output_destroy);
+	/* The signal owner does not unlink the listener for us. */
+	wl_list_remove(&output->layout_output_destroy.link);
+	output->layout_output = NULL;
+	xdg_output_destroy(output);
+}
+
 struct MangoXDGOutput *xdg_output_create(struct wlr_output *wlr_output) {
 	struct MangoXDGOutput *output = calloc(1, sizeof(*output));
 	if (!output)
@@ -242,6 +261,15 @@ struct MangoXDGOutput *xdg_output_create(struct wlr_output *wlr_output) {
 	output->description.notify = handle_xdg_output_description;
 	wl_signal_add(&wlr_output->events.description, &output->description);
 	wl_list_insert(&xdg_outputs, &output->link);
+
+	output->layout_output =
+		wlr_output_layout_get(server.output_layout, wlr_output);
+	if (output->layout_output) {
+		output->layout_output_destroy.notify =
+			handle_xdg_output_layout_output_destroy;
+		wl_signal_add(&output->layout_output->events.destroy,
+					  &output->layout_output_destroy);
+	}
 	return output;
 }
 
@@ -258,6 +286,8 @@ void xdg_output_destroy(struct MangoXDGOutput *output) {
 		wl_list_remove(&res->link);
 		free(res);
 	}
+	if (output->layout_output)
+		wl_list_remove(&output->layout_output_destroy.link);
 	wl_list_remove(&output->description.link);
 	wl_list_remove(&output->link);
 	free(output);
@@ -359,17 +389,6 @@ void xdg_output_update_all(void) {
 		}
 	}
 }
-/*
- * When an output is removed, makes its xdg-output resources inert instead of
- * destroying them. Called from cleanup_monitor() (the wlr_output destroy
- * listener); idempotent.
- */
-void xdg_output_cleanup_output(struct wlr_output *wlr_output) {
-	struct MangoXDGOutput *output = xdg_output_find(wlr_output);
-	if (output)
-		xdg_output_destroy(output);
-}
-
 void xdg_output_init(void) {
 	wl_list_init(&xdg_outputs);
 	xdg_output_global = wl_global_create(

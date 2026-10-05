@@ -30,30 +30,30 @@ Named scratchpads are bound to specific keys and applications. When triggered, m
 
 **1. Define the Window Rule**
 
-You must identify the app using a unique `appid` or `title` and mark it as a named scratchpad. The application must support setting a custom appid or title at launch. Common examples:
+You must identify the app using a unique `app_id` or `title` and mark it as a named scratchpad. The application must support setting a custom app_id or title at launch. Common examples:
 
-- `st -c my-appid` — sets the appid
+- `st -c my-appid` — sets the app_id
 - `kitty -T my-title` — sets the window title
-- `foot --app-id my-appid` — sets the appid
+- `foot --app-id my-appid` — sets the app_id
 
 Use `none` as a placeholder when you only want to match by one field.
 
 ```ini
-# Match by appid
-windowrule=isnamedscratchpad:1,width:1280,height:800,appid:st-yazi
+# Match by app_id
+window_rule=is_named_scratchpad:1,width:1280,height:800,app_id:st-yazi
 
 # Match by title
-windowrule=isnamedscratchpad:1,width:1000,height:700,title:kitty-scratch
+window_rule=is_named_scratchpad:1,width:1000,height:700,title:kitty-scratch
 ```
 
 **2. Bind the Toggle Key**
 
-Format: `bind=MOD,KEY,toggle_named_scratchpad,appid,title,command`
+Format: `bind=MOD,KEY,toggle_named_scratchpad,app_id,title,command`
 
 Use `none` for whichever field you are not matching on.
 
 ```ini
-# Match by appid: launch 'st' with class 'st-yazi' running 'yazi'
+# Match by app_id: launch 'st' with class 'st-yazi' running 'yazi'
 bind=alt,h,toggle_named_scratchpad,st-yazi,none,st -c st-yazi -e yazi
 
 # Match by title: launch 'kitty' with window title 'kitty-scratch'
@@ -69,7 +69,7 @@ You can customize the size of scratchpad windows relative to the screen.
 ```ini
 scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
-scratchpadcolor=0x516c93ff
+scratchpad_color=0x516c93ff
 ```
 
 ---
@@ -97,8 +97,8 @@ You can automatically assign applications to launch directly on the special work
 
 ```ini
 # Automatically open Spotify and Discord in the special workspace
-windowrule=tags:0,appid:spotify
-windowrule=tags:0,appid:discord
+window_rule=tags:0,app_id:spotify
+window_rule=tags:0,app_id:discord
 ```
 
 ### Configuration Options
@@ -110,8 +110,8 @@ You can configure background dimming and custom layout gaps for the special work
 special_dim=0.5
 
 # Inner and outer gaps for windows on the special workspace
-special_gappih=10
-special_gappiv=10
-special_gappoh=20
-special_gappov=20
+special_gap_inner_horizontal=10
+special_gap_inner_vertical=10
+special_gap_outer_horizontal=20
+special_gap_outer_vertical=20
 ```

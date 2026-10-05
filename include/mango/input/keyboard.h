@@ -2,7 +2,7 @@
 #define __KEYBOARD_H__
 
 #include "mango/common/types.h"
-#include "mango/config/parse_config.h"
+#include "mango/config/parse.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-server-core.h>

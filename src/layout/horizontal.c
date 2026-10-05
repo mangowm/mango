@@ -1,11 +1,20 @@
 #include "mango/layout/horizontal.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 
-void tile(Monitor *m) {
+static void tile_core(Monitor *m, const LayoutContext *ctx);
+static void right_tile_core(Monitor *m, const LayoutContext *ctx);
+static void center_tile_core(Monitor *m, const LayoutContext *ctx);
+static void deck_core(Monitor *m, const LayoutContext *ctx);
+static void monocle_core(Monitor *m, const LayoutContext *ctx);
+static void grid_core(Monitor *m, const LayoutContext *ctx);
+static void fair_core(Monitor *m, const LayoutContext *ctx);
+
+static void tile_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0, h, r, ie = server.enable_gaps, mw, my, ty;
 	Client *c = NULL;
 	Client *fc = NULL;
@@ -90,7 +99,7 @@ void tile(Monitor *m) {
 												.y = m->w.y + my,
 												.width = mw - cur_gappih * ie,
 												.height = h},
-							   0);
+							   0, ctx);
 			my += h +
 				  cur_gappiv * ie; // Accumulates using the theoretical height.
 		} else {
@@ -116,7 +125,7 @@ void tile(Monitor *m) {
 								 .y = m->w.y + ty,
 								 .width = m->w.width - mw - 2 * cur_gappoh,
 								 .height = h},
-				0);
+				0, ctx);
 			ty += h +
 				  cur_gappiv * ie; // Accumulates using the theoretical height.
 		}
@@ -124,7 +133,7 @@ void tile(Monitor *m) {
 	}
 }
 
-void right_tile(Monitor *m) {
+static void right_tile_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0, h, r, ie = server.enable_gaps, mw, my, ty;
 	Client *c = NULL;
 	Client *fc = NULL;
@@ -211,7 +220,7 @@ void right_tile(Monitor *m) {
 												.y = m->w.y + my,
 												.width = mw - cur_gappih * ie,
 												.height = h},
-							   0);
+							   0, ctx);
 			my += h +
 				  cur_gappiv * ie; // Accumulates using the theoretical height.
 		} else {
@@ -237,14 +246,14 @@ void right_tile(Monitor *m) {
 								 .y = m->w.y + ty,
 								 .width = m->w.width - mw - 2 * cur_gappoh,
 								 .height = h},
-				0);
+				0, ctx);
 			ty += h +
 				  cur_gappiv * ie; // Accumulates using the theoretical height.
 		}
 		i++;
 	}
 }
-void center_tile(Monitor *m) {
+static void center_tile_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0, h, r, ie = server.enable_gaps, mw, mx, my, oty, ety, tw;
 	Client *c = NULL;
 	Client *fc = NULL;
@@ -407,7 +416,7 @@ void center_tile(Monitor *m) {
 												.y = m->w.y + my,
 												.width = mw,
 												.height = h},
-							   0);
+							   0, ctx);
 			my += h +
 				  cur_gappiv * ie; // Accumulates using the theoretical height.
 		} else {
@@ -447,7 +456,7 @@ void center_tile(Monitor *m) {
 													.y = m->w.y + ety,
 													.width = tw,
 													.height = h},
-								   0);
+								   0, ctx);
 				ety += h + cur_gappiv * ie;
 			} else {
 				// Multiple stack windows: alternated on the left and right
@@ -486,7 +495,7 @@ void center_tile(Monitor *m) {
 														.y = m->w.y + ety,
 														.width = tw,
 														.height = h},
-									   0);
+									   0, ctx);
 					ety += h + cur_gappiv * ie;
 				} else {
 					// Left stack windows.
@@ -519,7 +528,7 @@ void center_tile(Monitor *m) {
 														.y = m->w.y + oty,
 														.width = tw,
 														.height = h},
-									   0);
+									   0, ctx);
 					oty += h + cur_gappiv * ie;
 				}
 			}
@@ -528,7 +537,7 @@ void center_tile(Monitor *m) {
 	}
 }
 
-void deck(Monitor *m) {
+static void deck_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t mw, my;
 	int32_t i, n = 0;
 	Client *c = NULL;
@@ -581,7 +590,7 @@ void deck(Monitor *m) {
 												.y = m->w.y + cur_gappov + my,
 												.width = mw,
 												.height = h},
-							   0);
+							   0, ctx);
 			my += h;
 		} else {
 			c->master_mfact_per = mfact;
@@ -592,14 +601,15 @@ void deck(Monitor *m) {
 								 .width = m->w.width - mw - 2 * cur_gappoh -
 										  cur_gappih,
 								 .height = m->w.height - 2 * cur_gappov},
-				0);
-			client_update_visibility(c);
+				0, ctx);
+			if (!ctx)
+				client_update_visibility(c);
 		}
 		i++;
 	}
 }
 
-void monocle(Monitor *m) {
+static void monocle_core(Monitor *m, const LayoutContext *ctx) {
 	Client *c = NULL;
 	struct wlr_box geom;
 
@@ -620,13 +630,14 @@ void monocle(Monitor *m) {
 		geom.y = m->w.y + cur_gappov;
 		geom.width = m->w.width - 2 * cur_gappoh;
 		geom.height = m->w.height - 2 * cur_gappov;
-		client_tile_resize(c, geom, 0);
-		client_update_visibility(c);
+		client_tile_resize(c, geom, 0, ctx);
+		if (!ctx)
+			client_update_visibility(c);
 	}
 }
 
 // Computes grid layout window sizes and positions.
-void grid(Monitor *m) {
+static void grid_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n;
 	int32_t cw, ch;
 	int32_t cols, rows, overcols;
@@ -656,7 +667,7 @@ void grid(Monitor *m) {
 				target_geom.y = m->w.y + (m->w.height - ch) / 2;
 				target_geom.width = cw;
 				target_geom.height = ch;
-				client_tile_resize(c, target_geom, 0);
+				client_tile_resize(c, target_geom, 0, ctx);
 				return;
 			}
 		}
@@ -711,7 +722,7 @@ void grid(Monitor *m) {
 				target_geom.y = m->w.y + (m->w.height - ch) / 2 + target_gappo;
 				target_geom.width = cw;
 				target_geom.height = ch;
-				client_tile_resize(c, target_geom, 0);
+				client_tile_resize(c, target_geom, 0, ctx);
 				i++;
 			}
 		}
@@ -817,7 +828,7 @@ void grid(Monitor *m) {
 			target_geom.y = (int32_t)fl_cy;
 			target_geom.width = (int32_t)fl_cw;
 			target_geom.height = (int32_t)fl_ch;
-			client_tile_resize(c, target_geom, 0);
+			client_tile_resize(c, target_geom, 0, ctx);
 			i++;
 		}
 	}
@@ -826,7 +837,7 @@ void grid(Monitor *m) {
 	free(row_pers);
 }
 
-void fair(Monitor *m) {
+static void fair_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0;
 	Client *c = NULL;
 
@@ -1013,7 +1024,7 @@ void fair(Monitor *m) {
 											.y = (int32_t)fl_cy,
 											.width = (int32_t)fl_cw,
 											.height = (int32_t)fl_ch},
-						   0);
+						   0, ctx);
 	}
 
 	free(arr);
@@ -1025,4 +1036,46 @@ void fair(Monitor *m) {
 	free(row_h_base);
 	free(row_y_max);
 	free(row_h_max);
+}
+
+void tile(Monitor *m) { tile_core(m, NULL); }
+
+bool tile_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(tile_core, m, c, out);
+}
+
+void right_tile(Monitor *m) { right_tile_core(m, NULL); }
+
+bool right_tile_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(right_tile_core, m, c, out);
+}
+
+void center_tile(Monitor *m) { center_tile_core(m, NULL); }
+
+bool center_tile_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(center_tile_core, m, c, out);
+}
+
+void deck(Monitor *m) { deck_core(m, NULL); }
+
+bool deck_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(deck_core, m, c, out);
+}
+
+void monocle(Monitor *m) { monocle_core(m, NULL); }
+
+bool monocle_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(monocle_core, m, c, out);
+}
+
+void grid(Monitor *m) { grid_core(m, NULL); }
+
+bool grid_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(grid_core, m, c, out);
+}
+
+void fair(Monitor *m) { fair_core(m, NULL); }
+
+bool fair_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(fair_core, m, c, out);
 }

@@ -5,41 +5,41 @@ description: Define behavior for specific windows, tags, and layers.
 
 ## Window Rules
 
-Window rules allow you to set specific properties (floating, opacity, size, animations, etc.) for applications based on their `appid` or `title`. You can set all parameters in one line, and if you both set appid and title, the window will only follow the rules when appid and title both match.
+Window rules allow you to set specific properties (floating, opacity, size, animations, etc.) for applications based on their `app_id` or `title`. You can set all parameters in one line, and if you both set app_id and title, the window will only follow the rules when app_id and title both match.
 
 **Format:**
 
 ```ini
 # Set window rules that apply to every times when the window is opened
-windowrule=Parameter:Values,title:Values
-windowrule=Parameter:Values,Parameter:Values,appid:Values,title:Values
+window_rule=Parameter:Values,title:Values
+window_rule=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 
 # Set window rules that only apply once when the window is opened
-windowrule-once=Parameter:Values,title:Values
-windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
+window_rule_once=Parameter:Values,title:Values
+window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 ```
 
 ### State & Behavior Parameters
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `appid` | string | Any | Match by application ID, supports regex |
+| `app_id` | string | Any | Match by application ID, supports regex |
 | `title` | string | Any | Match by window title, supports regex |
-| `isfloating` | integer | `0` / `1` | Force floating state |
-| `isfullscreen` | integer | `0` / `1` | Force fullscreen state |
-| `isfakefullscreen` | integer | `0` / `1` | Force fake-fullscreen state (window stays constrained) |
-| `isglobal` | integer | `0` / `1` | Open as global window (sticky across tags) |
-| `isoverlay` | integer | `0` / `1` | Make it always in top layer |
-| `isopensilent` | integer | `0` / `1` | Open without focus |
-| `istagsilent` | integer | `0` / `1` | Don't focus if client is not in current view tag |
-| `force_fakemaximize` | integer | `0` / `1` (default 1) | The state of client set to fake maximized |
+| `is_floating` | integer | `0` / `1` | Force floating state |
+| `is_fullscreen` | integer | `0` / `1` | Force fullscreen state |
+| `is_fake_fullscreen` | integer | `0` / `1` | Force fake-fullscreen state (window stays constrained) |
+| `is_global` | integer | `0` / `1` | Open as global window (sticky across tags) |
+| `is_overlay` | integer | `0` / `1` | Make it always in top layer |
+| `is_open_silent` | integer | `0` / `1` | Open without focus |
+| `is_tag_silent` | integer | `0` / `1` | Don't focus if client is not in current view tag |
+| `force_fake_maximize` | integer | `0` / `1` (default 1) | The state of client set to fake maximized |
 | `ignore_maximize` | integer | `0` / `1` (default 1) | Don't handle maximize request from client |
 | `ignore_minimize` | integer | `0` / `1` (default 1) | Don't handle minimize request from client |
 | `force_tiled_state` | integer | `0` / `1` | Deceive the window into thinking it is tiling, so it better adheres to assigned dimensions |
 | `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
-| `idleinhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
+| `idle_inhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
 | `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
 | `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
 | `force_render` | integer | `0` / `1` | Force render frame even if the window is not visible |
@@ -52,22 +52,22 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | :--- | :--- | :--- | :--- |
 | `width` | float | 0-9999 | Window width when it becomes a floating window,if the value below 1, it will be the percentage of the screen width,otherwise it will be the pixel value |
 | `height` | float | 0-9999 | Window height when it becomes a floating window,if the value below 1, it will be the percentage of the screen height,otherwise it will be the pixel value |
-| `offsetx` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
-| `offsety` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
+| `offset_x` | integer | -999-999 | X offset from center (%), 100 is the edge of screen with outer gap |
+| `offset_y` | integer | -999-999 | Y offset from center (%), 100 is the edge of screen with outer gap |
 | `monitor` | string | Any | Assign to monitor by [monitor spec](/docs/configuration/monitors#monitor-spec-format) (name, make, model, or serial) |
 | `tags` | mask | `0-9` / `1\|3\|5` | Assign to specific one tag (use `0` for special workspace overlay) or multiple tags (use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
-| `isnosizehint` | integer | `0` / `1` | Don't use min size and max size for size hints |
+| `no_size_hint` | integer | `0` / `1` | Don't use min size and max size for size hints |
 
 ### Visuals & Decoration
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `noblur` | integer | `0` / `1` | Window does not have blur effect |
-| `isnoborder` | integer | `0` / `1` | Remove window border |
-| `isnoshadow` | integer | `0` / `1` | Not apply shadow |
-| `isnoradius` | integer | `0` / `1` | Not apply corner radius |
-| `isnoanimation` | integer | `0` / `1` | Not apply animation |
+| `no_blur` | integer | `0` / `1` | Window does not have blur effect |
+| `no_border` | integer | `0` / `1` | Remove window border |
+| `no_shadow` | integer | `0` / `1` | Not apply shadow |
+| `no_radius` | integer | `0` / `1` | Not apply corner radius |
+| `no_animation` | integer | `0` / `1` | Not apply animation |
 | `focused_opacity` | integer | `0` / `1` | Window focused opacity |
 | `unfocused_opacity` | integer | `0` / `1` | Window unfocused opacity |
 | `allow_csd` | integer | `0` / `1` | Allow client side decoration |
@@ -90,8 +90,8 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 | :--- | :--- | :--- | :--- |
 | `animation_type_open` | string | zoom, slide, fade, none | Set open animation |
 | `animation_type_close` | string | zoom, slide, fade, none | Set close animation |
-| `nofadein` | integer | `0` / `1` | Window ignores fade-in animation |
-| `nofadeout` | integer | `0` / `1` | Window ignores fade-out animation |
+| `no_fade_in` | integer | `0` / `1` | Window ignores fade-in animation |
+| `no_fade_out` | integer | `0` / `1` | Window ignores fade-out animation |
 
 > **Tip:** For detailed animation configuration, see the [Animations](/docs/visuals/animations) page for available types and settings.
 
@@ -99,16 +99,16 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `isterm` | integer | `0` / `1` | A new GUI window will replace the isterm window when it is opened |
-| `noswallow` | integer | `0` / `1` | The window will not replace the isterm window |
+| `is_term` | integer | `0` / `1` | A new GUI window will replace the is_term window when it is opened |
+| `no_swallow` | integer | `0` / `1` | The window will not replace the is_term window |
 
 ### Global & Special Windows
 
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
-| `globalkeybinding` | string | `[mod combination][-][key]` | Global keybinding (only works for Wayland apps) |
-| `isunglobal` | integer | `0` / `1` | Open as unmanaged global window (for desktop pets or camera windows) |
-| `isnamedscratchpad` | integer | `0` / `1` | 0: disable, 1: named scratchpad |
+| `global_key_binding` | string | `[mod combination][-][key]` | Global keybinding (only works for Wayland apps) |
+| `is_unmanaged_global` | integer | `0` / `1` | Open as unmanaged global window (for desktop pets or camera windows) |
+| `is_named_scratchpad` | integer | `0` / `1` | 0: disable, 1: named scratchpad |
 
 > **Tip:** For scratchpad usage, see the [Scratchpad](/docs/window-management/scratchpad) page for detailed configuration examples.
 
@@ -122,45 +122,45 @@ windowrule-once=Parameter:Values,Parameter:Values,appid:Values,title:Values
 
 ```ini
 # Set specific window size and position
-windowrule=width:1000,height:900,appid:yesplaymusic,title:Demons
+window_rule=width:1000,height:900,app_id:yesplaymusic,title:Demons
 
 # Global keybindings for OBS Studio
-windowrule=globalkeybinding:ctrl+alt-o,appid:com.obsproject.Studio
-windowrule=globalkeybinding:ctrl+alt-n,appid:com.obsproject.Studio
-windowrule=isopensilent:1,appid:com.obsproject.Studio
+window_rule=global_key_binding:ctrl+alt-o,app_id:com.obsproject.Studio
+window_rule=global_key_binding:ctrl+alt-n,app_id:com.obsproject.Studio
+window_rule=is_open_silent:1,app_id:com.obsproject.Studio
 
 # Force tearing for games
-windowrule=force_tearing:1,title:vkcube
+window_rule=force_tearing:1,title:vkcube
 
 # Skip xdg-activation authentication for this app
-windowrule=activation_bypass:1,appid:org.example.App
-windowrule=force_tearing:1,title:Counter-Strike 2
+window_rule=activation_bypass:1,app_id:org.example.App
+window_rule=force_tearing:1,title:Counter-Strike 2
 
 # Named scratchpad for file manager
-windowrule=isnamedscratchpad:1,width:1280,height:800,appid:st-yazi
+window_rule=is_named_scratchpad:1,width:1280,height:800,app_id:st-yazi
 
 # Custom opacity for specific apps
-windowrule=focused_opacity:0.8,appid:firefox
-windowrule=unfocused_opacity:0.6,appid:foot
+window_rule=focused_opacity:0.8,app_id:firefox
+window_rule=unfocused_opacity:0.6,app_id:foot
 
 # Disable blur for selection tools
-windowrule=noblur:1,appid:slurp
+window_rule=no_blur:1,app_id:slurp
 
 # Position windows relative to screen center
-windowrule=offsetx:20,offsety:-30,width:800,height:600,appid:alacritty
+window_rule=offset_x:20,offset_y:-30,width:800,height:600,app_id:alacritty
 
 # Send to specific tag and monitor
-windowrule=tags:9,monitor:HDMI-A-1,appid:discord
+window_rule=tags:9,monitor:HDMI-A-1,app_id:discord
 
 # Terminal swallowdby setup
-windowrule=isterm:1,appid:st
-windowrule=noswallow:1,appid:foot
+window_rule=is_term:1,app_id:st
+window_rule=no_swallow:1,app_id:foot
 
 # Disable client-side decorations
-windowrule=allow_csd:1,appid:firefox
+window_rule=allow_csd:1,app_id:firefox
 
 # Unmanaged global window (desktop pets, camera)
-windowrule=isunglobal:1,appid:cheese
+window_rule=is_unmanaged_global:1,app_id:cheese
 
 # Named scratchpad toggle
 bind=alt,h,toggle_named_scratchpad,st-yazi,none,st -c st-yazi -e yazi
@@ -177,10 +177,10 @@ You can set all parameters in one line. If only `id` is set, the rule is followe
 **Format:**
 
 ```ini
-tagrule=id:Values,Parameter:Values,Parameter:Values
-tagrule=id:Values,monitor_name:eDP-1,Parameter:Values,Parameter:Values
-tagrule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
-tagrule=id:*,Parameter:Values
+tag_rule=id:Values,Parameter:Values,Parameter:Values
+tag_rule=id:Values,monitor_name:eDP-1,Parameter:Values,Parameter:Values
+tag_rule=id:Values,monitor_make:xxx,monitor_model:xxx,Parameter:Values
+tag_rule=id:*,Parameter:Values
 ```
 
 > **Tip:** See [Layouts](/docs/window-management/layouts#supported-layouts) for detailed descriptions of each layout type.
@@ -196,8 +196,8 @@ tagrule=id:*,Parameter:Values
 | `no_render_border` | integer | `0` / `1` | Disable render border |
 | `open_as_floating` | integer | `0` / `1` | New open window will be floating|
 | `no_hide` | integer | `0` / `1` | Not hide even if the tag is empty |
-| `nmaster` | integer | 0, 99 | Number of master windows |
-| `mfact` | float | 0.1–0.9 | Master area factor |
+| `master_count` | integer | 0, 99 | Number of master windows |
+| `master_factor` | float | 0.1–0.9 | Master area factor |
 | `scroller_default_proportion` | float | 0.1-1.0 | Set scroller  default proportion. |
 | `scroller_default_proportion_single` | float | 0.1-1.0 | Set scroller auto adjust proportion when it is single window(only apply when set `scroller_ignore_proportion_single` to `0`) |
 | `scroller_ignore_proportion_single` | integer | `0` / `1` | Ignore scroller single proportion setting. |
@@ -206,28 +206,28 @@ tagrule=id:*,Parameter:Values
 
 ```ini
 # Set layout for all tags at once (equivalent to the two rules below)
-tagrule=id:*,layout_name:scroller
+tag_rule=id:*,layout_name:scroller
 
 # Set layout for specific tags
-tagrule=id:1,layout_name:scroller
-tagrule=id:2,layout_name:scroller
+tag_rule=id:1,layout_name:scroller
+tag_rule=id:2,layout_name:scroller
 
 # Limit to specific monitor
-tagrule=id:1,monitor_name:eDP-1,layout_name:scroller
-tagrule=id:2,monitor_name:eDP-1,layout_name:scroller
+tag_rule=id:1,monitor_name:eDP-1,layout_name:scroller
+tag_rule=id:2,monitor_name:eDP-1,layout_name:scroller
 
 # Persistent tags (1-4) with layout assignment
-tagrule=id:1,no_hide:1,layout_name:scroller
-tagrule=id:2,no_hide:1,layout_name:scroller
-tagrule=id:3,monitor_name:eDP-1,no_hide:1,layout_name:scroller
-tagrule=id:4,monitor_name:eDP-1,no_hide:1,layout_name:scroller
+tag_rule=id:1,no_hide:1,layout_name:scroller
+tag_rule=id:2,no_hide:1,layout_name:scroller
+tag_rule=id:3,monitor_name:eDP-1,no_hide:1,layout_name:scroller
+tag_rule=id:4,monitor_name:eDP-1,no_hide:1,layout_name:scroller
 
 # Advanced tag configuration with master layout settings
-tagrule=id:5,layout_name:tile,nmaster:2,mfact:0.6
-tagrule=id:6,monitor_name:HDMI-A-1,layout_name:monocle,no_render_border:1
+tag_rule=id:5,layout_name:tile,master_count:2,master_factor:0.6
+tag_rule=id:6,monitor_name:HDMI-A-1,layout_name:monocle,no_render_border:1
 
 # set scroller proportion for specific tag
-tagrule=id:1,layout_name:scroller,scroller_default_proportion_single:0.5,scroller_ignore_proportion_single:0,scroller_default_proportion:0.9,monitor_name:HDMI-A-1
+tag_rule=id:1,layout_name:scroller,scroller_default_proportion_single:0.5,scroller_ignore_proportion_single:0,scroller_default_proportion:0.9,monitor_name:HDMI-A-1
 
 ```
 
@@ -242,7 +242,7 @@ You can set all parameters in one line. Target "layer shell" surfaces like statu
 **Format:**
 
 ```ini
-layerrule=layer_name:Values,Parameter:Values,Parameter:Values
+layer_rule=layer_name:Values,Parameter:Values,Parameter:Values
 ```
 
 > **Tip:** You can use `mmsg get last_open_surface` to get the last open layer name for debugging.
@@ -252,10 +252,10 @@ layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 | `layer_name` | string | layer name | Match name of layer, supports regex |
 | `animation_type_open` | string | slide, zoom, fade, none | Set open animation |
 | `animation_type_close` | string | slide, zoom, fade, none | Set close animation |
-| `noblur` | integer | `0` / `1` | Disable blur |
-| `noanim` | integer | `0` / `1` | Disable layer animation |
-| `noshadow` | integer | `0` / `1` | Disable layer shadow |
-| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `noanim:1`) |
+| `no_blur` | integer | `0` / `1` | Disable blur |
+| `no_animation` | integer | `0` / `1` | Disable layer animation |
+| `no_shadow` | integer | `0` / `1` | Disable layer shadow |
+| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `no_animation:1`) |
 
 > **Tip:** For animation types, see [Animations](/docs/visuals/animations#animation-types). For visual effects, see [Window Effects](/docs/visuals/effects).
 
@@ -263,14 +263,14 @@ layerrule=layer_name:Values,Parameter:Values,Parameter:Values
 
 ```ini
 # No blur or animation for slurp selection layer (avoids occlusion and ghosting in screenshots)
-layerrule=noanim:1,noblur:1,layer_name:selection
+layer_rule=no_animation:1,no_blur:1,layer_name:selection
 
 # Zoom animation for Rofi with multiple parameters
-layerrule=animation_type_open:zoom,noanim:0,layer_name:rofi
+layer_rule=animation_type_open:zoom,no_animation:0,layer_name:rofi
 
 # Disable animations and shadows for notification daemon
-layerrule=noanim:1,noshadow:1,layer_name:swaync
+layer_rule=no_animation:1,no_shadow:1,layer_name:swaync
 
 # Multiple effects for launcher
-layerrule=animation_type_open:slide,animation_type_close:fade,noblur:1,layer_name:wofi
+layer_rule=animation_type_open:slide,animation_type_close:fade,no_blur:1,layer_name:wofi
 ```

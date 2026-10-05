@@ -54,26 +54,26 @@ bindc=SUPER,a,centerwin
 
 You can divide key bindings into named modes. Rules:
 
-1. Set `keymode=<name>` before a group of `bind` lines — those binds only apply in that mode.
-2. If no `keymode` is set before a bind, it belongs to the `default` mode.
-3. The special `common` keymode applies its binds **across all modes**.
+1. Set `key_mode=<name>` before a group of `bind` lines — those binds only apply in that mode.
+2. If no `key_mode` is set before a bind, it belongs to the `default` mode.
+3. The special `common` key_mode applies its binds **across all modes**.
 
-> **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `keymode` rules as `bind`.
+> **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `key_mode` rules as `bind`.
 
 Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini
 # Binds in 'common' apply in every mode
-keymode=common
+key_mode=common
 bind=SUPER,r,reload_config
 
 # Default mode bindings
-keymode=default
+key_mode=default
 bind=ALT,Return,spawn,foot
 bind=SUPER,F,setkeymode,resize
 
 # 'resize' mode bindings
-keymode=resize
+key_mode=resize
 bind=NONE,Left,resizewin,-10,0
 bind=NONE,Right,resizewin,+10,0
 bind=NONE,Escape,setkeymode,default
@@ -109,7 +109,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `minimized` | - | Minimize window to scratchpad. |
 | `restore_minimized` | - | Restore minimized window to the currently focused tag. |
 | `toggle_scratchpad` | - | Toggle scratchpad. |
-| `toggle_named_scratchpad` | `appid,title,cmd` | Toggle named scratchpad. Launches app if not running, otherwise shows/hides it. |
+| `toggle_named_scratchpad` | `app_id,title,cmd` | Toggle named scratchpad. Launches app if not running, otherwise shows/hides it. |
 | `toggle_special_tag` | - | Toggle special workspace overlay (tiling scratchpad). |
 | `tag_special_tag` | - | Move focused window to/from the special workspace overlay. |
 | `tag_special_silent` | - | Silently move focused window to/from the special workspace overlay. |
@@ -203,7 +203,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |
 | `toggleoverlay` | - | Toggle overlay state for the focused window. |
 | `toggle_trackpad_enable` | - | Toggle trackpad enable. |
-| `setkeymode` | `mode` | Set keymode. |
+| `setkeymode` | `mode` | Set key_mode. |
 | `switch_keyboard_layout` | `[index]` | Switch keyboard layout. Optional index (0, 1, 2...) to switch to specific layout. |
 | `setoption` | `key,value` | Set config option temporarily. |
 | `sleep_monitor` | `monitor_spec` | Shutdown monitor power but not remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |

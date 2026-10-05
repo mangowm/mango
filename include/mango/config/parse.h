@@ -1,5 +1,5 @@
-#ifndef __CONFIG_PARSE_CONFIG_H__
-#define __CONFIG_PARSE_CONFIG_H__ 1
+#ifndef __CONFIG_PARSE_H__
+#define __CONFIG_PARSE_H__ 1
 
 #include "mango/common/types.h"
 #include "mango/dispatch/bind.h"
@@ -117,10 +117,10 @@ typedef struct {
 	float scroller_proportion;
 	int32_t animation_type_open;
 	int32_t animation_type_close;
-	int32_t isnoborder;
-	int32_t isnoshadow;
-	int32_t isnoradius;
-	int32_t isnoanimation;
+	int32_t no_border;
+	int32_t no_shadow;
+	int32_t no_radius;
+	int32_t no_animation;
 	int32_t isopensilent;
 	int32_t istagsilent;
 	int32_t isnamedscratchpad;
@@ -131,7 +131,7 @@ typedef struct {
 	int32_t allow_shortcuts_inhibit;
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
-	int32_t isnosizehint;
+	int32_t no_size_hint;
 	int32_t idleinhibit_when_focus;
 	int32_t vrr_only_fullscreen;
 	int32_t force_render;
@@ -141,18 +141,18 @@ typedef struct {
 	int32_t offsety;
 	float width;
 	float height;
-	int32_t nofocus;
-	int32_t nofadein;
-	int32_t nofadeout;
+	int32_t no_focus;
+	int32_t no_fade_in;
+	int32_t no_fade_out;
 	int32_t no_force_center;
 	int32_t isterm;
 	int32_t allow_csd;
 	int32_t force_fakemaximize;
 	int32_t force_tiled_state;
 	int32_t force_tearing;
-	int32_t noswallow;
+	int32_t no_swallow;
 	int32_t confine_pointer;
-	int32_t noblur;
+	int32_t no_blur;
 	float focused_opacity;
 	float unfocused_opacity;
 	float scroller_proportion_single;
@@ -165,6 +165,11 @@ typedef struct {
 	char *type;
 	char *value;
 } ConfigEnv;
+
+typedef struct {
+	char *name;
+	char *value;
+} ConfigVar;
 
 typedef struct {
 	const char *name;			 // Monitor name
@@ -209,9 +214,9 @@ typedef struct {
 	int32_t animation_type_open;
 	int32_t animation_type_close;
 	int32_t shield_when_capture;
-	int32_t noblur;
-	int32_t noanim;
-	int32_t noshadow;
+	int32_t no_blur;
+	int32_t no_animation;
+	int32_t no_shadow;
 } ConfigLayerRule;
 
 typedef struct {
@@ -528,6 +533,9 @@ typedef struct {
 
 	ConfigEnv **env;
 	int32_t env_count;
+
+	ConfigVar **vars;
+	int32_t vars_count;
 
 	char **exec;
 	int32_t exec_count;

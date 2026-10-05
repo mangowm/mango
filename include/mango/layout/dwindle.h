@@ -35,7 +35,8 @@ void dwindle_remove(DwindleNode **root, Client *c);
 void dwindle_insert(DwindleNode **root, Client *new_c, Client *focused,
 					float ratio, bool as_first, bool split_h, bool lock);
 void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
-					int32_t ah, int32_t gap_h, int32_t gap_v);
+					int32_t ah, int32_t gap_h, int32_t gap_v,
+					const LayoutContext *ctx);
 void dwindle_move_next_to(Client *c, Client *target, float ratio, int32_t dir);
 void dwindle_swap_clients(Client *c1, Client *c2);
 void dwindle_resize_client(Monitor *m, Client *c);
@@ -44,6 +45,7 @@ void dwindle_remove_client(Client *c);
 void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 								Client *focused, float ratio);
 void dwindle(Monitor *m);
+bool dwindle_predict(Monitor *m, Client *c, struct wlr_box *out);
 void cleanup_monitor_dwindle(Monitor *m);
 
 // Counts nodes in the same direction (N_old).

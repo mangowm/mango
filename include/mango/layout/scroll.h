@@ -43,11 +43,14 @@ void vertical_check_scroller_root_inside_mon(Client *c,
 void horizontal_scroll_adjust_fullandmax(Client *c,
 										 struct wlr_box *target_geom);
 void arrange_stack_node(struct ScrollerStackNode *head, struct wlr_box geometry,
-						int32_t gappiv);
+						int32_t gappiv, const LayoutContext *ctx);
 void arrange_stack_vertical_node(struct ScrollerStackNode *head,
-								 struct wlr_box geometry, int32_t gappih);
+								 struct wlr_box geometry, int32_t gappih,
+								 const LayoutContext *ctx);
 void scroller(Monitor *m);
+bool scroller_predict(Monitor *m, Client *c, struct wlr_box *out);
 void vertical_scroller(Monitor *m);
+bool vertical_scroller_predict(Monitor *m, Client *c, struct wlr_box *out);
 void scroller_remove_client(Client *c);
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before);

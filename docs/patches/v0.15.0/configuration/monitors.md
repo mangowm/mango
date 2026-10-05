@@ -5,12 +5,12 @@ description: Manage display outputs, resolution, scaling, and tearing.
 
 ## Monitor Rules
 
-You can configure each display output individually using the `monitorrule` keyword.
+You can configure each display output individually using the `monitor_rule` keyword.
 
 **Syntax:**
 
 ```ini
-monitorrule=name:Values,Parameter:Values,Parameter:Values
+monitor_rule=name:Values,Parameter:Values,Parameter:Values
 ```
 
 > **Info:** If any of the matching fields (`name`, `make`, `model`, `serial`) are set, **all** of the set ones must match to be considered a match. Use `wlr-randr` to get your monitor's name, make, model, and serial.
@@ -56,13 +56,13 @@ monitorrule=name:Values,Parameter:Values,Parameter:Values
 
 ```ini
 # Laptop display: 1080p, 60Hz, positioned at origin
-monitorrule=name:^eDP-1$,width:1920,height:1080,refresh:60,x:0,y:10
+monitor_rule=name:^eDP-1$,width:1920,height:1080,refresh:60,x:0,y:10
 
 # Match by make and model instead of name
-monitorrule=make:Chimei Innolux Corporation,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0
+monitor_rule=make:Chimei Innolux Corporation,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0
 
 # Virtual monitor with pattern matching
-monitorrule=name:HEADLESS-.*,width:1920,height:1080,refresh:60,x:1926,y:0,scale:1,rr:0,vrr:0
+monitor_rule=name:HEADLESS-.*,width:1920,height:1080,refresh:60,x:1926,y:0,scale:1,rr:0,vrr:0
 ```
 
 ---
@@ -109,13 +109,13 @@ Tearing allows games to bypass the compositor's VSync for lower latency.
 | :--- | :--- | :--- |
 | `hdr_depth` | `2`| Set the hdr depth for the current display. `0` is Default, `1` is HDR8, `2` is HDR10. |
 
-- you should enable HDR in monitorrule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
+- you should enable HDR in monitor_rule first, refer to [Monitors — Monitor Rules](/docs/configuration/monitors#monitor-rules)
 - you must set `env=WLR_RENDERER,vulkan` before mango starts.
 
 #### for example(must relogin once after setting):
 ```ini
 env=WLR_RENDERER,vulkan
-monitorrule=name:eDP-1,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0,scale:1,vrr:0,rr:0:hdr:1
+monitor_rule=name:eDP-1,model:0x15F5,width:1920,height:1080,refresh:60,x:0,y:0,scale:1,vrr:0,rr:0:hdr:1
 ```
 
 
@@ -132,7 +132,7 @@ allow_tearing=1
 Use a window rule to force tearing for specific games.
 
 ```ini
-windowrule=force_tearing:1,title:vkcube
+window_rule=force_tearing:1,title:vkcube
 ```
 
 ### Tearing Behavior Matrix
@@ -166,7 +166,7 @@ WLR_DRM_DEVICES=/dev/dri/card1 mango
 WLR_DRM_DEVICES=/dev/dri/card0:/dev/dri/card1 mango
 ```
 
-Some GPUs have compatibility issues with `syncobj_enable=1` — it may crash apps like `kitty` that use syncobj. Set `env=WLR_DRM_NO_ATOMIC,1` in `config.conf` and relogin to resolve this.
+Some GPUs have compatibility issues with `sync_obj_enable=1` — it may crash apps like `kitty` that use syncobj. Set `env=WLR_DRM_NO_ATOMIC,1` in `config.conf` and relogin to resolve this.
 
 ---
 
@@ -255,8 +255,8 @@ yay -S xwayland-satellite
 
 ```ini
 env=DISPLAY,:2
-exec-once=xwayland-satellite :2
-monitorrule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:0,scale:1.4,vrr:0,rr:0
+exec_once=xwayland-satellite :2
+monitor_rule=name:eDP-1,width:1920,height:1080,refresh:60,x:0,y:0,scale:1.4,vrr:0,rr:0
 ```
 
 > **Warning:** Use a `DISPLAY` value other than `:1` to avoid conflicting with mangowm.

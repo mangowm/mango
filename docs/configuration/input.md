@@ -17,7 +17,7 @@ Control key repeat rates and layout rules.
 | :--- | :--- | :--- | :--- |
 | `repeat_rate` | `int` | `25` | How many times a key repeats per second. |
 | `repeat_delay` | `int` | `600` | Delay (ms) before a held key starts repeating. |
-| `numlockon` | `0` or `1` | `0` | Enable NumLock on startup. |
+| `numlock_on` | `0` or `1` | `0` | Enable NumLock on startup. |
 | `xkb_rules_rules` | `string` | - | XKB rules file (e.g., `evdev`, `base`). Usually auto-detected. |
 | `xkb_rules_model` | `string` | - | Keyboard model (e.g., `pc104`, `macbook`). |
 | `xkb_rules_layout` | `string` | - | Keyboard layout code (e.g., `us`, `de`, `us,de`). |
@@ -29,7 +29,7 @@ Control key repeat rates and layout rules.
 ```ini
 repeat_rate=40
 repeat_delay=300
-numlockon=1
+numlock_on=1
 xkb_rules_layout=us,de
 xkb_rules_variant=dvorak
 xkb_rules_options=caps:escape,ctrl:nocaps
@@ -197,7 +197,7 @@ env=XMODIFIERS,@im=ibus
 ## Device Rules (Advanced)
 
 The global settings above apply to every device of the corresponding type.
-Use `devicerule` to override parameters for a specific device.
+Use `device_rule` to override parameters for a specific device.
 
 **Finding device names:**
 
@@ -215,8 +215,8 @@ also lists all connected devices at once if you prefer.
 **Syntax:**
 
 ```ini
-devicerule=name:<device-name>,option:value,option:value
-devicerule=type:<device-type>,option:value
+device_rule=name:<device-name>,option:value,option:value
+device_rule=type:<device-type>,option:value
 ```
 
 Put the printed `name` after `name:` (the `identifier` field,
@@ -233,10 +233,10 @@ unmatched devices stay in the shared, synchronized keyboard group.
 **Examples:**
 
 ```ini
-devicerule=name:AT Translated Set 2 keyboard,kb_layout:ru
-devicerule=name:A4Tech USB Mouse,natural_scrolling:1,accel_speed:0.1
-devicerule=type:trackpad,tap_to_click:1
-devicerule=name:ELAN Touchscreen,monitor:HDMI-A-1
+device_rule=name:AT Translated Set 2 keyboard,kb_layout:ru
+device_rule=name:A4Tech USB Mouse,natural_scrolling:1,accel_speed:0.1
+device_rule=type:trackpad,tap_to_click:1
+device_rule=name:ELAN Touchscreen,monitor:HDMI-A-1
 ```
 
 Apply changes with `mmsg dispatch reload_config` or restart mango.

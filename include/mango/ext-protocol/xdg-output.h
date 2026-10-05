@@ -5,6 +5,7 @@
  * xwayland_ignore_scale is set. */
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_layout.h>
 #include <wlr/util/log.h>
 
 #include "xdg-output-unstable-v1-protocol.h"
@@ -23,6 +24,14 @@ struct MangoXDGOutputResource {
 struct MangoXDGOutput {
 	struct wl_list link; /* xdg_outputs */
 	struct wlr_output *wlr_output;
+	/*
+	 * The output's entry in the layout. Stock wlroots scopes an xdg-output
+	 * object to this entry, so it must go inert exactly when the entry is
+	 * destroyed (which also destroys the wl_output global). Keeping the
+	 * teardown here means callers never have to know about xdg-output.
+	 */
+	struct wlr_output_layout_output *layout_output;
+	struct wl_listener layout_output_destroy;
 	struct wl_list resources; /* MangoXDGOutputResource.link */
 	struct {
 		struct wl_listener description;
@@ -102,12 +111,6 @@ void xdg_output_manager_bind(struct wl_client *client, void *data,
  * disturbing normal clients.
  */
 void xdg_output_update_all(void);
-/*
- * When an output is removed, makes its xdg-output resources inert instead of
- * destroying them. Called from cleanup_monitor() (the wlr_output destroy
- * listener); idempotent.
- */
-void xdg_output_cleanup_output(struct wlr_output *wlr_output);
 void xdg_output_init(void);
 
 #endif

@@ -34,6 +34,8 @@ static int32_t client_close_animation_type(const Client *c) {
 }
 
 bool client_animations_enabled(const Client *c) {
+	if (c && c->no_animation)
+		return false;
 	if (config.animations)
 		return true;
 	return client_gesture_driven(c);
@@ -144,14 +146,18 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t vertical, vertical_value;
 	int32_t special_direction;
 	int32_t center_x, center_y;
+	int32_t type = client_open_animation_type(c);
 
-	if (client_open_animation_type(c) == ANIM_TYPE_FADE) {
+	if (type == ANIM_TYPE_NONE || c->animation.duration == 0) {
+		c->animainit_geom = geo;
+		return;
+	} else if (type == ANIM_TYPE_FADE) {
 		c->animainit_geom.width = geo.width;
 		c->animainit_geom.height = geo.height;
 		c->animainit_geom.x = geo.x;
 		c->animainit_geom.y = geo.y;
 		return;
-	} else if (client_open_animation_type(c) == ANIM_TYPE_ZOOM) {
+	} else if (type == ANIM_TYPE_ZOOM) {
 		c->animainit_geom.width = geo.width * config.zoom_initial_ratio;
 		c->animainit_geom.height = geo.height * config.zoom_initial_ratio;
 		c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
@@ -296,7 +302,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 							c->mon->visible_tiling_clients == 1))
 		data.corner_location = corner_radii_none();
 
-	if (config.blur && !c->noblur)
+	if (config.blur && !c->no_blur)
 		wlr_scene_blur_set_corner_radii(c->blur, data.corner_location);
 
 	/* Overview cards get rounded corners directly. */
@@ -310,7 +316,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 }
 
 void client_draw_shadow(Client *c, struct ivec2 offsets) {
-	if (c->iskilling || !client_surface(c)->mapped || c->isnoshadow)
+	if (c->iskilling || !client_surface(c)->mapped || c->no_shadow)
 		return;
 
 	if (!config.shadows || c->isfullscreen ||
@@ -586,7 +592,7 @@ void client_draw_blur(Client *c, struct ivec2 clip_box) {
 	int32_t blur_width = 0;
 	int32_t blur_height = 0;
 
-	if (config.blur && !c->noblur) {
+	if (config.blur && !c->no_blur) {
 
 		if (client_is_ignore_output_clip(c)) {
 			blur_x = c->bw;
@@ -1189,7 +1195,7 @@ void fadeout_client_animation_next_tick(Client *c) {
 					 (opacity_eased_progress * config.fadeout_begin_opacity);
 	double opacity = MANGO_MAX(percent, 0);
 
-	if (config.animation_fade_out && !c->nofadeout)
+	if (config.animation_fade_out && !c->no_fade_out)
 		wlr_scene_node_for_each_buffer(&c->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
 
@@ -1330,7 +1336,7 @@ void init_fadeout_client(Client *c) {
 	fadeout_client->animation_type_close = c->animation_type_close;
 	fadeout_client->animation.action = CLOSE;
 	fadeout_client->bw = c->bw;
-	fadeout_client->nofadeout = c->nofadeout;
+	fadeout_client->no_fade_out = c->no_fade_out;
 
 	fadeout_client->animation.initial.x = 0;
 	fadeout_client->animation.initial.y = 0;
@@ -1490,7 +1496,7 @@ void client_set_pending_state(Client *c) {
 		c->animation.duration = 0;
 	}
 
-	if (c->isnoanimation) {
+	if (c->no_animation) {
 		c->animation.should_animate = false;
 		c->animation.duration = 0;
 	}
@@ -1523,7 +1529,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		client_apply_bounds(c, bbox);
 	}
 
-	if (!c->isnosizehint && !c->ismaximizescreen && !c->isfullscreen &&
+	if (!c->no_size_hint && !c->ismaximizescreen && !c->isfullscreen &&
 		c->isfloating)
 		client_set_size_bound(c);
 
@@ -1560,7 +1566,7 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	else
 		c->animainit_geom = c->animation.current;
 
-	if (c->isnoborder || c->iskilling)
+	if (c->no_border || c->iskilling)
 		c->bw = 0;
 	else if (!c->isfullscreen)
 		c->bw = config.borderpx;
@@ -1726,7 +1732,7 @@ void client_set_focused_opacity_animation(Client *c) {
 }
 
 bool client_apply_focus_opacity(Client *c) {
-	if (config.blur && !c->noblur && c->blur_opacity != 1.0f &&
+	if (config.blur && !c->no_blur && c->blur_opacity != 1.0f &&
 		c->animation.action != OPEN) {
 		c->blur_opacity = 1.0f;
 		wlr_scene_blur_set_strength(c->blur, 1.0f);
@@ -1749,7 +1755,7 @@ bool client_apply_focus_opacity(Client *c) {
 
 		double opacity_eased_progress =
 			find_animation_curve_at(linear_progress, OPAFADEIN);
-		float percent = config.animation_fade_in && !c->nofadein
+		float percent = config.animation_fade_in && !c->no_fade_in
 							? opacity_eased_progress
 							: 1.0;
 		float opacity =
@@ -1787,7 +1793,7 @@ bool client_apply_focus_opacity(Client *c) {
 
 		c->opacity_animation.current_opacity = target_opacity;
 		client_set_opacity(c, target_opacity);
-		if (config.blur && !c->noblur && !config.blur_optimized) {
+		if (config.blur && !c->no_blur && !config.blur_optimized) {
 			float blur_val = MIN(percent * (1.0 - config.fadein_begin_opacity) +
 									 config.fadein_begin_opacity,
 								 1.0);

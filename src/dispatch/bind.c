@@ -3,7 +3,7 @@
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
-#include "mango/config/parse_config.h"
+#include "mango/config/parse.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/xdg-activation.h"
@@ -1854,6 +1854,8 @@ int32_t toggle_tag(const Arg *arg) {
 	Client *sel = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 	if (!sel)
 		return 0;
+	if (sel->mon && sel->mon->isoverview)
+		return 0;
 	// special workspace windows only belong to tag0; use tag_special_tag to
 	// move them back to a normal tag
 	if (sel->tags & TAG0_MASK)
@@ -1884,6 +1886,8 @@ int32_t toggle_tag(const Arg *arg) {
 
 int32_t toggle_view(const Arg *arg) {
 	if (!server.selected_monitor)
+		return 0;
+	if (server.selected_monitor->isoverview)
 		return 0;
 
 	uint32_t newtagset;

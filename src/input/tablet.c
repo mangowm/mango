@@ -1,4 +1,5 @@
 #include "mango/input/tablet.h"
+#include "mango/common/input-event-codes.h"
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
@@ -8,7 +9,6 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
-#include <linux/input-event-codes.h>
 #include <stdlib.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_compositor.h>

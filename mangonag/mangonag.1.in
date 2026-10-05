@@ -1,0 +1,96 @@
+.TH "mangonag" "1" "2026-10-04" "mangonag @VERSION@" "mangonag manual"
+.SH NAME
+mangonag \- show a nag/notification bar on the mango Wayland compositor
+.SH SYNOPSIS
+\fBmangonag\fR [\fIoptions\fR]
+.br
+\fBmangonag\fR \-\-help | \-h
+.SH DESCRIPTION
+\fBmangonag\fR connects to a running \fBmango\fR(1) compositor and displays a
+single nag bar on a layer surface. It is used to surface messages such as
+configuration errors (see the compositor's config error nag) and can also be
+invoked directly to show custom notifications. The bar is anchored to the top
+or bottom edge of an output, stays on screen until dismissed, its timeout
+expires, or \fBSIGINT\fR/\fBSIGTERM\fR is received.
+.PP
+The message text is taken from \fB\-\-message\fR. If \fB\-\-detailed\-message\fR
+is given, the remaining lines are read from standard input and appended to the
+message. Messages are limited to four lines; longer input is truncated with an
+ellipsis and a count of the omitted lines.
+.PP
+If the message is empty and no buttons are configured the program still
+creates the bar. Pressing a button runs its action and, depending on the button
+kind, may dismiss the bar first.
+.SH OPTIONS
+.TP
+\fB\-m\fR, \fB\-\-message\fR <text>
+Message text to display.
+.TP
+\fB\-l\fR, \fB\-\-detailed\-message\fR
+Read extra lines from standard input and append them to the message.
+.TP
+\fB\-t\fR, \fB\-\-type\fR <error|warning|info>
+Color preset for the bar. Defaults to \fBerror\fR.
+.TP
+\fB\-e\fR, \fB\-\-edge\fR <top|bottom>
+Edge of the output to anchor the bar to. Defaults to \fBtop\fR.
+.TP
+\fB\-y\fR, \fB\-\-layer\fR <overlay|top|bottom>
+Layer shell layer to appear on. Defaults to \fBtop\fR.
+.TP
+\fB\-o\fR, \fB\-\-output\fR <name>
+Name of the output to show the bar on. If omitted the bar is shown on the
+output with the highest scale, or the focused output when the compositor
+selects one.
+.TP
+\fB\-f\fR, \fB\-\-font\fR <pango font>
+Font description used to render the text. Defaults to \fBmonospace 13\fR.
+.TP
+\fB\-s\fR, \fB\-\-dismiss\-button\fR <text>
+Text of the dismiss button. Defaults to \fBX\fR. Pass an empty string to omit
+the button.
+.TP
+\fB\-b\fR, \fB\-\-button\fR <text> <command>
+Add a button that runs \fIcommand\fR in a terminal when clicked.
+.TP
+\fB\-B\fR, \fB\-\-button\-no\-terminal\fR <text> <command>
+Add a button that runs \fIcommand\fR directly (no terminal).
+.TP
+\fB\-z\fR, \fB\-\-button\-dismiss\fR <text> <command>
+Add a button that runs \fIcommand\fR in a terminal and then dismisses the bar.
+.TP
+\fB\-Z\fR, \fB\-\-button\-dismiss\-no\-terminal\fR <text> <command>
+Add a button that runs \fIcommand\fR directly and then dismisses the bar.
+.TP
+\fB\-T\fR, \fB\-\-timeout\fR <ms>
+Automatically dismiss the bar after \fIms\fR milliseconds. \fB0\fR (the
+default) never times out.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print a usage summary and exit with success.
+.SH BUTTONS
+Buttons are added in the order given on the command line. For \fB\-b\fR and
+\fB\-B\fR the command is optional; a button without a command only dismisses
+the bar when pressed. Terminal buttons run the command in \fB$TERMINAL\fR if
+set, otherwise the first available of \fBfoot\fR, \fBalacritty\fR,
+\fBkitty\fR, \fBwezterm\fR, \fBst\fR or \fBxterm\fR, and fall back to
+\fBsh\fR(1) if none is found.
+.SH ENVIRONMENT
+.TP
+\fITERMINAL\fR
+Terminal used for terminal buttons.
+.TP
+\fIWAYLAND_DISPLAY\fR
+Wayland display to connect to. Set automatically inside a \fBmango\fR(1)
+session.
+.SH EXIT STATUS
+.TP
+\fB0\fR
+Success (or help message printed).
+.TP
+\fBEXIT_FAILURE\fR
+An error occurred (failed to connect to the compositor, missing globals, etc.).
+.SH SEE ALSO
+\fBmango\fR(1), \fBmmsg\fR(1), \fBsh\fR(1)
+.SH BUGS
+Report issues at the project's issue tracker.

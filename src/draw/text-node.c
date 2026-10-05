@@ -107,6 +107,30 @@ static void rect_apply(struct wlr_scene_rect *rect, const float color[4],
 	wlr_scene_rect_set_size(rect, width, height);
 }
 
+static void rect_apply_border(struct wlr_scene_rect *rect, const float color[4],
+							  int32_t outer_radius, int32_t inner_radius,
+							  int32_t border, int32_t width, int32_t height) {
+	rect_apply(rect, color, outer_radius, 0, 0, width, height);
+
+#if TEXT_NODE_CORNER_RADIUS
+	int32_t inner_w = width - 2 * border;
+	int32_t inner_h = height - 2 * border;
+	if (border > 0 && inner_w > 0 && inner_h > 0) {
+		struct clipped_region clipped = clipped_region_get_default();
+		clipped.area = (struct wlr_box){
+			.x = border,
+			.y = border,
+			.width = inner_w,
+			.height = inner_h,
+		};
+		clipped.corners = corner_radii_all(inner_radius);
+		wlr_scene_rect_set_clipped_region(rect, clipped);
+	} else {
+		wlr_scene_rect_set_clipped_region(rect, clipped_region_get_default());
+	}
+#endif
+}
+
 static void layout_configure(PangoLayout *layout, const char *font_desc,
 							 const char *text) {
 	pango_layout_set_font_description(layout, get_cached_font_desc(font_desc));
@@ -313,6 +337,9 @@ static void text_node_clear(struct wlr_scene_buffer *scene_buffer,
 	wlr_scene_buffer_set_source_box(scene_buffer, NULL);
 	wlr_scene_rect_set_size(border, 0, 0);
 	wlr_scene_rect_set_size(bg, 0, 0);
+#if TEXT_NODE_CORNER_RADIUS
+	wlr_scene_rect_set_clipped_region(border, clipped_region_get_default());
+#endif
 }
 
 MangoJumpLabel *mango_jump_label_node_create(struct wlr_scene_tree *parent,
@@ -401,8 +428,9 @@ static void jump_label_apply_geometry(MangoJumpLabel *node) {
 	node->logical_width = width;
 	node->logical_height = height;
 
-	rect_apply(node->border, node->border_color, node->corner_radius + border,
-			   0, 0, width, height);
+	rect_apply_border(node->border, node->border_color,
+					  node->corner_radius + border, node->corner_radius, border,
+					  width, height);
 	rect_apply(node->bg, node->focused ? node->focus_bg_color : node->bg_color,
 			   node->corner_radius, border, border, width - 2 * border,
 			   height - 2 * border);
@@ -609,8 +637,9 @@ static void bar_decoration_apply_geometry(MangoBarDecoration *node) {
 		return;
 	}
 
-	rect_apply(node->border, node->border_color, node->corner_radius + border,
-			   0, 0, width, height);
+	rect_apply_border(node->border, node->border_color,
+					  node->corner_radius + border, node->corner_radius, border,
+					  width, height);
 	rect_apply(node->bg, node->focused ? node->focus_bg_color : node->bg_color,
 			   node->corner_radius, border, border, inner_w, inner_h);
 

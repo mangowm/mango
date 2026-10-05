@@ -1,11 +1,17 @@
 #include "mango/layout/vertical.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 
-void vertical_tile(Monitor *m) {
+static void vertical_tile_core(Monitor *m, const LayoutContext *ctx);
+static void vertical_deck_core(Monitor *m, const LayoutContext *ctx);
+static void vertical_grid_core(Monitor *m, const LayoutContext *ctx);
+static void vertical_fair_core(Monitor *m, const LayoutContext *ctx);
+
+static void vertical_tile_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0, w, r, ie = server.enable_gaps, mh, mx, tx;
 	Client *c = NULL;
 	Client *fc = NULL;
@@ -85,7 +91,7 @@ void vertical_tile(Monitor *m) {
 												.y = m->w.y + cur_gapov,
 												.width = w,
 												.height = mh - cur_gapiv * ie},
-							   0);
+							   0, ctx);
 			mx +=
 				w + cur_gapih * ie; // Accumulates using the theoretical width.
 		} else {
@@ -110,7 +116,7 @@ void vertical_tile(Monitor *m) {
 								 .y = m->w.y + mh + cur_gapov,
 								 .width = w,
 								 .height = m->w.height - mh - 2 * cur_gapov},
-				0);
+				0, ctx);
 			tx +=
 				w + cur_gapih * ie; // Accumulates using the theoretical width.
 		}
@@ -118,7 +124,7 @@ void vertical_tile(Monitor *m) {
 	}
 }
 
-void vertical_deck(Monitor *m) {
+static void vertical_deck_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t mh, mx;
 	int32_t i, n = 0;
 	Client *c = NULL;
@@ -171,7 +177,7 @@ void vertical_deck(Monitor *m) {
 												.y = m->w.y + cur_gappov,
 												.width = w,
 												.height = mh},
-							   0);
+							   0, ctx);
 			mx += w;
 		} else {
 			c->master_mfact_per = mfact;
@@ -182,14 +188,15 @@ void vertical_deck(Monitor *m) {
 								 .width = m->w.width - 2 * cur_gappoh,
 								 .height = m->w.height - mh - 2 * cur_gappov -
 										   cur_gappiv},
-				0);
-			client_update_visibility(c);
+				0, ctx);
+			if (!ctx)
+				client_update_visibility(c);
 		}
 		i++;
 	}
 }
 
-void vertical_grid(Monitor *m) {
+static void vertical_grid_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n;
 	int32_t cw, ch;
 	int32_t rows, cols, overrows;
@@ -216,7 +223,7 @@ void vertical_grid(Monitor *m) {
 				target_geom.y = m->w.y + (m->w.height - ch) / 2;
 				target_geom.width = cw;
 				target_geom.height = ch;
-				client_tile_resize(c, target_geom, 0);
+				client_tile_resize(c, target_geom, 0, ctx);
 				return;
 			}
 		}
@@ -269,7 +276,7 @@ void vertical_grid(Monitor *m) {
 				}
 				target_geom.width = cw;
 				target_geom.height = ch;
-				client_tile_resize(c, target_geom, 0);
+				client_tile_resize(c, target_geom, 0, ctx);
 				i++;
 			}
 		}
@@ -368,7 +375,7 @@ void vertical_grid(Monitor *m) {
 			target_geom.y = (int32_t)fl_cy;
 			target_geom.width = (int32_t)fl_cw;
 			target_geom.height = (int32_t)fl_ch;
-			client_tile_resize(c, target_geom, 0);
+			client_tile_resize(c, target_geom, 0, ctx);
 			i++;
 		}
 	}
@@ -377,7 +384,7 @@ void vertical_grid(Monitor *m) {
 	free(row_pers);
 }
 
-void vertical_fair(Monitor *m) {
+static void vertical_fair_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0;
 	Client *c = NULL;
 
@@ -555,7 +562,7 @@ void vertical_fair(Monitor *m) {
 											.y = (int32_t)fl_cy,
 											.width = (int32_t)fl_cw,
 											.height = (int32_t)fl_ch},
-						   0);
+						   0, ctx);
 	}
 
 	free(arr);
@@ -567,4 +574,28 @@ void vertical_fair(Monitor *m) {
 	free(col_w_base);
 	free(col_x_max);
 	free(col_w_max);
+}
+
+void vertical_tile(Monitor *m) { vertical_tile_core(m, NULL); }
+
+bool vertical_tile_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(vertical_tile_core, m, c, out);
+}
+
+void vertical_deck(Monitor *m) { vertical_deck_core(m, NULL); }
+
+bool vertical_deck_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(vertical_deck_core, m, c, out);
+}
+
+void vertical_grid(Monitor *m) { vertical_grid_core(m, NULL); }
+
+bool vertical_grid_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(vertical_grid_core, m, c, out);
+}
+
+void vertical_fair(Monitor *m) { vertical_fair_core(m, NULL); }
+
+bool vertical_fair_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(vertical_fair_core, m, c, out);
 }
