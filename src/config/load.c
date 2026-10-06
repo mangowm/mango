@@ -185,7 +185,16 @@ bool parse_config_file(Config *config, const char *file_path, bool must_exist) {
 	int saved_file_index = current_file_index;
 
 	// Adds the file path to the global list.
-	file_paths = realloc(file_paths, (file_paths_count + 1) * sizeof(char *));
+	char **new_file_paths =
+		realloc(file_paths, (file_paths_count + 1) * sizeof(char *));
+	if (!new_file_paths) {
+		mango_error(false, WLR_ERROR,
+					"Failed to allocate memory for config file path\n");
+		if (file)
+			fclose(file);
+		return false;
+	}
+	file_paths = new_file_paths;
 	file_paths[file_paths_count] =
 		strdup(full_path); // Needs strdup for independent memory.
 	current_file_index = file_paths_count;

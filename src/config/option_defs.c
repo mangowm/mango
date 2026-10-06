@@ -1698,9 +1698,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 		env->type = strdup(env_type);
-		config->env = realloc(config->env,
-							  (config->env_count + 1) * sizeof(*config->env));
-		if (!config->env) {
+		ConfigEnv **new_env = realloc(config->env, (config->env_count + 1) *
+													   sizeof(*config->env));
+		if (!new_env) {
 			free(env->type);
 			free(env->value);
 			free(env);
@@ -1709,6 +1709,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						"allocate memory for env\n");
 			return false;
 		}
+		config->env = new_env;
 
 		config->env[config->env_count] = env;
 		config->env_count++;
@@ -2042,15 +2043,16 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 	} else if (strncmp(key, "switchbind", 10) == 0) {
-		config->switch_bindings = realloc(config->switch_bindings,
-										  (config->switch_bindings_count + 1) *
-											  sizeof(SwitchBinding));
-		if (!config->switch_bindings) {
+		SwitchBinding *new_switch_bindings = realloc(
+			config->switch_bindings,
+			(config->switch_bindings_count + 1) * sizeof(SwitchBinding));
+		if (!new_switch_bindings) {
 			mango_error(false, WLR_ERROR,
 						"Failed to allocate "
 						"memory for switch bindings\n");
 			return false;
 		}
+		config->switch_bindings = new_switch_bindings;
 
 		SwitchBinding *binding =
 			&config->switch_bindings[config->switch_bindings_count];
@@ -2114,15 +2116,16 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 	} else if (strncmp(key, "gesturebind", 11) == 0) {
-		config->gesture_bindings = realloc(
+		GestureBinding *new_gesture_bindings = realloc(
 			config->gesture_bindings,
 			(config->gesture_bindings_count + 1) * sizeof(GestureBinding));
-		if (!config->gesture_bindings) {
+		if (!new_gesture_bindings) {
 			mango_error(false, WLR_ERROR,
 						"Failed to allocate "
 						"memory for axis gesturebind\n");
 			return false;
 		}
+		config->gesture_bindings = new_gesture_bindings;
 
 		GestureBinding *binding =
 			&config->gesture_bindings[config->gesture_bindings_count];
