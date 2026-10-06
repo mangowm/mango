@@ -1,4 +1,5 @@
 #include "mango/manage/tab.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/draw/text-node.h"
@@ -126,6 +127,39 @@ static void tab_refresh_bars(Client *head) {
 			it->is_tab_hidden = stacked && shown && !it->is_tab_focus;
 		tab_bar_set_enabled(it, strip && shown);
 		client_update_visibility(it);
+	}
+}
+
+/*
+ * The tab strip is chain-wide UI: every member owns one bar node and they are
+ * laid out side by side to build the strip. Decide once for the whole chain
+ * whether it may take pointer input, then apply it to every member, so a
+ * tagouting or otherwise hidden chain cannot leave a single clickable segment
+ * behind.
+ */
+void tab_update_input_penetration(Client *c) {
+	if (!c || !c->mon || !tab_is_member(c))
+		return;
+
+	Client *head = tab_head(c);
+	Client *focus = head;
+	int32_t shown = 0;
+
+	for (Client *it = head; it; it = it->tab_next) {
+		if (it->is_tab_focus)
+			focus = it;
+		if (tab_member_shown_in_view(it, c->mon))
+			shown++;
+	}
+
+	bool strip = shown >= 2 && tab_layout_active(c->mon) &&
+				 tab_member_shown_in_view(focus, c->mon);
+	bool ignore_hit = !strip;
+
+	for (Client *it = head; it; it = it->tab_next) {
+		if (!it->tab_bar)
+			continue;
+		mango_scene_node_set_ignore_hit(&it->tab_bar->scene->node, ignore_hit);
 	}
 }
 

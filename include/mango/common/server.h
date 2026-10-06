@@ -16,7 +16,6 @@ enum {
 	LyrBg,
 	LyrBottom,
 	LyrTile,
-	LyrTagOut,
 	LyrMaximize,
 	LyrFloat,
 	LyrTop,

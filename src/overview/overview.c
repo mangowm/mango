@@ -86,7 +86,6 @@ void overview_card_surface_add(struct wlr_surface *surface, int sx, int sy,
 	}
 	entry->buffer = entry->scene_surface->buffer;
 	wlr_scene_buffer_set_filter_mode(entry->buffer, WLR_SCALE_FILTER_BILINEAR);
-	entry->buffer->node.data = c; /* Hit test. */
 
 	entry->commit.notify = handle_overview_card_surface_commit;
 	wl_signal_add(&surface->events.commit, &entry->commit);
@@ -303,7 +302,6 @@ void overview_backup_surface(Client *c) {
 	c->ov_card_tree = wlr_scene_tree_create(c->scene);
 	if (!c->ov_card_tree)
 		return;
-	c->ov_card_tree->node.data = c; // Hit test.
 
 	// Walks the surface tree and creates a card node per surface.
 	wlr_surface_for_each_surface(client_surface(c), overview_card_surface_add,

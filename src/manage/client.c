@@ -2,6 +2,7 @@
 #include "mango/animation/client.h"
 #include "mango/common/input-event-codes.h"
 #include "mango/common/log.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
@@ -1930,11 +1931,9 @@ bool xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
 		return false;
 
 	double tx = *sx, ty = *sy;
-	struct wlr_scene_node *node = &buffer->node;
-	while (node && !node->data)
-		node = node->parent ? &node->parent->node : NULL;
-	Client *c = node ? node->data : NULL;
-	if (c && client_is_x11(c)) {
+	MangoSceneNode *scene_data = mango_scene_node_find(&buffer->node);
+	if (scene_data && scene_data->type == X11) {
+		Client *c = scene_data->owner;
 #ifdef XWAYLAND
 		if (config.xwayland_ignore_scale && c->xwayland_scale > 0.f) {
 			tx *= c->xwayland_scale;
@@ -2217,7 +2216,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 		c->type == XDGShell
 			? wlr_scene_xdg_surface_create(c->scene, c->surface.xdg)
 			: wlr_scene_subsurface_tree_create(c->scene, client_surface(c));
-	c->scene->node.data = c->scene_surface->node.data = c;
+	mango_scene_node_set(&c->scene->node, c->type, c);
 
 	client_init_xwayland(c);
 
@@ -2286,7 +2285,6 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 		c->splitindicator[i] = wlr_scene_rect_create(
 			c->scene, 0, 0,
 			c->isurgent ? config.urgentcolor : config.splitcolor);
-		c->splitindicator[i]->node.data = c;
 		wlr_scene_node_lower_to_bottom(&c->splitindicator[i]->node);
 		wlr_scene_node_set_enabled(&c->splitindicator[i]->node, false);
 	}
@@ -2303,7 +2301,6 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 
 	c->shield =
 		wlr_scene_rect_create(c->scene, 0, 0, (float[4]){0, 0, 0, 0xff});
-	c->shield->node.data = c;
 	wlr_scene_node_lower_to_bottom(&c->shield->node);
 	wlr_scene_node_set_enabled(&c->shield->node, false);
 
@@ -4066,9 +4063,22 @@ bool client_should_visible(Client *c) {
 	return c->tag_visible;
 }
 
+/*
+ * Mark the window's own scene tree as pointer-transparent while it animates
+ * out on a tag change. The group bar and tab bar are chain-wide strips built
+ * from separate scene trees, so they are handled by their own chain helpers
+ * instead of being flagged one member at a time.
+ */
+static void client_update_input_penetration(Client *c) {
+	mango_scene_node_set_ignore_hit(&c->scene->node, c->animation.tagouting);
+	tab_update_input_penetration(c);
+}
+
 void client_update_visibility(Client *c) {
 	if (!c || !c->scene)
 		return;
+
+	client_update_input_penetration(c);
 
 	bool show = client_should_visible(c);
 
@@ -4104,9 +4114,6 @@ void client_add_jump_label_node(Client *c) {
 // scene layer a client belongs to; only clients actually tagged with tag 0
 // belong to the special layers
 uint32_t client_target_layer(Client *c) {
-	if (c->animation.tagouting)
-		return LyrTagOut;
-
 	bool special_overlay = (c->tags & TAG0_MASK);
 
 	if (c->isoverlay)
@@ -4145,6 +4152,7 @@ uint32_t client_target_layer(Client *c) {
 void client_sync_layer(Client *c) {
 	if (!c || !c->scene || !c->mon)
 		return;
+	client_update_input_penetration(c);
 	if (c->scene->node.parent != server.layers[client_target_layer(c)])
 		client_reparent_group(c);
 }
@@ -4239,13 +4247,18 @@ void client_check_tab_node_visible(Client *c) {
 
 	Client *cur = head;
 	while (cur) {
-		if (!c->mon->isoverview && cur->group_bar &&
-			(cur->group_next || cur->group_prev) && TAGMATCH(c, c->mon) &&
-			ISNORMAL(c) && !c->isfullscreen) {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene->node, true);
-		} else if (cur->group_bar) {
-			wlr_scene_node_set_enabled(&cur->group_bar->scene->node, false);
+		bool show = !c->mon->isoverview && cur->group_bar &&
+					(cur->group_next || cur->group_prev) &&
+					TAGMATCH(c, c->mon) && ISNORMAL(c) && !c->isfullscreen;
+		if (!cur->group_bar) {
+			cur = cur->group_next;
+			continue;
 		}
+		/* The strip is drawn from one bar node per member; keep the whole
+		 * group in sync so a hidden member cannot leave a clickable
+		 * segment behind. */
+		wlr_scene_node_set_enabled(&cur->group_bar->scene->node, show);
+		mango_scene_node_set_ignore_hit(&cur->group_bar->scene->node, !show);
 		cur = cur->group_next;
 	}
 }

@@ -1,4 +1,5 @@
 #include "mango/ext-protocol/text-input.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/input/device.h"
@@ -329,7 +330,7 @@ void handle_input_method_new_popup_surface(struct wl_listener *listener,
 		popup->tree, popup->popup_surface->surface);
 
 	popup->type = XdgImPopup;
-	popup->scene_surface->node.data = popup;
+	mango_scene_node_set(&popup->scene_surface->node, XdgImPopup, popup);
 
 	wl_list_insert(&relay->popups, &popup->link);
 

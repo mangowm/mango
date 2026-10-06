@@ -1,4 +1,5 @@
 #include "mango/draw/text-node.h"
+#include "mango/common/scene_node.h"
 
 #include <cairo.h>
 #include <drm_fourcc.h>
@@ -593,7 +594,7 @@ MangoBarDecoration *mango_bar_decoration_create(void *cdata, uint32_t type,
 
 	mangobar->cached_scale = -1.0f;
 
-	mangobar->scene->node.data = mangobar;
+	mango_scene_node_set(&mangobar->scene->node, mangobar->type, mangobar);
 	measure_init(&mangobar->measure);
 
 	return mangobar;

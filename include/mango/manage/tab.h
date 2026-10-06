@@ -12,6 +12,7 @@ void tab_detach_client(Client *c);
 void tab_replace_client(Client *old, Client *new);
 void tab_focus_member(Client *c);
 void tab_sync_focus(Client *c);
+void tab_update_input_penetration(Client *c);
 void client_add_tab_bar(Client *c);
 void client_update_tab_bar_title(Client *c);
 void client_apply_tab_bar_config(Client *c);

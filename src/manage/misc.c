@@ -1,5 +1,6 @@
 #include "mango/manage/misc.h"
 #include "mango/common/log.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/data/static_keymap.h"
@@ -221,7 +222,7 @@ bool layer_ignores_focus(LayerSurface *l) {
 void node_at_point(double x, double y, struct wlr_surface **psurface,
 				   Client **pc, LayerSurface **pl, MangoBarDecoration **bar,
 				   double *nx, double *ny) {
-	struct wlr_scene_node *node = NULL, *pnode = NULL;
+	struct wlr_scene_node *node = NULL;
 	struct wlr_surface *surface = NULL;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
@@ -239,15 +240,17 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		*bar = NULL;
 
 	for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
-		if (layer == LyrFadeOut || layer == LyrTagOut)
+		if (layer == LyrFadeOut)
 			continue;
 
 		/* Only layers_wrap carries the real layer stacking order;
 		 * layers[] are the content nodes that get inserted dynamically. */
-		node =
-			wlr_scene_node_at(&server.layers_wrap[layer]->node, x, y, nx, ny);
+		node = mango_scene_node_at(&server.layers_wrap[layer]->node, x, y, nx,
+								   ny);
 		if (!node)
 			continue;
+
+		MangoSceneNode *data = mango_scene_node_find(node);
 
 		Monitor *cm = monitor_at_point(x, y);
 		if (cm && cm->special_dim_rect && cm->special_dim_rect->node.enabled &&
@@ -271,24 +274,13 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		if (layer == LyrIMPopup) {
 			c = NULL;
 			l = NULL;
-		} else {
-			void *data = NULL;
-			for (pnode = node; pnode; pnode = &pnode->parent->node) {
-				if (pnode->data) {
-					data = pnode->data;
-					break;
-				}
-			}
-
-			if (data) {
-				Client *temp_c = (Client *)data;
-				if (temp_c->type == LayerShell) {
-					l = (LayerSurface *)temp_c;
-				} else if (temp_c->type == GroupBar || temp_c->type == TabBar) {
-					mangobar = (MangoBarDecoration *)temp_c;
-				} else if (temp_c->type == XDGShell || temp_c->type == X11) {
-					c = temp_c;
-				}
+		} else if (data) {
+			if (data->type == LayerShell) {
+				l = data->owner;
+			} else if (data->type == GroupBar || data->type == TabBar) {
+				mangobar = data->owner;
+			} else if (data->type == XDGShell || data->type == X11) {
+				c = data->owner;
 			}
 		}
 

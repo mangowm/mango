@@ -1,4 +1,5 @@
 #include "mango/animation/common.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/config/parse.h"
 #include "mango/manage/client.h"
@@ -185,7 +186,7 @@ bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,
 		// node is destroyed
 		meta->destroy.notify = handle_snapshot_meta_destroy;
 		wl_signal_add(&wrapper->node.events.destroy, &meta->destroy);
-		wrapper->node.data = meta;
+		mango_scene_node_set(&wrapper->node, Snapshot, meta);
 
 		// attach the real buffer underneath the wrapper (relative coordinates
 		// 0,0)
@@ -196,9 +197,14 @@ bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,
 			return false;
 		}
 
-		// etain the original data pointer (e.g., Client*) to prevent event
-		// dispatching/focus acquisition from failing.
-		snapshot_buffer->node.data = scene_buffer->node.data;
+		/*
+		 * Do not copy the source node's payload onto the snapshot buffer. A
+		 * MangoSceneNode is owned by (and freed together with) its original
+		 * node, so aliasing it here would dangle once that node is destroyed
+		 * and would make an ancestor lookup resolve to the wrong root. The
+		 * wrapping tree already carries its own Snapshot payload, so walking
+		 * up from this buffer still resolves correctly.
+		 */
 
 		wlr_scene_buffer_set_dest_size(snapshot_buffer, scene_buffer->dst_width,
 									   scene_buffer->dst_height);
