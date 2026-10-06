@@ -365,13 +365,16 @@ void client_draw_tabbar(Client *c, struct ivec2 offsets) {
 	if (count < 2)
 		return;
 
-	int32_t tab_x = c->animation.current.x;
+	struct wlr_box anchor = c->animation.current;
+	if (c->animation.running && c->animation.action == OPEN)
+		anchor = c->geom;
+
+	int32_t tab_x = anchor.x;
 	int32_t group_h =
 		(c->group_next || c->group_prev) ? (int32_t)config.group_bar_height : 0;
 	/* Tab strip sits above the group strip when both are present. */
-	int32_t tab_y =
-		c->animation.current.y - (int32_t)config.tab_bar_height - group_h;
-	int32_t tw = c->animation.current.width;
+	int32_t tab_y = anchor.y - (int32_t)config.tab_bar_height - group_h;
+	int32_t tw = anchor.width;
 	int32_t th = (int32_t)config.tab_bar_height;
 
 	int32_t top_over = offsets.y;
@@ -384,7 +387,7 @@ void client_draw_tabbar(Client *c, struct ivec2 offsets) {
 		th = (int32_t)config.tab_bar_height - top_over;
 	}
 	if (bottom_over > 0)
-		th = th - GEZERO(bottom_over - c->animation.current.height);
+		th = th - GEZERO(bottom_over - anchor.height);
 	if (right_over > 0)
 		tw = tw - right_over;
 	if (left_over > 0) {
