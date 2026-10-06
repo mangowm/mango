@@ -1,24 +1,40 @@
-#define _GNU_SOURCE
-
+#undef _POSIX_C_SOURCE
+#define _XOPEN_SOURCE 700
 #include "mango/config/error_nag.h"
 
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/config/error_store.h"
 #include "mango/manage/monitor.h"
+#include <fcntl.h>
 #include <limits.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/syscall.h>
-#include <sys/wait.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <wayland-server-core.h>
 
-static pid_t nag_pid = -1;
-static int nag_pidfd = -1;
+static struct wl_client *nag_client = NULL;
+static struct wl_listener nag_client_destroy = {0};
 static struct wl_event_source *nag_timer = NULL;
+
+static void nag_client_destroyed(struct wl_listener *listener, void *data) {
+	(void)listener;
+	(void)data;
+
+	wl_list_remove(&nag_client_destroy.link);
+	wl_list_init(&nag_client_destroy.link);
+	nag_client = NULL;
+}
+
+static bool nag_set_cloexec(int fd) {
+	int flags = fcntl(fd, F_GETFD);
+	if (flags < 0)
+		return false;
+
+	return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+}
 
 static void nag_strip_ansi(const char *src, char *dst, size_t dst_size) {
 	size_t j = 0;
@@ -40,30 +56,13 @@ static void nag_strip_ansi(const char *src, char *dst, size_t dst_size) {
 }
 
 static void nag_kill(void) {
-#ifdef SYS_pidfd_send_signal
-	if (nag_pidfd >= 0) {
-		syscall(SYS_pidfd_send_signal, nag_pidfd, SIGTERM, NULL, 0);
-		close(nag_pidfd);
-		nag_pidfd = -1;
-		nag_pid = -1;
-		return;
-	}
-#endif
-	if (nag_pid <= 0)
+	if (nag_client == NULL)
 		return;
 
-	sigset_t block, old;
-	sigemptyset(&block);
-	sigaddset(&block, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &block, &old);
-
-	int status;
-	pid_t ret = waitpid(nag_pid, &status, WNOHANG);
-	if (ret == 0)
-		kill(nag_pid, SIGTERM);
-
-	nag_pid = -1;
-	sigprocmask(SIG_SETMASK, &old, NULL);
+	/* Tearing down the compositor-side client closes the connection, which
+	 * makes mangonag leave its main loop and exit on its own. The destroy
+	 * listener clears nag_client for us. */
+	wl_client_destroy(nag_client);
 }
 
 static bool nag_first_target(char *path, size_t path_size, int *line_out) {
@@ -247,6 +246,11 @@ static void nag_pipe_text(int fd) {
 }
 
 static void nag_spawn(void) {
+	if (!server.display)
+		return;
+
+	nag_kill();
+
 	char *edit = nag_edit_command();
 
 	int pfd[2];
@@ -255,16 +259,63 @@ static void nag_spawn(void) {
 		return;
 	}
 
+	int sockets[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0) {
+		close(pfd[0]);
+		close(pfd[1]);
+		free(edit);
+		return;
+	}
+
+	/* Keep both ends close-on-exec; the child re-enables its end so
+	 * libwayland can pick it up from WAYLAND_SOCKET after the exec. */
+	if (!nag_set_cloexec(sockets[0]) || !nag_set_cloexec(sockets[1])) {
+		close(sockets[0]);
+		close(sockets[1]);
+		close(pfd[0]);
+		close(pfd[1]);
+		free(edit);
+		return;
+	}
+
+	struct wl_client *client = wl_client_create(server.display, sockets[0]);
+	if (client == NULL) {
+		close(sockets[0]);
+		close(sockets[1]);
+		close(pfd[0]);
+		close(pfd[1]);
+		free(edit);
+		return;
+	}
+
+	nag_client = client;
+	nag_client_destroy.notify = nag_client_destroyed;
+	wl_client_add_destroy_listener(client, &nag_client_destroy);
+
 	pid_t pid = fork();
 	if (pid < 0) {
+		wl_client_destroy(client);
+		close(sockets[1]);
 		close(pfd[0]);
 		close(pfd[1]);
 		free(edit);
 		return;
 	}
 	if (pid == 0) {
-		dup2(pfd[0], STDIN_FILENO);
-		close(pfd[0]);
+		close(sockets[0]);
+
+		int flags = fcntl(sockets[1], F_GETFD);
+		if (flags >= 0)
+			fcntl(sockets[1], F_SETFD, flags & ~FD_CLOEXEC);
+
+		char socket_str[16];
+		snprintf(socket_str, sizeof(socket_str), "%d", sockets[1]);
+		setenv("WAYLAND_SOCKET", socket_str, true);
+
+		if (pfd[0] != STDIN_FILENO) {
+			dup2(pfd[0], STDIN_FILENO);
+			close(pfd[0]);
+		}
 		close(pfd[1]);
 		const char *out = NULL;
 		if (server.selected_monitor && server.selected_monitor->wlr_output)
@@ -285,13 +336,8 @@ static void nag_spawn(void) {
 		_exit(127);
 	}
 
+	close(sockets[1]);
 	close(pfd[0]);
-	nag_pid = pid;
-#ifdef SYS_pidfd_open
-	nag_pidfd = syscall(SYS_pidfd_open, pid, 0);
-#else
-	nag_pidfd = -1;
-#endif
 	nag_pipe_text(pfd[1]);
 	close(pfd[1]);
 	free(edit);
