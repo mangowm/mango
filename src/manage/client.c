@@ -4104,6 +4104,9 @@ void client_add_jump_label_node(Client *c) {
 // scene layer a client belongs to; shown scratchpads join the special
 // layers while the special workspace is active
 uint32_t client_target_layer(Client *c) {
+	if (c->animation.tagouting)
+		return LyrTagOut;
+
 	bool special_overlay = (c->tags & TAG0_MASK) ||
 						   (is_special_active(c->mon) && SCRATCHPAD_SHOWN(c));
 

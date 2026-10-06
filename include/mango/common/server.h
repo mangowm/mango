@@ -27,6 +27,7 @@ enum {
 	LyrSpecialTop,
 	LyrSpecialFloat,
 	LyrSpecialFullscreen,
+	LyrTagOut,
 	LyrFadeOut,
 	LyrSpecialOverlay,
 	LyrIMPopup,

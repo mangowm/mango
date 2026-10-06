@@ -239,7 +239,7 @@ void node_at_point(double x, double y, struct wlr_surface **psurface,
 		*bar = NULL;
 
 	for (layer = NUM_LAYERS - 1; layer >= 0; layer--) {
-		if (layer == LyrFadeOut)
+		if (layer == LyrFadeOut || layer == LyrTagOut)
 			continue;
 
 		/* Only layers_wrap carries the real layer stacking order;
