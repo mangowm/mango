@@ -4101,14 +4101,13 @@ void client_add_jump_label_node(Client *c) {
 	wlr_scene_node_set_enabled(&c->jump_label_node->scene->node, false);
 }
 
-// scene layer a client belongs to; shown scratchpads join the special
-// layers while the special workspace is active
+// scene layer a client belongs to; only clients actually tagged with tag 0
+// belong to the special layers
 uint32_t client_target_layer(Client *c) {
 	if (c->animation.tagouting)
 		return LyrTagOut;
 
-	bool special_overlay = (c->tags & TAG0_MASK) ||
-						   (is_special_active(c->mon) && SCRATCHPAD_SHOWN(c));
+	bool special_overlay = (c->tags & TAG0_MASK);
 
 	if (c->isoverlay)
 		return special_overlay ? LyrSpecialOverlay : LyrOverlay;
