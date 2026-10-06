@@ -228,7 +228,7 @@ in
             )
         )
         + lib.optionalString (cfg.extraConfig != "") cfg.extraConfig
-        + lib.optionalString (cfg.autostart_sh != "") "\nexec-once=~/.config/mango/autostart.sh\n";
+        + lib.optionalString (cfg.autostart_sh != "") "\nexec_once=~/.config/mango/autostart.sh\n";
 
       validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
         cp ${pkgs.writeText "mango-config.conf" finalConfigText} "$out"
