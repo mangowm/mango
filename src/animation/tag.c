@@ -230,6 +230,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		c->animation.running = false;
 		c->animation.tagining = false;
 		c->animation.tagouting = false;
+		c->animation.tagouted = true;
 		client_update_visibility(c);
 		c->animainit_geom = c->current = c->pending = c->animation.current =
 			c->geom;
