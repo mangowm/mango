@@ -830,6 +830,16 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 	server.grab_offset_y += cdy;
 }
 
+static void client_begin_drag_float(Client *c) {
+	c->drag_to_tile = true;
+	exit_scroller_stack(c);
+	client_set_floating(c, 1);
+	c->drag_tile_float_backup_geom = c->float_geom;
+	c->old_stack_inner_per = 0.0f;
+	c->old_master_inner_per = 0.0f;
+	set_size_per(c->mon, c);
+}
+
 bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y) {
 	const char *cursors[] = {"nw-resize", "ne-resize", "sw-resize",
 							 "se-resize"};
@@ -845,15 +855,8 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y) {
 
 	server.grab_client = gc;
 
-	if (gc->isfloating == 0 && mode == CurMove) {
-		gc->drag_to_tile = true;
-		exit_scroller_stack(gc);
-		client_set_floating(gc, 1);
-		gc->drag_tile_float_backup_geom = gc->float_geom;
-		gc->old_stack_inner_per = 0.0f;
-		gc->old_master_inner_per = 0.0f;
-		set_size_per(gc->mon, gc);
-	}
+	if (gc->isfloating == 0 && mode == CurMove)
+		client_begin_drag_float(gc);
 
 	if (gc->drag_to_tile && config.drag_tile_to_tile &&
 		config.drag_tile_small) {
@@ -963,6 +966,32 @@ void pointer_end_grab_client(bool follow_pointer) {
 	}
 }
 
+static Client *group_bar_target_at(double x, double y, Client *ignore) {
+	bool scene_on = false, bar_on = false;
+
+	if (ignore) {
+		scene_on = ignore->scene->node.enabled;
+		wlr_scene_node_set_enabled(&ignore->scene->node, false);
+		if (ignore->group_bar) {
+			bar_on = ignore->group_bar->scene->node.enabled;
+			wlr_scene_node_set_enabled(&ignore->group_bar->scene->node, false);
+		}
+	}
+
+	MangoBarDecoration *bar = NULL;
+	node_at_point(x, y, NULL, NULL, NULL, &bar, NULL, NULL);
+
+	if (ignore) {
+		wlr_scene_node_set_enabled(&ignore->scene->node, scene_on);
+		if (ignore->group_bar)
+			wlr_scene_node_set_enabled(&ignore->group_bar->scene->node, bar_on);
+	}
+
+	Client *owner = (bar && bar->node_data) ? (Client *)bar->node_data : NULL;
+	Client *target = client_group_active(owner);
+	return target != ignore ? target : NULL;
+}
+
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,
 							double dy_unaccel) {
@@ -970,6 +999,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	Client *c = NULL, *w = NULL;
 	Client *closet_drop_client = NULL;
 	LayerSurface *l = NULL;
+	MangoBarDecoration *bar = NULL;
 	struct wlr_surface *surface = NULL;
 	bool should_lock = false;
 
@@ -1056,8 +1086,26 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	}
 
 	/* Find the client under the pointer and send the event along. */
-	node_at_point(server.cursor->x, server.cursor->y, &surface, &c, NULL, NULL,
+	node_at_point(server.cursor->x, server.cursor->y, &surface, &c, NULL, &bar,
 				  &sx, &sy);
+
+	{
+		MangoBarDecoration *hover = NULL;
+		if (bar) {
+			double lx = server.cursor->x - bar->scene->node.x;
+			double ly = server.cursor->y - bar->scene->node.y;
+			if (mango_bar_decoration_close_contains(bar, lx, ly))
+				hover = bar;
+		}
+		if (server.group_bar_hover != hover) {
+			if (server.group_bar_hover)
+				mango_bar_decoration_set_close_hover(server.group_bar_hover,
+													 false);
+			if (hover)
+				mango_bar_decoration_set_close_hover(hover, true);
+			server.group_bar_hover = hover;
+		}
+	}
 
 	if (server.cursor_mode == CurPressed && !server.seat->drag &&
 		surface != server.seat->pointer_state.focused_surface &&
@@ -1074,6 +1122,23 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 								(int32_t)round(server.cursor->x),
 								(int32_t)round(server.cursor->y));
 
+	if (server.group_bar_drag_pending) {
+		double ddx = server.cursor->x - server.group_bar_drag_x;
+		double ddy = server.cursor->y - server.group_bar_drag_y;
+		if (ddx * ddx + ddy * ddy >= 25.0) {
+			Client *dc = server.group_bar_drag_client;
+			server.group_bar_drag_pending = false;
+			server.group_bar_drag_client = NULL;
+			if (dc && !dc->iskilling) {
+				if (client_is_group_member(dc))
+					client_group_leave(dc);
+				client_focus(dc, 1);
+				pointer_begin_move_resize(dc, CurMove, server.cursor->x,
+										  server.cursor->y);
+			}
+		}
+	}
+
 	/* If we are currently grabbing the mouse, handle and return */
 	if (server.cursor_mode == CurMove) {
 		/* Move the grabbed client to the new position. */
@@ -1083,24 +1148,32 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			.y = (int32_t)round(server.cursor->y) - server.grab_offset_y,
 			.width = server.grab_client->geom.width,
 			.height = server.grab_client->geom.height};
-		if (config.drag_tile_to_tile && server.grab_client->drag_to_tile) {
-			closet_drop_client = find_closest_tiled_client(server.grab_client);
-			if (closet_drop_client && server.drop_client &&
-				closet_drop_client != server.drop_client) {
-				server.drop_client->enable_drop_area_draw = false;
-				client_set_drop_area(server.drop_client);
-				server.drop_client = closet_drop_client;
-				server.drop_client->enable_drop_area_draw = true;
-				client_set_drop_area(server.drop_client);
-			} else if (closet_drop_client) {
-				server.drop_client = closet_drop_client;
-				server.drop_client->enable_drop_area_draw = true;
-				client_set_drop_area(server.drop_client);
-			} else if (server.drop_client) {
-				server.drop_client->enable_drop_area_draw = false;
-				client_set_drop_area(server.drop_client);
-				server.drop_client = NULL;
-			}
+		Client *target = NULL;
+		if (server.grab_client->drag_to_tile)
+			target = group_bar_target_at(server.cursor->x, server.cursor->y,
+										 server.grab_client);
+		server.drop_to_group = target != NULL;
+		if (config.drag_tile_to_tile && server.grab_client->drag_to_tile)
+			closet_drop_client =
+				target ? target : find_closest_tiled_client(server.grab_client);
+		else
+			closet_drop_client = target;
+
+		if (closet_drop_client && server.drop_client &&
+			closet_drop_client != server.drop_client) {
+			server.drop_client->enable_drop_area_draw = false;
+			client_set_drop_area(server.drop_client);
+			server.drop_client = closet_drop_client;
+			server.drop_client->enable_drop_area_draw = true;
+			client_set_drop_area(server.drop_client);
+		} else if (closet_drop_client) {
+			server.drop_client = closet_drop_client;
+			server.drop_client->enable_drop_area_draw = true;
+			client_set_drop_area(server.drop_client);
+		} else if (server.drop_client) {
+			server.drop_client->enable_drop_area_draw = false;
+			client_set_drop_area(server.drop_client);
+			server.drop_client = NULL;
 		}
 		resize(server.grab_client, server.grab_client->float_geom, 1);
 		return;
@@ -1526,6 +1599,29 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			return true;
 		}
 
+		if (bar && !bar->is_tab && bar->node_data &&
+			event->button == BTN_LEFT) {
+			Client *tc = bar->node_data;
+			double lx = server.cursor->x - bar->scene->node.x;
+			double ly = server.cursor->y - bar->scene->node.y;
+
+			if (mango_bar_decoration_close_contains(bar, lx, ly)) {
+				pending_kill_client(tc);
+				return true;
+			}
+
+			client_handle_decorate_click(bar);
+
+			if (!tc->isfullscreen && !tc->ismaximizescreen &&
+				!client_is_unmanaged(tc)) {
+				server.group_bar_drag_pending = true;
+				server.group_bar_drag_client = tc;
+				server.group_bar_drag_x = server.cursor->x;
+				server.group_bar_drag_y = server.cursor->y;
+			}
+			return true;
+		}
+
 		// handle click on tile node
 		client_handle_decorate_click(bar);
 
@@ -1545,6 +1641,30 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		server.group_bar_drag_pending = false;
+		server.drop_to_group = false;
+		server.group_bar_drag_client = NULL;
+		if (server.cursor_mode == CurMove && server.grab_client &&
+			server.grab_client->drag_to_tile) {
+			Client *jc = server.grab_client;
+			Client *target =
+				group_bar_target_at(server.cursor->x, server.cursor->y, jc);
+			if (target) {
+				server.grab_client = NULL;
+				server.cursor_mode = CurNormal;
+				server.start_drag_window = false;
+				server.last_apply_drag_time = 0;
+				jc->drag_to_tile = false;
+				if (server.drop_client) {
+					server.drop_client->enable_drop_area_draw = false;
+					client_set_drop_area(server.drop_client);
+					server.drop_client = NULL;
+				}
+				client_group_join(jc, target);
+				wlr_seat_pointer_clear_focus(server.seat);
+				return true;
+			}
+		}
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		if (!server.session_locked && server.cursor_mode != CurNormal &&
 			server.cursor_mode != CurPressed) {

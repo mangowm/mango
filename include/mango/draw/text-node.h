@@ -117,6 +117,20 @@ typedef struct MangoBarDecoration {
 	int32_t text_logical_h;
 	int32_t logical_width;
 	int32_t logical_height;
+
+	struct wlr_scene_buffer *close_buffer;
+	struct mango_text_buffer *close_texture;
+	bool close_enabled;
+	bool close_hover;
+	int32_t close_size;
+	int32_t close_margin;
+	float close_color[4];
+	float close_hover_color[4];
+	float close_x_color[4];
+	int32_t close_cached_size;
+	float close_cached_scale;
+	bool close_cached_hover;
+	bool close_cached_valid;
 } MangoBarDecoration;
 
 void mango_text_global_finish(void);
@@ -149,6 +163,15 @@ void mango_bar_decoration_set_focus(MangoBarDecoration *node, bool focused);
 
 void mango_bar_decoration_set_colors(MangoBarDecoration *node,
 									 const float fg[4], const float bg[4]);
+
+void mango_bar_decoration_set_close(MangoBarDecoration *node, bool enabled,
+									int32_t size, int32_t margin);
+void mango_bar_decoration_set_close_color(MangoBarDecoration *node,
+										  const float circle[4]);
+void mango_bar_decoration_set_close_hover(MangoBarDecoration *node, bool hover);
+bool mango_bar_decoration_close_contains(MangoBarDecoration *node, double lx,
+										 double ly);
+
 void mango_jump_label_node_apply_config(MangoJumpLabel *node,
 										const DecorateDrawData *data);
 void mango_bar_decoration_apply_config(MangoBarDecoration *node,

@@ -405,7 +405,7 @@ void client_draw_tabbar(Client *c, struct ivec2 offsets) {
 
 	int32_t tab_x = anchor.x;
 	int32_t group_h =
-		(c->group_next || c->group_prev) ? (int32_t)config.group_bar_height : 0;
+		client_wants_group_bar(c) ? (int32_t)config.group_bar_height : 0;
 	/* Tab strip sits above the group strip when both are present. */
 	int32_t tab_y = anchor.y - (int32_t)config.tab_bar_height - group_h;
 	int32_t tw = anchor.width;

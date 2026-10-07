@@ -305,30 +305,22 @@ int32_t focus_window_or_workspace(const Arg *arg) {
 	return 0;
 }
 
-int32_t group_join(const Arg *arg) {
-
-	if (!server.selected_monitor)
-		return 0;
-
+void client_group_join(Client *need_join_client, Client *need_replace_client) {
 	Monitor *oldmon = NULL;
 
-	Client *need_join_client = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!need_join_client || !need_join_client->mon)
-		return 0;
-
-	if (need_join_client->mon->isoverview)
-		return 0;
-
-	Client *need_replace_client = NULL;
-	need_replace_client = direction_select(arg);
+		return;
 
 	if (!need_replace_client || !need_replace_client->mon)
-		return 0;
+		return;
 
 	if (need_join_client == need_replace_client)
-		return 0;
+		return;
 
-	if (need_join_client->group_next || need_join_client->group_prev) {
+	if (need_join_client->mon->isoverview)
+		return;
+
+	if (client_is_group_member(need_join_client)) {
 		group_leave(&(Arg){.tc = need_join_client});
 	}
 
@@ -337,7 +329,7 @@ int32_t group_join(const Arg *arg) {
 		need_join_client->mon = need_replace_client->mon;
 	}
 
-	if (!need_replace_client->group_prev && !need_replace_client->group_next) {
+	if (!client_is_group_member(need_replace_client)) {
 		need_replace_client->is_group_focus = true;
 	}
 
@@ -352,30 +344,42 @@ int32_t group_join(const Arg *arg) {
 	need_replace_client->group_prev = need_join_client;
 
 	client_focus_group_member(need_join_client);
+	client_sync_tiled_hint(need_join_client);
 	arrange(need_join_client->mon, false, false);
 
 	// oldmon may already be destroyed.
 	if (oldmon) {
 		arrange(oldmon, false, false);
 	}
+}
+
+int32_t group_join(const Arg *arg) {
+
+	if (!server.selected_monitor)
+		return 0;
+
+	Client *need_join_client = arg->tc ? arg->tc : server.selected_monitor->sel;
+	if (!need_join_client || !need_join_client->mon)
+		return 0;
+
+	if (need_join_client->mon->isoverview)
+		return 0;
+
+	client_group_join(need_join_client, direction_select(arg));
 
 	return 0;
 }
 
-int32_t group_leave(const Arg *arg) {
-
-	if (!server.selected_monitor)
-		return 0;
-	Client *tc = arg->tc ? arg->tc : server.selected_monitor->sel;
+bool client_group_leave(Client *tc) {
 	if (!tc || !tc->mon || !tc->is_group_focus)
-		return 0;
-	if (!tc->group_next && !tc->group_prev) {
-		return 0;
-	}
+		return false;
+	if (!client_is_group_member(tc))
+		return false;
 
 	if (tc->mon->isoverview)
-		return 0;
+		return false;
 
+	bool was_visible = tc->tag_visible;
 	Client *rc = tc->group_next ? tc->group_next : tc->group_prev;
 
 	client_focus_group_member(rc);
@@ -388,11 +392,23 @@ int32_t group_leave(const Arg *arg) {
 	wl_list_remove(&tc->flink);
 	wl_list_insert(rc->flink.next, &tc->flink);
 
-	if (!rc->group_prev && !rc->group_next) {
+	tc->tag_visible = was_visible;
+	client_update_visibility(tc);
+
+	if (!client_is_group_member(rc)) {
 		rc->is_group_focus = false;
 	}
 
-	arrange(tc->mon, false, false);
+	return true;
+}
+
+int32_t group_leave(const Arg *arg) {
+
+	if (!server.selected_monitor)
+		return 0;
+	Client *tc = arg->tc ? arg->tc : server.selected_monitor->sel;
+	if (client_group_leave(tc))
+		arrange(tc->mon, false, false);
 
 	return 0;
 }
@@ -548,7 +564,7 @@ int32_t group_focus(const Arg *arg) {
 	if (!c || !c->mon)
 		return 0;
 
-	if (!c->group_prev && !c->group_next) {
+	if (!client_is_group_member(c)) {
 		return 0;
 	}
 
@@ -689,12 +705,15 @@ int32_t kill_client(const Arg *arg) {
 
 int32_t move_resize(const Arg *arg) {
 	Client *c = NULL;
+	MangoBarDecoration *bar = NULL;
 
 	if (server.cursor_mode != CurNormal && server.cursor_mode != CurPressed)
 		return 0;
 
-	node_at_point(server.cursor->x, server.cursor->y, NULL, &c, NULL, NULL,
+	node_at_point(server.cursor->x, server.cursor->y, NULL, &c, NULL, &bar,
 				  NULL, NULL);
+	if (!c && bar && !bar->is_tab)
+		c = bar->node_data;
 	pointer_begin_move_resize(c, arg->ui, server.cursor->x, server.cursor->y);
 	return 0;
 }
@@ -1810,6 +1829,17 @@ int32_t toggle_gaps(const Arg *arg) {
 	return 0;
 }
 
+int32_t toggle_group_bar(const Arg *arg) {
+	config.always_show_group_bar ^= 1;
+
+	Monitor *m = NULL;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->wlr_output->enabled)
+			arrange(m, false, false);
+	}
+	return 0;
+}
+
 int32_t toggle_maximize_screen(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
@@ -2702,7 +2732,7 @@ int32_t focus_by_id(const Arg *arg) {
 	if (c->swallowdby)
 		return 0;
 
-	if (c->group_next || c->group_prev)
+	if (client_is_group_member(c))
 		client_focus_group_member(c);
 
 	client_active(c);

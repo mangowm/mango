@@ -280,7 +280,7 @@ void client_draw_group_bar(Client *c, struct ivec2 offsets) {
 	if (!c || !c->group_bar)
 		return;
 
-	if (!c->group_next && !c->group_prev) {
+	if (!client_wants_group_bar(c)) {
 		if (c->group_bar->scene->node.enabled)
 			wlr_scene_node_set_enabled(&c->group_bar->scene->node, false);
 		return;
@@ -289,22 +289,15 @@ void client_draw_group_bar(Client *c, struct ivec2 offsets) {
 	/* Owner hidden by tab: hide the whole strip, otherwise its nodes (they are
 	 * not children of the window) would float over the visible window. */
 	if (c->is_tab_hidden) {
-		Client *head = c;
-		while (head->group_prev)
-			head = head->group_prev;
-		for (Client *cur = head; cur; cur = cur->group_next) {
+		for (Client *cur = client_group_head(c); cur; cur = cur->group_next) {
 			if (cur->group_bar)
 				wlr_scene_node_set_enabled(&cur->group_bar->scene->node, false);
 		}
 		return;
 	}
 
-	Client *head = c;
-	while (head->group_prev)
-		head = head->group_prev;
-
 	int count = 0;
-	Client *cur = head;
+	Client *cur = client_group_head(c);
 	while (cur) {
 		count++;
 		cur = cur->group_next;
@@ -336,7 +329,7 @@ void client_draw_group_bar(Client *c, struct ivec2 offsets) {
 	}
 
 	if (tw <= 0 || th <= 0) {
-		cur = head;
+		cur = client_group_head(c);
 		while (cur) {
 			if (cur->group_bar)
 				wlr_scene_node_set_enabled(&cur->group_bar->scene->node, false);
@@ -350,7 +343,7 @@ void client_draw_group_bar(Client *c, struct ivec2 offsets) {
 	int32_t bar_w = tw / count;
 	int32_t rem = tw % count;
 	int32_t x = tab_x;
-	cur = head;
+	cur = client_group_head(c);
 
 	for (int i = 0; i < count && cur; i++) {
 		int32_t w = bar_w + (i < rem ? 1 : 0);
@@ -653,6 +646,15 @@ void client_set_drop_area(Client *c) {
 
 	if (client_width <= 0 || client_height <= 0) {
 		wlr_scene_node_set_enabled(&c->droparea->node, false);
+		return;
+	}
+
+	if (server.drop_to_group && server.drop_client == c) {
+		if (!first_draw && c->drop_direction == UNDIR)
+			return;
+		c->drop_direction = UNDIR;
+		wlr_scene_node_set_position(&c->droparea->node, bw, bw);
+		wlr_scene_rect_set_size(c->droparea, client_width, client_height);
 		return;
 	}
 

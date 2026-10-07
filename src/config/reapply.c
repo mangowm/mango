@@ -169,7 +169,14 @@ void reset_option(void) {
 	reapply_tagrule();
 	reapply_monitor_rules();
 
-	arrange(server.selected_monitor, false, false);
+	/* A global reload must re-apply every monitor, not just the selected one:
+	 * layout-affecting options such as always_show_group_bar reserve or release
+	 * space on all outputs. */
+	Monitor *m = NULL;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->wlr_output->enabled)
+			arrange(m, false, false);
+	}
 }
 
 void reapply_monitor_rules(void) {

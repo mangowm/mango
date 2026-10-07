@@ -66,20 +66,25 @@ You can also color-code windows based on their state:
 | `jump_label_decorate_padding_y` | `10` | vertical padding.|
 | `jump_label_decorate_font_desc` | `monospace Bold 16` | font set.|
 
-### Tab Bar For Monocle Layout
+### Group Bar
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `group_bar_height` | `25` | Height of the tab bar for monocle layout. |
+| `always_show_group_bar` | `0` | Show the group bar (with close button) on every window. |
+| `group_bar_height` | `33` | Group bar height. |
+| `group_bar_close_button_enable` | `1` | Show the close button. |
+| `group_bar_button_size` | `16` | Close button size in px. |
+| `group_bar_button_margin` | `4` | Close button inset from the right edge in px. |
+| `group_bar_button_color` | `0xad401fff` | Close button colour. |
 | `group_bar_decorate_fg_color` | `0xc0caf5ff` | text color.
 | `group_bar_decorate_bg_color` | `0x1a1b26ff` | background color.|
-| `group_bar_decorate_focus_fg_color` | `0x1a1b26ff` | text color for focus. |
-| `group_bar_decorate_focus_bg_color` | `0x9ece6aff` | background color for focus.|
+| `group_bar_decorate_focus_fg_color` | `0x9ece6aff` | text color for focus. |
+| `group_bar_decorate_focus_bg_color` | `0x2f3d33ff` | background color for focus.|
 | `group_bar_decorate_border_color` | `0x3b4261ff` | border color.|
 | `group_bar_decorate_border_width` | `4` | border width.|
 | `group_bar_decorate_corner_radius` | `5` | corner radius.|
 | `group_bar_decorate_padding_x` | `0` | horizontal padding.|
 | `group_bar_decorate_padding_y` | `0` | vertical padding.|
-| `group_bar_decorate_font_desc` | `monospace Bold 10` | font set.|
+| `group_bar_decorate_font_desc` | `monospace Bold 13` | font set.|
 
 ### Auto Tab Bar
 | Setting | Default | Description |
@@ -89,14 +94,14 @@ You can also color-code windows based on their state:
 | `tab_bar_height` | `25` | Height of the auto tab bar. |
 | `tab_bar_decorate_fg_color` | `0xc0caf5ff` | text color.
 | `tab_bar_decorate_bg_color` | `0x1a1b26ff` | background color.|
-| `tab_bar_decorate_focus_fg_color` | `0x1a1b26ff` | text color for focus. |
-| `tab_bar_decorate_focus_bg_color` | `0x7aa2f7ff` | background color for focus.|
+| `tab_bar_decorate_focus_fg_color` | `0x7aa2f7ff` | text color for focus. |
+| `tab_bar_decorate_focus_bg_color` | `0x2b3550ff` | background color for focus.|
 | `tab_bar_decorate_border_color` | `0x3b4261ff` | border color.|
 | `tab_bar_decorate_border_width` | `4` | border width.|
 | `tab_bar_decorate_corner_radius` | `5` | corner radius.|
 | `tab_bar_decorate_padding_x` | `0` | horizontal padding.|
 | `tab_bar_decorate_padding_y` | `0` | vertical padding.|
-| `tab_bar_decorate_font_desc` | `monospace Bold 10` | font set.|
+| `tab_bar_decorate_font_desc` | `monospace Bold 13` | font set.|
 
 ## Borders
 

@@ -315,6 +315,7 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height);
 void client_set_minimized(Client *c, bool minimize_window);
 void client_set_maximized(Client *c, bool maximized);
 void client_set_tiled(Client *c, uint32_t edges);
+void client_sync_tiled_hint(Client *c);
 
 int32_t client_should_ignore_focus(Client *c);
 int32_t client_is_x11_popup(Client *c);
@@ -434,6 +435,7 @@ void client_add_jump_label_node(Client *c);
 uint32_t client_target_layer(Client *c);
 void client_sync_layer(Client *c);
 void client_add_group_bar(Client *c);
+bool client_wants_group_bar(Client *c);
 void client_update_group_bar_title(Client *c);
 void client_apply_group_bar_config(Client *c);
 void client_remove_group_bar(Client *c);
@@ -446,6 +448,10 @@ void client_set_group_mon(Client *c, Monitor *m);
 void client_set_group_config(Client *c);
 void client_group_detach(Client *c);
 void client_group_replace(Client *old, Client *new);
+Client *client_group_active(Client *c);
+Client *client_group_head(Client *c);
+Client *client_group_focused(Client *c);
+bool client_is_group_member(const Client *c);
 
 Client *client_chain_head(Client *c, size_t prev_off);
 void client_chain_unlink(Client *c, size_t prev_off, size_t next_off);

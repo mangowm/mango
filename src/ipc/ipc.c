@@ -568,7 +568,7 @@ cJSON *build_client_json(Client *c) {
 	cJSON_AddBoolToObject(obj, "is_xwayland", c->type == X11 ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowing", c->swallowing ? true : false);
 	cJSON_AddBoolToObject(obj, "is_swallowedby", c->swallowdby ? true : false);
-	cJSON_AddBoolToObject(obj, "is_group", c->group_prev || c->group_next);
+	cJSON_AddBoolToObject(obj, "is_group", client_is_group_member(c));
 	cJSON_AddBoolToObject(obj, "is_visible", c->mon && VISIBLEON(c, c->mon));
 	cJSON_AddBoolToObject(obj, "is_focused", c->isfocusing);
 	cJSON_AddBoolToObject(obj, "is_fullscreen", c->isfullscreen);

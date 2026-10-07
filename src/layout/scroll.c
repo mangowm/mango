@@ -743,10 +743,10 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		arrange_stack_vertical_node(heads[focus_index], target_geom, cur_gappih,
 									ctx);
 	} else {
-		bar_height = !root_client->isfullscreen && (root_client->group_prev ||
-													root_client->group_next)
-						 ? config.group_bar_height
-						 : 0;
+		bar_height =
+			!root_client->isfullscreen && client_wants_group_bar(root_client)
+				? config.group_bar_height
+				: 0;
 
 		target_geom.y = root_client->geom.y - bar_height;
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
@@ -762,11 +762,11 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		up_geom.height = max_client_height * cur->scroller_proportion;
 		vertical_scroll_adjust_fullandmax(cur->client, &up_geom);
 
-		bar_height = !heads[focus_index - i + 1]->client->isfullscreen &&
-							 (heads[focus_index - i + 1]->client->group_prev ||
-							  heads[focus_index - i + 1]->client->group_next)
-						 ? config.group_bar_height
-						 : 0;
+		bar_height =
+			!heads[focus_index - i + 1]->client->isfullscreen &&
+					client_wants_group_bar(heads[focus_index - i + 1]->client)
+				? config.group_bar_height
+				: 0;
 
 		up_geom.y = heads[focus_index - i + 1]->client->geom.y - cur_gappiv -
 					up_geom.height - bar_height;

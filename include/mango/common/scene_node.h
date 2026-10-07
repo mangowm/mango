@@ -33,7 +33,8 @@ void mango_scene_node_set_ignore_hit(struct wlr_scene_node *node,
  * accepts pointer input at (lx, ly), skipping any subtree whose payload has
  * ignore_hit set. `nx` / `ny` receive node-local coordinates and may be NULL.
  */
-struct wlr_scene_node *mango_scene_node_at(struct wlr_scene_node *node, double lx,
-										   double ly, double *nx, double *ny);
+struct wlr_scene_node *mango_scene_node_at(struct wlr_scene_node *node,
+										   double lx, double ly, double *nx,
+										   double *ny);
 
 #endif

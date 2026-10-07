@@ -180,6 +180,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `scroller_stack` | `left/right/up/down` | Move window inside/outside scroller stack by direction. |
 | `incgaps` | `+/-value` | Adjust gap size. |
 | `togglegaps` | - | Toggle gaps. |
+| `togglegroupbar` | - | Toggle the group bar on every tiled window. |
 |  `dwindle_toggle_split_direction` | - | Toggle split direction in dwindle layout. |
 | `dwindle_split_horizontal` | - | Set split window direction to horizontal in dwindle layout. |
 | `dwindle_split_vertical` | - | Set split window direction to vertical in dwindle layout. |

@@ -140,16 +140,18 @@ static void restore_nofile_limit(void) {
 
 static void increase_nofile_limit(void) {
 	if (getrlimit(RLIMIT_NOFILE, &original_nofile_rlimit) != 0) {
-		mango_error(true, WLR_ERROR, "Failed to bump max open files limit: "
-									 "getrlimit(NOFILE) failed");
+		mango_error(true, WLR_ERROR,
+					"Failed to bump max open files limit: "
+					"getrlimit(NOFILE) failed");
 		return;
 	}
 
 	struct rlimit new_rlimit = original_nofile_rlimit;
 	new_rlimit.rlim_cur = new_rlimit.rlim_max;
 	if (setrlimit(RLIMIT_NOFILE, &new_rlimit) != 0) {
-		mango_error(true, WLR_ERROR, "Failed to bump max open files limit: "
-									 "setrlimit(NOFILE) failed");
+		mango_error(true, WLR_ERROR,
+					"Failed to bump max open files limit: "
+					"setrlimit(NOFILE) failed");
 		mango_error(true, WLR_INFO, "Running with %d max open files",
 					(int)original_nofile_rlimit.rlim_cur);
 		return;

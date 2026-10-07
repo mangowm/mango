@@ -136,6 +136,12 @@ struct MangoServer {
 	bool start_drag_window;
 	int32_t last_apply_drag_time;
 
+	bool group_bar_drag_pending;
+	Client *group_bar_drag_client;
+	double group_bar_drag_x, group_bar_drag_y;
+	MangoBarDecoration *group_bar_hover;
+	bool drop_to_group;
+
 	/* Outputs / monitors */
 	struct wlr_output_layout *output_layout;
 	struct wlr_box scene_geometry;

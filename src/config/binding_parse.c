@@ -715,6 +715,8 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).i = atoi(arg_value);
 	} else if (strcmp(func_name, "togglegaps") == 0) {
 		func = toggle_gaps;
+	} else if (strcmp(func_name, "togglegroupbar") == 0) {
+		func = toggle_group_bar;
 	} else if (strcmp(func_name, "chvt") == 0) {
 		func = change_vt;
 		(*arg).ui = atoi(arg_value);

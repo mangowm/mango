@@ -565,11 +565,14 @@ MangoBarDecoration *mango_bar_decoration_create(void *cdata, uint32_t type,
 	}
 	mangobar->bg = wlr_scene_rect_create(mangobar->scene, 0, 0, (float[4]){0});
 	mangobar->scene_buffer = wlr_scene_buffer_create(mangobar->scene, NULL);
-	if (!border_ok || !mangobar->bg || !mangobar->scene_buffer) {
+	mangobar->close_buffer = wlr_scene_buffer_create(mangobar->scene, NULL);
+	if (!border_ok || !mangobar->bg || !mangobar->scene_buffer ||
+		!mangobar->close_buffer) {
 		wlr_scene_node_destroy(&mangobar->scene->node);
 		free(mangobar);
 		return NULL;
 	}
+	wlr_scene_node_set_enabled(&mangobar->close_buffer->node, false);
 
 	memcpy(mangobar->fg_color, data.fg_color, sizeof(mangobar->fg_color));
 	memcpy(mangobar->bg_color, data.bg_color, sizeof(mangobar->bg_color));
@@ -584,7 +587,7 @@ MangoBarDecoration *mango_bar_decoration_create(void *cdata, uint32_t type,
 	mangobar->padding_x = data.padding_x;
 	mangobar->padding_y = data.padding_y;
 	mangobar->font_desc =
-		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 10");
+		g_strdup(data.font_desc ? data.font_desc : "monospace Bold 13");
 
 	mangobar->target_width = width;
 	mangobar->target_height = height;
@@ -593,6 +596,17 @@ MangoBarDecoration *mango_bar_decoration_create(void *cdata, uint32_t type,
 	mangobar->node_data = cdata;
 
 	mangobar->cached_scale = -1.0f;
+
+	mangobar->close_color[0] = 0.68f;
+	mangobar->close_color[1] = 0.25f;
+	mangobar->close_color[2] = 0.12f;
+	mangobar->close_color[3] = 1.0f;
+	mangobar->close_hover_color[0] = 0.81f;
+	mangobar->close_hover_color[1] = 0.55f;
+	mangobar->close_hover_color[2] = 0.47f;
+	mangobar->close_hover_color[3] = 1.0f;
+	mangobar->close_x_color[0] = mangobar->close_x_color[1] =
+		mangobar->close_x_color[2] = mangobar->close_x_color[3] = 1.0f;
 
 	mango_scene_node_set(&mangobar->scene->node, mangobar->type, mangobar);
 	measure_init(&mangobar->measure);
@@ -607,6 +621,10 @@ void mango_bar_decoration_destroy(MangoBarDecoration *node) {
 	if (node->buffer) {
 		wlr_buffer_drop(&node->buffer->base);
 		node->buffer = NULL;
+	}
+	if (node->close_texture) {
+		wlr_buffer_drop(&node->close_texture->base);
+		node->close_texture = NULL;
 	}
 	if (node->scene) {
 		wlr_scene_node_destroy(&node->scene->node);
@@ -697,6 +715,105 @@ void mango_bar_decoration_set_size(MangoBarDecoration *node, int32_t width,
 	mango_bar_decoration_update(node, redraw_text, redraw_scale);
 }
 
+static bool close_button_box(const MangoBarDecoration *node, int32_t *out_x,
+							 int32_t *out_y, int32_t *out_size) {
+	if (!node->close_enabled || node->close_size <= 0 ||
+		node->target_width <= 0 || node->target_height <= 0)
+		return false;
+
+	int32_t size = node->close_size;
+	if (size > node->target_height)
+		size = node->target_height;
+	if (size > node->target_width)
+		size = node->target_width;
+	int32_t margin = node->close_margin;
+	if (margin > node->target_width - size)
+		margin = node->target_width - size;
+
+	*out_size = size;
+	*out_x = node->target_width - size - margin;
+	*out_y = (node->target_height - size) / 2;
+	return true;
+}
+
+static void close_button_render(MangoBarDecoration *node, int32_t size,
+								int32_t pixel, float scale, bool hover) {
+	cairo_surface_t *surface =
+		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, pixel, pixel);
+	if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+		cairo_surface_destroy(surface);
+		text_node_install(node->close_buffer, &node->close_texture, NULL, 0, 0);
+		return;
+	}
+
+	cairo_t *cr = cairo_create(surface);
+	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+	cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
+	cairo_paint(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+	double center = pixel / 2.0;
+	const float *circle = hover ? node->close_hover_color : node->close_color;
+	cairo_set_source_rgba(cr, circle[0], circle[1], circle[2], circle[3]);
+	cairo_arc(cr, center, center, center, 0, 2 * 3.14159265358979323846);
+	cairo_fill(cr);
+
+	double inset = pixel * 0.30;
+	double line_width = pixel * 0.12;
+	if (line_width < 1.0)
+		line_width = 1.0;
+	cairo_set_line_width(cr, line_width);
+	cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+	cairo_set_source_rgba(cr, node->close_x_color[0], node->close_x_color[1],
+						  node->close_x_color[2], node->close_x_color[3]);
+	cairo_move_to(cr, inset, inset);
+	cairo_line_to(cr, pixel - inset, pixel - inset);
+	cairo_move_to(cr, pixel - inset, inset);
+	cairo_line_to(cr, inset, pixel - inset);
+	cairo_stroke(cr);
+
+	cairo_surface_flush(surface);
+	cairo_destroy(cr);
+
+	text_node_install(node->close_buffer, &node->close_texture, surface, pixel,
+					  pixel);
+
+	node->close_cached_size = size;
+	node->close_cached_scale = scale;
+	node->close_cached_hover = hover;
+	node->close_cached_valid = true;
+}
+
+static void close_button_sync(MangoBarDecoration *node) {
+	if (!node || !node->close_buffer)
+		return;
+
+	int32_t x = 0, y = 0, size = 0;
+	if (!close_button_box(node, &x, &y, &size)) {
+		text_node_install(node->close_buffer, &node->close_texture, NULL, 0, 0);
+		node->close_cached_valid = false;
+		wlr_scene_node_set_enabled(&node->close_buffer->node, false);
+		return;
+	}
+
+	float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
+	int32_t pixel = (int32_t)(size * scale + 0.5f);
+	if (pixel < 1)
+		pixel = 1;
+
+	if (!node->close_cached_valid || node->close_cached_size != size ||
+		node->close_cached_scale != scale ||
+		node->close_cached_hover != node->close_hover) {
+		close_button_render(node, size, pixel, scale, node->close_hover);
+	}
+
+	wlr_scene_buffer_set_dest_size(node->close_buffer, size, size);
+	wlr_scene_node_set_position(&node->close_buffer->node, x, y);
+	wlr_scene_node_place_above(&node->close_buffer->node,
+							   &node->scene_buffer->node);
+	wlr_scene_node_set_enabled(&node->close_buffer->node, true);
+}
+
 void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 								 float scale) {
 	if (!node || !text)
@@ -759,6 +876,7 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 	}
 
 	bar_decoration_apply_geometry(node);
+	close_button_sync(node);
 }
 
 void mango_bar_decoration_set_focus(MangoBarDecoration *node, bool focused) {
@@ -783,6 +901,55 @@ void mango_bar_decoration_set_colors(MangoBarDecoration *node,
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
 		mango_bar_decoration_update(node, node->last_text, scale);
 	}
+}
+
+void mango_bar_decoration_set_close(MangoBarDecoration *node, bool enabled,
+									int32_t size, int32_t margin) {
+	if (!node)
+		return;
+
+	if (node->close_enabled == enabled && node->close_size == size &&
+		node->close_margin == margin)
+		return;
+
+	node->close_enabled = enabled;
+	node->close_size = size;
+	node->close_margin = margin;
+	close_button_sync(node);
+}
+
+void mango_bar_decoration_set_close_color(MangoBarDecoration *node,
+										  const float circle[4]) {
+	if (!node || !circle)
+		return;
+
+	memcpy(node->close_color, circle, sizeof(node->close_color));
+	for (int i = 0; i < 3; i++)
+		node->close_hover_color[i] = circle[i] + (1.0f - circle[i]) * 0.4f;
+	node->close_hover_color[3] = circle[3];
+
+	node->close_cached_valid = false;
+	close_button_sync(node);
+}
+
+void mango_bar_decoration_set_close_hover(MangoBarDecoration *node,
+										  bool hover) {
+	if (!node || node->close_hover == hover)
+		return;
+	node->close_hover = hover;
+	close_button_sync(node);
+}
+
+bool mango_bar_decoration_close_contains(MangoBarDecoration *node, double lx,
+										 double ly) {
+	if (!node)
+		return false;
+
+	int32_t x = 0, y = 0, size = 0;
+	if (!close_button_box(node, &x, &y, &size))
+		return false;
+
+	return lx >= x && lx < x + size && ly >= y && ly < y + size;
 }
 
 void mango_jump_label_node_apply_config(MangoJumpLabel *node,
@@ -832,7 +999,7 @@ void mango_bar_decoration_apply_config(MangoBarDecoration *node,
 
 	g_free(node->font_desc);
 	node->font_desc =
-		g_strdup(data->font_desc ? data->font_desc : "monospace Bold 10");
+		g_strdup(data->font_desc ? data->font_desc : "monospace Bold 13");
 
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
