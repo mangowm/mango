@@ -143,9 +143,6 @@ window_rule=is_named_scratchpad:1,width:1280,height:800,app_id:st-yazi
 window_rule=focused_opacity:0.8,app_id:firefox
 window_rule=unfocused_opacity:0.6,app_id:foot
 
-# Disable blur for selection tools
-window_rule=no_blur:1,app_id:slurp
-
 # Position windows relative to screen center
 window_rule=offset_x:20,offset_y:-30,width:800,height:600,app_id:alacritty
 
