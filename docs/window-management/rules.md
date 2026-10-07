@@ -36,7 +36,6 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 | `ignore_maximize` | integer | `0` / `1` (default 1) | Don't handle maximize request from client |
 | `ignore_minimize` | integer | `0` / `1` (default 1) | Don't handle minimize request from client |
 | `force_tiled_state` | integer | `0` / `1` | Deceive the window into thinking it is tiling, so it better adheres to assigned dimensions |
-| `noopenmaximized` | integer | `0` / `1` | Window does not open as maximized mode |
 | `single_scratchpad` | integer | `0` / `1` (default 1) | Only show one out of named scratchpads or the normal scratchpad |
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
 | `idle_inhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
