@@ -55,6 +55,13 @@ void mango_scene_node_set_ignore_hit(struct wlr_scene_node *node,
 	((MangoSceneNode *)node->data)->ignore_hit = ignore_hit;
 }
 
+bool mango_scene_node_get_ignore_hit(struct wlr_scene_node *node) {
+	if (!node || !node->data) {
+		return false;
+	}
+	return ((MangoSceneNode *)node->data)->ignore_hit;
+}
+
 /* Size of a scene node, mirroring wlroots' internal scene_node_get_size() for
  * the node kinds that can actually take pointer input. */
 static void scene_node_size(struct wlr_scene_node *node, int32_t *width,

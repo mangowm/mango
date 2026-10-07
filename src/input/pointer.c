@@ -2,6 +2,7 @@
 #include "mango/animation/client.h"
 #include "mango/common/input-event-codes.h"
 #include "mango/common/log.h"
+#include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
@@ -1145,14 +1146,18 @@ void pointer_end_grab_client(bool follow_pointer) {
 }
 
 static Client *group_bar_target_at(double x, double y, Client *ignore) {
-	bool scene_on = false, bar_on = false;
+	/* Borrow the transparency flag so the dragged window cannot swallow the
+	 * hit test aimed at the bar underneath it. */
+	bool scene_hit = false, bar_hit = false;
 
 	if (ignore) {
-		scene_on = ignore->scene->node.enabled;
-		wlr_scene_node_set_enabled(&ignore->scene->node, false);
+		scene_hit = mango_scene_node_get_ignore_hit(&ignore->scene->node);
+		mango_scene_node_set_ignore_hit(&ignore->scene->node, true);
 		if (ignore->group_bar) {
-			bar_on = ignore->group_bar->scene->node.enabled;
-			wlr_scene_node_set_enabled(&ignore->group_bar->scene->node, false);
+			bar_hit = mango_scene_node_get_ignore_hit(
+				&ignore->group_bar->scene->node);
+			mango_scene_node_set_ignore_hit(&ignore->group_bar->scene->node,
+											true);
 		}
 	}
 
@@ -1160,9 +1165,10 @@ static Client *group_bar_target_at(double x, double y, Client *ignore) {
 	node_at_point(x, y, NULL, NULL, NULL, &bar, NULL, NULL);
 
 	if (ignore) {
-		wlr_scene_node_set_enabled(&ignore->scene->node, scene_on);
+		mango_scene_node_set_ignore_hit(&ignore->scene->node, scene_hit);
 		if (ignore->group_bar)
-			wlr_scene_node_set_enabled(&ignore->group_bar->scene->node, bar_on);
+			mango_scene_node_set_ignore_hit(&ignore->group_bar->scene->node,
+											bar_hit);
 	}
 
 	Client *owner = (bar && bar->node_data) ? (Client *)bar->node_data : NULL;
@@ -1267,7 +1273,8 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	node_at_point(server.cursor->x, server.cursor->y, &surface, &c, NULL, &bar,
 				  &sx, &sy);
 
-	{
+	/* While a grab owns the pointer the bar under it is not really hovered. */
+	if (server.cursor_mode != CurMove && server.cursor_mode != CurResize) {
 		MangoBarDecoration *hover = NULL;
 		if (bar) {
 			double lx = server.cursor->x - bar->scene->node.x;

@@ -28,6 +28,9 @@ MangoSceneNode *mango_scene_node_find(struct wlr_scene_node *node);
 void mango_scene_node_set_ignore_hit(struct wlr_scene_node *node,
 									 bool ignore_hit);
 
+/* Current value of the pointer-transparency flag; false without a payload. */
+bool mango_scene_node_get_ignore_hit(struct wlr_scene_node *node);
+
 /*
  * Read-only equivalent of wlr_scene_node_at(): returns the topmost node that
  * accepts pointer input at (lx, ly), skipping any subtree whose payload has
