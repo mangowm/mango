@@ -2293,7 +2293,7 @@ void set_value_default() {
 
 	config.borderpx = 4;
 	config.group_bar_height = 33;
-	config.tab_bar_height = 25;
+	config.tab_bar_height = 33;
 	config.always_show_group_bar = 0;
 	config.group_bar_close_button_enable = 1;
 	config.group_bar_button_size = 16;

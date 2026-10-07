@@ -91,7 +91,7 @@ You can also color-code windows based on their state:
 | :--- | :--- | :--- |
 | `monocle_tab_mode` | `0` | Auto merge stacked windows into a tab in monocle layout. |
 | `deck_tab_mode` | `0` | Auto merge stack area windows into a tab in deck layout. |
-| `tab_bar_height` | `25` | Height of the auto tab bar. |
+| `tab_bar_height` | `33` | Height of the auto tab bar. |
 | `tab_bar_decorate_fg_color` | `0xc0caf5ff` | text color.
 | `tab_bar_decorate_bg_color` | `0x1a1b26ff` | background color.|
 | `tab_bar_decorate_focus_fg_color` | `0x7aa2f7ff` | text color for focus. |
