@@ -2290,7 +2290,6 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 		c->border[i] = wlr_scene_rect_create(c->scene, 0, 0,
 											 c->isurgent ? config.urgentcolor
 														 : config.bordercolor);
-		c->border[i]->node.data = c;
 	}
 
 	for (i = 0; i < 2; i++) {

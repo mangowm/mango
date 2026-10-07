@@ -714,7 +714,8 @@ int32_t move_resize(const Arg *arg) {
 				  NULL, NULL);
 	if (!c && bar && !bar->is_tab)
 		c = bar->node_data;
-	pointer_begin_move_resize(c, arg->ui, server.cursor->x, server.cursor->y);
+	pointer_begin_move_resize(c, arg->ui, server.cursor->x, server.cursor->y,
+							  0);
 	return 0;
 }
 

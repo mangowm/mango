@@ -398,6 +398,8 @@ typedef struct {
 	int32_t warpcursor;
 	int32_t drag_corner;
 	int32_t drag_warp_cursor;
+	int32_t enable_border_resize;
+	int32_t border_resize_size;
 
 	/* keyboard */
 	int32_t repeat_rate;

@@ -130,8 +130,12 @@ struct MangoServer {
 
 	/* Drag / resize */
 	Client *grab_client, *drop_client;
-	int32_t resize_corner;
-	int32_t grab_offset_x, grab_offset_y;			  /* client-relative */
+	uint32_t resize_edge;
+	uint32_t hover_resize_edge;
+	bool hover_resize_floating;
+	bool grab_is_border_resize;			   /* grab started by a border click */
+	int32_t grab_offset_x, grab_offset_y;  /* client-relative */
+	double grab_pointer_x, grab_pointer_y; /* pointer at grab start */
 	int32_t drag_begin_cursor_x, drag_begin_cursor_y; /* client-relative */
 	bool start_drag_window;
 	int32_t last_apply_drag_time;
