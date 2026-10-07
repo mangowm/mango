@@ -1299,6 +1299,7 @@ void tag_gather_reset_slot(Monitor *m, uint32_t tag) {
 			(tr->id_wildcard || tr->id == (int32_t)tag))
 			tag_rule_apply_to_slot(m, tr, tag);
 	}
+	m->pertag->ltidxs[tag] = m->pertag->config_ltidxs[tag];
 }
 
 // move pertag state from src to dst, then reset src.
@@ -1315,6 +1316,7 @@ void tag_gather_move_pertag(Monitor *m, uint32_t dst, uint32_t src) {
 	m->pertag->scroller_ignore_proportion_single[dst] =
 		m->pertag->scroller_ignore_proportion_single[src];
 	m->pertag->dwindle_root[dst] = m->pertag->dwindle_root[src];
+	m->pertag->config_ltidxs[dst] = m->pertag->config_ltidxs[src];
 	m->pertag->ltidxs[dst] = m->pertag->ltidxs[src];
 	m->pertag->scroller_state[dst] = m->pertag->scroller_state[src];
 	tag_gather_reset_slot(m, src);

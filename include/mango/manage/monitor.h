@@ -103,6 +103,7 @@ struct Pertag {
 	float scroller_default_proportion_single[PERTAG_SLOTS];
 	int32_t scroller_ignore_proportion_single[PERTAG_SLOTS];
 	struct DwindleNode *dwindle_root[PERTAG_SLOTS];
+	const Layout *config_ltidxs[PERTAG_SLOTS];
 	const Layout *ltidxs[PERTAG_SLOTS];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
 };
