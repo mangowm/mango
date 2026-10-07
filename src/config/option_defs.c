@@ -2312,7 +2312,7 @@ void set_value_default() {
 	config.drag_corner = 3;
 	config.drag_warp_cursor = 1;
 	config.enable_border_resize = 1;
-	config.border_resize_size = 4;
+	config.border_resize_size = 10;
 
 	config.repeat_rate = 25;
 	config.repeat_delay = 600;
@@ -2605,7 +2605,7 @@ void override_config(void) {
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	config.enable_border_resize = CLAMP_INT(config.enable_border_resize, 0, 1);
-	config.border_resize_size = CLAMP_INT(config.border_resize_size, 0, 200);
+	config.border_resize_size = CLAMP_INT(config.border_resize_size, 0, 50);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
 	config.focusdir_only_zone_overlap =
 		CLAMP_INT(config.focusdir_only_zone_overlap, 0, 1);
