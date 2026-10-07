@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -123,6 +124,39 @@
 
 void handle_quit_signal(int32_t signo);
 void unset_activation_env(void);
+
+/* Raise the soft NOFILE limit to the hard limit at startup, and restore it in
+ * forked children so they keep the original limit. */
+static struct rlimit original_nofile_rlimit = {0};
+
+static void restore_nofile_limit(void) {
+	if (original_nofile_rlimit.rlim_cur == 0)
+		return;
+	if (setrlimit(RLIMIT_NOFILE, &original_nofile_rlimit) != 0)
+		mango_error(true, WLR_ERROR,
+					"Failed to restore max open files limit: "
+					"setrlimit(NOFILE) failed");
+}
+
+static void increase_nofile_limit(void) {
+	if (getrlimit(RLIMIT_NOFILE, &original_nofile_rlimit) != 0) {
+		mango_error(true, WLR_ERROR, "Failed to bump max open files limit: "
+									 "getrlimit(NOFILE) failed");
+		return;
+	}
+
+	struct rlimit new_rlimit = original_nofile_rlimit;
+	new_rlimit.rlim_cur = new_rlimit.rlim_max;
+	if (setrlimit(RLIMIT_NOFILE, &new_rlimit) != 0) {
+		mango_error(true, WLR_ERROR, "Failed to bump max open files limit: "
+									 "setrlimit(NOFILE) failed");
+		mango_error(true, WLR_INFO, "Running with %d max open files",
+					(int)original_nofile_rlimit.rlim_cur);
+		return;
+	}
+
+	pthread_atfork(NULL, NULL, restore_nofile_limit);
+}
 
 void handle_signal(int32_t signo) {
 	if (signo == SIGCHLD)
@@ -928,6 +962,8 @@ int32_t main(int32_t argc, char *argv[]) {
 
 	if (check_config)
 		return parse_config() ? EXIT_SUCCESS : EXIT_FAILURE;
+
+	increase_nofile_limit();
 
 	/* Wayland requires XDG_RUNTIME_DIR for creating its communications
 	 * socket
