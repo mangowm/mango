@@ -168,11 +168,11 @@ overlay_color = 0x14a57cff
 "ALT+Up" = "focusdir,up"
 "ALT+Down" = "focusdir,down"
 
-# swap window
-"SUPER+SHIFT+Up" = "exchange_client,up"
-"SUPER+SHIFT+Down" = "exchange_client,down"
-"SUPER+SHIFT+Left" = "exchange_client,left"
-"SUPER+SHIFT+Right" = "exchange_client,right"
+# move window
+"SUPER+SHIFT+Up" = "move_client,up"
+"SUPER+SHIFT+Down" = "move_client,down"
+"SUPER+SHIFT+Left" = "move_client,left"
+"SUPER+SHIFT+Right" = "move_client,right"
 
 # switch window status
 "SUPER+g" = "toggleglobal,"
