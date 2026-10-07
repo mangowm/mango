@@ -1377,6 +1377,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			return;
 		} else {
 			resize_tile_client(server.grab_client, true, 0, 0, time);
+			return;
 		}
 	}
 
