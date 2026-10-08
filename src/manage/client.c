@@ -548,7 +548,8 @@ void client_update_xwayland_dest_size(Client *c) {
 	}
 #endif
 }
-uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
+uint32_t client_set_size(Client *c, uint32_t width, uint32_t height,
+						 bool force_configure) {
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
 		struct wlr_xwayland_surface *surface = c->surface.xwayland;
@@ -571,19 +572,21 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
 			height = size_hints->min_height;
 
 		/*
-		 * Compare against the geometry the X window really has. The wl_surface
-		 * is resized to the request as soon as it is committed, while the
-		 * window keeps its old size until it applies the configure, so
-		 * deduplicating on the surface made a window that never applied our
-		 * configure look "already correct" and no configure was ever sent
-		 * again.
+		 * Skip an identical repeat: arrange reflows the same box many times
+		 * while a window is opening. A client ConfigureRequest bypasses this,
+		 * it must be answered even when the box is unchanged.
 		 */
-		if ((int32_t)surface->width == width &&
-			(int32_t)surface->height == height && (int32_t)surface->x == xx &&
-			(int32_t)surface->y == xy) {
+		if (!force_configure && c->xwl_req_valid && c->xwl_req_x == xx &&
+			c->xwl_req_y == xy && c->xwl_req_w == width &&
+			c->xwl_req_h == height) {
 			return 0;
 		}
 
+		c->xwl_req_valid = true;
+		c->xwl_req_x = xx;
+		c->xwl_req_y = xy;
+		c->xwl_req_w = width;
+		c->xwl_req_h = height;
 		wlr_xwayland_surface_configure(c->surface.xwayland, xx, xy, width,
 									   height);
 		return 1;
@@ -1985,6 +1988,13 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 }
 
 void init_client_properties(Client *c) {
+#ifdef XWAYLAND
+	c->xwl_req_valid = false;
+	c->xwl_req_x = 0;
+	c->xwl_req_y = 0;
+	c->xwl_req_w = 0;
+	c->xwl_req_h = 0;
+#endif
 	c->is_group_focus = false;
 	c->group_prev = NULL;
 	c->group_next = NULL;
@@ -2141,7 +2151,7 @@ static void client_configure_size(Client *c, struct wlr_box geo, int32_t bw) {
 		return;
 
 	client_set_size(c, (uint32_t)((int32_t)geo.width - 2 * bw),
-					(uint32_t)((int32_t)geo.height - 2 * bw));
+					(uint32_t)((int32_t)geo.height - 2 * bw), false);
 }
 
 static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
@@ -4678,6 +4688,13 @@ void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 		return;
 	}
 
+	/*
+	 * The request must be answered even when the assigned box did not change,
+	 * so force this resize and drop the dedup record in case it never reaches
+	 * client_set_size().
+	 */
+	c->xwl_req_valid = false;
+
 	if (c->isfloating && c != server.grab_client) {
 		new_geo.x = new_geo.x - c->bw;
 		new_geo.y = new_geo.y - c->bw;
@@ -4685,13 +4702,16 @@ void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 		new_geo.height = new_geo.height + c->bw * 2;
 		fix_xwayland_coordinate(&new_geo);
 
-		resize(c,
-			   (struct wlr_box){.x = new_geo.x,
-								.y = new_geo.y,
-								.width = new_geo.width,
-								.height = new_geo.height},
-			   0);
+		resize_apply(c,
+					 (struct wlr_box){.x = new_geo.x,
+									  .y = new_geo.y,
+									  .width = new_geo.width,
+									  .height = new_geo.height},
+					 (ResizeOpts){.force_configure = true});
 	} else {
+		/* The layout ignores the request; answer with the box it assigned and
+		 * re-run arrange. */
+		resize_apply(c, c->geom, (ResizeOpts){.force_configure = true});
 		arrange(c->mon, false, false);
 	}
 }

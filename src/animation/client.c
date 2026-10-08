@@ -1394,8 +1394,9 @@ void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	}
 
 	if (!c->mon->isoverview)
-		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
-											  c->geom.height - 2 * c->bw);
+		c->configure_serial =
+			client_set_size(c, c->geom.width - 2 * c->bw,
+							c->geom.height - 2 * c->bw, opts.force_configure);
 
 	if (c->configure_serial != 0)
 		c->mon->resizing_count_pending++;

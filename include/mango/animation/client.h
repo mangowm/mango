@@ -56,6 +56,8 @@ typedef struct ResizeOpts {
 	bool interact; // Interactive resize (window resized by mouse drag).
 	bool skip_ov_enter_anim; // Pre-arrangement stage: skip the overview enter
 							 // zoom.
+	bool force_configure; // Must be sent even if the box did not change (client
+						  // ConfigureRequest).
 } ResizeOpts;
 
 void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts);
