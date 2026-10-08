@@ -3,6 +3,7 @@
 
 #include "mango/common/types.h"
 #include "mango/dispatch/bind.h"
+#include <stdbool.h>
 #include <wayland-server-core.h>
 
 #define SW_PAD 6

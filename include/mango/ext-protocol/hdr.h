@@ -5,6 +5,7 @@
 #include "mango/config/parse.h"
 #include "mango/dispatch/bind.h"
 #include <drm_fourcc.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

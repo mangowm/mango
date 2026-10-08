@@ -2,6 +2,7 @@
 #define __ANIMATION_LAYER_H__ 1
 
 #include "mango/common/types.h"
+#include <stdbool.h>
 #include <wlr/util/box.h>
 
 void layer_actual_size(LayerSurface *l, int32_t *width, int32_t *height);

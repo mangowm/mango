@@ -5,6 +5,7 @@
 #include "mango/config/parse.h"
 #include "mango/config/preset.h"
 #include <limits.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_output.h>

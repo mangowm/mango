@@ -3,6 +3,7 @@
 
 /* Custom xdg-output: reports physical coordinates/sizes to XWayland when
  * xwayland_ignore_scale is set. */
+#include <stdbool.h>
 #include <wayland-server-core.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>

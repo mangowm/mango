@@ -3,6 +3,7 @@
 
 #include "mango/config/parse.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 
 typedef enum {

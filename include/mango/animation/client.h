@@ -3,6 +3,7 @@
 
 #include "mango/animation/common.h"
 #include "mango/common/types.h"
+#include <stdbool.h>
 
 bool client_is_ignore_output_clip(Client *c);
 struct ivec2 compute_edge_offsets(Client *c);

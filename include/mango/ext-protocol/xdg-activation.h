@@ -4,6 +4,7 @@
 /*
  * xdg-activation-v1
  */
+#include <stdbool.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 
 /* Tracks a wlr token so we can check auth later. */

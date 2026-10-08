@@ -2,6 +2,7 @@
 #define __BIND_H__ 1
 
 #include "mango/common/types.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 /* The generic argument carried by a binding action. */

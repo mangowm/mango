@@ -5,6 +5,7 @@
 #include "mango/common/types.h"
 #include "mango/config/parse.h"
 #include "mango/draw/dim-node.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
