@@ -60,8 +60,7 @@ typedef struct ResizeOpts {
 						  // ConfigureRequest).
 } ResizeOpts;
 
-void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts);
-void resize(Client *c, struct wlr_box geo, int32_t interact);
+void resize(Client *c, struct wlr_box geo, ResizeOpts opts);
 bool client_draw_fadeout_frame(Client *c);
 void client_set_focused_opacity_animation(Client *c);
 void client_set_unfocused_opacity_animation(Client *c);

@@ -374,7 +374,7 @@ void overview_restore(Client *c, const Arg *arg) {
 	if (c->isfloating) {
 		// XRaiseWindow(display, c->win); // Raise the floating window to the
 		// top
-		resize(c, c->overview_backup_geom, 0);
+		resize(c, c->overview_backup_geom, (ResizeOpts){.interact = 0});
 	} else if (c->isfullscreen || c->ismaximizescreen) {
 		if (want_restore_fullscreen(c) && c->ismaximizescreen) {
 			client_set_maximize_screen(c, 1, false);
@@ -388,7 +388,7 @@ void overview_restore(Client *c, const Arg *arg) {
 	} else {
 		if (c->is_restoring_from_ov) {
 			c->is_restoring_from_ov = false;
-			resize(c, c->overview_backup_geom, 0);
+			resize(c, c->overview_backup_geom, (ResizeOpts){.interact = 0});
 		}
 	}
 

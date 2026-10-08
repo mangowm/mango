@@ -1070,7 +1070,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 			if (client_is_x11(c) && c->mon == m) {
 				xwayland_apply_scale(c);
 				if (client_surface(c)->mapped)
-					resize(c, c->geom, 0);
+					resize(c, c->geom, (ResizeOpts){.interact = 0});
 			}
 #endif
 			// floating window position auto adjust the change of monitor
@@ -1080,7 +1080,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 				c->geom.y += mon_pos_offsety;
 				c->float_geom = c->geom;
 				if (VISIBLEON(c, m))
-					resize(c, c->geom, 1);
+					resize(c, c->geom, (ResizeOpts){.interact = 1});
 			}
 
 			// restore window to old monitor
@@ -1111,7 +1111,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 		arrange(m, false, false);
 		/* make sure fullscreen clients have the right size */
 		if ((c = client_focus_top(m)) && c->isfullscreen)
-			resize(c, m->m, 0);
+			resize(c, m->m, (ResizeOpts){.interact = 0});
 
 		config_head->state.x = m->m.x;
 		config_head->state.y = m->m.y;

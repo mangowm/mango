@@ -1842,7 +1842,7 @@ void apply_window_snap(Client *c) {
 	}
 
 	c->float_geom = c->geom;
-	resize(c, c->geom, 0);
+	resize(c, c->geom, (ResizeOpts){.interact = 0});
 }
 /*
  * Client management: window lifecycle, rules, focus, tiled/floating/fullscreen
@@ -2339,7 +2339,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
-	resize(c, c->geom, 0);
+	resize(c, c->geom, (ResizeOpts){.interact = 0});
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 
@@ -2420,7 +2420,7 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 	if (c == server.grab_client || !c->dirty)
 		return;
 
-	resize(c, c->geom, 0);
+	resize(c, c->geom, (ResizeOpts){.interact = 0});
 
 	new_geo = &c->surface.xdg->geometry;
 	c->xdg_geo_x = new_geo->x;
@@ -3116,7 +3116,7 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 	if (m) {
 		/* Make sure window actually overlaps with the monitor */
 		reset_foreign_tolevel(c, oldmon, m);
-		resize(c, c->geom, 0);
+		resize(c, c->geom, (ResizeOpts){.interact = 0});
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
 		client_set_floating(c, c->isfloating);
@@ -3224,9 +3224,9 @@ void client_set_floating(Client *c, int32_t floating) {
 				c->float_geom =
 					client_center_geometry(c, c->mon, c->float_geom, 0, 0);
 			}
-			resize(c, c->float_geom, 0);
+			resize(c, c->float_geom, (ResizeOpts){.interact = 0});
 		} else {
-			resize(c, target_box, 0);
+			resize(c, target_box, (ResizeOpts){.interact = 0});
 		}
 
 		c->need_float_size_reduce = 0;
@@ -3298,7 +3298,7 @@ void client_apply_fullscreen(
 
 		c->bw = 0;
 		if (!is_scroller_layout(c->mon) || c->isfloating)
-			resize(c, c->mon->m, 1);
+			resize(c, c->mon->m, (ResizeOpts){.interact = 1});
 
 	} else {
 		c->bw = c->no_border ? 0 : config.borderpx;
@@ -3370,7 +3370,7 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 		}
 
 		if (!is_scroller_layout(c->mon) || c->isfloating)
-			resize(c, maximizescreen_box, 0);
+			resize(c, maximizescreen_box, (ResizeOpts){.interact = 0});
 	} else {
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
@@ -3405,7 +3405,7 @@ void reset_maximizescreen_size(Client *c) {
 		geom.y += config.group_bar_height;
 	}
 
-	resize(c, geom, 0);
+	resize(c, geom, (ResizeOpts){.interact = 0});
 }
 
 void set_minimized(Client *c) {
@@ -3547,7 +3547,7 @@ void show_scratchpad(Client *c) {
 		c->float_geom = c->geom = c->animainit_geom = c->animation.current =
 			client_center_geometry(c, c->mon, c->geom, 0, 0);
 		c->iscustomsize = 1;
-		resize(c, c->geom, 0);
+		resize(c, c->geom, (ResizeOpts){.interact = 0});
 	}
 
 	client_reparent_group(c);
@@ -3583,13 +3583,13 @@ bool switch_scratchpad_client_state(Client *c) {
 			c->tags = get_tags_first_tag(
 				server.selected_monitor
 					->tagset[server.selected_monitor->seltags]);
-			resize(c, c->float_geom, 0);
+			resize(c, c->float_geom, (ResizeOpts){.interact = 0});
 			arrange(server.selected_monitor, false, false);
 			client_focus(c, 1);
 			c->scratchpad_switching_mon = false;
 			return true;
 		} else {
-			resize(c, c->float_geom, 0);
+			resize(c, c->float_geom, (ResizeOpts){.interact = 0});
 			c->scratchpad_switching_mon = false;
 		}
 	}
@@ -4038,7 +4038,7 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact,
 
 	if ((!c->isfullscreen && !c->ismaximizescreen) ||
 		is_scroller_layout(c->mon)) {
-		resize(c, geo, interact);
+		resize(c, geo, (ResizeOpts){.interact = interact});
 	}
 }
 
@@ -4702,16 +4702,16 @@ void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 		new_geo.height = new_geo.height + c->bw * 2;
 		fix_xwayland_coordinate(&new_geo);
 
-		resize_apply(c,
-					 (struct wlr_box){.x = new_geo.x,
-									  .y = new_geo.y,
-									  .width = new_geo.width,
-									  .height = new_geo.height},
-					 (ResizeOpts){.force_configure = true});
+		resize(c,
+			   (struct wlr_box){.x = new_geo.x,
+								.y = new_geo.y,
+								.width = new_geo.width,
+								.height = new_geo.height},
+			   (ResizeOpts){.force_configure = true});
 	} else {
 		/* The layout ignores the request; answer with the box it assigned and
 		 * re-run arrange. */
-		resize_apply(c, c->geom, (ResizeOpts){.force_configure = true});
+		resize(c, c->geom, (ResizeOpts){.force_configure = true});
 		arrange(c->mon, false, false);
 	}
 }

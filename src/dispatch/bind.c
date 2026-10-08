@@ -755,7 +755,7 @@ int32_t move_window(const Arg *arg) {
 
 	c->iscustomsize = 1;
 	c->float_geom = c->geom;
-	resize(c, c->geom, 0);
+	resize(c, c->geom, (ResizeOpts){.interact = 0});
 	return 0;
 }
 
@@ -833,7 +833,7 @@ int32_t resize_window(const Arg *arg) {
 
 	c->iscustomsize = 1;
 	c->float_geom = c->geom;
-	resize(c, c->geom, 0);
+	resize(c, c->geom, (ResizeOpts){.interact = 0});
 	config.animations = animations_state_backup;
 	return 0;
 }
@@ -1147,7 +1147,7 @@ int32_t smart_move_window(const Arg *arg) {
 	c->float_geom = (struct wlr_box){
 		.x = nx, .y = ny, .width = c->geom.width, .height = c->geom.height};
 	c->iscustomsize = 1;
-	resize(c, c->float_geom, 1);
+	resize(c, c->float_geom, (ResizeOpts){.interact = 1});
 	return 0;
 }
 
@@ -1225,7 +1225,7 @@ int32_t smart_resize_window(const Arg *arg) {
 	c->float_geom = (struct wlr_box){
 		.x = c->geom.x, .y = c->geom.y, .width = nw, .height = nh};
 	c->iscustomsize = 1;
-	resize(c, c->float_geom, 1);
+	resize(c, c->float_geom, (ResizeOpts){.interact = 1});
 	return 0;
 }
 
@@ -1241,7 +1241,7 @@ int32_t center_window(const Arg *arg) {
 	if (c->isfloating) {
 		c->float_geom = client_center_geometry(c, c->mon, c->geom, 0, 0);
 		c->iscustomsize = 1;
-		resize(c, c->float_geom, 1);
+		resize(c, c->float_geom, (ResizeOpts){.interact = 1});
 		return 0;
 	}
 
@@ -1530,7 +1530,7 @@ int32_t tag_monitor(const Arg *arg) {
 		target = get_tags_first_tag(c->tags);
 		client_switch_view(&(Arg){.ui = target}, true);
 		client_focus(c, 1);
-		resize(c, c->geom, 1);
+		resize(c, c->geom, (ResizeOpts){.interact = 1});
 	} else {
 		set_selected_monitor(c->mon);
 		target = get_tags_first_tag(c->tags);

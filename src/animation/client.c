@@ -1318,7 +1318,7 @@ void client_set_pending_state(Client *c) {
 	client_commit(c);
 	c->dirty = true;
 }
-void resize_apply(Client *c, struct wlr_box geo, ResizeOpts opts) {
+void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	if (!c || !c->mon || !client_surface(c)->mapped)
 		return;
 
@@ -1461,10 +1461,6 @@ bool client_draw_fadeout_frame(Client *c) {
 
 	fadeout_client_animation_next_tick(c);
 	return true;
-}
-
-void resize(Client *c, struct wlr_box geo, int32_t interact) {
-	resize_apply(c, geo, (ResizeOpts){.interact = interact});
 }
 
 void client_set_focused_opacity_animation(Client *c) {

@@ -91,7 +91,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 			c->animainit_geom.x = c->animation.current.x;
 			c->animainit_geom.y = c->animation.current.y;
 		}
-		resize_apply(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
+		resize(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
 		return;
 	}
 
@@ -108,7 +108,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 			c->animainit_geom.x = c->animation.current.x;
 			c->animainit_geom.y = c->animation.current.y;
 		}
-		resize_apply(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
+		resize(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
 		return;
 	}
 
@@ -123,7 +123,7 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 	c->animation.tag_from_rule = false;
 	c->animation.tagouting = false;
 	c->animation.tagouted = false;
-	resize_apply(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
+	resize(c, c->geom, (ResizeOpts){.skip_ov_enter_anim = true});
 }
 
 void set_tagout_animation(Monitor *m, Client *c) {
@@ -151,7 +151,7 @@ void set_tagout_animation(Monitor *m, Client *c) {
 									   c->geom.y - c->mon->m.height)
 						   : c->animation.current.y;
 
-		resize(c, c->geom, 0);
+		resize(c, c->geom, (ResizeOpts){.interact = 0});
 	} else {
 		c->pending = c->geom;
 		c->pending.x = config.tag_animation_direction == VERTICAL
@@ -162,7 +162,7 @@ void set_tagout_animation(Monitor *m, Client *c) {
 						   ? MANGO_MAX(c->mon->m.y + c->mon->m.height,
 									   c->geom.y + c->mon->m.height)
 						   : c->animation.current.y;
-		resize(c, c->geom, 0);
+		resize(c, c->geom, (ResizeOpts){.interact = 0});
 	}
 }
 void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
@@ -186,7 +186,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 			c->animation.tagining = false;
 			c->pending = c->geom;
 			c->pending.y = c->mon->m.y - c->geom.height;
-			resize(c, c->geom, 0);
+			resize(c, c->geom, (ResizeOpts){.interact = 0});
 		} else {
 			c->animation.running = false;
 			c->animation.tagouting = false;
@@ -207,7 +207,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 			c->animation.tagining = false;
 			c->pending = c->geom;
 			c->pending.y = c->mon->m.y - c->geom.height;
-			resize(c, c->geom, 0);
+			resize(c, c->geom, (ResizeOpts){.interact = 0});
 		} else {
 			c->animation.running = false;
 			c->animation.tagouting = false;

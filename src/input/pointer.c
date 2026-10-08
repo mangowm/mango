@@ -981,7 +981,7 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 
 	gc->float_geom = box;
 
-	resize(gc, box, 1);
+	resize(gc, box, (ResizeOpts){.interact = 1});
 	server.grab_offset_x += cdx;
 	server.grab_offset_y += cdy;
 }
@@ -1019,7 +1019,7 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 		gc->geom.y = (int32_t)round(y) - 150;
 		gc->geom.width = 300;
 		gc->geom.height = 300;
-		resize(gc, gc->geom, 1);
+		resize(gc, gc->geom, (ResizeOpts){.interact = 1});
 	}
 
 	switch (server.cursor_mode = mode) {
@@ -1362,7 +1362,8 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			client_set_drop_area(server.drop_client);
 			server.drop_client = NULL;
 		}
-		resize(server.grab_client, server.grab_client->float_geom, 1);
+		resize(server.grab_client, server.grab_client->float_geom,
+			   (ResizeOpts){.interact = 1});
 		return;
 	} else if (server.cursor_mode == CurResize) {
 		if (server.grab_client->isfloating) {
