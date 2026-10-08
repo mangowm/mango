@@ -4635,7 +4635,7 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 											   void *data) {
 	Client *c = wl_container_of(listener, c, configure);
-	if (!c || client_is_parked(c))
+	if (!c)
 		return;
 	struct wlr_xwayland_surface_configure_event *event = data;
 	struct wlr_box new_geo;
@@ -4655,6 +4655,12 @@ void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 									   xgeo.width, xgeo.height);
 		return;
 	}
+
+	/* The client is parked (e.g. it unmapped itself and is about to be
+	 * re-mapped). Its configure request must still be answered above, but there
+	 * is nothing to lay out until it is mapped again. */
+	if (client_is_parked(c))
+		return;
 
 	if (client_is_unmanaged(c)) {
 		struct wlr_box xgeo = new_geo;
