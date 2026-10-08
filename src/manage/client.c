@@ -552,7 +552,6 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
 		struct wlr_xwayland_surface *surface = c->surface.xwayland;
-		struct wlr_surface_state *state = &surface->surface->current;
 
 		/* Configure uses physical sizes (see client_get_x11_geometry). */
 		struct wlr_box xgeo;
@@ -562,27 +561,6 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
 		int32_t xx = xgeo.x;
 		int32_t xy = xgeo.y;
 
-		if ((int32_t)state->width == xw && (int32_t)state->height == xh &&
-			(int32_t)c->surface.xwayland->x == xx &&
-			(int32_t)c->surface.xwayland->y == xy) {
-			return 0;
-		}
-
-		/*
-		 * Until the client acks, state does not update; deduplicate using the
-		 * already-requested parameters so identical configures are not resent,
-		 * avoiding repeated client re-renders/ uploads.
-		 */
-		if (c->xwl_req_valid && c->xwl_req_x == xx && c->xwl_req_y == xy &&
-			c->xwl_req_w == xw && c->xwl_req_h == xh) {
-			return 0;
-		}
-		c->xwl_req_valid = true;
-		c->xwl_req_x = xx;
-		c->xwl_req_y = xy;
-		c->xwl_req_w = xw;
-		c->xwl_req_h = xh;
-
 		xcb_size_hints_t *size_hints = surface->size_hints;
 		int32_t width = xw;
 		int32_t height = xh;
@@ -591,6 +569,20 @@ uint32_t client_set_size(Client *c, uint32_t width, uint32_t height) {
 			width = size_hints->min_width;
 		if (size_hints && xh < (int32_t)size_hints->min_height)
 			height = size_hints->min_height;
+
+		/*
+		 * Compare against the geometry the X window really has. The wl_surface
+		 * is resized to the request as soon as it is committed, while the
+		 * window keeps its old size until it applies the configure, so
+		 * deduplicating on the surface made a window that never applied our
+		 * configure look "already correct" and no configure was ever sent
+		 * again.
+		 */
+		if ((int32_t)surface->width == width &&
+			(int32_t)surface->height == height && (int32_t)surface->x == xx &&
+			(int32_t)surface->y == xy) {
+			return 0;
+		}
 
 		wlr_xwayland_surface_configure(c->surface.xwayland, xx, xy, width,
 									   height);
@@ -1988,13 +1980,6 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 }
 
 void init_client_properties(Client *c) {
-#ifdef XWAYLAND
-	c->xwl_req_valid = false;
-	c->xwl_req_x = 0;
-	c->xwl_req_y = 0;
-	c->xwl_req_w = 0;
-	c->xwl_req_h = 0;
-#endif
 	c->is_group_focus = false;
 	c->group_prev = NULL;
 	c->group_next = NULL;

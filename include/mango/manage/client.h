@@ -110,14 +110,6 @@ struct Client {
 	struct wlr_box xwl_clip; /* Most recent logical clip area of the XWayland
 								root surface. */
 	bool xwl_clip_active;	 /* Whether source_box clipping is active. */
-	/*
-	 * X11 configure deduplication: until the client acks, surface->current is
-	 * not updated, so repeated arrange calls resend identical configures and
-	 * force clients to re-render/re-upload. Record the most recently requested
-	 * physical size/position here and skip configure if it has not changed.
-	 */
-	int32_t xwl_req_x, xwl_req_y, xwl_req_w, xwl_req_h;
-	bool xwl_req_valid;
 #endif
 	uint32_t bw;
 	uint32_t tags, oldtags;
