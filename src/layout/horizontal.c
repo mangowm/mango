@@ -616,6 +616,11 @@ static void monocle_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t cur_gappov = server.enable_gaps ? m->gappov : 0;
 	int32_t cur_gappoh = server.enable_gaps ? m->gappoh : 0;
 
+	if (config.monocle_no_gap) {
+		cur_gappoh = 0;
+		cur_gappov = 0;
+	}
+
 	cur_gappoh = config.smartgaps && m->visible_fake_tiling_clients == 1
 					 ? 0
 					 : cur_gappoh;

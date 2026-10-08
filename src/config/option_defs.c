@@ -210,6 +210,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->auto_reload_config = atoi(value);
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
+	} else if (strcmp(key, "monocle_no_border") == 0) {
+		config->monocle_no_border = atoi(value);
+	} else if (strcmp(key, "monocle_no_gap") == 0) {
+		config->monocle_no_gap = atoi(value);
 	} else if (strcmp(key, "snap_distance") == 0) {
 		config->snap_distance = atoi(value);
 	} else if (strcmp(key, "enable_floating_snap") == 0) {
@@ -2277,6 +2281,8 @@ void set_value_default() {
 	config.allow_lock_transparent = 0;
 	config.auto_reload_config = 1;
 	config.no_border_when_single = 0;
+	config.monocle_no_border = 0;
+	config.monocle_no_gap = 0;
 	config.snap_distance = 30;
 	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
@@ -2621,6 +2627,8 @@ void override_config(void) {
 	config.cursor_size = CLAMP_INT(config.cursor_size, 4, 512);
 	config.no_border_when_single =
 		CLAMP_INT(config.no_border_when_single, 0, 1);
+	config.monocle_no_border = CLAMP_INT(config.monocle_no_border, 0, 1);
+	config.monocle_no_gap = CLAMP_INT(config.monocle_no_gap, 0, 1);
 	config.cursor_hide_timeout =
 		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
 	config.cursor_hide_on_keypress =

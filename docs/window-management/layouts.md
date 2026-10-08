@@ -118,6 +118,44 @@ dwindle_drop_simple_split=1
 
 ---
 
+## Monocle Layout
+
+The Monocle layout shows a single window at a time, with the other windows on the tag stacked behind it.
+
+### Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `monocle_tab_mode` | `1` | Auto merge stacked windows into a tab in monocle layout. |
+| `monocle_no_border` | `0` | Remove window borders from tiled windows (including maximized ones) while the monocle layout is active. |
+| `monocle_no_gap` | `0` | Remove gaps around tiled windows (including maximized ones) while the monocle layout is active. |
+
+```ini
+# Example monocle configuration
+monocle_tab_mode=1
+monocle_no_border=0
+monocle_no_gap=0
+```
+
+---
+
+## Deck Layout
+
+The Deck layout keeps the master area visible and stacks the remaining windows as a deck of cards.
+
+### Configuration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `deck_tab_mode` | `1` | Auto merge stack area windows into a tab in deck layout. |
+
+```ini
+# Example deck configuration
+deck_tab_mode=1
+```
+
+---
+
 ## Switching Layouts
 | Setting | Default | Description |
 | :--- | :--- | :--- |

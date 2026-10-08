@@ -342,6 +342,8 @@ typedef struct {
 	int32_t focus_cross_tag;
 	int32_t view_current_to_back;
 	int32_t no_border_when_single;
+	int32_t monocle_no_border;
+	int32_t monocle_no_gap;
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t float_full_to_top;

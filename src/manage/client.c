@@ -845,6 +845,11 @@ bool check_hit_no_border(Client *c) {
 		 c->mon->visible_clients == 1)) {
 		hit_no_border = true;
 	}
+
+	if (config.monocle_no_border && ISFAKETILED(c) && !c->mon->isoverview &&
+		is_monocle_layout(c->mon)) {
+		hit_no_border = true;
+	}
 	return hit_no_border;
 }
 
@@ -3310,9 +3315,20 @@ void client_set_fake_fullscreen(Client *c, int32_t fakefullscreen) {
 	client_set_fullscreen(c, fakefullscreen);
 }
 
+static void maximize_screen_gaps(Client *c, int32_t *gappoh, int32_t *gappov) {
+	*gappoh = config.gappoh;
+	*gappov = config.gappov;
+	if (config.monocle_no_gap && c->mon && !c->mon->isoverview &&
+		is_monocle_layout(c->mon)) {
+		*gappoh = 0;
+		*gappov = 0;
+	}
+}
+
 void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 								bool rearrange) {
 	struct wlr_box maximizescreen_box;
+	int32_t gappoh, gappov;
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
 		c == server.grab_client)
 		return;
@@ -3331,10 +3347,12 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 
 		exit_scroller_stack(c);
 
-		maximizescreen_box.x = c->mon->w.x + config.gappoh;
-		maximizescreen_box.y = c->mon->w.y + config.gappov;
-		maximizescreen_box.width = c->mon->w.width - 2 * config.gappoh;
-		maximizescreen_box.height = c->mon->w.height - 2 * config.gappov;
+		maximize_screen_gaps(c, &gappoh, &gappov);
+
+		maximizescreen_box.x = c->mon->w.x + gappoh;
+		maximizescreen_box.y = c->mon->w.y + gappov;
+		maximizescreen_box.width = c->mon->w.width - 2 * gappoh;
+		maximizescreen_box.height = c->mon->w.height - 2 * gappov;
 
 		if (client_wants_group_bar(c)) {
 			maximizescreen_box.height -= config.group_bar_height;
@@ -3363,10 +3381,14 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 
 void reset_maximizescreen_size(Client *c) {
 	struct wlr_box geom;
-	geom.x = c->mon->w.x + config.gappoh;
-	geom.y = c->mon->w.y + config.gappov;
-	geom.width = c->mon->w.width - 2 * config.gappoh;
-	geom.height = c->mon->w.height - 2 * config.gappov;
+	int32_t gappoh, gappov;
+
+	maximize_screen_gaps(c, &gappoh, &gappov);
+
+	geom.x = c->mon->w.x + gappoh;
+	geom.y = c->mon->w.y + gappov;
+	geom.width = c->mon->w.width - 2 * gappoh;
+	geom.height = c->mon->w.height - 2 * gappov;
 
 	if (client_wants_group_bar(c)) {
 		geom.height -= config.group_bar_height;
