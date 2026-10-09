@@ -125,7 +125,11 @@ bindl=CTRL,comma,spawn,brightness.sh down
 
 ```toml
 [bind.default.conflict]
-"SUPER+a" = "resizewin,+10,0"
+"SUPER+r" = [
+"spawn_shell,config-check.sh",
+"reload_config"
+]
+
 
 [bind.default.lock]
 "CTRL+comma" = "spawn,brightness.sh down"
@@ -221,11 +225,6 @@ exec_once = ["waybar", "swaybg -i wall.png"]
 Repeated rules (`window_rule`, `tag_rule`, ...) use array-of-tables instead, so
 each `[[rule.<type>]]` is a new rule. Repeating the *same key combination* in one
 bind table is the one remaining case: put the actions in an array.
-
-```toml
-[bind.default]
-"SUPER+r" = ["spawn_shell,config-check.sh", "reload_config"]
-```
 
 ## Values
 
