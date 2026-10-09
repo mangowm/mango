@@ -331,7 +331,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	if (config.blur && config.blur_layer) {
+	if (config.blur_layer) {
 
 		if (!l->no_blur &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
