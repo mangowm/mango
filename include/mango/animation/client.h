@@ -58,6 +58,7 @@ typedef struct ResizeOpts {
 							 // zoom.
 	bool force_configure; // Must be sent even if the box did not change (client
 						  // ConfigureRequest).
+	uint32_t drag_edge;
 } ResizeOpts;
 
 void resize(Client *c, struct wlr_box geo, ResizeOpts opts);

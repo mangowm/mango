@@ -17,6 +17,7 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/util/edges.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
 #endif
@@ -1344,8 +1345,15 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	}
 
 	if (!c->no_size_hint && !c->ismaximizescreen && !c->isfullscreen &&
-		c->isfloating)
+		c->isfloating) {
+		int32_t anchor_right = c->geom.x + c->geom.width;
+		int32_t anchor_bottom = c->geom.y + c->geom.height;
 		client_set_size_bound(c);
+		if (opts.drag_edge & WLR_EDGE_LEFT)
+			c->geom.x = anchor_right - c->geom.width;
+		if (opts.drag_edge & WLR_EDGE_TOP)
+			c->geom.y = anchor_bottom - c->geom.height;
+	}
 
 	if (!c->is_pending_open_animation)
 		c->animation.begin_fade_in = false;

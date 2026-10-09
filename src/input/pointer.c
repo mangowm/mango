@@ -981,7 +981,7 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 
 	gc->float_geom = box;
 
-	resize(gc, box, (ResizeOpts){.interact = 1});
+	resize(gc, box, (ResizeOpts){.interact = 1, .drag_edge = edge});
 	server.grab_offset_x += cdx;
 	server.grab_offset_y += cdy;
 }
