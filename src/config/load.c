@@ -160,13 +160,18 @@ static bool resolve_config_path(const char *file_path, char *full_path,
 			snprintf(full_path, size, "%s/%s", config_dir, rel);
 			free(config_path);
 		} else {
-			const char *home = getenv("HOME");
-			if (!home) {
-				mango_error(false, WLR_ERROR,
-							"HOME environment variable not set.\n");
-				return false;
+			const char *confdir = getenv("XDG_CONFIG_HOME");
+			if (!confdir) {
+				confdir = getenv("HOME");
+				if (!confdir) {
+					mango_error(false, WLR_ERROR,
+								"HOME environment variable not set.\n");
+					return false;
+				}
+				snprintf(full_path, size, "%s/.config/mango/%s", confdir, rel);
+			} else {
+				snprintf(full_path, size, "%s/mango/%s", confdir, rel);
 			}
-			snprintf(full_path, size, "%s/.config/mango/%s", home, rel);
 		}
 	} else if (file_path[0] == '~' &&
 			   (file_path[1] == '/' || file_path[1] == '\0')) {
@@ -391,18 +396,30 @@ bool parse_config(void) {
 	if (server.cli_config_path[0]) {
 		snprintf(filename, sizeof(filename), "%s", server.cli_config_path);
 	} else {
-		// Gets the current user home directory.
-		const char *homedir = getenv("HOME");
-		if (!homedir) {
-			// Cannot continue if that fails.
-			config_error_store_end();
-			return false;
-		}
-		snprintf(filename, sizeof(filename), "%s/.config/mango/config.conf",
-				 homedir);
-		if (access(filename, F_OK) != 0) {
-			snprintf(filename, sizeof(filename), "%s/.config/mango/config.toml",
-					 homedir);
+		const char *confdir = getenv("XDG_CONFIG_HOME");
+		if (!confdir) {
+			confdir = getenv("HOME");
+
+			if (!confdir) {
+				// Cannot continue if that fails.
+				config_error_store_end();
+				return false;
+			}
+
+			snprintf(filename, sizeof(filename), "%s/.config/mango/config.conf",
+					 confdir);
+			if (access(filename, F_OK) != 0) {
+				snprintf(filename, sizeof(filename),
+						 "%s/.config/mango/config.toml", confdir);
+			}
+
+		} else {
+			snprintf(filename, sizeof(filename), "%s/mango/config.conf",
+					 confdir);
+			if (access(filename, F_OK) != 0) {
+				snprintf(filename, sizeof(filename), "%s/mango/config.toml",
+						 confdir);
+			}
 		}
 
 		if (access(filename, F_OK) != 0) {
