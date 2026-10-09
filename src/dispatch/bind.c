@@ -521,6 +521,27 @@ int32_t focus_stack(const Arg *arg) {
 	return 0;
 }
 
+int32_t focus_first_tiled(const Arg *arg) {
+	Monitor *m = server.selected_monitor;
+	Client *c = NULL;
+
+	if (!m || !m->pertag->ltidxs[get_mon_curtag(m)]->arrange)
+		return 0;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (VISIBLEON(c, m) && ISFAKETILED(c))
+			break;
+	}
+
+	if (&c->link == &server.clients || c == m->sel)
+		return 0;
+
+	client_focus(c, 1);
+	if (config.warpcursor)
+		pointer_warp_to_client(c);
+	return 0;
+}
+
 /*
  * overcircle: opens/cycles overview (centered tab layout)
  * - not in overview: enters overview
