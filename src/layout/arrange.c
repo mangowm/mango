@@ -25,7 +25,7 @@ uint32_t drag_refresh_interval_ms(const Monitor *m) {
 	return ms > 0 ? (uint32_t)ms : 1;
 }
 
-void set_size_per(Monitor *m, Client *c) {
+void set_size_per(Monitor *m, Client *c, bool reset_proportion) {
 	Client *fc = NULL;
 	bool found = false;
 
@@ -35,24 +35,52 @@ void set_size_per(Monitor *m, Client *c) {
 	uint32_t tag = get_mon_curtag(m);
 	const Layout *current_layout = m->pertag->ltidxs[tag];
 
+	bool keep_own = !reset_proportion &&
+					(c->master_size_weight > 0.0 || c->stack_size_weight > 0.0);
+
+	c->master_mfact_per = m->pertag->mfacts[tag];
+	wl_list_for_each(fc, &server.clients, link) {
+		if (fc == c || !VISIBLEON(fc, m) || !ISTILED(fc) ||
+			fc->master_mfact_per <= 0.0)
+			continue;
+		if (current_layout->id == CENTER_TILE &&
+			(fc->isleftstack ^ c->isleftstack))
+			continue;
+		c->master_mfact_per = fc->master_mfact_per;
+		break;
+	}
+
+	if (keep_own) {
+		if (!c->iscustom_scroller_proportion && c->scroller_proportion <= 0.0f)
+			c->scroller_proportion =
+				m->pertag->scroller_default_proportion[tag];
+		if (!c->iscustom_scroller_proportion_single &&
+			c->scroller_proportion_single <= 0.0f)
+			c->scroller_proportion_single =
+				m->pertag->scroller_default_proportion_single[tag];
+		return;
+	}
+
+	/* New client or reset_proportion: copy a neighbour's weight as its own. */
 	wl_list_for_each(fc, &server.clients, link) {
 		if (VISIBLEON(fc, m) && ISTILED(fc) && fc != c) {
 			if (current_layout->id == CENTER_TILE &&
 				(fc->isleftstack ^ c->isleftstack))
 				continue;
-			c->master_mfact_per = fc->master_mfact_per;
-			c->master_inner_per = fc->master_inner_per;
-			c->stack_inner_per = fc->stack_inner_per;
+			c->master_size_weight = fc->master_size_weight;
+			c->stack_size_weight = fc->stack_size_weight;
 			found = true;
 			break;
 		}
 	}
 
-	if (!found || c->isfloating) {
-		c->master_mfact_per = m->pertag->mfacts[tag];
-		c->master_inner_per = 1.0f;
-		c->stack_inner_per = 1.0f;
+	if (!found || c->master_size_weight <= 0.0 || c->stack_size_weight <= 0.0) {
+		c->master_size_weight = 1.0;
+		c->stack_size_weight = 1.0;
 	}
+
+	c->master_inner_per = c->master_size_weight;
+	c->stack_inner_per = c->stack_size_weight;
 
 	if (!c->iscustom_scroller_proportion) {
 		c->scroller_proportion = m->pertag->scroller_default_proportion[tag];
@@ -61,6 +89,20 @@ void set_size_per(Monitor *m, Client *c) {
 	if (!c->iscustom_scroller_proportion_single) {
 		c->scroller_proportion_single =
 			m->pertag->scroller_default_proportion_single[tag];
+	}
+}
+
+/* Manual resize: freeze the proportions just computed into the weights. */
+static void persist_tile_size_weights(Monitor *m) {
+	Client *c = NULL;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+			continue;
+		if (c->ismaster)
+			c->master_size_weight = c->master_inner_per;
+		else
+			c->stack_size_weight = c->stack_inner_per;
 	}
 }
 
@@ -287,6 +329,8 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 				tc->master_mfact_per = new_master_mfact_per;
 		}
 
+		persist_tile_size_weights(gc->mon);
+
 		if (!isdrag) {
 			arrange(gc->mon, false, false);
 			return;
@@ -467,6 +511,8 @@ void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
 			if (VISIBLEON(tc, gc->mon) && ISTILED(tc))
 				tc->master_mfact_per = new_master_mfact_per;
 		}
+
+		persist_tile_size_weights(gc->mon);
 
 		if (!isdrag) {
 			arrange(gc->mon, false, false);
@@ -789,8 +835,7 @@ void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(m)) {
+			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
 			arrange(m, false, false);
 			server.last_apply_drag_time = time;
 		}
@@ -832,7 +877,7 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 
 		headnode->client->old_scroller_pproportion =
 			headnode->scroller_proportion;
-		gc->old_stack_proportion = curnode->stack_proportion;
+		gc->scroller_old_stack_proportion = curnode->scroller_stack_proportion;
 
 		gc->cursor_in_left_half =
 			server.cursor->x < gc->geom.x + gc->geom.width / 2;
@@ -850,7 +895,8 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 			gc->drag_begin_geom = gc->geom;
 			stack_head_client->old_scroller_pproportion =
 				headnode->scroller_proportion;
-			gc->old_stack_proportion = curnode->stack_proportion;
+			gc->scroller_old_stack_proportion =
+				curnode->scroller_stack_proportion;
 			gc->cursor_in_upper_half = false;
 			gc->cursor_in_left_half = false;
 		}
@@ -859,13 +905,13 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 			delta_y = (float)(offsety) *
 					  (headnode->client->old_scroller_pproportion) /
 					  gc->drag_begin_geom.height;
-			delta_x = (float)(offsetx) * (gc->old_stack_proportion) /
+			delta_x = (float)(offsetx) * (gc->scroller_old_stack_proportion) /
 					  gc->drag_begin_geom.width;
 		} else {
 			delta_x = (float)(offsetx) *
 					  (headnode->client->old_scroller_pproportion) /
 					  gc->drag_begin_geom.width;
-			delta_y = (float)(offsety) * (gc->old_stack_proportion) /
+			delta_y = (float)(offsety) * (gc->scroller_old_stack_proportion) /
 					  gc->drag_begin_geom.height;
 		}
 
@@ -945,11 +991,11 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		if (isvertical) {
 			new_scroller_proportion =
 				headnode->client->old_scroller_pproportion + delta_y;
-			new_stack_proportion = gc->old_stack_proportion + delta_x;
+			new_stack_proportion = gc->scroller_old_stack_proportion + delta_x;
 		} else {
 			new_scroller_proportion =
 				headnode->client->old_scroller_pproportion + delta_x;
-			new_stack_proportion = gc->old_stack_proportion + delta_y;
+			new_stack_proportion = gc->scroller_old_stack_proportion + delta_y;
 		}
 
 		new_scroller_proportion =
@@ -959,37 +1005,42 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		// Keeps the sum at 1 so later arrange normalization does not swallow
 		// the offset.
 		if (isdrag) {
-			float current_other_sum = 1.0f - curnode->stack_proportion;
+			float current_other_sum = 1.0f - curnode->scroller_stack_proportion;
 			float new_other_sum = 1.0f - new_stack_proportion;
 			if (current_other_sum > 0.001f) {
 				float scale = new_other_sum / current_other_sum;
 				for (struct ScrollerStackNode *tc = headnode; tc;
 					 tc = tc->next_in_stack) {
 					if (tc != curnode) {
-						tc->stack_proportion *= scale;
+						tc->scroller_stack_proportion *= scale;
 					}
 				}
 			}
 		} else {
 			// Keyboard stepping.
-			if (gc->old_stack_proportion != 1.0f) {
+			if (gc->scroller_old_stack_proportion != 1.0f) {
 				for (struct ScrollerStackNode *tc = headnode; tc;
 					 tc = tc->next_in_stack) {
 					if (tc != curnode) {
-						tc->stack_proportion =
+						tc->scroller_stack_proportion =
 							(1.0f - new_stack_proportion) /
-							(1.0f - gc->old_stack_proportion) *
-							tc->stack_proportion;
+							(1.0f - gc->scroller_old_stack_proportion) *
+							tc->scroller_stack_proportion;
 					}
 				}
 			}
 		}
 
-		curnode->stack_proportion = new_stack_proportion;
+		curnode->scroller_stack_proportion = new_stack_proportion;
 
 		if (m->visible_scroll_tiling_clients > 1 ||
 			config.scroller_ignore_proportion_single) {
 			headnode->scroller_proportion = new_scroller_proportion;
+		}
+
+		for (struct ScrollerStackNode *stnode = headnode; stnode;
+			 stnode = stnode->next_in_stack) {
+			stnode->scroller_stack_weight = stnode->scroller_stack_proportion;
 		}
 
 		/* Syncs back to the global fields. */
@@ -1001,8 +1052,7 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(m)) {
+			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
 			arrange(m, false, false);
 			server.last_apply_drag_time = time;
 		}
@@ -1062,94 +1112,64 @@ bool special_keep_bg_client(Monitor *m, Client *c) {
 			 (c->tags & (1 << (m->pertag->prevtag - 1)))) ||
 			(c->tags & (m->tagset[m->seltags ^ 1] & ~TAG0_MASK)));
 }
-void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
-						double total_left_stack_hight_percent,
-						double total_right_stack_hight_percent,
-						double total_stack_hight_percent,
-						double total_master_inner_percent, int32_t master_num,
-						int32_t stack_num) {
+void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
+						double total_right_stack_weight,
+						double total_stack_weight, double total_master_weight,
+						int32_t master_num, int32_t stack_num) {
 	Client *c = NULL;
 	int32_t i = 0;
-	uint32_t stack_index = 0;
 	uint32_t tag = get_mon_curtag(m);
 	uint32_t nmasters = m->pertag->nmasters[tag];
+	bool centered = m->pertag->ltidxs[tag]->id == CENTER_TILE;
 
-	if (m->pertag->ltidxs[tag]->id != CENTER_TILE) {
+	wl_list_for_each(c, &server.clients, link) {
+		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
+			continue;
 
-		wl_list_for_each(c, &server.clients, link) {
-			if (VISIBLEON(c, m) && ISFAKETILED(c)) {
+		if (total_master_weight > 0.0 && i < nmasters) {
+			c->ismaster = true;
+			c->master_inner_per = c->master_size_weight / total_master_weight;
 
-				if (total_master_inner_percent > 0.0 && i < nmasters) {
-					c->ismaster = true;
-					c->stack_inner_per = stack_num ? 1.0f / stack_num : 1.0f;
-					c->master_inner_per =
-						c->master_inner_per / total_master_inner_percent;
-				} else {
-					c->ismaster = false;
-					c->master_inner_per =
-						master_num > 0 ? 1.0f / master_num : 1.0f;
-					c->stack_inner_per =
-						total_stack_hight_percent
-							? c->stack_inner_per / total_stack_hight_percent
-							: 1.0f;
-				}
-				i++;
+			double stack_side =
+				centered ? total_left_stack_weight + total_right_stack_weight
+						 : total_stack_weight;
+			c->stack_inner_per =
+				stack_side > 0.0
+					? c->stack_size_weight / (stack_side + c->stack_size_weight)
+					: 1.0f;
+		} else {
+			c->ismaster = false;
+			c->master_inner_per =
+				total_master_weight > 0.0
+					? c->master_size_weight /
+						  (total_master_weight + c->master_size_weight)
+					: (master_num > 0 ? 1.0f / master_num : 1.0f);
 
-				check_size_per_valid(c);
+			if (centered) {
+				double side = c->isleftstack ? total_left_stack_weight
+											 : total_right_stack_weight;
+				c->stack_inner_per =
+					side > 0.0 ? c->stack_size_weight / side : 1.0f;
+			} else {
+				c->stack_inner_per =
+					total_stack_weight > 0.0
+						? c->stack_size_weight / total_stack_weight
+						: (stack_num > 0 ? 1.0f / stack_num : 1.0f);
 			}
 		}
-	} else {
-		wl_list_for_each(c, &server.clients, link) {
-			if (VISIBLEON(c, m) && ISFAKETILED(c)) {
+		i++;
 
-				if (total_master_inner_percent > 0.0 && i < nmasters) {
-					c->ismaster = true;
-					if ((stack_index % 2) ^ (tile_cilent_num % 2 == 0)) {
-						c->stack_inner_per =
-							stack_num > 1 ? 1.0f / ((stack_num - 1) / 2.0f)
-										  : 1.0f;
-					} else {
-						c->stack_inner_per =
-							stack_num > 1 ? 2.0f / stack_num : 1.0f;
-					}
-
-					c->master_inner_per =
-						c->master_inner_per / total_master_inner_percent;
-				} else {
-					stack_index = i - nmasters;
-
-					c->ismaster = false;
-					c->master_inner_per =
-						master_num > 0 ? 1.0f / master_num : 1.0f;
-					if ((stack_index % 2) ^ (tile_cilent_num % 2 == 0)) {
-						c->stack_inner_per =
-							total_right_stack_hight_percent
-								? c->stack_inner_per /
-									  total_right_stack_hight_percent
-								: 1.0f;
-					} else {
-						c->stack_inner_per =
-							total_left_stack_hight_percent
-								? c->stack_inner_per /
-									  total_left_stack_hight_percent
-								: 1.0f;
-					}
-				}
-				i++;
-
-				check_size_per_valid(c);
-			}
-		}
+		check_size_per_valid(c);
 	}
 }
 
 void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 								  bool from_view, bool only_calculate) {
 	Client *c = NULL;
-	double total_stack_inner_percent = 0;
-	double total_master_inner_percent = 0;
-	double total_right_stack_hight_percent = 0;
-	double total_left_stack_hight_percent = 0;
+	double total_stack_weight = 0;
+	double total_master_weight = 0;
+	double total_right_stack_weight = 0;
+	double total_left_stack_weight = 0;
 	int32_t i = 0;
 	int32_t nmasters = 0;
 	int32_t stack_index = 0;
@@ -1172,7 +1192,7 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 	wl_list_for_each(c, &server.clients, link) {
 		if (from_view && (c->isglobal || c->isunglobal)) {
-			set_size_per(m, c);
+			set_size_per(m, c, true);
 		}
 
 		if (c->group_bar && c->group_bar->scene->node.enabled) {
@@ -1193,7 +1213,7 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 		if (VISIBLEON(c, m)) {
 			if (from_view && !client_only_in_one_tag(c)) {
-				set_size_per(m, c);
+				set_size_per(m, c, true);
 			}
 
 			if (!c->isunglobal)
@@ -1227,22 +1247,25 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		if (c->mon == m) {
 			if (VISIBLEON(c, m)) {
 				if (ISFAKETILED(c)) {
+					if (c->master_size_weight <= 0.0)
+						c->master_size_weight = 1.0;
+					if (c->stack_size_weight <= 0.0)
+						c->stack_size_weight = 1.0;
+
 					if (i < nmasters) {
 						master_num++;
-						total_master_inner_percent += c->master_inner_per;
+						total_master_weight += c->master_size_weight;
 					} else {
 						stack_num++;
-						total_stack_inner_percent += c->stack_inner_per;
+						total_stack_weight += c->stack_size_weight;
 						stack_index = i - nmasters;
 						if ((stack_index % 2) ^
 							(m->visible_tiling_clients % 2 == 0)) {
 							c->isleftstack = false;
-							total_right_stack_hight_percent +=
-								c->stack_inner_per;
+							total_right_stack_weight += c->stack_size_weight;
 						} else {
 							c->isleftstack = true;
-							total_left_stack_hight_percent +=
-								c->stack_inner_per;
+							total_left_stack_weight += c->stack_size_weight;
 						}
 					}
 					i++;
@@ -1271,10 +1294,9 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		}
 	}
 
-	reset_size_per_mon(
-		m, m->visible_tiling_clients, total_left_stack_hight_percent,
-		total_right_stack_hight_percent, total_stack_inner_percent,
-		total_master_inner_percent, master_num, stack_num);
+	reset_size_per_mon(m, total_left_stack_weight, total_right_stack_weight,
+					   total_stack_weight, total_master_weight, master_num,
+					   stack_num);
 
 	special_update_dim(m);
 }

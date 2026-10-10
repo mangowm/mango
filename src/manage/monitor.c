@@ -1145,7 +1145,7 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 			if (c->tags == 0 && !c->is_in_scratchpad) {
 				c->tags = server.selected_monitor
 							  ->tagset[server.selected_monitor->seltags];
-				set_size_per(server.selected_monitor, c);
+				set_size_per(server.selected_monitor, c, false);
 			}
 		}
 		client_focus(client_focus_top(server.selected_monitor), 1);

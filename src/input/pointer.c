@@ -993,7 +993,7 @@ static void client_begin_drag_float(Client *c) {
 	c->drag_tile_float_backup_geom = c->float_geom;
 	c->old_stack_inner_per = 0.0f;
 	c->old_master_inner_per = 0.0f;
-	set_size_per(c->mon, c);
+	set_size_per(c->mon, c, false);
 }
 
 bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,

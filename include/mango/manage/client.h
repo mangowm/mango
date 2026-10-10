@@ -169,8 +169,8 @@ struct Client {
 	bool is_pending_open_animation;
 	bool is_restoring_from_ov;
 	float scroller_proportion;
-	float stack_proportion;
-	float old_stack_proportion;
+	float scroller_stack_proportion;
+	float scroller_old_stack_proportion;
 	bool need_output_flush;
 	struct mango_animation animation;
 	struct mango_opacity_animation opacity_animation;
@@ -197,6 +197,7 @@ struct Client {
 	float blur_opacity;
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
 	double master_mfact_per, master_inner_per, stack_inner_per;
+	double master_size_weight, stack_size_weight;
 	double old_master_mfact_per, old_master_inner_per, old_stack_inner_per;
 	double old_scroller_pproportion;
 	bool ismaster;
