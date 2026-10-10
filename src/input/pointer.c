@@ -1369,8 +1369,8 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		if (server.grab_client->isfloating) {
 			server.grab_client->iscustomsize = 1;
 			if (server.last_apply_drag_time == 0 ||
-				time - server.last_apply_drag_time >
-					config.drag_floating_refresh_interval) {
+				time - server.last_apply_drag_time >=
+					drag_refresh_interval_ms(server.grab_client->mon)) {
 				pointer_resize_floating_window(
 					server.grab_client, server.cursor->x, server.cursor->y);
 				server.last_apply_drag_time = time;
