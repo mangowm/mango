@@ -19,6 +19,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
+#include "mango/manage/tab.h"
 #include "mango/overview/overview.h"
 #include <fcntl.h>
 #include <unistd.h>
@@ -2635,6 +2636,13 @@ int32_t toggle_all_floating(const Arg *arg) {
 				client_set_floating(c, should_floating);
 			}
 		}
+	}
+
+	wl_list_for_each_reverse(c, &server.focus_stack, flink) {
+		if (!VISIBLEON(c, server.selected_monitor))
+			continue;
+		client_raise_group(c);
+		client_raise_tab(c);
 	}
 	return 0;
 }
