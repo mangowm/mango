@@ -2253,6 +2253,12 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 			: wlr_scene_subsurface_tree_create(c->scene, client_surface(c));
 	mango_scene_node_set(&c->scene->node, c->type, c);
 
+	/*
+	 * Must be registered after wlr_scene_xdg_surface_create() so this listener
+	 * runs after wlroots' own commit callback, which resets the surface node
+	 * size that the fill sets. Registered with c->commit instead it would run
+	 * before wlroots and be overwritten.
+	 */
 	if (c->type == XDGShell) {
 		LISTEN(&client_surface(c)->events.commit, &c->commit_fill,
 			   handle_client_commit_fill);
