@@ -92,6 +92,7 @@ struct Client {
 		struct wlr_xwayland_surface *xwayland;
 	} surface;
 	struct wl_listener commit;
+	struct wl_listener commit_fill;
 	struct wl_listener map;
 	struct wl_listener maximize;
 	struct wl_listener minimize;

@@ -994,6 +994,40 @@ void client_set_drop_area(Client *c) {
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
 }
+
+static void fill_main_surface_buffer(struct wlr_scene_buffer *buffer, int32_t sx,
+									 int32_t sy, void *data) {
+	struct wlr_box *box = data;
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+
+	if (scene_surface == NULL)
+		return;
+
+	struct wlr_surface *surface = scene_surface->surface;
+	if (wlr_subsurface_try_from_wlr_surface(surface) != NULL)
+		return;
+	if (wlr_xdg_popup_try_from_wlr_surface(surface) != NULL)
+		return;
+	if (box->width <= 0 || box->height <= 0)
+		return;
+
+	wlr_scene_buffer_set_source_box(buffer, NULL);
+	wlr_scene_buffer_set_dest_size(buffer, box->width, box->height);
+}
+
+/* Stretch the client's last frame into the box it occupies, so a window whose
+ * client has not repainted yet does not trail its own frame. */
+void client_fill_surface_to_box(Client *c, const struct wlr_box *box) {
+	if (client_is_x11(c) || c->overview_scene_surface ||
+		c->animation.tagining || c->animation.tagouting ||
+		c->animation.tagouted)
+		return;
+
+	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+								   fill_main_surface_buffer, (void *)box);
+}
+
 void client_apply_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
@@ -1079,6 +1113,8 @@ void client_apply_clip(Client *c, float factor) {
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
 										  current_corner_location, true});
+		if (c != server.grab_client)
+			client_fill_surface_to_box(c, &clip_box);
 		return;
 	}
 
@@ -1156,6 +1192,9 @@ void client_apply_clip(Client *c, float factor) {
 	}
 
 	buffer_set_effect(c, buffer_data);
+
+	if (factor == 1.0 && c != server.grab_client)
+		client_fill_surface_to_box(c, &clip_box);
 }
 
 void fadeout_client_animation_next_tick(Client *c) {
@@ -1621,8 +1660,10 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip);
-		else
+		else {
 			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
+			client_fill_surface_to_box(c, &clip);
+		}
 		return;
 	}
 

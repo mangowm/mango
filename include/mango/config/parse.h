@@ -560,8 +560,6 @@ typedef struct {
 	int32_t xwayland_ignore_scale;
 	int32_t syncobj_enable;
 	int32_t tag_carousel;
-	float drag_tile_refresh_interval;
-	float drag_floating_refresh_interval;
 	int32_t allow_tearing;
 	int32_t allow_shortcuts_inhibit;
 	int32_t disable_middle_paste;

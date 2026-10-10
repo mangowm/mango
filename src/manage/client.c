@@ -2220,6 +2220,22 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 	c->tags = saved_tags;
 }
 
+/* Runs after wlroots rebuilt the surface node, which resets its size. Skipped
+ * while an animation owns the box. */
+static void handle_client_commit_fill(struct wl_listener *listener, void *data) {
+	Client *c = wl_container_of(listener, c, commit_fill);
+
+	if (!c->scene_surface || c->iskilling || !client_surface(c)->mapped)
+		return;
+
+	if (c->animation.running)
+		return;
+
+	struct wlr_box box;
+	client_get_clip(c, &box);
+	client_fill_surface_to_box(c, &box);
+}
+
 void handle_client_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	Client *c = wl_container_of(listener, c, map);
@@ -2236,6 +2252,11 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 			? wlr_scene_xdg_surface_create(c->scene, c->surface.xdg)
 			: wlr_scene_subsurface_tree_create(c->scene, client_surface(c));
 	mango_scene_node_set(&c->scene->node, c->type, c);
+
+	if (c->type == XDGShell) {
+		LISTEN(&client_surface(c)->events.commit, &c->commit_fill,
+			   handle_client_commit_fill);
+	}
 
 	client_init_xwayland(c);
 
@@ -2546,6 +2567,14 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		}
 	}
 #endif
+
+	if (c->type == XDGShell) {
+		if (c->commit_fill.link.prev && c->commit_fill.link.next &&
+			c->commit_fill.link.prev != &c->commit_fill.link) {
+			wl_list_remove(&c->commit_fill.link);
+			wl_list_init(&c->commit_fill.link);
+		}
+	}
 
 	if (client_is_unmanaged(c)) {
 #ifdef XWAYLAND

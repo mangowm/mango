@@ -15,6 +15,16 @@
 #include <assert.h>
 #include <wlr/types/wlr_cursor.h>
 
+/* Minimum interval between drag layout updates: one per presented frame. */
+uint32_t drag_refresh_interval_ms(const Monitor *m) {
+	int32_t refresh_mhz = (m && m->wlr_output) ? m->wlr_output->refresh : 0;
+	if (refresh_mhz <= 0)
+		refresh_mhz = 60000;
+
+	int32_t ms = (int32_t)(1000.0 / ((double)refresh_mhz / 1000.0));
+	return ms > 0 ? (uint32_t)ms : 1;
+}
+
 void set_size_per(Monitor *m, Client *c) {
 	Client *fc = NULL;
 	bool found = false;
@@ -283,8 +293,8 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >
-				config.drag_tile_refresh_interval) {
+			time - server.last_apply_drag_time >=
+				drag_refresh_interval_ms(gc->mon)) {
 			arrange(gc->mon, false, false);
 			server.last_apply_drag_time = time;
 		}
@@ -464,8 +474,8 @@ void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >
-				config.drag_tile_refresh_interval) {
+			time - server.last_apply_drag_time >=
+				drag_refresh_interval_ms(gc->mon)) {
 			arrange(gc->mon, false, false);
 			server.last_apply_drag_time = time;
 		}
@@ -481,8 +491,8 @@ void resize_tile_dwindle(Client *gc, bool isdrag, int32_t offsetx,
 	}
 
 	if (server.last_apply_drag_time == 0 ||
-		time - server.last_apply_drag_time >
-			config.drag_tile_refresh_interval) {
+		time - server.last_apply_drag_time >=
+			drag_refresh_interval_ms(gc->mon)) {
 		dwindle_resize_client(gc->mon, gc);
 		server.last_apply_drag_time = time;
 	}
@@ -779,8 +789,8 @@ void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >
-				config.drag_tile_refresh_interval) {
+			time - server.last_apply_drag_time >=
+				drag_refresh_interval_ms(m)) {
 			arrange(m, false, false);
 			server.last_apply_drag_time = time;
 		}
@@ -991,8 +1001,8 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		}
 
 		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >
-				config.drag_tile_refresh_interval) {
+			time - server.last_apply_drag_time >=
+				drag_refresh_interval_ms(m)) {
 			arrange(m, false, false);
 			server.last_apply_drag_time = time;
 		}

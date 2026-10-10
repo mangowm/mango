@@ -226,10 +226,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->syncobj_enable = atoi(value);
 	} else if (strcmp(key, "tag_carousel") == 0) {
 		config->tag_carousel = atoi(value);
-	} else if (strcmp(key, "drag_tile_refresh_interval") == 0) {
-		config->drag_tile_refresh_interval = atof(value);
-	} else if (strcmp(key, "drag_floating_refresh_interval") == 0) {
-		config->drag_floating_refresh_interval = atof(value);
 	} else if (strcmp(key, "allow_tearing") == 0) {
 		config->allow_tearing = atoi(value);
 	} else if (strcmp(key, "hdr_depth") == 0) {
@@ -2342,8 +2338,6 @@ void set_value_default() {
 	config.xwayland_ignore_scale = 0;
 	config.syncobj_enable = 1;
 	config.tag_carousel = 0;
-	config.drag_tile_refresh_interval = 8.0f;
-	config.drag_floating_refresh_interval = 8.0f;
 	config.allow_tearing = TEARING_DISABLED;
 	config.hdr_depth = MANGO_RENDER_BIT_DEPTH_10;
 	config.allow_shortcuts_inhibit = SHORTCUTS_INHIBIT_ENABLE;
@@ -2678,10 +2672,6 @@ void override_config(void) {
 	config.xwayland_ignore_scale =
 		CLAMP_INT(config.xwayland_ignore_scale, 0, 1);
 	config.syncobj_enable = CLAMP_INT(config.syncobj_enable, 0, 1);
-	config.drag_tile_refresh_interval =
-		CLAMP_FLOAT(config.drag_tile_refresh_interval, 1.0f, 16.0f);
-	config.drag_floating_refresh_interval =
-		CLAMP_FLOAT(config.drag_floating_refresh_interval, 0.0f, 1000.0f);
 	config.drag_tile_to_tile = CLAMP_INT(config.drag_tile_to_tile, 0, 1);
 	config.drag_tile_small = CLAMP_INT(config.drag_tile_small, 0, 1);
 	config.allow_tearing = CLAMP_INT(config.allow_tearing, 0, 2);
