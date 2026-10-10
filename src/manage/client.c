@@ -1638,7 +1638,7 @@ void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	}
 
 	if (mon)
-		set_size_per(mon, c);
+		set_size_per(mon, c, false);
 
 	// if no geom rule hit and is normal winodw, use the center pos and record
 	// the hit size
@@ -2070,6 +2070,8 @@ void init_client_properties(Client *c) {
 	c->master_mfact_per = 0.0f;
 	c->master_inner_per = 0.0f;
 	c->stack_inner_per = 0.0f;
+	c->master_size_weight = 0.0;
+	c->stack_size_weight = 0.0;
 	c->old_stack_inner_per = 0.0f;
 	c->old_master_inner_per = 0.0f;
 	c->old_master_mfact_per = 0.0f;
@@ -2093,7 +2095,7 @@ void init_client_properties(Client *c) {
 	c->float_geom.height = 0;
 	c->float_geom.x = 0;
 	c->float_geom.y = 0;
-	c->stack_proportion = 0.0f;
+	c->scroller_stack_proportion = 0.0f;
 	memset(c->oldmonname, 0, sizeof(c->oldmonname));
 	memcpy(c->opacity_animation.initial_border_color, config.bordercolor,
 		   sizeof(c->opacity_animation.initial_border_color));
@@ -3073,7 +3075,7 @@ void show_hide_client(Client *c) {
 	if (!c || !c->mon)
 		return;
 
-	set_size_per(c->mon, c);
+	set_size_per(c->mon, c, false);
 	target = get_tags_first_tag(c->oldtags);
 
 	if (!c->is_in_scratchpad) {
@@ -3236,6 +3238,7 @@ void client_set_floating(Client *c, int32_t floating) {
 		c->need_float_size_reduce = 1;
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
+		set_size_per(c->mon, c, false);
 		// Makes fullscreen windows on the current tag exit fullscreen so they
 		// join tiling.
 		wl_list_for_each(fc, &server.clients,
@@ -3247,10 +3250,6 @@ void client_set_floating(Client *c, int32_t floating) {
 	}
 
 	client_reparent_group(c);
-
-	if (c->isfloating) {
-		set_size_per(c->mon, c);
-	}
 
 	if (!c->force_fakemaximize)
 		client_set_maximized(c, false);
@@ -3446,7 +3445,7 @@ void unminimize(Client *c) {
 	}
 
 	if (c->isminimized) {
-		set_size_per(c->mon, c);
+		set_size_per(c->mon, c, false);
 		c->tags = c->mon->tagset[c->mon->seltags];
 		c->is_in_scratchpad = 0;
 		c->isnamedscratchpad = 0;
@@ -3471,6 +3470,9 @@ void exit_scroller_stack(Client *c) {
 	if (st) {
 		struct ScrollerStackNode *n = find_scroller_node(st, c);
 		if (n) {
+			c->scroller_proportion = n->scroller_proportion;
+			c->scroller_proportion_single = n->scroller_proportion_single;
+			c->scroller_stack_proportion = n->scroller_stack_weight;
 			scroller_node_remove(st, n);
 			return;
 		}
@@ -3738,12 +3740,14 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->float_geom = w->float_geom;
 	c->stack_inner_per = w->stack_inner_per;
 	c->master_inner_per = w->master_inner_per;
+	c->stack_size_weight = w->stack_size_weight;
+	c->master_size_weight = w->master_size_weight;
 	c->master_mfact_per = w->master_mfact_per;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
-	c->stack_proportion = w->stack_proportion;
+	c->scroller_stack_proportion = w->scroller_stack_proportion;
 
 	if (is_swallow || !is_group_change_member) {
 		client_group_replace(w, c);
@@ -3980,14 +3984,20 @@ void client_swap_layout_properties(Client *c1, Client *c2) {
 	double master_inner_per = c1->master_inner_per;
 	double master_mfact_per = c1->master_mfact_per;
 	double stack_inner_per = c1->stack_inner_per;
+	double master_size_weight = c1->master_size_weight;
+	double stack_size_weight = c1->stack_size_weight;
 
 	c1->master_inner_per = c2->master_inner_per;
 	c1->master_mfact_per = c2->master_mfact_per;
 	c1->stack_inner_per = c2->stack_inner_per;
+	c1->master_size_weight = c2->master_size_weight;
+	c1->stack_size_weight = c2->stack_size_weight;
 
 	c2->master_inner_per = master_inner_per;
 	c2->master_mfact_per = master_mfact_per;
 	c2->stack_inner_per = stack_inner_per;
+	c2->master_size_weight = master_size_weight;
+	c2->stack_size_weight = stack_size_weight;
 }
 
 void client_swap_monitors_and_tags(Client *c1, Client *c2) {

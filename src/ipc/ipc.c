@@ -859,8 +859,7 @@ void handle_command(int client_fd, const char *cmd_raw) {
 			if (field_start && strncmp(ptr, "client,", 7) == 0) {
 				char *end;
 				long id = strtol(ptr + 7, &end, 10);
-				if (id > 0 && end > ptr + 7 &&
-					(*end == '\0' || *end == ',')) {
+				if (id > 0 && end > ptr + 7 && (*end == '\0' || *end == ',')) {
 					client_id = (int)id;
 					ptr = end;
 					if (*ptr == ',')

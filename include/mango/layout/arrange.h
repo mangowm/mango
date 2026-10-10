@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-void set_size_per(Monitor *m, Client *c);
+void set_size_per(Monitor *m, Client *c, bool reset_proportion);
 
 uint32_t drag_refresh_interval_ms(const Monitor *m);
 
@@ -33,12 +33,10 @@ void check_size_per_valid(Client *c);
 these two functions will never be triggered.
 Just in case to facilitate the final investigation*/
 
-void reset_size_per_mon(Monitor *m, int32_t tile_cilent_num,
-						double total_left_stack_hight_percent,
-						double total_right_stack_hight_percent,
-						double total_stack_hight_percent,
-						double total_master_inner_percent, int32_t master_num,
-						int32_t stack_num);
+void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
+						double total_right_stack_weight,
+						double total_stack_weight, double total_master_weight,
+						int32_t master_num, int32_t stack_num);
 
 // normal-tag client kept visible as background under the special overlay
 bool special_keep_bg_client(Monitor *m, Client *c);
