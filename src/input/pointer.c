@@ -12,6 +12,7 @@
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/client.h"
@@ -1143,6 +1144,8 @@ void pointer_end_grab_client(bool follow_pointer) {
 		client_set_drop_area(server.drop_client);
 		server.drop_client = NULL;
 	}
+	floating_note(gc);
+	floating_flush();
 }
 
 static Client *group_bar_target_at(double x, double y, Client *ignore) {

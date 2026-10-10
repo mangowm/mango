@@ -3,6 +3,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
@@ -1581,6 +1582,10 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		if (opts.drag_edge & WLR_EDGE_TOP)
 			c->geom.y = anchor_bottom - c->geom.height;
 	}
+
+	floating_note(c);
+	if (!opts.interact)
+		floating_flush();
 
 	if (!c->is_pending_open_animation)
 		c->animation.begin_fade_in = false;

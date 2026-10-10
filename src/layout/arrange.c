@@ -1424,6 +1424,7 @@ Layout layouts[] = {
 	{"F", fair, fair_predict, "fair", FAIR},
 	{"VF", vertical_fair, vertical_fair_predict, "vertical_fair",
 	 VERTICAL_FAIR},
+	{"FL", floating_layout, NULL, "floating", FLOATING}, // All windows float
 };
 
 bool special_handle_empty_view(Monitor *m, bool from_view) {
@@ -1459,6 +1460,9 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 
 	if (special_handle_empty_view(m, from_view))
 		return;
+
+	/* Floating layout: float/unfloat windows before they are counted. */
+	floating_prepare(m);
 
 	pre_calculate_before_arrange(m, want_animation, from_view, false);
 	/* Must run after pre_calculate: global windows get their tags rewritten

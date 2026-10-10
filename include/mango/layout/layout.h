@@ -3,6 +3,7 @@
 
 #include "mango/common/types.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/horizontal.h"
 #include "mango/layout/overview.h"
 #include "mango/layout/scroll.h"
@@ -52,8 +53,9 @@ enum {
 	DWINDLE,
 	FAIR,
 	VERTICAL_FAIR,
+	FLOATING,
 };
 
-extern Layout layouts[14];
+extern Layout layouts[15];
 
 #endif

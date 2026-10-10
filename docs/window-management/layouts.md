@@ -21,6 +21,7 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `dwindle`
 - `fair`
 - `vertical_fair`
+- `floating`
 
 ---
 
@@ -174,3 +175,11 @@ bind=SUPER,n,switch_layout
 bind=SUPER,t,setlayout,tile
 bind=SUPER,s,setlayout,scroller
 ```
+
+---
+
+## Floating Layout
+
+Name: `floating`. Every window on the tag floats. The position and size of an app's main window are saved in `~/.config/mango/floating.txt` (next to the config file when `-c` is used) and restored when the layout is entered or the window opens.
+
+Each line is `app_id x y width height`, with x/y relative to the monitor. There is one line per app. Dialogs and other child windows (rename, copy, search dialogs, anything with a parent window, fixed-size windows) are not saved and open with the size their app chose. Windows return to tiling when you switch to another layout.

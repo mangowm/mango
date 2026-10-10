@@ -12,6 +12,7 @@
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/layer.h"
@@ -2483,6 +2484,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	floating_note(c);
+	floating_flush();
 	c->iskilling = 1;
 	if (c->tab_prev || c->tab_next)
 		tab_detach_client(c);
