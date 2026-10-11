@@ -447,6 +447,11 @@ typedef struct {
 	int32_t touch_enable;
 	int32_t touch_enable_mouse_emulation;
 
+	/* window effects */
+	int32_t dim_enable;
+	float dim_focused_color[4];
+	float dim_unfocused_color[4];
+
 	/* appearance */
 	int32_t smartgaps;
 	int32_t monocle_tab_mode;
@@ -477,9 +482,6 @@ typedef struct {
 	float focuscolor[4];
 	float maximizescreencolor[4];
 	float urgentcolor[4];
-	int32_t dim_enable;
-	float dim_focused_color[4];
-	float dim_unfocused_color[4];
 	float scratchpadcolor[4];
 	float globalcolor[4];
 	float overlaycolor[4];
