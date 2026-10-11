@@ -971,10 +971,11 @@ bool handle_watch_command(int fd, const char *cmd,
 	} else if (strcmp(cmd, "watch last_open_surface") == 0 ||
 			   strncmp(cmd, "watch last_open_surface ", 24) == 0) {
 		type = IPC_WATCH_LAST_OPEN_SURFACE;
-		if (cmd[24] != '\0') { // has argument after the space
+		// has argument after the space, otherwise default to selected_monitor
+		if (cmd[23] == ' ' && cmd[24] != '\0') {
 			arg = cmd + 24;
 		} else {
-			arg = NULL; // default to selected_monitor
+			arg = NULL;
 		}
 	}
 
