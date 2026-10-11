@@ -459,7 +459,6 @@ typedef struct {
 	int32_t blur_layer;
 	int32_t blur_optimized;
 	int32_t border_radius;
-	int32_t border_radius_location_default;
 	struct blur_data blur_params;
 	int32_t shadows;
 	int32_t shadow_only_floating;

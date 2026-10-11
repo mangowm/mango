@@ -99,10 +99,6 @@ By default a touchscreen is restricted to the current screen (the monitor that
 currently has focus). To pin a specific touch device to a fixed output, use the
 `monitor` [device rule](#device-rules-advanced) option.
 
-Tablet (pen) devices are not restricted to a monitor by default. Use a device
-rule to pin a tablet to a fixed output with `monitor`, or set
-`map_focus_monitor:1` to make it follow the currently focused monitor.
-
 ---
 
 **Detailed descriptions:**
