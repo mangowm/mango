@@ -70,6 +70,10 @@ int32_t keyboard_check_keybinding(uint32_t state, bool locked, uint32_t mods,
 
 void keyboard_cancel_pending_release_bind(void);
 
+void keyboard_mark_bound_key(uint32_t keycode);
+void keyboard_unmark_bound_key(uint32_t keycode);
+bool keyboard_is_bound_key(uint32_t keycode);
+
 bool keyboard_process_global_keypress(struct wlr_surface *last_surface,
 									  struct wlr_keyboard *keyboard,
 									  struct wlr_keyboard_key_event *event,

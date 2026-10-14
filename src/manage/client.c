@@ -8,6 +8,7 @@
 #include "mango/dispatch/bind.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/text-input.h"
+#include "mango/input/keyboard.h"
 #include "mango/input/pointer.h"
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
@@ -300,11 +301,21 @@ int32_t client_is_unmanaged(Client *c) {
 	return 0;
 }
 void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb) {
-	if (kb)
-		wlr_seat_keyboard_notify_enter(server.seat, s, kb->keycodes,
-									   kb->num_keycodes, &kb->modifiers);
-	else
+	if (!kb) {
 		wlr_seat_keyboard_notify_enter(server.seat, s, NULL, 0, NULL);
+		return;
+	}
+
+	uint32_t keys[WLR_KEYBOARD_KEYS_CAP];
+	size_t num_keys = 0;
+	/* Skip keys consumed by keybindings; they were never sent to clients. */
+	for (size_t i = 0; i < kb->num_keycodes && num_keys < WLR_KEYBOARD_KEYS_CAP;
+		 i++) {
+		if (!keyboard_is_bound_key(kb->keycodes[i] + 8))
+			keys[num_keys++] = kb->keycodes[i];
+	}
+	wlr_seat_keyboard_notify_enter(server.seat, s, keys, num_keys,
+								   &kb->modifiers);
 }
 
 void client_send_close(Client *c) {
