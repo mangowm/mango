@@ -704,6 +704,33 @@ int32_t kill_client(const Arg *arg) {
 	return 0;
 }
 
+int32_t smart_kill_client(const Arg *arg) {
+	Client *c =
+		arg->tc
+			? arg->tc
+			: (server.selected_monitor ? server.selected_monitor->sel : NULL);
+	if (!c || !c->mon)
+		return 0;
+
+	if (client_only_in_one_tag(c)) {
+		pending_kill_client(c);
+		return 0;
+	}
+
+	uint32_t view_tags = c->mon->tagset[c->mon->seltags] & TAGMASK;
+	uint32_t remaining_tags = c->tags & ~view_tags;
+	if (!remaining_tags) {
+		pending_kill_client(c);
+		return 0;
+	}
+
+	c->tags = remaining_tags;
+	client_reparent_group(c);
+	client_focus(client_focus_top(server.selected_monitor), 1);
+	arrange(c->mon, false, false);
+	return 0;
+}
+
 int32_t move_resize(const Arg *arg) {
 	Client *c = NULL;
 	MangoBarDecoration *bar = NULL;
