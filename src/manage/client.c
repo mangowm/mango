@@ -306,8 +306,8 @@ void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb) {
 		return;
 	}
 
-	uint32_t keys[WLR_KEYBOARD_KEYS_CAP];
 	size_t num_keys = 0;
+	uint32_t keys[WLR_KEYBOARD_KEYS_CAP];
 	/* Skip keys consumed by keybindings; they were never sent to clients. */
 	for (size_t i = 0; i < kb->num_keycodes && num_keys < WLR_KEYBOARD_KEYS_CAP;
 		 i++) {

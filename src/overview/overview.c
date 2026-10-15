@@ -163,17 +163,26 @@ void overview_layout_card(Client *c) {
 
 		if (entry->is_root) {
 			/*
-			 * The root surface is clipped to fill the card; source_box is in
-			 * buffer pixels, converted by ratio.
+			 * The root surface is clipped to fill the card, so the source box
+			 * is expressed in buffer pixels.
 			 */
-			float ratio_x =
-				es->current.width > 0
-					? (float)es->current.buffer_width / es->current.width
-					: 1.0f;
-			float ratio_y =
-				es->current.height > 0
-					? (float)es->current.buffer_height / es->current.height
-					: 1.0f;
+			/*
+			 * A client may advertise a buffer whose size differs from the
+			 * surface size and restrict which part of that buffer is shown
+			 * (wp_viewporter, buffer scale).
+			 * wlr_surface_get_buffer_source_box() provides that mapping; both
+			 * its offset and its size are required, since deriving the source
+			 * box from the buffer dimensions alone samples an incorrect region.
+			 */
+			struct wlr_fbox bsrc = {0};
+			wlr_surface_get_buffer_source_box(es, &bsrc);
+			/* Buffer pixels per unit of surface size. */
+			float ratio_x = es->current.width > 0
+								? (float)bsrc.width / es->current.width
+								: 1.0f;
+			float ratio_y = es->current.height > 0
+								? (float)bsrc.height / es->current.height
+								: 1.0f;
 			if (vw <= 0 || vh <= 0) {
 				wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
 				wlr_scene_buffer_set_dest_size(entry->buffer, 0, 0);
@@ -182,8 +191,8 @@ void overview_layout_card(Client *c) {
 			wlr_scene_node_set_position(&entry->buffer->node, vx, vy);
 			wlr_scene_buffer_set_dest_size(entry->buffer, vw, vh);
 			struct wlr_fbox src = {
-				.x = (clip.x + (float)vx / scale_x) * ratio_x,
-				.y = (clip.y + (float)vy / scale_y) * ratio_y,
+				.x = bsrc.x + (clip.x + (float)vx / scale_x) * ratio_x,
+				.y = bsrc.y + (clip.y + (float)vy / scale_y) * ratio_y,
 				.width = ((float)vw / scale_x) * ratio_x,
 				.height = ((float)vh / scale_y) * ratio_y,
 			};
@@ -208,21 +217,22 @@ void overview_layout_card(Client *c) {
 				continue;
 			}
 
-			float ratio_x =
-				es->current.width > 0
-					? (float)es->current.buffer_width / es->current.width
-					: 1.0f;
-			float ratio_y =
-				es->current.height > 0
-					? (float)es->current.buffer_height / es->current.height
-					: 1.0f;
+			/* Same buffer mapping as the root surface above. */
+			struct wlr_fbox bsrc = {0};
+			wlr_surface_get_buffer_source_box(es, &bsrc);
+			float ratio_x = es->current.width > 0
+								? (float)bsrc.width / es->current.width
+								: 1.0f;
+			float ratio_y = es->current.height > 0
+								? (float)bsrc.height / es->current.height
+								: 1.0f;
 			float ox = (float)(cx0 - px) / scale_x;
 			float oy = (float)(cy0 - py) / scale_y;
 			wlr_scene_node_set_position(&entry->buffer->node, cx0, cy0);
 			wlr_scene_buffer_set_dest_size(entry->buffer, cw, ch);
 			struct wlr_fbox src = {
-				.x = ox * ratio_x,
-				.y = oy * ratio_y,
+				.x = bsrc.x + ox * ratio_x,
+				.y = bsrc.y + oy * ratio_y,
 				.width = ((float)cw / scale_x) * ratio_x,
 				.height = ((float)ch / scale_y) * ratio_y,
 			};

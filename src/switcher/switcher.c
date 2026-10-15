@@ -32,17 +32,26 @@ void switcher_tile_layout(struct switcher_tile *tile) {
 	wl_list_for_each(entry, &tile->surfaces, link) {
 		struct wlr_surface *s = entry->surface;
 		if (entry->is_root) {
-			float ratio_x =
-				s->current.width > 0
-					? (float)s->current.buffer_width / s->current.width
-					: 1.0f;
-			float ratio_y =
-				s->current.height > 0
-					? (float)s->current.buffer_height / s->current.height
-					: 1.0f;
+			/*
+			 * A client may advertise a buffer whose size differs from the
+			 * surface size and restrict which part of that buffer is shown
+			 * (wp_viewporter, buffer scale).
+			 * wlr_surface_get_buffer_source_box() provides that mapping; both
+			 * its offset and its size are required, since deriving the source
+			 * box from the buffer dimensions alone samples an incorrect region.
+			 */
+			struct wlr_fbox bsrc = {0};
+			wlr_surface_get_buffer_source_box(s, &bsrc);
+			/* Buffer pixels per unit of surface size. */
+			float ratio_x = s->current.width > 0
+								? (float)bsrc.width / s->current.width
+								: 1.0f;
+			float ratio_y = s->current.height > 0
+								? (float)bsrc.height / s->current.height
+								: 1.0f;
 			struct wlr_fbox src = {
-				.x = clip.x * ratio_x,
-				.y = clip.y * ratio_y,
+				.x = bsrc.x + clip.x * ratio_x,
+				.y = bsrc.y + clip.y * ratio_y,
 				.width = src_w * ratio_x,
 				.height = src_h * ratio_y,
 			};
