@@ -1840,6 +1840,12 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			}
 		}
 
+		/* Don't send the press to the surface that a bar/tab click switched
+		 * to. The seat drops its release too, so the client never sees a
+		 * click. */
+		if (bar)
+			return true;
+
 		if (event->button == BTN_LEFT && c && !bar &&
 			config.enable_border_resize) {
 			uint32_t edge = client_resize_edge_at(c, surface, server.cursor->x,
