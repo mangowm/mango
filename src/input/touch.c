@@ -163,6 +163,8 @@ void handle_cursor_touch_down(struct wl_listener *listener, void *data) {
 
 	touch_apply_monitor_mapping(event->touch);
 
+	server.input_serial++;
+
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
 	point->surface = touch_get_coords(event->touch, event->x, event->y,

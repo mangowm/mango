@@ -719,6 +719,9 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	int32_t handled = 0;
 	uint32_t mods = wlr_keyboard_get_modifiers(group->keyboard);
 
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+		server.input_serial++;
+
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
 	// In overcircle mode, releasing the mode key exits overview.

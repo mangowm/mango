@@ -409,6 +409,9 @@ void handle_tablet_tool_tip(struct wl_listener *listener, void *data) {
 	if (!tool)
 		return;
 
+	if (event->state == WLR_TABLET_TOOL_TIP_DOWN)
+		server.input_serial++;
+
 	struct wlr_pointer_button_event fakeptrbtnevent = {
 		.button = BTN_LEFT,
 		.state = event->state == WLR_TABLET_TOOL_TIP_UP

@@ -478,6 +478,9 @@ handle_cursor_button(struct wl_listener *listener, void *data) {
 
 	ipc_notify_device_event(&event->pointer->base);
 
+	if (event->state == WL_POINTER_BUTTON_STATE_PRESSED)
+		server.input_serial++;
+
 	if (!pointer_process_button_press(event))
 		wlr_seat_pointer_notify_button(server.seat, event->time_msec,
 									   event->button, event->state);

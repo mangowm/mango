@@ -2116,6 +2116,7 @@ void init_client_properties(Client *c) {
 	c->isfakefullscreen = 0;
 	c->no_animation = 0;
 	c->isopensilent = 0;
+	c->open_silent_input = server.input_serial;
 	c->istagsilent = 0;
 	c->no_swallow = 0;
 	c->isterm = 0;
@@ -4845,6 +4846,11 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 	if (c && c->swallowdby)
 		return;
 
+	/* No activation tokens in X11: drop the whole startup burst (toolkits
+	 * send several) until the user presses a key or button. */
+	if (c->isopensilent && c->open_silent_input == server.input_serial)
+		return;
+
 	if (c->tags & TAG0_MASK) {
 		if (is_special_active(c->mon)) {
 			client_focus(c, 1);
@@ -4870,8 +4876,10 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 		}
 	}
 
+	/* A silent window can be sel without focus (arrange). */
 	if (config.focus_on_activate && !c->istagsilent &&
-		c != server.selected_monitor->sel) {
+		(c != server.selected_monitor->sel ||
+		 (c->isopensilent && !c->isfocusing))) {
 		if (!(c->mon == server.selected_monitor &&
 			  c->tags & c->mon->tagset[c->mon->seltags]))
 			client_view_on_monitor(&(Arg){.ui = c->tags}, true, c->mon, true);
