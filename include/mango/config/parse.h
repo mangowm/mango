@@ -100,6 +100,7 @@ typedef struct {
 	bool isreleaseapply;
 	bool ispassapply;
 	bool isallowconflict;
+	bool isnorepeat;
 	int line_number;
 	int file_index;
 } KeyBinding;

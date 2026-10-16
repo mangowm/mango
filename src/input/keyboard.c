@@ -191,7 +191,7 @@ int32_t keyboard_repeat(void *data) {
 	for (i = 0; i < group->nsyms; i++)
 		keyboard_check_keybinding(WL_KEYBOARD_KEY_STATE_PRESSED, false,
 								  group->mods, group->keysyms[i],
-								  group->keycode);
+								  group->keycode, true);
 
 	return 0;
 }
@@ -583,7 +583,8 @@ void keyboard_unmark_bound_key(uint32_t keycode) {
 }
 
 int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
-								  xkb_keysym_t sym, uint32_t keycode) {
+								  xkb_keysym_t sym, uint32_t keycode,
+								  bool is_repeat) {
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
 	 * processing keys, rather than passing them on to the client for its
@@ -632,6 +633,11 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			   keycode == k->keysymcode.keycode.keycode2 ||
 			   keycode == k->keysymcode.keycode.keycode3))) &&
 			k->func) {
+
+			/* A "n" binding fires once per press: ignore key repeat events.
+			 * Stop here so a repeat never falls through to another binding. */
+			if (is_repeat && k->isnorepeat)
+				break;
 
 			if (!k->ispassapply) {
 				handled = 1;
@@ -757,7 +763,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	for (i = 0; i < nsyms; i++)
 		handled = keyboard_check_keybinding(event->state, server.session_locked,
-											mods, syms[i], keycode) ||
+											mods, syms[i], keycode, false) ||
 				  handled;
 
 	/* The press was swallowed, so swallow its release too. */
