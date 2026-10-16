@@ -42,6 +42,7 @@ void client_set_drop_area(Client *c);
 
 /* ---------- central rendering entry point ---------- */
 void client_apply_clip(Client *c, float factor);
+void client_fill_surface_to_box(Client *c, const struct wlr_box *box);
 void client_animation_set_progress(Client *c, double p);
 void client_animation_resume(Client *c, double remaining);
 void fadeout_client_animation_next_tick(Client *c);

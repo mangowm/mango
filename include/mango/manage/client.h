@@ -84,6 +84,7 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoDimNode *dim_node;
+	MangoDimNode *traffic_light[3]; /* close, minimize, maximize */
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -92,9 +93,12 @@ struct Client {
 		struct wlr_xwayland_surface *xwayland;
 	} surface;
 	struct wl_listener commit;
+	struct wl_listener commit_fill;
 	struct wl_listener map;
 	struct wl_listener maximize;
 	struct wl_listener minimize;
+	struct wl_listener request_move;
+	struct wl_listener request_resize;
 	struct wl_listener unmap;
 	struct wl_listener destroy;
 	struct wl_listener set_title;
@@ -129,6 +133,8 @@ struct Client {
 		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
 		vrr_only_fullscreen, force_render, activation_bypass;
 	int32_t ismaximizescreen;
+	/* floating layout: forced float, restored from floating.txt */
+	int32_t float_forced, float_restored;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
 		fullscreen_backup_h;
@@ -379,6 +385,8 @@ void handle_client_commit(struct wl_listener *listener, void *data);
 void handle_client_unmap(struct wl_listener *listener, void *data);
 void handle_client_destroy(struct wl_listener *listener, void *data);
 void handle_client_request_fullscreen(struct wl_listener *listener, void *data);
+void handle_client_request_move(struct wl_listener *listener, void *data);
+void handle_client_request_resize(struct wl_listener *listener, void *data);
 void handle_client_request_maximize(struct wl_listener *listener, void *data);
 void handle_client_request_minimize(struct wl_listener *listener, void *data);
 void handle_client_set_title(struct wl_listener *listener, void *data);

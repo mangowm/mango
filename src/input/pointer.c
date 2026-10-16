@@ -6,12 +6,14 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/traffic-lights.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
 #include "mango/input/trackpad.h"
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/client.h"
@@ -32,12 +34,18 @@
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
+#include <wlr/types/wlr_xdg_shell.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
 #endif
 #include <wlr/util/edges.h>
 #include <wlr/util/region.h>
 #include <wlr/xcursor.h>
+
+/* A press inside the top drag zone arms a window move: if the pointer then
+ * travels a few pixels with the button held, the compositor takes over. */
+static Client *top_drag_client = NULL;
+static double top_drag_x, top_drag_y;
 
 static struct LastCursor last_cursor;
 
@@ -1143,6 +1151,8 @@ void pointer_end_grab_client(bool follow_pointer) {
 		client_set_drop_area(server.drop_client);
 		server.drop_client = NULL;
 	}
+	floating_note(gc);
+	floating_flush();
 }
 
 static Client *group_bar_target_at(double x, double y, Client *ignore) {
@@ -1325,6 +1335,22 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	}
 
 	pointer_update_resize_cursor(c, surface);
+
+	if (top_drag_client) {
+		if (server.cursor_mode != CurPressed || top_drag_client->iskilling) {
+			top_drag_client = NULL;
+		} else {
+			double ddx = server.cursor->x - top_drag_x;
+			double ddy = server.cursor->y - top_drag_y;
+			if (ddx * ddx + ddy * ddy >= 64.0) {
+				Client *dc = top_drag_client;
+				top_drag_client = NULL;
+				if (pointer_begin_move_resize(dc, CurMove, top_drag_x,
+											  top_drag_y, 0))
+					wlr_seat_pointer_clear_focus(server.seat);
+			}
+		}
+	}
 
 	/* If we are currently grabbing the mouse, handle and return */
 	if (server.cursor_mode == CurMove) {
@@ -1711,6 +1737,20 @@ void pointer_place_drag_tile(Client *c) {
 	client_set_floating(c, 0);
 }
 
+/* The press hit a traffic light dot; its release must be dropped too. */
+static bool traffic_swallow_release = false;
+
+static bool client_in_top_drag_zone(Client *c, double x, double y) {
+	int32_t bw = (int32_t)c->bw;
+
+	if (config.top_drag_zone <= 0 || !c->isfloating || c->isfullscreen ||
+		c->ismaximizescreen || c->iskilling || client_is_unmanaged(c))
+		return false;
+
+	return x >= c->geom.x + bw && x < c->geom.x + c->geom.width - bw &&
+		   y >= c->geom.y + bw && y < c->geom.y + bw + config.top_drag_zone;
+}
+
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	uint32_t mods;
 	Client *c = NULL;
@@ -1779,6 +1819,13 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			}
 		}
 
+		/* Clicks on the traffic light dots never reach the window. */
+		if (c && event->button == BTN_LEFT &&
+			traffic_lights_click(c, server.cursor->x, server.cursor->y)) {
+			traffic_swallow_release = true;
+			return true;
+		}
+
 		// In overview mode, left click jumps and right click closes windows.
 		if (server.selected_monitor && server.selected_monitor->isoverview &&
 			event->button == BTN_LEFT && c) {
@@ -1790,6 +1837,21 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			event->button == BTN_RIGHT && c) {
 			pending_kill_client(c);
 			return true;
+		}
+
+		/* Top drag zone; the press itself still goes to the window. Menus
+		 * and other popups over the zone are left alone. */
+		top_drag_client = NULL;
+		if (c && !bar && event->button == BTN_LEFT && surface) {
+			struct wlr_xdg_surface *xs =
+				wlr_xdg_surface_try_from_wlr_surface(surface);
+			if ((!xs || xs->role != WLR_XDG_SURFACE_ROLE_POPUP) &&
+				client_in_top_drag_zone(c, server.cursor->x,
+										server.cursor->y)) {
+				top_drag_client = c;
+				top_drag_x = server.cursor->x;
+				top_drag_y = server.cursor->y;
+			}
 		}
 
 		if (bar && !bar->is_tab && bar->node_data &&
@@ -1857,6 +1919,12 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		top_drag_client = NULL;
+		if (traffic_swallow_release && event->button == BTN_LEFT) {
+			traffic_swallow_release = false;
+			server.cursor_mode = CurNormal;
+			return true;
+		}
 		server.group_bar_drag_pending = false;
 		server.drop_to_group = false;
 		server.group_bar_drag_client = NULL;

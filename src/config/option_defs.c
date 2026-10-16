@@ -843,6 +843,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->always_show_group_bar = atoi(value);
 	} else if (strcmp(key, "group_bar_close_button_enable") == 0) {
 		config->group_bar_close_button_enable = atoi(value);
+	} else if (strcmp(key, "top_drag_zone") == 0) {
+		config->top_drag_zone = atoi(value);
 	} else if (strcmp(key, "group_bar_button_size") == 0) {
 		config->group_bar_button_size = atoi(value);
 	} else if (strcmp(key, "group_bar_button_margin") == 0) {
@@ -882,6 +884,37 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->shadowscolor, color);
 		}
+	} else if (strcmp(key, "traffic_lights") == 0) {
+		config->traffic_lights = atoi(value);
+	} else if (strcmp(key, "traffic_light_size") == 0) {
+		config->traffic_light_size = atoi(value);
+	} else if (strcmp(key, "traffic_light_position") == 0) {
+		config->traffic_light_right = strcmp(value, "left") != 0;
+	} else if (strcmp(key, "traffic_light_order") == 0) {
+		/* e.g. "close,minimize,maximize"; leave one out to hide it */
+		char *copy = strdup(value), *save = NULL, *tok;
+		int32_t n = 0;
+		if (copy) {
+			for (tok = strtok_r(copy, ", \t", &save); tok && n < 3;
+				 tok = strtok_r(NULL, ", \t", &save)) {
+				int32_t id = -1, dup = 0;
+				if (strcmp(tok, "close") == 0)
+					id = 0;
+				else if (strcmp(tok, "minimize") == 0 ||
+						 strcmp(tok, "min") == 0)
+					id = 1;
+				else if (strcmp(tok, "maximize") == 0 ||
+						 strcmp(tok, "max") == 0)
+					id = 2;
+				for (int32_t k = 0; k < n; k++)
+					dup |= config->traffic_light_order[k] == id;
+				if (id >= 0 && !dup)
+					config->traffic_light_order[n++] = id;
+			}
+			free(copy);
+		}
+		if (n > 0)
+			config->traffic_light_count = n;
 	} else if (strcmp(key, "dim_enable") == 0) {
 		config->dim_enable = atoi(value);
 	} else if (strcmp(key, "dim_focused_color") == 0) {
@@ -2394,6 +2427,7 @@ void set_value_default() {
 	config.always_show_group_bar = 0;
 	config.group_bar_close_button_enable = 0;
 	config.group_bar_button_size = 16;
+	config.top_drag_zone = 0;
 	config.group_bar_button_margin = 4;
 	config.group_bar_button_color[0] = 0xad / 255.0f;
 	config.group_bar_button_color[1] = 0x40 / 255.0f;
@@ -2469,6 +2503,13 @@ void set_value_default() {
 	config.shadowscolor[3] = 1.0f;
 
 	config.dim_enable = 0;
+	config.traffic_lights = 1;
+	config.traffic_light_size = 12;
+	config.traffic_light_right = 1;
+	config.traffic_light_count = 3;
+	config.traffic_light_order[0] = 0;
+	config.traffic_light_order[1] = 1;
+	config.traffic_light_order[2] = 2;
 	config.dim_focused_color[0] = 0.0f;
 	config.dim_focused_color[1] = 0.0f;
 	config.dim_focused_color[2] = 0.0f;
@@ -2826,6 +2867,7 @@ void override_config(void) {
 		CLAMP_INT(config.always_show_group_bar, 0, 1);
 	config.group_bar_close_button_enable =
 		CLAMP_INT(config.group_bar_close_button_enable, 0, 1);
+	config.top_drag_zone = CLAMP_INT(config.top_drag_zone, 0, 200);
 	config.group_bar_button_size =
 		CLAMP_INT(config.group_bar_button_size, 4, 64);
 	config.group_bar_button_margin =
@@ -2858,6 +2900,8 @@ void override_config(void) {
 	config.unfocused_opacity =
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
 	config.dim_enable = CLAMP_INT(config.dim_enable, 0, 1);
+	config.traffic_lights = CLAMP_INT(config.traffic_lights, 0, 1);
+	config.traffic_light_size = CLAMP_INT(config.traffic_light_size, 6, 40);
 
 	config.groupbardata.border_width =
 		CLAMP_INT(config.groupbardata.border_width, 0, 100);
