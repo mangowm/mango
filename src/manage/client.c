@@ -1669,8 +1669,6 @@ void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 			c->geom = c->float_geom.width > 0 && c->float_geom.height > 0
 						  ? c->float_geom
 						  : c->geom;
-			if (!c->no_size_hint)
-				client_set_size_bound(c);
 		}
 	}
 
