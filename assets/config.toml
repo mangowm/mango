@@ -93,6 +93,8 @@ hotarea_disable_on_fullscreen = 1
 overview_gap_inner = 5
 overview_gap_outer = 30
 overcircle_center_ratio = 0.5
+title_message_bar_height = 52
+title_message_bar_gap = 20
 
 # Misc
 no_border_when_single = 0

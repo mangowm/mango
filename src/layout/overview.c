@@ -482,6 +482,14 @@ void overview_scale_tab(Monitor *m) {
 	// The focused window is centered.
 	Client *focus = items[focus_idx];
 	{
+		/* Keep the title bar and its gap inside the visible area by treating
+		 * them as part of the centered focus block. */
+		float title_block_h = 0.0f;
+		if (config.title_message_bar_height > 0)
+			title_block_h = (float)config.title_message_bar_height +
+							(float)config.title_message_bar_gap;
+		if (title_block_h >= avail_h)
+			title_block_h = 0.0f;
 		float ow = focus->overview_backup_geom.width;
 		float oh = focus->overview_backup_geom.height;
 		if (ow <= 0 || oh <= 0) {
@@ -490,13 +498,14 @@ void overview_scale_tab(Monitor *m) {
 		}
 		float w = center_w;
 		float h = w * (oh / ow);
-		if (h > avail_h) {
-			float s = avail_h / h;
+		float max_h = avail_h - title_block_h;
+		if (h > max_h) {
+			float s = max_h / h;
 			w *= s;
 			h *= s;
 		}
 		int ix = (int)(center_x + (center_w - w) / 2.0f + 0.5f);
-		int iy = (int)(base_y + (avail_h - h) / 2.0f + 0.5f);
+		int iy = (int)(base_y + (avail_h - (h + title_block_h)) / 2.0f + 0.5f);
 		client_tile_resize(focus, (struct wlr_box){ix, iy, (int)w, (int)h}, 0,
 						   NULL);
 	}

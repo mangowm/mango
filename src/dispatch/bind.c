@@ -20,6 +20,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/title-message-bar.h"
 #include "mango/overview/overview.h"
 #include <fcntl.h>
 #include <unistd.h>
@@ -2313,6 +2314,7 @@ static void set_overview(const Arg *arg, bool enter) {
 
 	if (!enter) {
 		server.selected_monitor->ov_tab_layout = 0;
+		title_message_bar_hide(server.selected_monitor);
 		if (server.selected_monitor->is_jump_mode)
 			finish_jump_mode(server.selected_monitor);
 	}
@@ -2340,6 +2342,7 @@ static void set_overview(const Arg *arg, bool enter) {
 		} else {
 			server.selected_monitor->isoverview = false;
 			server.selected_monitor->ov_tab_layout = 0;
+			title_message_bar_hide(server.selected_monitor);
 			return;
 		}
 	} else if (sel && (sel->tags & TAGMASK) != 0) {
@@ -2415,7 +2418,6 @@ static void set_overview(const Arg *arg, bool enter) {
 		}
 		arrange(server.selected_monitor, true, false);
 	}
-
 	fix_mon_tagset_from_overview(server.selected_monitor);
 	refresh_monitors_workspaces_status(server.selected_monitor);
 

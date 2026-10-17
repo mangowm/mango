@@ -31,6 +31,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/title-message-bar.h"
 #include "mango/switcher/switcher.h"
 #include <scenefx/types/wlr_scene.h>
 #include <unistd.h>
@@ -175,8 +176,11 @@ void reset_option(void) {
 	 * space on all outputs. */
 	Monitor *m = NULL;
 	wl_list_for_each(m, &server.monitors, link) {
-		if (m->wlr_output->enabled)
+		if (m->wlr_output->enabled) {
+			title_message_bar_apply_config(m);
+			title_message_bar_update(m);
 			arrange(m, false, false);
+		}
 	}
 }
 

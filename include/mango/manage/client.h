@@ -22,7 +22,8 @@ enum {
 	XdgPopup,
 	XdgImPopup,
 	GroupBar,
-	TabBar
+	TabBar,
+	TitleMessageBar
 }; /* client types */
 
 #ifdef XWAYLAND

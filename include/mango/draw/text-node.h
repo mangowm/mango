@@ -104,11 +104,13 @@ typedef struct MangoBarDecoration {
 	float cached_scale;
 	float cached_fg_color[4];
 	bool cached_focused;
+	bool cached_center_secondary_line;
 	int32_t cached_clip_pixel_w;
 	int32_t surface_pixel_w;
 	int32_t surface_pixel_h;
 
 	bool focused;
+	bool center_secondary_line;
 
 	char *last_text;
 	float last_scale;
@@ -160,6 +162,8 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 
 void mango_jump_label_node_set_focus(MangoJumpLabel *node, bool focused);
 void mango_bar_decoration_set_focus(MangoBarDecoration *node, bool focused);
+void mango_bar_decoration_set_center_secondary_line(MangoBarDecoration *node,
+													bool centered);
 
 void mango_bar_decoration_set_colors(MangoBarDecoration *node,
 									 const float fg[4], const float bg[4]);

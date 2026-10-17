@@ -20,6 +20,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
+#include "mango/manage/title-message-bar.h"
 #include "mango/manage/xwayland_primary.h"
 #include <fcntl.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
@@ -895,6 +896,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		wlr_scene_node_destroy(&m->special_dim_rect->node);
 		m->special_dim_rect = NULL;
 	}
+	title_message_bar_finish(m);
 	if (m->skip_frame_timeout) {
 		monitor_stop_skip_frame_timer(m);
 		wl_event_source_remove(m->skip_frame_timeout);

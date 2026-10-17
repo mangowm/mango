@@ -19,6 +19,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/title-message-bar.h"
 #include "mango/manage/xwayland_primary.h"
 #include "mango/overview/overview.h"
 #include "mango/switcher/switcher.h"
@@ -2762,6 +2763,7 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 	const char *title = client_get_title(c);
 	client_update_group_bar_title(c);
 	client_update_tab_bar_title(c);
+	title_message_bar_update_title(c);
 
 	struct wayland_string wayland_title;
 	const char *clamped_title = wayland_string_set(&wayland_title, title);

@@ -51,6 +51,10 @@ struct switcher_state {
 	int index;
 	int tile_h;
 	int scope;
+	int panel_x;
+	int panel_y;
+	int panel_w;
+	int panel_h;
 };
 
 /* Function Definitions */
@@ -79,6 +83,8 @@ void switcher_remove_client(Client *c);
 void switcher_commit_client(Client *tc);
 void switcher_commit(void);
 Client *switcher_client_at(double lx, double ly);
+bool switcher_title_message_bar_geometry(Monitor *m, Client **client,
+										 struct wlr_box *box);
 void switcher_open(int scope, int dir);
 void switcher_cycle(int dir);
 int32_t switcher(const Arg *arg);

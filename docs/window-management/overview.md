@@ -14,6 +14,8 @@ description: Configure the overview mode for window navigation.
 | `overview_gap_inner` | integer | `5` | Inner gap in overview mode. |
 | `overview_gap_outer` | integer | `30` | Outer gap in overview mode. |
 | `overcircle_center_ratio` | float | `0.5` | Width ratio of the centered window in the `overcircle` layout (0.1–0.9). |
+| `title_message_bar_height` | integer | `52` | Height of the focused window's title bar below its card in `overcircle` mode. Set to `0` to disable it. |
+| `title_message_bar_gap` | integer | `20` | Gap between the focused window's card and its title bar in `overcircle` mode. |
 | `jump_labels` | string | `HJKLASDFGQWERTYUIOPZXCVBNM` | Character sequence used for jump hints in overview mode. |
 
 ### Setting Descriptions
@@ -31,6 +33,11 @@ monitor. Release a modifier key or run `toggleoverview` to close it.
 By default overview temporarily views every tag on the monitor. Use
 `overcircle` with `current_next`/`current_prev`, or run `toggleoverview,1`, to
 keep the overview restricted to the current tagset's windows.
+
+The title message bar shows the window title on the first line and its app id on
+the second. It also appears below the switcher panel for the highlighted
+window. Its width follows the switcher panel. See
+[Theming](/docs/visuals/theming#title-message-bar) for its decoration options.
 
 ### Mouse Interaction in Overview
 

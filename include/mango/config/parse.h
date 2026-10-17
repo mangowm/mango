@@ -488,6 +488,8 @@ typedef struct {
 	uint32_t borderpx;
 	uint32_t group_bar_height;
 	uint32_t tab_bar_height;
+	uint32_t title_message_bar_height;
+	uint32_t title_message_bar_gap;
 	int32_t always_show_group_bar;
 	int32_t group_bar_close_button_enable;
 	uint32_t group_bar_button_size;
@@ -580,6 +582,7 @@ typedef struct {
 	DecorateDrawData jumplabeldata;
 	DecorateDrawData groupbardata;
 	DecorateDrawData tabbardata;
+	DecorateDrawData title_message_bardata;
 
 	int32_t hdr_depth;
 } Config;
