@@ -73,6 +73,7 @@ These settings apply to layouts like `tile` and `center_tile`.
 | `new_is_master` | `1` | New windows become the master window. |
 | `default_master_factor` | `0.55` | The split ratio between master and stack areas. |
 | `default_master_count` | `1` | Number of allowed master windows. |
+| `master_horizontal_split` | `0` | (Tile / Right Tile) Place multiple masters side by side instead of stacked. |
 | `center_master_overspread` | `0` | (Center Tile) Master spreads across screen if no stack exists. |
 | `center_when_single_stack` | `1` | (Center Tile) Center master when only one stack window exists. |
 

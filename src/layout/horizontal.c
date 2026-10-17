@@ -74,10 +74,38 @@ static void tile_core(Monitor *m, const LayoutContext *ctx) {
 		(m->w.height - 2 * cur_gappov - cur_gappiv * ie * (stack_num - 1));
 	float slave_surplus_ratio = 1.0;
 
+	int32_t master_area_width = mw - cur_gappih * ie;
+	int32_t master_surplus_width =
+		master_area_width - cur_gappih * ie * (master_num - 1);
+	int32_t mx = 0, w;
+
 	wl_list_for_each(c, &server.clients, link) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
-		if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
+		if (i < m->pertag->nmasters[get_mon_curtag(m)] &&
+			config.master_horizontal_split) {
+			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
+			if (c->master_inner_per > 0.0f) {
+				w = master_surplus_width * c->master_inner_per /
+					master_surplus_ratio;
+				master_surplus_width = master_surplus_width - w;
+				master_surplus_ratio =
+					master_surplus_ratio - c->master_inner_per;
+			} else {
+				w = (master_area_width - mx - cur_gappih * ie * (r - 1)) / r;
+				c->master_inner_per = (float)w / (master_area_width - mx -
+												  cur_gappih * ie * (r - 1));
+			}
+			c->master_mfact_per = mfact;
+			client_tile_resize(
+				c,
+				(struct wlr_box){.x = m->w.x + cur_gappoh + mx,
+								 .y = m->w.y + cur_gappov,
+								 .width = w,
+								 .height = m->w.height - 2 * cur_gappov},
+				0, ctx);
+			mx += w + cur_gappih * ie;
+		} else if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
 			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
@@ -193,10 +221,38 @@ static void right_tile_core(Monitor *m, const LayoutContext *ctx) {
 		(m->w.height - 2 * cur_gappov - cur_gappiv * ie * (stack_num - 1));
 	float slave_surplus_ratio = 1.0;
 
+	int32_t master_area_width = mw - cur_gappih * ie;
+	int32_t master_surplus_width =
+		master_area_width - cur_gappih * ie * (master_num - 1);
+	int32_t mx = 0, w;
+
 	wl_list_for_each(c, &server.clients, link) {
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
-		if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
+		if (i < m->pertag->nmasters[get_mon_curtag(m)] &&
+			config.master_horizontal_split) {
+			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
+			if (c->master_inner_per > 0.0f) {
+				w = master_surplus_width * c->master_inner_per /
+					master_surplus_ratio;
+				master_surplus_width = master_surplus_width - w;
+				master_surplus_ratio =
+					master_surplus_ratio - c->master_inner_per;
+			} else {
+				w = (master_area_width - mx - cur_gappih * ie * (r - 1)) / r;
+				c->master_inner_per = (float)w / (master_area_width - mx -
+												  cur_gappih * ie * (r - 1));
+			}
+			c->master_mfact_per = mfact;
+			client_tile_resize(
+				c,
+				(struct wlr_box){.x = m->w.x + m->w.width - cur_gappoh - mx - w,
+								 .y = m->w.y + cur_gappov,
+								 .width = w,
+								 .height = m->w.height - 2 * cur_gappov},
+				0, ctx);
+			mx += w + cur_gappih * ie;
+		} else if (i < m->pertag->nmasters[get_mon_curtag(m)]) {
 			r = MANGO_MIN(n, m->pertag->nmasters[get_mon_curtag(m)]) - i;
 			if (c->master_inner_per > 0.0f) {
 				h = master_surplus_height * c->master_inner_per /
