@@ -4758,7 +4758,7 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 		}
 	}
 
-	if (config.focus_on_activate && !c->istagsilent &&
+	if (config.focus_on_activate && !c->istagsilent && !c->isopensilent &&
 		c != server.selected_monitor->sel) {
 		if (!(c->mon == server.selected_monitor &&
 			  c->tags & c->mon->tagset[c->mon->seltags]))
