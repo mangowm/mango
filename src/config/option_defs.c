@@ -1431,6 +1431,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		}
 
 		rule->isfloating = -1;
+		rule->stayfocused = -1;
 		rule->isfullscreen = -1;
 		rule->isfakefullscreen = -1;
 		rule->no_border = -1;
@@ -1501,6 +1502,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 				if (strcmp(key, "is_floating") == 0) {
 					rule->isfloating = atoi(val);
+				} else if (strcmp(key, "stay_focused") == 0) {
+					rule->stayfocused = atoi(val);
 				} else if (strcmp(key, "title") == 0) {
 					rule->title = strdup(val);
 				} else if (strcmp(key, "app_id") == 0) {

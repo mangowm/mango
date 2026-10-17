@@ -1474,6 +1474,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, no_fade_out);
 	APPLY_INT_PROP(c, r, no_force_center);
 	APPLY_INT_PROP(c, r, isfloating);
+	APPLY_INT_PROP(c, r, stayfocused);
 	APPLY_INT_PROP(c, r, isfullscreen);
 	APPLY_INT_PROP(c, r, isfakefullscreen);
 	APPLY_INT_PROP(c, r, no_border);
@@ -2069,6 +2070,7 @@ void init_client_properties(Client *c) {
 	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
 	c->isfloating = 0;
+	c->stayfocused = 0;
 	c->isfakefullscreen = 0;
 	c->no_animation = 0;
 	c->isopensilent = 0;
@@ -2890,6 +2892,11 @@ void client_focus(Client *c, int32_t lift) {
 		return;
 
 	if (c && c->no_focus)
+		return;
+
+	Client *cur = server.selected_monitor ? server.selected_monitor->sel : NULL;
+	if (c && cur && cur != c && cur->stayfocused && !cur->iskilling &&
+		client_surface(cur)->mapped && VISIBLEON(cur, cur->mon))
 		return;
 
 	/* Raise client in stacking order if requested */
