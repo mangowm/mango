@@ -175,6 +175,7 @@ struct MangoServer {
 	char chvt_backup_monitor_name[32];
 	bool cursor_hidden;
 	bool tag_combo;
+	bool mod_key_used;
 	char cli_config_path[1024];
 	int active_capture_count;
 	bool cli_debug_log;

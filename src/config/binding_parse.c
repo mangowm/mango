@@ -80,6 +80,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 		case 'p':
 			kb->ispassapply = true;
 			break;
+		case 'e':
+			kb->isexclusiveapply = true;
+			break;
 		case 'c':
 			kb->isallowconflict = true;
 			break;
@@ -89,6 +92,12 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 						suffix[i]);
 			break;
 		}
+	}
+
+	if (kb->isexclusiveapply && !kb->isreleaseapply) {
+		fprintf(stderr, "\033[1m\033[31m[ERROR]:\033[33m Exclusive bind flag "
+						"requires release flag ('r')\n");
+		kb->isexclusiveapply = false;
 	}
 }
 

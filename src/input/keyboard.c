@@ -619,6 +619,11 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			continue;
 		}
 
+		// exclusive binds are handled after this loop so that mod_key_used is
+		// set properly.
+		if (config.key_bindings[ji].isexclusiveapply)
+			continue;
+
 		k = &config.key_bindings[ji];
 		if ((k->iscommonmode ||
 			 (k->isdefaultmode && server.key_mode.isdefault) ||
@@ -640,6 +645,7 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 					keyboard_mark_bound_key(keycode);
 			} else {
 				handled = 0;
+				server.mod_key_used = true;
 			}
 
 			if (k->func(&k->arg))
@@ -721,6 +727,14 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
+	/* Track non-modifier key presses.
+	 * Modifier keycodes: 133,134=Super  37,105=Ctrl  50,62=Shift  64,108=Alt */
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED && keycode != 133 &&
+		keycode != 134 && keycode != 37 && keycode != 105 && keycode != 50 &&
+		keycode != 62 && keycode != 64 && keycode != 108) {
+		server.mod_key_used = true;
+	}
+
 	// In overcircle mode, releasing the mode key exits overview.
 	if (server.selected_monitor && server.selected_monitor->ov_tab_layout &&
 		!server.selected_monitor->is_jump_mode &&
@@ -740,6 +754,38 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 			switcher_commit();
 			group->nsyms = 0;
 			wl_event_source_timer_update(group->key_repeat_source, 0);
+		}
+	}
+
+	if (!server.mod_key_used &&
+		event->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+		for (int32_t ji = 0; ji < config.key_bindings_count; ji++) {
+			const KeyBinding *k = &config.key_bindings[ji];
+			if (!k->isexclusiveapply || !k->func)
+				continue;
+			if (server.session_locked && !k->islockapply)
+				continue;
+			if (!(k->iscommonmode ||
+				  (k->isdefaultmode && server.key_mode.isdefault) ||
+				  (strcmp(server.key_mode.mode, k->mode) == 0)))
+				continue;
+			if (CLEANMASK(mods) != CLEANMASK(k->mod))
+				continue;
+			bool key_match = false;
+			for (int32_t si = 0; si < nsyms && !key_match; si++) {
+				if ((k->keysymcode.type == KEY_TYPE_SYM &&
+					 xkb_keysym_to_lower(syms[si]) ==
+						 xkb_keysym_to_lower(k->keysymcode.keysym)) ||
+					(k->keysymcode.type == KEY_TYPE_CODE &&
+					 (keycode == k->keysymcode.keycode.keycode1 ||
+					  keycode == k->keysymcode.keycode.keycode2 ||
+					  keycode == k->keysymcode.keycode.keycode3)))
+					key_match = true;
+			}
+			if (!key_match)
+				continue;
+			handled = !k->ispassapply;
+			k->func(&k->arg);
 		}
 	}
 
@@ -844,6 +890,10 @@ void handle_keyboard_modifiers(struct wl_listener *listener, void *data) {
 
 	if (!group->keyboard->xkb_state)
 		return;
+
+	uint32_t cur_mods = wlr_keyboard_get_modifiers(group->keyboard);
+	if (cur_mods == 0)
+		server.mod_key_used = false;
 
 	if (!mango_im_keyboard_grab_forward_modifiers(group)) {
 

@@ -100,6 +100,7 @@ typedef struct {
 	bool islockapply;
 	bool isreleaseapply;
 	bool ispassapply;
+	bool isexclusiveapply;
 	bool isallowconflict;
 	int line_number;
 	int file_index;
