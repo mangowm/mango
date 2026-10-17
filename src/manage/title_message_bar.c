@@ -141,14 +141,16 @@ static void title_message_bar_refresh(Monitor *m, bool use_animation) {
 	if (!bar)
 		return;
 
+	bool was_enabled = bar->scene->node.enabled;
+	if (!was_enabled)
+		wlr_scene_node_set_enabled(&bar->scene->node, true);
+
 	title_message_bar_set_text(bar, c, m->wlr_output->scale);
 	mango_bar_decoration_set_size(bar, box.width, box.height);
 
 	wlr_scene_node_set_position(&bar->scene->node, box.x, box.y);
-	if (!bar->scene->node.enabled) {
-		wlr_scene_node_set_enabled(&bar->scene->node, true);
+	if (!was_enabled)
 		wlr_scene_node_raise_to_top(&bar->scene->node);
-	}
 }
 
 void title_message_bar_update(Monitor *m) {

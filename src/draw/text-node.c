@@ -777,7 +777,8 @@ void mango_bar_decoration_set_size(MangoBarDecoration *node, int32_t width,
 	if (height < 0)
 		height = 0;
 
-	if (node->target_width == width && node->target_height == height)
+	if (node->target_width == width && node->target_height == height &&
+		node->cached_text)
 		return;
 
 	node->target_width = width;
@@ -901,6 +902,18 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 		node->last_text = g_strdup(text);
 	}
 	node->last_scale = scale;
+
+	/*
+	 * Keep the pending text current while hidden, but do not rasterize it.
+	 * Invalidating cached_text makes the next visible set_size/update render
+	 * with the final target geometry instead of a zero-width hidden layout.
+	 */
+	if (!node->scene->node.enabled) {
+		g_free(node->cached_text);
+		node->cached_text = NULL;
+		node->cached_scale = -1.0f;
+		return;
+	}
 
 	const float *fg_color =
 		node->focused ? node->focus_fg_color : node->fg_color;

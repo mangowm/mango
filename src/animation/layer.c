@@ -331,7 +331,7 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 			? (double)passed_time / (double)l->animation.duration
 			: 1.0;
 
-	int32_t type = l->animation.action = l->animation.action;
+	int32_t type = l->animation.action;
 	double factor = find_animation_curve_at(animation_passed, type);
 	int32_t width = l->animation.initial.width +
 					(l->current.width - l->animation.initial.width) * factor;
