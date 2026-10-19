@@ -5,6 +5,14 @@
 #include "mango/draw/dim-node.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <wlr/types/wlr_xdg_shell.h>
+#ifdef XWAYLAND
+#include <wlr/xwayland.h>
+#endif
 
 #define TL_COUNT 3
 
@@ -55,6 +63,72 @@ static int32_t tl_x(int32_t sw, int32_t slot) {
 	return base + slot * (size + tl_gap());
 }
 
+/* True when the window draws its own title bar and buttons (client-side
+ * decorations), so the dots would sit on top of its real buttons. */
+static bool tl_client_draws_buttons(Client *c) {
+	struct wlr_xdg_surface *xdg;
+
+#ifdef XWAYLAND
+	if (client_is_x11(c)) {
+		struct wlr_xwayland_surface *xs = c->surface.xwayland;
+
+		/* X11 apps drawing their own bar (OnlyOffice, Qt frameless windows)
+		 * tell the window manager they want no frame decorations. */
+		return c->has_own_buttons ||
+			   (xs && xs->decorations != WLR_XWAYLAND_SURFACE_DECORATIONS_ALL);
+	}
+#endif
+
+	/* It asked to move, minimize or maximize itself: it has its own bar. */
+	if (c->has_own_buttons)
+		return true;
+
+	xdg = c->surface.xdg;
+	if (!xdg || !xdg->surface)
+		return false;
+
+	/* The window negotiated decorations: trust the mode the compositor set. */
+	if (c->decoration) {
+		/* Asking for client-side means it wants to draw its own bar, and some
+		 * apps (Chrome web apps) keep it even when told server-side. */
+		if (c->decoration->requested_mode ==
+			WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+			return true;
+		if (c->decoration->requested_mode ==
+			WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE)
+			return false;
+	}
+
+	/* No negotiation (e.g. GTK headerbars): such windows declare a window
+	 * geometry smaller than their surface to leave room for their shadow. */
+	return xdg->geometry.x > 0 || xdg->geometry.y > 0 ||
+		   xdg->geometry.width < xdg->surface->current.width ||
+		   xdg->geometry.height < xdg->surface->current.height;
+}
+
+/* App ids listed in traffic_light_ignore never get dots. */
+static bool tl_ignored(Client *c) {
+	const char *appid = client_get_appid(c);
+	char *list, *save = NULL, *tok;
+	bool hit = false;
+
+	if (!appid || !*appid || !config.traffic_light_ignore[0])
+		return false;
+
+	list = strdup(config.traffic_light_ignore);
+	if (!list)
+		return false;
+	for (tok = strtok_r(list, ", \t", &save); tok;
+		 tok = strtok_r(NULL, ", \t", &save)) {
+		if (strcasecmp(tok, appid) == 0) {
+			hit = true;
+			break;
+		}
+	}
+	free(list);
+	return hit;
+}
+
 /* Dots are for the main window of an app, not for dialogs. */
 static bool tl_visible(Client *c) {
 	int32_t sw, total;
@@ -65,6 +139,10 @@ static bool tl_visible(Client *c) {
 		c->mon->isoverview || !VISIBLEON(c, c->mon))
 		return false;
 	if (client_is_float_type(c) || client_get_parent(c))
+		return false;
+	if (tl_ignored(c))
+		return false;
+	if (!config.traffic_light_on_csd && tl_client_draws_buttons(c))
 		return false;
 
 	sw = c->geom.width - 2 * (int32_t)c->bw;

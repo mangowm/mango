@@ -190,6 +190,7 @@ struct Client {
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
 	bool scratchpad_tagin;
+	bool has_own_buttons; /* asked to move/minimize/maximize: draws its own */
 	bool user_minimized; /* minimized by the user, not a scratchpad hide */
 	bool fake_no_border;
 	int32_t no_focus;

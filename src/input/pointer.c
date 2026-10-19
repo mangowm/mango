@@ -1751,8 +1751,22 @@ static bool client_in_top_drag_zone(Client *c, double x, double y) {
 		   y >= c->geom.y + bw && y < c->geom.y + bw + config.top_drag_zone;
 }
 
+static uint32_t last_button_ms;
+
+/* True when a mouse button was pressed or released a moment ago over c. Lets
+ * the compositor tell a click on a window's own minimize/maximize button from
+ * a request the app made by itself (e.g. restoring its saved state). */
+bool pointer_button_recent(Client *c) {
+	Client *fc = NULL;
+	struct wlr_surface *focused = server.seat->pointer_state.focused_surface;
+
+	return c && focused && get_now_in_ms() - last_button_ms < 600 &&
+		   toplevel_from_wlr_surface(focused, &fc, NULL) >= 0 && fc == c;
+}
+
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	uint32_t mods;
+	last_button_ms = get_now_in_ms();
 	Client *c = NULL;
 	LayerSurface *l = NULL;
 	MangoBarDecoration *bar = NULL;

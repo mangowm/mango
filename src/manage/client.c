@@ -2064,6 +2064,7 @@ void init_client_properties(Client *c) {
 	c->scratchpad_switching_mon = false;
 	c->scratchpad_tagin = false;
 	c->user_minimized = false;
+	c->has_own_buttons = false;
 	c->fake_no_border = false;
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
@@ -2075,8 +2076,10 @@ void init_client_properties(Client *c) {
 	c->no_size_hint = 0;
 	c->no_radius = 0;
 	c->no_shadow = 0;
-	c->ignore_maximize = 1;
-	c->ignore_minimize = 1;
+	/* Windows with their own title bar (Chrome, GTK, Qt) need these to make
+	 * their minimize/maximize buttons work; rules can still set them to 1. */
+	c->ignore_maximize = 0;
+	c->ignore_minimize = 0;
 	c->iscustomsize = 0;
 	c->iscustompos = 0;
 	c->iscustom_scroller_proportion = 0;
@@ -2731,6 +2734,9 @@ static bool client_owns_pointer_press(Client *c) {
 void handle_client_request_move(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, request_move);
 
+	if (c)
+		c->has_own_buttons = true;
+
 	if (!c || c->iskilling || server.session_locked ||
 		!client_owns_pointer_press(c))
 		return;
@@ -2757,6 +2763,9 @@ void handle_client_request_maximize(struct wl_listener *listener, void *data) {
 
 	Client *c = wl_container_of(listener, c, maximize);
 
+	if (pointer_button_recent(c))
+		c->has_own_buttons = true;
+
 	if (!c || !c->mon || c->iskilling || c->ignore_maximize ||
 		client_is_parked(c))
 		return;
@@ -2775,6 +2784,9 @@ void handle_client_request_maximize(struct wl_listener *listener, void *data) {
 void handle_client_request_minimize(struct wl_listener *listener, void *data) {
 
 	Client *c = wl_container_of(listener, c, minimize);
+
+	if (pointer_button_recent(c))
+		c->has_own_buttons = true;
 
 	if (!c || !c->mon || c->iskilling || c->isminimized || client_is_parked(c))
 		return;

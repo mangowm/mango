@@ -62,6 +62,7 @@ void handle_pointer_constraint_destroy(struct wl_listener *listener,
 									   void *data);
 void handle_cursor_motion_absolute(struct wl_listener *listener, void *data);
 void pointer_resize_floating_window(Client *gc, double x, double y);
+bool pointer_button_recent(Client *c);
 bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 							   uint32_t edge);
 void pointer_end_grab_client(bool follow_pointer);

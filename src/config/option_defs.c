@@ -886,6 +886,11 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->traffic_lights = atoi(value);
 	} else if (strcmp(key, "traffic_light_size") == 0) {
 		config->traffic_light_size = atoi(value);
+	} else if (strcmp(key, "traffic_light_ignore") == 0) {
+		snprintf(config->traffic_light_ignore,
+				 sizeof(config->traffic_light_ignore), "%s", value);
+	} else if (strcmp(key, "traffic_light_on_csd") == 0) {
+		config->traffic_light_on_csd = atoi(value);
 	} else if (strcmp(key, "traffic_light_position") == 0) {
 		config->traffic_light_right = strcmp(value, "left") != 0;
 	} else if (strcmp(key, "traffic_light_order") == 0) {
@@ -2479,6 +2484,8 @@ void set_value_default() {
 	config.dim_enable = 0;
 	config.traffic_lights = 1;
 	config.traffic_light_size = 12;
+	config.traffic_light_on_csd = 0;
+	config.traffic_light_ignore[0] = '\0';
 	config.traffic_light_right = 1;
 	config.traffic_light_count = 3;
 	config.traffic_light_order[0] = 0;
@@ -2873,6 +2880,7 @@ void override_config(void) {
 		CLAMP_FLOAT(config.unfocused_opacity, 0.0f, 1.0f);
 	config.dim_enable = CLAMP_INT(config.dim_enable, 0, 1);
 	config.traffic_lights = CLAMP_INT(config.traffic_lights, 0, 1);
+	config.traffic_light_on_csd = CLAMP_INT(config.traffic_light_on_csd, 0, 1);
 	config.traffic_light_size = CLAMP_INT(config.traffic_light_size, 6, 40);
 
 	config.groupbardata.border_width =
