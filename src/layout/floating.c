@@ -167,6 +167,10 @@ static bool layout_is_floating(Monitor *m) {
 	return l && l->id == FLOATING;
 }
 
+bool floating_layout_active(Monitor *m) {
+	return m && layout_is_floating(m) && !m->isoverview;
+}
+
 void floating_prepare(Monitor *m) {
 	Client *c;
 	bool on = layout_is_floating(m) && !m->isoverview;

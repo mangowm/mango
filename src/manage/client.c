@@ -2063,6 +2063,7 @@ void init_client_properties(Client *c) {
 	c->drag_to_tile = false;
 	c->scratchpad_switching_mon = false;
 	c->scratchpad_tagin = false;
+	c->user_minimized = false;
 	c->fake_no_border = false;
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
@@ -2780,7 +2781,7 @@ void handle_client_request_minimize(struct wl_listener *listener, void *data) {
 
 	if (client_request_minimize(c, data) && !c->ignore_minimize) {
 		if (!c->isminimized)
-			set_minimized(c);
+			minimize_client(c);
 		client_set_minimized(c, true);
 	} else {
 		if (c->isminimized)
@@ -3579,6 +3580,43 @@ void set_minimized(Client *c) {
 	wl_list_insert(server.clients.prev, &c->link); // Inserts it at the tail.
 }
 
+/* Minimize by the user (button, dispatch, taskbar): plays the close animation
+ * instead of the scratchpad slide, and the open animation when restored. */
+void minimize_client(Client *c) {
+	if (!c || !c->mon || c == server.grab_client)
+		return;
+
+	/* Only in the floating layout; tiling keeps its own animations. */
+	if (config.animations && !c->no_animation && !client_is_parked(c) &&
+		floating_layout_active(c->mon) && !c->is_clip_to_hide &&
+		!c->isminimized && VISIBLEON(c, c->mon)) {
+		c->user_minimized = true;
+		init_fadeout_client(c);
+	} else {
+		c->user_minimized = false;
+	}
+	set_minimized(c);
+}
+
+/* A user-minimized window is shown again: start its open animation. */
+void client_play_restore_animation(Client *c) {
+	if (!c || !c->user_minimized || !c->mon)
+		return;
+
+	c->user_minimized = false;
+	if (!client_animations_enabled(c) || !floating_layout_active(c->mon))
+		return;
+
+	c->animation.tagining = false;
+	c->animation.tagouting = false;
+	c->animation.tagouted = false;
+	c->animation.tag_from_rule = false;
+	c->animation.running = false;
+	c->is_pending_open_animation = true;
+	client_update_visibility(c);
+	resize(c, c->geom, (ResizeOpts){.interact = 0, .skip_ov_enter_anim = true});
+}
+
 void unminimize(Client *c) {
 	if (!c || !c->mon)
 		return;
@@ -3672,6 +3710,8 @@ void client_pending_maximized_state(Client *c, int32_t ismaximized) {
 
 void client_pending_minimized_state(Client *c, int32_t isminimized) {
 	c->isminimized = isminimized;
+	if (!isminimized && c->user_minimized && c->mon && VISIBLEON(c, c->mon))
+		client_play_restore_animation(c);
 	if (c->foreign_toplevel && !c->iskilling)
 		wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel,
 													 isminimized);

@@ -8,6 +8,9 @@
  * ~/.config/mango/floating.txt. */
 void floating_layout(Monitor *m);
 
+/* True when the monitor's current tag uses the floating layout. */
+bool floating_layout_active(Monitor *m);
+
 /* Called at the start of arrange(): turns windows floating when the current
  * tag uses the floating layout, and returns them to tiling when it does not. */
 void floating_prepare(Monitor *m);

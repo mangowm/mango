@@ -2253,7 +2253,7 @@ int32_t minimize_window(const Arg *arg) {
 
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (c && !c->isminimized) {
-		set_minimized(c);
+		minimize_client(c);
 	}
 	return 0;
 }

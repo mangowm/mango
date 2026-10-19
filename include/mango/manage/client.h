@@ -190,6 +190,7 @@ struct Client {
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
 	bool scratchpad_tagin;
+	bool user_minimized; /* minimized by the user, not a scratchpad hide */
 	bool fake_no_border;
 	int32_t no_focus;
 	int32_t no_fade_in;
@@ -417,6 +418,8 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 								bool rearrange);
 void reset_maximizescreen_size(Client *c);
 void set_minimized(Client *c);
+void minimize_client(Client *c);
+void client_play_restore_animation(Client *c);
 void unminimize(Client *c);
 void exit_scroller_stack(Client *c);
 void clear_fullscreen_and_maximized_state(Monitor *m);

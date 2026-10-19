@@ -67,6 +67,15 @@ void set_arrange_visible(Monitor *m, Client *c, bool want_animation) {
 		client_update_visibility(c);
 	}
 
+	/* Restored from a user minimize: open animation, not the tag slide. */
+	if (c->user_minimized && !c->isminimized) {
+		if (floating_layout_active(m)) {
+			client_play_restore_animation(c);
+			return;
+		}
+		c->user_minimized = false; /* tiling: normal animation */
+	}
+
 	/* Scratchpad clients slide in from above the monitor when shown */
 	if (SCRATCHPAD_SHOWN(c) && c->scratchpad_tagin) {
 		c->scratchpad_tagin = false;
@@ -179,9 +188,11 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		return;
 	}
 
-	/* Scratchpad windows slide up and out when hidden */
+	/* Scratchpad windows slide up and out when hidden; a window minimized by
+	 * the user already played its close animation and just hides. */
 	if (!(c->tags & TAG0_MASK) && c->is_in_scratchpad && c->isminimized) {
-		if (client_animations_enabled(c) && !c->animation.tagouted) {
+		if (client_animations_enabled(c) && !c->animation.tagouted &&
+			!c->user_minimized) {
 			c->animation.tagouting = true;
 			c->animation.tagining = false;
 			c->pending = c->geom;

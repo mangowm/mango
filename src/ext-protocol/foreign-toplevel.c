@@ -39,7 +39,7 @@ void handle_foreign_minimize_request(struct wl_listener *listener, void *data) {
 		return;
 
 	if (!c->isminimized && event->minimized) {
-		set_minimized(c);
+		minimize_client(c);
 		return;
 	}
 
