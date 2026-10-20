@@ -3649,15 +3649,13 @@ void show_scratchpad(Client *c) {
 		c->bw = c->no_border ? 0 : config.borderpx;
 	}
 
-	/* return if fullscreen */
 	if (!c->isfloating) {
 		client_set_floating(c, 1);
-		c->geom.width = c->iscustomsize
-							? c->float_geom.width
-							: c->mon->w.width * config.scratchpad_width_ratio;
-		c->geom.height =
-			c->iscustomsize ? c->float_geom.height
-							: c->mon->w.height * config.scratchpad_height_ratio;
+	}
+
+	if (!c->iscustomsize) {
+		c->geom.width = c->mon->w.width * config.scratchpad_width_ratio;
+		c->geom.height = c->mon->w.height * config.scratchpad_height_ratio;
 		// Recomputes the centered coordinates.
 		c->float_geom = c->geom = c->animainit_geom = c->animation.current =
 			client_center_geometry(c, c->mon, c->geom, 0, 0);
