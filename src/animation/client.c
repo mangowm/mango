@@ -136,10 +136,19 @@ int32_t is_special_animation_rule(Client *c) {
 }
 
 void set_overview_enter_animation(Client *c) {
-	struct wlr_box start = c->overview_backup_geom;
-	if (start.width <= 0 || start.height <= 0)
-		start = c->animation.current;
-	c->animainit_geom = start;
+	if (client_gesture_driven(c)) {
+		struct wlr_box start = c->overview_backup_geom;
+		if (start.width <= 0 || start.height <= 0)
+			start = c->animation.current;
+		c->animainit_geom = start;
+		return;
+	}
+
+	struct wlr_box geo = c->geom;
+	c->animainit_geom.width = geo.width * 1.2;
+	c->animainit_geom.height = geo.height * 1.2;
+	c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
+	c->animainit_geom.y = geo.y + (geo.height - c->animainit_geom.height) / 2;
 }
 
 void set_client_open_animation(Client *c, struct wlr_box geo) {
@@ -1648,9 +1657,17 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 
 	if (!opts.skip_ov_enter_anim && c->mon->isoverview &&
 		c->animation.overining && !c->animation.overview_enter_anim_set) {
-		set_overview_enter_animation(c);
-		c->animation.overining = false;
-		c->animation.overview_enter_anim_set = true;
+		if (client_gesture_driven(c)) {
+			set_overview_enter_animation(c);
+			c->animation.overining = false;
+			c->animation.overview_enter_anim_set = true;
+		} else {
+			c->animation.overining = false;
+			if (c != c->mon->sel && c->animation.action == OVERVIEW) {
+				c->animation.overview_enter_anim_set = true;
+				set_overview_enter_animation(c);
+			}
+		}
 	}
 
 	client_set_pending_state(c);
