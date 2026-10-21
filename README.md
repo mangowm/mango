@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/mangowm/mango/blob/main/assets/mango-transparency-256.png" alt="Mango Logo" width="120"/>
+  <img src="assets/mango.svg" alt="Mango Logo" width="120"/>
 
   <h1>Mango Wayland Compositor</h1>
 
