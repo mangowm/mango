@@ -67,6 +67,16 @@ jobs:
             done
           } | jq -Rn '[inputs | select(length > 0)] | {pages: .}' > "$TARGET/meta.json"
 
+      - name: Normalize docs links
+        run: |
+          TARGET="$PWD/website/apps/docs/content"
+
+          find "$TARGET" -type f \( -name '*.md' -o -name '*.mdx' \) -exec sed -i \
+            -e 's#](/docs/#](/#g' \
+            -e 's#href="/docs/#href="/#g' {} +
+
+          (cd "$RUNNER_TEMP" && npx --yes oxfmt "$TARGET")
+
       - name: Commit and push
         working-directory: website
         run: |
