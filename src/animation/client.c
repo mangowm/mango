@@ -579,7 +579,7 @@ void client_draw_dim(Client *c, struct ivec2 clip_box) {
 }
 
 void client_draw_blur(Client *c, struct ivec2 clip_box) {
-	if (c->isfullscreen) {
+	if (c->isfullscreen && !client_uses_transparent_rendering(c)) {
 		if (c->blur->node.enabled)
 			wlr_scene_node_set_enabled(&c->blur->node, false);
 		return;

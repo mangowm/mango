@@ -30,6 +30,7 @@
 #include <scenefx/types/wlr_scene.h>
 #include <unistd.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
+#include <wlr/types/wlr_buffer.h>
 #include <wlr/types/wlr_color_management_v1.h>
 #include <wlr/types/wlr_color_representation_v1.h>
 #include <wlr/types/wlr_compositor.h>
@@ -68,6 +69,20 @@ struct wlr_surface *client_surface(Client *c) {
 		return c->surface.xwayland->surface;
 #endif
 	return c->surface.xdg->surface;
+}
+bool client_uses_transparent_rendering(Client *c) {
+	struct wlr_surface *surface = client_surface(c);
+	if (!surface) {
+		return false;
+	}
+
+	/* Client-requested wp_alpha_modifier_v1 state. */
+	if (wlr_alpha_modifier_v1_get_surface_state(surface) != NULL) {
+		return true;
+	}
+
+	/* Clients such as kitty render transparency directly into an alpha buffer. */
+	return surface->buffer && !wlr_buffer_is_opaque(&surface->buffer->base);
 }
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
 								  LayerSurface **pl) {

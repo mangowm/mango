@@ -276,6 +276,7 @@ Monitor *xwayland_monitor(Client *c);
 
 int32_t client_is_x11(Client *c);
 struct wlr_surface *client_surface(Client *c);
+bool client_uses_transparent_rendering(Client *c);
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
 								  LayerSurface **pl);
 
