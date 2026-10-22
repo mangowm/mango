@@ -227,12 +227,6 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	}
 }
 
-void snap_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
-									int32_t sy, void *data) {
-	BufferData *buffer_data = (BufferData *)data;
-	wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
-								   buffer_data->height);
-}
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data) {
 	BufferData *buffer_data = (BufferData *)data;
@@ -1215,14 +1209,10 @@ void fadeout_client_animation_next_tick(Client *c) {
 		wlr_scene_node_for_each_buffer(&c->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
 
-	if (client_close_animation_type(c) == ANIM_TYPE_ZOOM) {
-		BufferData buffer_data;
-		buffer_data.width = width;
-		buffer_data.height = height;
-		buffer_data.width_scale = animation_passed;
-		buffer_data.height_scale = animation_passed;
-		wlr_scene_node_for_each_buffer(
-			&c->scene->node, snap_scene_buffer_apply_effect, &buffer_data);
+	if (c->mon) {
+		bool scaling = client_close_animation_type(c) == ANIM_TYPE_ZOOM;
+		scene_snapshot_clip_to_box(c->scene, &c->mon->m, scaling, width,
+								   height);
 	}
 
 	if (animation_passed >= 1.0) {
@@ -1298,7 +1288,7 @@ void client_animation_next_tick(Client *c) {
 	}
 }
 void init_fadeout_client(Client *c) {
-	if (!c->mon || client_is_unmanaged(c))
+	if (!c->mon || c->mon->iscleanuping || client_is_unmanaged(c))
 		return;
 
 	if (!c->scene)

@@ -865,6 +865,24 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 
 	m->iscleanuping = true;
 
+	Client *c, *ctmp;
+	wl_list_for_each_safe(c, ctmp, &server.fadeout_clients, fadeout_link) {
+		if (c->mon != m) {
+			continue;
+		}
+		wl_list_remove(&c->fadeout_link);
+		wlr_scene_node_destroy(&c->scene->node);
+		free(c);
+	}
+	wl_list_for_each_safe(l, tmp, &server.fadeout_layers, fadeout_link) {
+		if (l->mon != m) {
+			continue;
+		}
+		wl_list_remove(&l->fadeout_link);
+		wlr_scene_node_destroy(&l->scene->node);
+		free(l);
+	}
+
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {
 		wl_list_for_each_safe(l, tmp, &m->layers[i], link)

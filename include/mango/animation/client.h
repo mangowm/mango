@@ -20,8 +20,6 @@ int32_t is_special_animation_rule(Client *client);
 void set_overview_enter_animation(Client *c);
 void set_client_open_animation(Client *c, struct wlr_box geo);
 
-void snap_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
-									int32_t sy, void *data);
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data);
 void buffer_set_effect(Client *c, BufferData data);

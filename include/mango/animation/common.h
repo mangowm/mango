@@ -66,6 +66,9 @@ typedef struct SnapshotMetadata {
 	uint32_t type; // must at first in struct
 	int32_t orig_width;
 	int32_t orig_height;
+	struct wlr_fbox orig_src_box;
+	int32_t orig_x;
+	int32_t orig_y;
 	bool is_subsurface;
 	struct wl_listener destroy;
 } SnapshotMetadata;
@@ -80,5 +83,8 @@ bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,
 
 struct wlr_scene_tree *wlr_scene_tree_snapshot(struct wlr_scene_node *node,
 											   struct wlr_scene_tree *parent);
+void scene_snapshot_clip_to_box(struct wlr_scene_tree *snapshot,
+								const struct wlr_box *bounds, bool scale,
+								int32_t width, int32_t height);
 void request_fresh_all_monitors(void);
 #endif

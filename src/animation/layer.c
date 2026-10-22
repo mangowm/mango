@@ -311,13 +311,6 @@ void layer_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 		wlr_scene_buffer_set_dest_size(buffer, surface_width, surface_height);
 	}
 }
-void layer_fadeout_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
-											 int32_t sx, int32_t sy,
-											 void *data) {
-	BufferData *buffer_data = (BufferData *)data;
-	wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
-								   buffer_data->height);
-}
 void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	if (!l)
 		return;
@@ -345,14 +338,10 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 
 	wlr_scene_node_set_position(&l->scene->node, x, y);
 
-	BufferData buffer_data;
-	buffer_data.width = width;
-	buffer_data.height = height;
-
-	if (layer_close_animation_type(l) == ANIM_TYPE_ZOOM) {
-		wlr_scene_node_for_each_buffer(&l->scene->node,
-									   layer_fadeout_scene_buffer_apply_effect,
-									   &buffer_data);
+	if (l->mon) {
+		bool scaling = layer_close_animation_type(l) == ANIM_TYPE_ZOOM;
+		scene_snapshot_clip_to_box(l->scene, &l->mon->m, scaling, width,
+								   height);
 	}
 
 	l->animation.current = (struct wlr_box){
@@ -381,6 +370,59 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 		l = NULL;
 	}
 }
+
+static struct wlr_scene_tree *layer_surface_tree(LayerSurface *l) {
+	if (!l || !l->scene) {
+		return NULL;
+	}
+
+	struct wlr_scene_node *node;
+	wl_list_for_each(node, &l->scene->children, link) {
+		if (node->type == WLR_SCENE_NODE_TREE) {
+			return wlr_scene_tree_from_node(node);
+		}
+	}
+	return NULL;
+}
+
+/*
+ * Applies the same monitor-boundary clipping used by regular client
+ * animations to a live layer surface. Returns true when the surface has been
+ * partially or fully clipped, in which case zoom scaling must not overwrite
+ * the clipped buffer state.
+ */
+static bool layer_apply_output_clip(LayerSurface *l,
+									const struct wlr_box *animated) {
+	struct wlr_scene_tree *surface_tree = layer_surface_tree(l);
+	if (!surface_tree || !l->mon) {
+		return false;
+	}
+
+	struct wlr_box visible;
+	if (!wlr_box_intersection(&visible, animated, &l->mon->m)) {
+		wlr_scene_subsurface_tree_set_clip(&surface_tree->node, NULL);
+		wlr_scene_node_set_enabled(&surface_tree->node, false);
+		return true;
+	}
+
+	wlr_scene_node_set_enabled(&surface_tree->node, true);
+	if (wlr_box_equal(&visible, animated)) {
+		wlr_scene_subsurface_tree_set_clip(&surface_tree->node, NULL);
+		return false;
+	}
+
+	int32_t surface_x, surface_y;
+	wlr_scene_node_coords(&surface_tree->node, &surface_x, &surface_y);
+	struct wlr_box clip = {
+		.x = visible.x - surface_x,
+		.y = visible.y - surface_y,
+		.width = visible.width,
+		.height = visible.height,
+	};
+	wlr_scene_subsurface_tree_set_clip(&surface_tree->node, &clip);
+	return true;
+}
+
 void layer_animation_next_tick(LayerSurface *l) {
 	if (!l || !l->mapped)
 		return;
@@ -426,6 +468,14 @@ void layer_animation_next_tick(LayerSurface *l) {
 
 	wlr_scene_node_set_position(&l->scene->node, x, y);
 
+	struct wlr_box animated = {
+		.x = x,
+		.y = y,
+		.width = width,
+		.height = height,
+	};
+	bool clipped = layer_apply_output_clip(l, &animated);
+
 	BufferData buffer_data;
 	if (factor == 1.0) {
 		buffer_data.width_scale = 1.0f;
@@ -435,16 +485,16 @@ void layer_animation_next_tick(LayerSurface *l) {
 		buffer_data.height_scale = (float)height / (float)l->current.height;
 	}
 
-	if (layer_open_animation_type(l) == ANIM_TYPE_ZOOM) {
+	if (layer_open_animation_type(l) == ANIM_TYPE_ZOOM && !clipped) {
 		wlr_scene_node_for_each_buffer(
 			&l->scene->node, layer_scene_buffer_apply_effect, &buffer_data);
 	}
 
 	l->animation.current = (struct wlr_box){
-		.x = x,
-		.y = y,
-		.width = width,
-		.height = height,
+		.x = animated.x,
+		.y = animated.y,
+		.width = animated.width,
+		.height = animated.height,
 	};
 
 	if (config.blur && config.blur_layer && !l->no_blur && l->blur)
@@ -462,7 +512,7 @@ void init_fadeout_layers(LayerSurface *l) {
 		return;
 	}
 
-	if (!l->mon || !l->scene)
+	if (!l->mon || l->mon->iscleanuping || !l->scene)
 		return;
 
 	if (l->shield_when_capture) {
