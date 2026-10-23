@@ -48,6 +48,12 @@ Mango starts where dwl ends. It keeps the lightweight, fast-build philosophy whi
 
 **Focused scope.** Niche requests are evaluated by community interest. Significant upvotes move things forward.
 
+## AI Policy
+
+- **Pull requests:** AI may be used to assist in preparing a pull request (PR), but direct AI-generated PRs are not accepted. Contributors must clearly understand what the code does, whether the implementation is reasonable and rigorous, whether it wastes resources, and whether the implementation is sufficiently convergent rather than scattered.
+
+- **Bug reports:** Using AI to report bugs is acceptable. AI-provided information may serve as reference material, which is preferable to reports that provide no reference information.
+
 ## Installation
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/mangowm.svg)](https://repology.org/project/mangowm/versions)
