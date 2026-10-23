@@ -96,7 +96,7 @@ void get_layer_area_bound(LayerSurface *l, struct wlr_box *bound) {
 }
 void get_layer_target_geometry(LayerSurface *l, struct wlr_box *target_box) {
 
-	if (!l || !l->mapped)
+	if (!l || !l->layer_surface || !l->layer_surface->surface->mapped)
 		return;
 
 	const struct wlr_layer_surface_v1_state *state = &l->layer_surface->current;
@@ -607,7 +607,7 @@ void init_fadeout_layers(LayerSurface *l) {
 		wlr_output_schedule_frame(l->mon->wlr_output);
 }
 void layer_set_pending_state(LayerSurface *l) {
-	if (!l || !l->mapped)
+	if (!l || !l->layer_surface || !l->layer_surface->surface->mapped)
 		return;
 
 	struct wlr_box usable_area;
@@ -658,7 +658,7 @@ void layer_set_pending_state(LayerSurface *l) {
 	l->dirty = true;
 }
 void layer_commit(LayerSurface *l) {
-	if (!l || !l->mapped)
+	if (!l || !l->layer_surface || !l->layer_surface->surface->mapped)
 		return;
 
 	l->current = l->pending; // set the end position of the animation
