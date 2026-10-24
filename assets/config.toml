@@ -27,7 +27,7 @@ dim_enable = 0
 dim_focused_color = 0x00000000
 dim_unfocused_color = 0x00000055
 
-# Animation Configuration(support type:zoom,slide)
+# Animation Configuration (support type:zoom,slide)
 # tag_animation_direction: 1-horizontal,0-vertical
 animations = 1
 layer_animations = 1
@@ -53,7 +53,7 @@ animation_curve_focus = [0.46, 1.0, 0.29, 1]
 animation_curve_opacity_fade_out = [0.5, 0.5, 0.5, 0.5]
 animation_curve_opacity_fade_in = [0.46, 1.0, 0.29, 1]
 
-# Scroller Layout Setting
+# Scroller Layout Settings
 scroller_structs = 20
 scroller_default_proportion = 0.8
 scroller_focus_center = 0
@@ -63,14 +63,14 @@ edge_scroller_focus_allow_speed = 0.0
 scroller_default_proportion_single = 1.0
 scroller_proportion_preset = [0.5, 0.8, 1.0]
 
-# Master-Stack Layout Setting
+# Master-Stack Layout Settings
 new_is_master = 1
 default_master_factor = 0.55
 default_master_count = 1
 tag_num = 9
 smart_gaps = 0
 
-# Dwindle Layout Setting
+# Dwindle Layout Settings
 dwindle_smart_split = 0
 dwindle_drop_simple_split = 1
 dwindle_manual_split = 0
@@ -78,15 +78,15 @@ dwindle_horizontal_split = 1
 dwindle_vertical_split = 1
 dwindle_preserve_split = 0
 
-# Monocle Layout Setting
+# Monocle Layout Settings
 monocle_tab_mode = 1
 monocle_no_border = 0
 monocle_no_gap = 0
 
-# Deck Layout Setting
+# Deck Layout Settings
 deck_tab_mode = 1
 
-# Overview Setting
+# Overview Settings
 hotarea_size = 10
 enable_hotarea = 0
 hotarea_disable_on_fullscreen = 1
@@ -114,7 +114,7 @@ cursor_size = 24
 drag_tile_to_tile = 1
 drag_tile_small = 1
 
-# keyboard
+# Keyboard
 repeat_rate = 25
 repeat_delay = 600
 numlock_on = 0
@@ -132,7 +132,7 @@ trackpad_left_handed = 0
 trackpad_middle_button_emulation = 0
 swipe_min_threshold = 1
 
-# mouse
+# Mouse
 # need relogin to make it apply
 mouse_natural_scrolling = 0
 
@@ -160,31 +160,32 @@ overlay_color = 0x14a57cff
 # Key Bindings
 # key name refer to `xev` or `wev` command output,
 # mod keys name: super,ctrl,alt,shift,none
-# reload config
+
+# Reload config
 "SUPER+r" = "reload_config"
 
-# menu and terminal
+# Menu and terminal
 "Alt+space" = "spawn,rofi -show drun"
 "Alt+Return" = "spawn,foot"
 
-# exit
+# Exit
 "SUPER+m" = "quit"
 "ALT+q" = "killclient,"
 
-# switch window focus
+# Switch window focus
 "SUPER+Tab" = "focusstack,next"
 "ALT+Left" = "focusdir,left"
 "ALT+Right" = "focusdir,right"
 "ALT+Up" = "focusdir,up"
 "ALT+Down" = "focusdir,down"
 
-# move window
+# Move window
 "SUPER+SHIFT+Up" = "move_client,up"
 "SUPER+SHIFT+Down" = "move_client,down"
 "SUPER+SHIFT+Left" = "move_client,left"
 "SUPER+SHIFT+Right" = "move_client,right"
 
-# switch window status
+# Switch window status
 "SUPER+g" = "toggleglobal,"
 "ALT+Tab" = "togglejump,"
 "ALT+backslash" = "togglefloating,"
@@ -196,7 +197,7 @@ overlay_color = 0x14a57cff
 "SUPER+SHIFT+I" = "restore_minimized"
 "ALT+z" = "toggle_scratchpad"
 
-# scroller layout
+# Scroller layout
 "ALT+e" = "set_proportion,1.0"
 "ALT+x" = "switch_proportion_preset,"
 "alt+super+ctrl+Left" = "scroller_stack,left"
@@ -204,13 +205,13 @@ overlay_color = 0x14a57cff
 "alt+super+ctrl+Up" = "scroller_stack,up"
 "alt+super+ctrl+Down" = "scroller_stack,down"
 
-#dwindle layout(manual split mode)
+# Dwindle layout (manual split mode)
 "alt+shift+Return" = "dwindle_toggle_split_direction"
 
-# switch layout
+# Switch layout
 "SUPER+n" = "switch_layout"
 
-# tag switch
+# Tag switch
 "SUPER+Left" = "viewtoleft,0"
 "CTRL+Left" = "viewtoleft_have_client,0"
 "SUPER+Right" = "viewtoright,0"
@@ -240,13 +241,13 @@ overlay_color = 0x14a57cff
 "Alt+8" = "tag,8,0"
 "Alt+9" = "tag,9,0"
 
-# monitor switch
+# Monitor switch
 "alt+shift+Left" = "focusmon,left"
 "alt+shift+Right" = "focusmon,right"
 "SUPER+Alt+Left" = "tagmon,left"
 "SUPER+Alt+Right" = "tagmon,right"
 
-# gaps
+# Gaps
 "ALT+SHIFT+X" = "incgaps,1"
 "ALT+SHIFT+Z" = "incgaps,-1"
 "ALT+SHIFT+R" = "togglegaps"
@@ -289,7 +290,7 @@ overlay_color = 0x14a57cff
 "none+up+4" = "enteroverview"
 "none+down+4" = "leaveoverview"
 
-# layout support:
+# Layout support:
 # tile,scroller,grid,deck,monocle,center_tile,vertical_tile,vertical_scroller
 
 [[rule.tag_rule]]
@@ -328,7 +329,7 @@ layout_name = "tile"
 id = 9
 layout_name = "tile"
 
-# layer rule
+# Layer rule
 
 [[rule.layer_rule]]
 animation_type_open = "zoom"
