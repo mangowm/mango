@@ -56,9 +56,9 @@ You can also color-code windows based on their state:
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `jump_label_decorate_fg_color` | `0xc4939dff` | text color. |
-| `jump_label_decorate_bg_color` | `0x201b14ff` | background color.|
-| `jump_label_decorate_focus_fg_color` | `0x201b14ff` |  text color for focus. |
-| `jump_label_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
+| `jump_label_decorate_bg_color` | `0x323232ff` | background color.|
+| `jump_label_decorate_focus_fg_color` | `0xeda6b4ff` |  text color for focus. |
+| `jump_label_decorate_focus_bg_color` | `0x4e453cff` | background color for focus.|
 | `jump_label_decorate_border_color` | `0x8BAA9Bff` | border color.|
 | `jump_label_decorate_border_width` | `4` | border width.|
 | `jump_label_decorate_corner_radius` | `5` | corner radius.|
