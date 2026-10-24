@@ -81,6 +81,7 @@ struct Monitor {
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
 	bool is_vrr_enabling;
+	bool vrr_enable_failed;
 	bool hdr_enable;
 	bool prefer_disable;
 	bool is_hdr_enabling;

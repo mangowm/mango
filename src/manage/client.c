@@ -81,7 +81,8 @@ bool client_uses_transparent_rendering(Client *c) {
 		return true;
 	}
 
-	/* Clients such as kitty render transparency directly into an alpha buffer. */
+	/* Clients such as kitty render transparency directly into an alpha buffer.
+	 */
 	return surface->buffer && !wlr_buffer_is_opaque(&surface->buffer->base);
 }
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
