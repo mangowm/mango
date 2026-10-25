@@ -1587,6 +1587,10 @@ void check_match_tag_floating_rule(Client *c, Monitor *mon) {
 	}
 }
 
+/* A silent-open window ignores activation requests for this long after it
+ * maps, so the activation that belongs to the opening does not steal focus. */
+#define OPEN_SILENT_MS 1000
+
 void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	/* rule matching */
 	const char *appid, *title;
@@ -1757,6 +1761,10 @@ void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 
 	if (!should_init_get_focus) {
 		wl_list_safe_reinsert_prev(&server.focus_stack, &c->flink);
+	}
+
+	if (c->isopensilent) {
+		c->open_silent_until = get_now_in_ms() + OPEN_SILENT_MS;
 	}
 
 	client_set_monitor(c, mon, newtags, should_init_get_focus);
@@ -2797,6 +2805,14 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 	if (c == client_focus_top(c->mon))
 		printstatus(IPC_WATCH_ARRANGGE);
 }
+
+/* A silent-open window ignores activation requests while it is opening; later
+ * requests are handled normally. */
+static bool client_should_ignore_activation(Client *c) {
+	return c->isopensilent &&
+		   (int32_t)(get_now_in_ms() - c->open_silent_until) < 0;
+}
+
 void handle_client_activation_request(struct wl_listener *listener,
 									  void *data) {
 	struct wlr_xdg_activation_v1_request_activate_event *event = data;
@@ -2804,6 +2820,9 @@ void handle_client_activation_request(struct wl_listener *listener,
 	toplevel_from_wlr_surface(event->surface, &c, NULL);
 
 	if (!c || !c->foreign_toplevel)
+		return;
+
+	if (client_should_ignore_activation(c))
 		return;
 
 	if (config.focus_on_activate && !c->istagsilent &&
@@ -4759,6 +4778,9 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 		return;
 
 	if (c && c->swallowdby)
+		return;
+
+	if (client_should_ignore_activation(c))
 		return;
 
 	if (c->isminimized) {

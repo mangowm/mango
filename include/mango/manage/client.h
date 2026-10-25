@@ -163,6 +163,7 @@ struct Client {
 	int32_t no_radius;
 	int32_t no_animation;
 	int32_t isopensilent;
+	uint32_t open_silent_until;
 	int32_t istagsilent;
 	int32_t iskilling;
 	int32_t isnamedscratchpad;
