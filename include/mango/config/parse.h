@@ -471,6 +471,11 @@ typedef struct {
 	int32_t dim_enable;
 	float dim_focused_color[4];
 	float dim_unfocused_color[4];
+	int32_t traffic_lights;
+	int32_t traffic_light_size;
+	int32_t traffic_light_right;	/* 1: top-right corner, 0: top-left */
+	int32_t traffic_light_count;	/* buttons shown */
+	int32_t traffic_light_order[3]; /* 0 close, 1 minimize, 2 maximize */
 
 	/* appearance */
 	int32_t smartgaps;
@@ -494,6 +499,7 @@ typedef struct {
 	int32_t group_bar_close_button_enable;
 	uint32_t group_bar_button_size;
 	uint32_t group_bar_button_margin;
+	int32_t top_drag_zone;
 	float group_bar_button_color[4];
 	float scratchpad_width_ratio;
 	float scratchpad_height_ratio;
