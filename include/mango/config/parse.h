@@ -404,6 +404,7 @@ typedef struct {
 	int32_t idleinhibit_ignore_visible;
 	int32_t idleinhibit_when_fullscreen;
 	int32_t sloppyfocus;
+	int32_t monitor_focus_follow_mouse;
 	int32_t warpcursor;
 	int32_t drag_corner;
 	int32_t drag_warp_cursor;

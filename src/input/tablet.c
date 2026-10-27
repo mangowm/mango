@@ -238,7 +238,9 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 
 	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 
-	if (config.sloppyfocus) {
+	/* The internal pointer_process_motion() call runs with time == 0, so it
+	 * cannot update the selected monitor; do it here for the same options. */
+	if (config.sloppyfocus || config.monitor_focus_follow_mouse) {
 		Monitor *oldmon = server.selected_monitor;
 		set_selected_monitor(
 			monitor_at_point(server.cursor->x, server.cursor->y));

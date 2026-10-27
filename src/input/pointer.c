@@ -1259,8 +1259,10 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		pointer_cursor_activity();
 		wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
-		/* Update selected_monitor (even while dragging a window) */
-		if (config.sloppyfocus) {
+		/* Update selected_monitor (even while dragging a window). With
+		 * monitor_focus_follow_mouse the monitor follows the pointer while
+		 * windows keep click-to-focus. */
+		if (config.sloppyfocus || config.monitor_focus_follow_mouse) {
 			Monitor *oldmon = server.selected_monitor;
 			set_selected_monitor(
 				monitor_at_point(server.cursor->x, server.cursor->y));

@@ -518,6 +518,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->idleinhibit_when_fullscreen = atoi(value);
 	} else if (strcmp(key, "sloppy_focus") == 0) {
 		config->sloppyfocus = atoi(value);
+	} else if (strcmp(key, "monitor_focus_follow_mouse") == 0) {
+		config->monitor_focus_follow_mouse = atoi(value);
 	} else if (strcmp(key, "warp_cursor") == 0) {
 		config->warpcursor = atoi(value);
 	} else if (strcmp(key, "drag_corner") == 0) {
@@ -2422,6 +2424,7 @@ void set_value_default() {
 	config.monocle_right_button_close = 0;
 	config.deck_tab_mode = 1;
 	config.sloppyfocus = 1;
+	config.monitor_focus_follow_mouse = 0;
 	config.gappih = 5;
 	config.gappiv = 5;
 	config.gappoh = 10;
@@ -2813,6 +2816,8 @@ void override_config(void) {
 	config.idleinhibit_when_fullscreen =
 		CLAMP_INT(config.idleinhibit_when_fullscreen, 0, 1);
 	config.sloppyfocus = CLAMP_INT(config.sloppyfocus, 0, 1);
+	config.monitor_focus_follow_mouse =
+		CLAMP_INT(config.monitor_focus_follow_mouse, 0, 1);
 	config.warpcursor = CLAMP_INT(config.warpcursor, 0, 1);
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);

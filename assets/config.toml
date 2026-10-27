@@ -103,6 +103,7 @@ focus_on_activate = 1
 idle_inhibit_ignore_visible = 0
 idle_inhibit_when_fullscreen = 0
 sloppy_focus = 1
+monitor_focus_follow_mouse = 0
 warp_cursor = 1
 focus_cross_monitor = 0
 focus_direction_only_zone_overlap = 1
