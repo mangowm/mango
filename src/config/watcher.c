@@ -28,6 +28,7 @@
 #endif
 
 #define CONFIG_WATCH_DEBOUNCE_MS 150
+#define CONFIG_WATCH_MAX_SYMLINK_DEPTH 40
 
 typedef struct {
 	char *path;
@@ -98,6 +99,122 @@ static bool file_is_tracked(const char *path) {
 	return false;
 }
 
+static char *path_dirname(const char *path) {
+	const char *slash = strrchr(path, '/');
+
+	if (slash == NULL)
+		return strdup(".");
+	if (slash == path)
+		return strdup("/");
+
+	size_t len = (size_t)(slash - path);
+	char *dir = malloc(len + 1);
+	if (dir == NULL)
+		return NULL;
+	memcpy(dir, path, len);
+	dir[len] = '\0';
+	return dir;
+}
+
+static char *path_join(const char *dir, const char *name) {
+	size_t dir_len = strlen(dir);
+	size_t name_len = strlen(name);
+	bool has_slash = dir_len > 0 && dir[dir_len - 1] == '/';
+	size_t len = dir_len + name_len + (has_slash ? 0 : 1);
+	char *path = malloc(len + 1);
+	if (path == NULL)
+		return NULL;
+
+	memcpy(path, dir, dir_len);
+	size_t offset = dir_len;
+	if (!has_slash)
+		path[offset++] = '/';
+	memcpy(path + offset, name, name_len + 1);
+	return path;
+}
+
+static char *read_symlink_target(const char *path) {
+	size_t size = 256;
+
+	for (;;) {
+		char *target = malloc(size + 1);
+		if (target == NULL)
+			return NULL;
+
+		ssize_t len = readlink(path, target, size);
+		if (len < 0) {
+			int saved_errno = errno;
+			free(target);
+			errno = saved_errno;
+			return NULL;
+		}
+		if ((size_t)len < size) {
+			target[len] = '\0';
+			return target;
+		}
+
+		free(target);
+		if (size > ((size_t)-1) / 2) {
+			errno = ENAMETOOLONG;
+			return NULL;
+		}
+		size *= 2;
+	}
+}
+
+static char *resolve_watch_path(const char *path) {
+	char *current = strdup(path);
+	if (current == NULL)
+		return NULL;
+
+	for (int depth = 0;; depth++) {
+		struct stat st;
+		if (lstat(current, &st) != 0 || !S_ISLNK(st.st_mode))
+			return current;
+
+		if (depth >= CONFIG_WATCH_MAX_SYMLINK_DEPTH) {
+			mango_error(false, WLR_ERROR,
+						"config auto reload: too many symlinks in "
+						"\033[1m\033[31m%s\033[0m\n",
+						path);
+			free(current);
+			return NULL;
+		}
+
+		char *target = read_symlink_target(current);
+		if (target == NULL) {
+			mango_error(false, WLR_ERROR,
+						"config auto reload: failed to read symlink "
+						"\033[1m\033[31m%s\033[0m: %s\n",
+						current, strerror(errno));
+			free(current);
+			return NULL;
+		}
+
+		char *next;
+		if (target[0] == '/') {
+			next = target;
+		} else {
+			char *dir = path_dirname(current);
+			if (dir == NULL) {
+				free(target);
+				free(current);
+				return NULL;
+			}
+			next = path_join(dir, target);
+			free(dir);
+			free(target);
+			if (next == NULL) {
+				free(current);
+				return NULL;
+			}
+		}
+
+		free(current);
+		current = next;
+	}
+}
+
 static void track_path(const char *path) {
 	if (file_is_tracked(path))
 		return;
@@ -109,7 +226,7 @@ static void track_path(const char *path) {
 	watched_files = next;
 
 	WatchedFile *file = &watched_files[watched_files_count];
-	file->path = strdup(path);
+	file->path = resolve_watch_path(path);
 	if (file->path == NULL)
 		return;
 
@@ -135,23 +252,6 @@ static int inotify_fd = -1;
 static struct wl_event_source *inotify_source = NULL;
 static DirWatch *dir_watches = NULL;
 static int dir_watches_count = 0;
-
-static char *path_dirname(const char *path) {
-	const char *slash = strrchr(path, '/');
-
-	if (slash == NULL)
-		return strdup(".");
-	if (slash == path)
-		return strdup("/");
-
-	size_t len = (size_t)(slash - path);
-	char *dir = malloc(len + 1);
-	if (dir == NULL)
-		return NULL;
-	memcpy(dir, path, len);
-	dir[len] = '\0';
-	return dir;
-}
 
 static void clear_dir_watches(void) {
 	for (int i = 0; i < dir_watches_count; i++) {
