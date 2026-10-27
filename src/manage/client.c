@@ -2797,6 +2797,7 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 	if (c == client_focus_top(c->mon))
 		printstatus(IPC_WATCH_ARRANGGE);
 }
+
 void handle_client_activation_request(struct wl_listener *listener,
 									  void *data) {
 	struct wlr_xdg_activation_v1_request_activate_event *event = data;
@@ -2808,10 +2809,15 @@ void handle_client_activation_request(struct wl_listener *listener,
 
 	if (config.focus_on_activate && !c->istagsilent &&
 		c != server.selected_monitor->sel) {
-		if (!(c->mon == server.selected_monitor &&
-			  c->tags & c->mon->tagset[c->mon->seltags]))
-			client_view_on_monitor(&(Arg){.ui = c->tags}, true, c->mon, true);
-		client_focus(c, 1);
+		if (c->tags & TAG0_MASK) {
+			if (is_special_active(c->mon)) {
+				client_focus(c, 1);
+			} else {
+				toggle_special_tag_mon(c->mon);
+			}
+			return;
+		}
+		client_active(c);
 	} else if (c != client_focus_top(server.selected_monitor)) {
 		c->isurgent = 1;
 		if (client_surface(c)->mapped)
@@ -3079,6 +3085,19 @@ void client_active(Client *c) {
 
 	if (!c->mon && !client_group_swap_focus(c))
 		return;
+
+	if (c->is_in_scratchpad) {
+		bool visible =
+			SCRATCHPAD_SHOWN(c) && (c->tags & c->mon->tagset[c->mon->seltags]);
+		if (visible) {
+			client_focus(c, 1);
+		} else if (c->isnamedscratchpad) {
+			apply_named_scratchpad(c);
+		} else {
+			switch_scratchpad_client_state(c);
+		}
+		return;
+	}
 
 	if (c->isminimized) {
 		c->is_in_scratchpad = 0;
@@ -4760,6 +4779,20 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 
 	if (c && c->swallowdby)
 		return;
+
+	if (c->tags & TAG0_MASK) {
+		if (is_special_active(c->mon)) {
+			client_focus(c, 1);
+		} else {
+			toggle_special_tag_mon(c->mon);
+		}
+		return;
+	}
+
+	if (c->is_in_scratchpad) {
+		client_active(c);
+		return;
+	}
 
 	if (c->isminimized) {
 		client_pending_minimized_state(c, 0);
