@@ -351,6 +351,7 @@ typedef struct {
 	int32_t no_radius_when_single;
 	int32_t monocle_no_border;
 	int32_t monocle_no_gap;
+	int32_t monocle_no_radius;
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t float_full_to_top;

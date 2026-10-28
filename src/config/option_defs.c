@@ -255,6 +255,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->monocle_no_border = atoi(value);
 	} else if (strcmp(key, "monocle_no_gap") == 0) {
 		config->monocle_no_gap = atoi(value);
+	} else if (strcmp(key, "monocle_no_radius") == 0) {
+		config->monocle_no_radius = atoi(value);
 	} else if (strcmp(key, "snap_distance") == 0) {
 		config->snap_distance = atoi(value);
 	} else if (strcmp(key, "enable_floating_snap") == 0) {
@@ -2466,6 +2468,7 @@ void set_value_default() {
 	config.no_radius_when_single = 0;
 	config.monocle_no_border = 0;
 	config.monocle_no_gap = 0;
+	config.monocle_no_radius = 0;
 	config.snap_distance = 30;
 	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
@@ -2837,6 +2840,7 @@ void override_config(void) {
 		CLAMP_INT(config.no_radius_when_single, 0, 1);
 	config.monocle_no_border = CLAMP_INT(config.monocle_no_border, 0, 1);
 	config.monocle_no_gap = CLAMP_INT(config.monocle_no_gap, 0, 1);
+	config.monocle_no_radius = CLAMP_INT(config.monocle_no_radius, 0, 1);
 	config.monocle_right_button_close =
 		CLAMP_INT(config.monocle_right_button_close, 0, 1);
 	config.cursor_hide_timeout =

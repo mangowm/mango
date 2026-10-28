@@ -35,6 +35,18 @@ static int32_t client_close_animation_type(const Client *c) {
 			   : config.animation_type_close;
 }
 
+static bool client_no_radius_active(const Client *c) {
+	if (!c || !c->mon)
+		return false;
+
+	if (c->isfullscreen ||
+		(config.no_radius_when_single && c->mon->visible_tiling_clients == 1))
+		return true;
+
+	return config.monocle_no_radius && ISFAKETILED(c) && !c->mon->isoverview &&
+		   is_monocle_layout(c->mon);
+}
+
 bool client_animations_enabled(const Client *c) {
 	if (c && c->no_animation)
 		return false;
@@ -74,6 +86,9 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 struct fx_corner_radii set_client_corner_location(Client *c) {
 	struct fx_corner_radii current_corner_location =
 		corner_radii_all(config.border_radius);
+
+	if (client_no_radius_active(c))
+		return corner_radii_none();
 
 	if (client_is_ignore_output_clip(c))
 		return current_corner_location;
@@ -303,8 +318,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c == server.grab_client)
 		data.should_scale = false;
 
-	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1))
+	if (client_no_radius_active(c))
 		data.corner_location = corner_radii_none();
 
 	if (config.blur && !c->no_blur)
@@ -336,10 +350,7 @@ void client_draw_shadow(Client *c, struct ivec2 offsets) {
 
 	bool hit_no_border = check_hit_no_border(c);
 	struct fx_corner_radii current_corner_location =
-		c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1)
-			? corner_radii_none()
-			: set_client_corner_location(c);
+		set_client_corner_location(c);
 
 	int32_t bw = (int32_t)c->bw;
 	int32_t bwoffset = bw != 0 && hit_no_border ? bw : 0;
@@ -568,8 +579,7 @@ void client_draw_dim(Client *c, struct ivec2 clip_box) {
 	}
 
 	int32_t radius = 0;
-	if (!c->isfullscreen && !(config.no_radius_when_single && c->mon &&
-							  c->mon->visible_tiling_clients == 1)) {
+	if (!client_no_radius_active(c)) {
 		radius = config.border_radius;
 	}
 
@@ -716,10 +726,7 @@ void client_draw_border(Client *c, struct ivec2 offsets) {
 	client_draw_split_border(c, hit_no_border, offsets);
 
 	struct fx_corner_radii current_corner_location =
-		c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1)
-			? corner_radii_none()
-			: set_client_corner_location(c);
+		set_client_corner_location(c);
 
 	struct wlr_box cur = c->animation.current;
 	int32_t bw = (int32_t)c->bw;

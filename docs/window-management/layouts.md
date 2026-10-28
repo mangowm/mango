@@ -130,6 +130,7 @@ The Monocle layout shows a single window at a time, with the other windows on th
 | `monocle_right_button_close` | `0` | Right click on the tab bar closes that window. |
 | `monocle_no_border` | `0` | Remove window borders from tiled windows (including maximized ones) while the monocle layout is active. |
 | `monocle_no_gap` | `0` | Remove gaps around tiled windows (including maximized ones) while the monocle layout is active. |
+| `monocle_no_radius` | `0` | Remove window corner radii (including maximized ones) while the monocle layout is active. |
 
 ```ini
 # Example monocle configuration
@@ -137,6 +138,7 @@ monocle_tab_mode=1
 monocle_right_button_close=0
 monocle_no_border=0
 monocle_no_gap=0
+monocle_no_radius=0
 ```
 
 ---
