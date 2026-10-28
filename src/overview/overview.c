@@ -21,7 +21,6 @@ struct ov_card_surface {
 	struct wlr_scene_surface *scene_surface;
 	struct wlr_scene_buffer *buffer;
 	int sx, sy; /* Coordinates relative to the root surface */
-	bool is_root;
 	struct wl_list link;
 	struct wl_listener commit; /* Recomputes scaling after commit (commit resets
 								  dest/source). */
@@ -77,7 +76,6 @@ void overview_card_surface_add(struct wlr_surface *surface, int sx, int sy,
 	entry->surface = surface;
 	entry->sx = sx;
 	entry->sy = sy;
-	entry->is_root = (surface == client_surface(c));
 
 	entry->scene_surface = wlr_scene_surface_create(c->ov_card_tree, surface);
 	if (!entry->scene_surface) {
@@ -130,8 +128,8 @@ void overview_layout_card(Client *c) {
 	if (content_w <= 0 || content_h <= 0)
 		return;
 
-	float scale_x = (float)w / content_w;
-	float scale_y = (float)h / content_h;
+	double scale_x = (double)w / content_w;
+	double scale_y = (double)h / content_h;
 
 	int32_t vx = 0, vy = 0, vw = w, vh = h;
 	if (c->mon) {
@@ -158,86 +156,49 @@ void overview_layout_card(Client *c) {
 		struct wlr_surface *es = entry->surface;
 		/* current.width/height are logical coordinates; buffer_width/height are
 		 * pixel coordinates. */
-		float lw = es->current.width;
-		float lh = es->current.height;
-
-		if (entry->is_root) {
-			/*
-			 * The root surface is clipped to fill the card, so the source box
-			 * is expressed in buffer pixels.
-			 */
-			/*
-			 * A client may advertise a buffer whose size differs from the
-			 * surface size and restrict which part of that buffer is shown
-			 * (wp_viewporter, buffer scale).
-			 * wlr_surface_get_buffer_source_box() provides that mapping; both
-			 * its offset and its size are required, since deriving the source
-			 * box from the buffer dimensions alone samples an incorrect region.
-			 */
-			struct wlr_fbox bsrc = {0};
-			wlr_surface_get_buffer_source_box(es, &bsrc);
-			/* Buffer pixels per unit of surface size. */
-			float ratio_x = es->current.width > 0
-								? (float)bsrc.width / es->current.width
-								: 1.0f;
-			float ratio_y = es->current.height > 0
-								? (float)bsrc.height / es->current.height
-								: 1.0f;
-			if (vw <= 0 || vh <= 0) {
-				wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
-				wlr_scene_buffer_set_dest_size(entry->buffer, 0, 0);
-				continue;
-			}
-			wlr_scene_node_set_position(&entry->buffer->node, vx, vy);
-			wlr_scene_buffer_set_dest_size(entry->buffer, vw, vh);
-			struct wlr_fbox src = {
-				.x = bsrc.x + (clip.x + (float)vx / scale_x) * ratio_x,
-				.y = bsrc.y + (clip.y + (float)vy / scale_y) * ratio_y,
-				.width = ((float)vw / scale_x) * ratio_x,
-				.height = ((float)vh / scale_y) * ratio_y,
-			};
-			wlr_scene_buffer_set_source_box(entry->buffer, &src);
-		} else {
-			/* Subsurfaces are positioned and scaled relative to the content
-			 * origin. */
-			int px = (int)((entry->sx - clip.x) * scale_x);
-			int py = (int)((entry->sy - clip.y) * scale_y);
-			int dw = (int)(lw * scale_x);
-			int dh = (int)(lh * scale_y);
-
-			int cx0 = MANGO_MAX(px, vx);
-			int cy0 = MANGO_MAX(py, vy);
-			int cx1 = MANGO_MIN(px + dw, vx + vw);
-			int cy1 = MANGO_MIN(py + dh, vy + vh);
-			int cw = cx1 - cx0;
-			int ch = cy1 - cy0;
-			if (cw <= 0 || ch <= 0) {
-				wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
-				wlr_scene_buffer_set_dest_size(entry->buffer, 0, 0);
-				continue;
-			}
-
-			/* Same buffer mapping as the root surface above. */
-			struct wlr_fbox bsrc = {0};
-			wlr_surface_get_buffer_source_box(es, &bsrc);
-			float ratio_x = es->current.width > 0
-								? (float)bsrc.width / es->current.width
-								: 1.0f;
-			float ratio_y = es->current.height > 0
-								? (float)bsrc.height / es->current.height
-								: 1.0f;
-			float ox = (float)(cx0 - px) / scale_x;
-			float oy = (float)(cy0 - py) / scale_y;
-			wlr_scene_node_set_position(&entry->buffer->node, cx0, cy0);
-			wlr_scene_buffer_set_dest_size(entry->buffer, cw, ch);
-			struct wlr_fbox src = {
-				.x = bsrc.x + ox * ratio_x,
-				.y = bsrc.y + oy * ratio_y,
-				.width = ((float)cw / scale_x) * ratio_x,
-				.height = ((float)ch / scale_y) * ratio_y,
-			};
-			wlr_scene_buffer_set_source_box(entry->buffer, &src);
+		int32_t lw = es->current.width;
+		int32_t lh = es->current.height;
+		if (lw <= 0 || lh <= 0) {
+			wlr_scene_node_set_enabled(&entry->buffer->node, false);
+			continue;
 		}
+
+		/*
+		 * Map each surface's own (0,0) into the card, then clip the result to
+		 * the card and monitor. The source offset is derived from that
+		 * intersection, so an xdg geometry origin outside the root buffer never
+		 * becomes a negative buffer coordinate.
+		 */
+		int px = (int)((entry->sx - clip.x) * scale_x);
+		int py = (int)((entry->sy - clip.y) * scale_y);
+		int dw = (int)(lw * scale_x);
+		int dh = (int)(lh * scale_y);
+
+		int cx0 = MANGO_MAX(px, vx);
+		int cy0 = MANGO_MAX(py, vy);
+		int cx1 = MANGO_MIN(px + dw, vx + vw);
+		int cy1 = MANGO_MIN(py + dh, vy + vh);
+		int cw = cx1 - cx0;
+		int ch = cy1 - cy0;
+		if (cw <= 0 || ch <= 0) {
+			wlr_scene_node_set_enabled(&entry->buffer->node, false);
+			continue;
+		}
+
+		double ox = (double)(cx0 - px) / scale_x;
+		double oy = (double)(cy0 - py) / scale_y;
+		struct wlr_fbox surface_box = {
+			.x = ox,
+			.y = oy,
+			.width = (double)cw / scale_x,
+			.height = (double)ch / scale_y,
+		};
+		struct wlr_fbox src;
+		client_surface_get_source_box(es, &surface_box, &src);
+		wlr_scene_node_set_enabled(&entry->buffer->node, true);
+		wlr_scene_node_set_position(&entry->buffer->node, cx0, cy0);
+		wlr_scene_buffer_set_dest_size(entry->buffer, cw, ch);
+		wlr_scene_buffer_set_source_box(entry->buffer, &src);
 	}
 
 	overview_update_jump_label(c);
