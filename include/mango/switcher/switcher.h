@@ -34,7 +34,6 @@ struct switcher_surface {
 	struct wlr_surface *surface;
 	struct wlr_scene_buffer *buffer;
 	int sx, sy;
-	bool is_root;
 	struct wl_listener commit;
 	struct wl_listener destroy;
 	struct wl_listener output_sample;

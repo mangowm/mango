@@ -24,50 +24,49 @@ void switcher_tile_layout(struct switcher_tile *tile) {
 	float src_w, src_h;
 	client_get_clip(tile->c, &clip);
 	switcher_content_size(tile->c, &src_w, &src_h);
-	if (src_w <= 0 || src_h <= 0)
+	if (src_w <= 0 || src_h <= 0) {
+		struct switcher_surface *entry;
+		wl_list_for_each(entry, &tile->surfaces, link)
+			wlr_scene_node_set_enabled(&entry->buffer->node, false);
 		return;
+	}
 
-	float scale_x = (float)tile->cw / src_w;
-	float scale_y = (float)switcher_state.tile_h / src_h;
+	double scale_x = (double)tile->cw / src_w;
+	double scale_y = (double)switcher_state.tile_h / src_h;
 	struct switcher_surface *entry;
 	wl_list_for_each(entry, &tile->surfaces, link) {
 		struct wlr_surface *s = entry->surface;
-		if (entry->is_root) {
-			/*
-			 * A client may advertise a buffer whose size differs from the
-			 * surface size and restrict which part of that buffer is shown
-			 * (wp_viewporter, buffer scale).
-			 * wlr_surface_get_buffer_source_box() provides that mapping; both
-			 * its offset and its size are required, since deriving the source
-			 * box from the buffer dimensions alone samples an incorrect region.
-			 */
-			struct wlr_fbox bsrc = {0};
-			wlr_surface_get_buffer_source_box(s, &bsrc);
-			/* Buffer pixels per unit of surface size. */
-			float ratio_x = s->current.width > 0
-								? (float)bsrc.width / s->current.width
-								: 1.0f;
-			float ratio_y = s->current.height > 0
-								? (float)bsrc.height / s->current.height
-								: 1.0f;
-			struct wlr_fbox src = {
-				.x = bsrc.x + clip.x * ratio_x,
-				.y = bsrc.y + clip.y * ratio_y,
-				.width = src_w * ratio_x,
-				.height = src_h * ratio_y,
-			};
-			wlr_scene_buffer_set_source_box(entry->buffer, &src);
-			wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
-			wlr_scene_buffer_set_dest_size(entry->buffer, tile->cw,
-										   switcher_state.tile_h);
-		} else {
-			wlr_scene_node_set_position(&entry->buffer->node,
-										(int)((entry->sx - clip.x) * scale_x),
-										(int)((entry->sy - clip.y) * scale_y));
-			wlr_scene_buffer_set_dest_size(entry->buffer,
-										   (int)(s->current.width * scale_x),
-										   (int)(s->current.height * scale_y));
+		int px = (int)((entry->sx - clip.x) * scale_x);
+		int py = (int)((entry->sy - clip.y) * scale_y);
+		int dw = (int)(s->current.width * scale_x);
+		int dh = (int)(s->current.height * scale_y);
+
+		int cx0 = MANGO_MAX(px, 0);
+		int cy0 = MANGO_MAX(py, 0);
+		int cx1 = MANGO_MIN(px + dw, tile->cw);
+		int cy1 = MANGO_MIN(py + dh, switcher_state.tile_h);
+		int cw = cx1 - cx0;
+		int ch = cy1 - cy0;
+		if (cw <= 0 || ch <= 0) {
+			wlr_scene_node_set_enabled(&entry->buffer->node, false);
+			continue;
 		}
+
+		/* The tile crop is in surface-local logical coordinates. */
+		double ox = (double)(cx0 - px) / scale_x;
+		double oy = (double)(cy0 - py) / scale_y;
+		struct wlr_fbox surface_box = {
+			.x = ox,
+			.y = oy,
+			.width = (double)cw / scale_x,
+			.height = (double)ch / scale_y,
+		};
+		struct wlr_fbox src;
+		client_surface_get_source_box(s, &surface_box, &src);
+		wlr_scene_node_set_enabled(&entry->buffer->node, true);
+		wlr_scene_buffer_set_source_box(entry->buffer, &src);
+		wlr_scene_node_set_position(&entry->buffer->node, cx0, cy0);
+		wlr_scene_buffer_set_dest_size(entry->buffer, cw, ch);
 	}
 }
 
@@ -203,7 +202,6 @@ void switcher_tile_add_surface(struct wlr_surface *surface, int sx, int sy,
 	entry->buffer = buffer;
 	entry->sx = sx;
 	entry->sy = sy;
-	entry->is_root = surface == client_surface(tile->c);
 	wlr_scene_buffer_set_filter_mode(entry->buffer, WLR_SCALE_FILTER_BILINEAR);
 	switcher_surface_update_buffer(entry);
 

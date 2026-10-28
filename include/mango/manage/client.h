@@ -280,6 +280,9 @@ uint32_t get_client_tag_idx(const Client *c);
 int32_t client_get_pid(Client *c);
 void client_get_clip(Client *c, struct wlr_box *clip);
 void client_get_geometry(Client *c, struct wlr_box *geom);
+void client_surface_get_source_box(struct wlr_surface *surface,
+								   const struct wlr_fbox *surface_box,
+								   struct wlr_fbox *source_box);
 Client *client_get_parent(Client *c);
 int32_t client_has_children(Client *c);
 const char *client_get_title(Client *c);
