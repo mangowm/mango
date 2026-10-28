@@ -19,6 +19,7 @@
 #include "mango/config/error_store.h"
 #include "mango/config/watcher.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/hdr.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
@@ -31,7 +32,6 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
-#include "mango/manage/title-message-bar.h"
 #include "mango/switcher/switcher.h"
 #include <unistd.h>
 #include <wlr/backend/libinput.h>

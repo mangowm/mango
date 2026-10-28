@@ -6,6 +6,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/hdr.h"
@@ -20,7 +21,6 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
-#include "mango/manage/title-message-bar.h"
 #include "mango/manage/xwayland_primary.h"
 #include <fcntl.h>
 #include <unistd.h>

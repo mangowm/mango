@@ -1,9 +1,9 @@
 #include "mango/switcher/switcher.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
-#include "mango/manage/title-message-bar.h"
 #include <wlr/types/wlr_alpha_modifier_v1.h>
 #include <wlr/types/wlr_color_management_v1.h>
 #include <wlr/types/wlr_color_representation_v1.h>

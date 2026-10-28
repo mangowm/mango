@@ -2,13 +2,13 @@
 #include "mango/animation/common.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
-#include "mango/manage/title-message-bar.h"
 #include "mango/overview/overview.h"
 #include <math.h>
 #include <stdint.h>

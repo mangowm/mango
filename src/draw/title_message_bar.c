@@ -1,9 +1,9 @@
 #include "mango/common/scene_node.h"
 #include "mango/common/server.h"
 #include "mango/draw/text-node.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
-#include "mango/manage/title-message-bar.h"
 #include "mango/switcher/switcher.h"
 #include <glib.h>
 #include <string.h>
