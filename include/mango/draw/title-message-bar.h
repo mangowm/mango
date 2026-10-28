@@ -1,5 +1,5 @@
-#ifndef __MANAGE_TITLE_MESSAGE_BAR_H__
-#define __MANAGE_TITLE_MESSAGE_BAR_H__ 1
+#ifndef __DRAW_TITLE_MESSAGE_BAR_H__
+#define __DRAW_TITLE_MESSAGE_BAR_H__ 1
 
 #include "mango/common/types.h"
 

@@ -4,6 +4,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/config/parse.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/xdg-activation.h"
@@ -20,7 +21,6 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
-#include "mango/manage/title-message-bar.h"
 #include "mango/overview/overview.h"
 #include <fcntl.h>
 #include <unistd.h>
