@@ -1047,21 +1047,11 @@ int32_t switch_proportion_preset(const Arg *arg) {
 
 	for (int32_t i = 0; i < config.scroller_proportion_preset_count; i++) {
 		if (config.scroller_proportion_preset[i] == current_proportion) {
-			if (arg->i == NEXT) {
-				if (i == config.scroller_proportion_preset_count - 1)
-					target_proportion = config.scroller_proportion_preset[0];
-				else
-					target_proportion =
-						config.scroller_proportion_preset[i + 1];
-			} else {
-				if (i == 0)
-					target_proportion =
-						config.scroller_proportion_preset
-							[config.scroller_proportion_preset_count - 1];
-				else
-					target_proportion =
-						config.scroller_proportion_preset[i - 1];
-			}
+			if (i == config.scroller_proportion_preset_count - 1)
+				target_proportion = config.scroller_proportion_preset[0];
+			else
+				target_proportion =
+					config.scroller_proportion_preset[i + 1];
 			break;
 		}
 	}
