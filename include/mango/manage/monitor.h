@@ -34,6 +34,7 @@ struct Monitor {
 	struct wl_listener destroy;
 	struct wl_listener request_state;
 	struct wl_listener destroy_lock_surface;
+	struct wl_listener commit_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;
 	struct wl_event_source *skip_frame_timeout;
 	struct wlr_box m;		  /* monitor area, layout-relative */
