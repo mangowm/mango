@@ -15,6 +15,7 @@
 #include <wlr/backend/session.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_drm_lease_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
@@ -441,6 +442,8 @@ void handle_session_lock_new_surface(struct wl_listener *listener, void *data) {
 	wlr_session_lock_surface_v1_configure(lock_surface, m->m.width,
 										  m->m.height);
 
+	LISTEN(&lock_surface->surface->events.commit, &m->commit_lock_surface,
+		   handle_session_lock_surface_commit);
 	LISTEN(&lock_surface->events.destroy, &m->destroy_lock_surface,
 		   handle_session_lock_surface_destroy);
 
@@ -458,17 +461,12 @@ void handle_idle_inhibitor_destroy(struct wl_listener *listener, void *data) {
 
 void session_lock_cleanup(SessionLock *lock, int32_t unlock) {
 	wlr_seat_keyboard_notify_clear_focus(server.seat);
-	if ((server.session_locked = !unlock))
-		goto destroy;
+	server.session_locked = !unlock;
 
-	if (server.locked_bg->node.enabled) {
+	if (unlock && server.locked_bg->node.enabled) {
 		wlr_scene_node_set_enabled(&server.locked_bg->node, false);
 	}
 
-	client_focus(client_focus_top(server.selected_monitor), 1);
-	pointer_process_motion(0, NULL, 0, 0, 0, 0);
-
-destroy:
 	wl_list_remove(&lock->new_surface.link);
 	wl_list_remove(&lock->unlock.link);
 	wl_list_remove(&lock->destroy.link);
@@ -476,6 +474,14 @@ destroy:
 	wlr_scene_node_destroy(&lock->scene->node);
 	server.current_lock = NULL;
 	free(lock);
+
+	if (!unlock)
+		return;
+
+	pointer_cursor_activity();
+	wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
+	client_focus(client_focus_top(server.selected_monitor), 1);
+	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 }
 
 void handle_session_lock_surface_destroy(struct wl_listener *listener,
@@ -485,6 +491,7 @@ void handle_session_lock_surface_destroy(struct wl_listener *listener,
 
 	m->lock_surface = NULL;
 	wl_list_remove(&m->destroy_lock_surface.link);
+	wl_list_remove(&m->commit_lock_surface.link);
 
 	if (lock_surface->surface != server.seat->keyboard_state.focused_surface) {
 		if (server.exclusive_focus && !server.session_locked) {
@@ -498,6 +505,23 @@ void handle_session_lock_surface_destroy(struct wl_listener *listener,
 	} else {
 		reset_exclusive_layers_focus(server.selected_monitor);
 	}
+}
+
+void handle_session_lock_surface_commit(struct wl_listener *listener,
+										void *data) {
+	Monitor *m = wl_container_of(listener, m, commit_lock_surface);
+	struct wlr_surface *focused;
+
+	if (!server.session_locked || !m->lock_surface ||
+		!m->lock_surface->surface->mapped)
+		return;
+
+	focused = server.seat->pointer_state.focused_surface;
+	if (focused &&
+		wlr_surface_get_root_surface(focused) == m->lock_surface->surface)
+		return;
+
+	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 }
 
 void handle_session_lock_destroy(struct wl_listener *listener, void *data) {

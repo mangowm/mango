@@ -1417,6 +1417,11 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			server.scroller_focus_lock = 1;
 		}
 	}
+
+	/* Internal focus rebases need an explicit frame for clients to process. */
+	if (!time) {
+		wlr_seat_pointer_notify_frame(server.seat);
+	}
 }
 
 void handle_cursor_motion(struct wl_listener *listener, void *data) {
