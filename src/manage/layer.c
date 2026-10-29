@@ -368,6 +368,8 @@ void handle_popup_destroy(struct wl_listener *listener, void *data) {
 		wl_list_remove(&popup->commit.link);
 		popup->commit.notify = NULL;
 	}
+	if (server.selected_monitor && server.selected_monitor->sel)
+		client_focus(server.selected_monitor->sel, 1);
 	free(popup);
 }
 
