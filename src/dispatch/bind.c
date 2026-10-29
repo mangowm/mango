@@ -259,8 +259,21 @@ int32_t focus_direction(const Arg *arg) {
 	Client *c = NULL;
 	c = direction_select(arg);
 
-	if (!server.selected_monitor->isoverview)
-		c = get_focused_stack_client(c, arg->tc);
+	if (c && c->mon != server.selected_monitor &&
+		!config.focus_cross_monitor)
+		return 0;
+
+	if (c && !server.selected_monitor->isoverview) {
+		if (c->mon != server.selected_monitor) {
+			Monitor *m = c->mon;
+			c = client_focus_top(m);
+			if (!c)
+				return 0;
+			set_selected_monitor(m);
+		} else {
+			c = get_focused_stack_client(c, arg->tc);
+		}
+	}
 	if (c) {
 		client_focus(c, 1);
 		if (config.warpcursor)
