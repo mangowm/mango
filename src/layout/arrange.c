@@ -193,7 +193,25 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 			moving_down = server.cursor->y > server.drag_begin_cursor_y;
 		}
 
-		if (gc->ismaster && !prev) {
+		bool hsplit_master = config.master_horizontal_split && gc->ismaster &&
+							 (type == TILE || type == RIGHT_TILE);
+		bool hsplit_inner =
+			hsplit_master &&
+			((next && next->ismaster) || (!next && prev && prev->ismaster));
+
+		if (hsplit_inner) {
+			bool moving_right =
+				isdrag ? server.cursor->x > server.drag_begin_cursor_x
+					   : offsetx > 0;
+			bool edge_on_right = (type == TILE) ^ (next == NULL);
+			float d = fabsf((float)(offsetx) * (gc->old_master_inner_per) /
+							gc->drag_begin_geom.width);
+			delta_y = moving_right == edge_on_right ? d : -d;
+			delta_x = 0;
+		} else if (hsplit_master) {
+			delta_x *= gc->old_master_inner_per;
+			delta_y = 0;
+		} else if (gc->ismaster && !prev) {
 			if (moving_up)
 				delta_y = -fabsf(delta_y);
 			else

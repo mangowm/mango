@@ -468,6 +468,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->tag_gather = atoi(value);
 	} else if (strcmp(key, "center_master_overspread") == 0) {
 		config->center_master_overspread = atoi(value);
+	} else if (strcmp(key, "master_horizontal_split") == 0) {
+		config->master_horizontal_split = atoi(value);
 	} else if (strcmp(key, "center_when_single_stack") == 0) {
 		config->center_when_single_stack = atoi(value);
 	} else if (strcmp(key, "dwindle_vertical_split") == 0) {
@@ -2401,6 +2403,7 @@ void set_value_default() {
 	config.tag_num = 9;
 	config.tag_gather = 0;
 	config.center_master_overspread = 0;
+	config.master_horizontal_split = 0;
 	config.center_when_single_stack = 1;
 
 	config.dwindle_vsplit = 1;
@@ -2771,6 +2774,8 @@ void override_config(void) {
 	config.tag_gather = CLAMP_INT(config.tag_gather, 0, 1);
 	config.center_master_overspread =
 		CLAMP_INT(config.center_master_overspread, 0, 1);
+	config.master_horizontal_split =
+		CLAMP_INT(config.master_horizontal_split, 0, 1);
 	config.center_when_single_stack =
 		CLAMP_INT(config.center_when_single_stack, 0, 1);
 	config.new_is_master = CLAMP_INT(config.new_is_master, 0, 1);
