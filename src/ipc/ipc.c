@@ -959,20 +959,38 @@ void handle_command(int client_fd, const char *cmd_raw) {
 		return;
 	}
 
-	if (resp) {
-		json_str = cJSON_PrintUnformatted(resp);
-		if (json_str) {
-			size_t len = strlen(json_str);
-			char *msg = malloc(len + 2);
-			if (msg) {
-				snprintf(msg, len + 2, "%s\n", json_str);
-				send(client_fd, msg, len + 1, 0);
-				free(msg);
-			}
-			free(json_str);
-		}
-		cJSON_Delete(resp);
-	}
+    /* Fix partial write issue when the JSON payload is very large (e.g. 380+ clients).
+    * Temporarily clear O_NONBLOCK to guarantee the full buffer is pushed into the socket. */
+    if (resp) {
+        json_str = cJSON_PrintUnformatted(resp);
+        if (json_str) {
+            size_t len = strlen(json_str);
+            char *msg = malloc(len + 2);
+            if (msg) {
+                snprintf(msg, len + 2, "%s\n", json_str);
+
+                int flags = fcntl(client_fd, F_GETFL, 0);
+                if (flags != -1) {
+                    fcntl(client_fd, F_SETFL, flags & ~O_NONBLOCK);
+                }
+                size_t total = 0;
+                size_t msg_len = len + 1;
+
+                while (total < msg_len) {
+                    ssize_t n = send(client_fd, msg + total, msg_len - total, 0);
+                    if (n < 0) {
+                        if (errno == EINTR) continue;
+                        perror("IPC: send failed");
+                        break;
+                    }
+                    total += n;
+                }
+                free(msg);
+            }
+            free(json_str);
+        }
+        cJSON_Delete(resp);
+    }
 }
 
 bool handle_watch_command(int fd, const char *cmd,
