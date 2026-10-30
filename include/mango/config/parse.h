@@ -241,6 +241,9 @@ typedef struct {
 	/* Mouse / trackpad libinput parameters. */
 	int32_t natural_scrolling;
 	int32_t accel_profile;
+	double *accel_points;
+	uint8_t accel_npoints;
+	double accel_step;
 	double accel_speed;
 	int32_t left_handed;
 	int32_t middle_button_emulation;
@@ -422,6 +425,9 @@ typedef struct {
 	/* mouse */
 	int32_t mouse_natural_scrolling;
 	uint32_t mouse_accel_profile;
+	double *mouse_accel_points;
+	uint8_t mouse_accel_npoints;
+	double mouse_accel_step;
 	double mouse_accel_speed;
 	double axis_scroll_factor;
 	/* Mouse-specific parameters. */
@@ -435,6 +441,9 @@ typedef struct {
 	/* Trackpad */
 	int32_t trackpad_natural_scrolling;
 	uint32_t trackpad_accel_profile;
+	double *trackpad_accel_points;
+	uint8_t trackpad_accel_npoints;
+	double trackpad_accel_step;
 	double trackpad_accel_speed;
 	double trackpad_scroll_factor;
 	int32_t disable_trackpad;

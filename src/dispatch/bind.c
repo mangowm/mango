@@ -259,8 +259,7 @@ int32_t focus_direction(const Arg *arg) {
 	Client *c = NULL;
 	c = direction_select(arg);
 
-	if (c && c->mon != server.selected_monitor &&
-		!config.focus_cross_monitor)
+	if (c && c->mon != server.selected_monitor && !config.focus_cross_monitor)
 		return 0;
 
 	if (c && !server.selected_monitor->isoverview) {
@@ -1063,8 +1062,7 @@ int32_t switch_proportion_preset(const Arg *arg) {
 			if (i == config.scroller_proportion_preset_count - 1)
 				target_proportion = config.scroller_proportion_preset[0];
 			else
-				target_proportion =
-					config.scroller_proportion_preset[i + 1];
+				target_proportion = config.scroller_proportion_preset[i + 1];
 			break;
 		}
 	}

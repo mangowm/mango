@@ -861,10 +861,50 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->jumplabeldata.padding_y = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "mouse_accel_profile") == 0) {
 		config->mouse_accel_profile = atoi(value);
+	} else if (strcmp(key, "mouse_accel_points") == 0) {
+		config->mouse_accel_npoints = count_words(value);
+		config->mouse_accel_points =
+			calloc(config->mouse_accel_npoints, sizeof(double));
+		if (!config->mouse_accel_points) {
+			mango_error(true, WLR_ERROR,
+						"Cant allocate accel profile points. Size was %u",
+						config->mouse_accel_npoints);
+			return false;
+		}
+
+		int i = 0;
+		for (char *tok = strtok(value, " "); tok;
+			 tok = strtok(NULL, " "), ++i) {
+			config->mouse_accel_points[i] =
+				CLAMP_FLOAT(atof(tok), 0.0f, 255.0f);
+		}
+
 	} else if (strcmp(key, "mouse_accel_speed") == 0) {
 		config->mouse_accel_speed = atof(value);
+	} else if (strcmp(key, "mouse_accel_step") == 0) {
+		config->mouse_accel_step = CLAMP_FLOAT(atof(value), 0.0f, 255.0f);
 	} else if (strcmp(key, "trackpad_accel_profile") == 0) {
 		config->trackpad_accel_profile = atoi(value);
+	} else if (strcmp(key, "trackpad_accel_points") == 0) {
+		config->trackpad_accel_npoints = count_words(value);
+		config->trackpad_accel_points =
+			calloc(config->trackpad_accel_npoints, sizeof(double));
+		if (!config->trackpad_accel_points) {
+			mango_error(true, WLR_ERROR,
+						"Cant allocate accel profile points. Size was %u",
+						config->trackpad_accel_npoints);
+			return false;
+		}
+
+		int i = 0;
+		for (char *tok = strtok(value, " "); tok;
+			 tok = strtok(NULL, " "), ++i) {
+			config->trackpad_accel_points[i] =
+				CLAMP_FLOAT(atof(tok), 0.0f, 255.0f);
+		}
+
+	} else if (strcmp(key, "trackpad_accel_step") == 0) {
+		config->trackpad_accel_step = CLAMP_FLOAT(atof(value), 0.0f, 255.0f);
 	} else if (strcmp(key, "trackpad_accel_speed") == 0) {
 		config->trackpad_accel_speed = atof(value);
 	} else if (strcmp(key, "mouse_left_handed") == 0) {
@@ -1650,12 +1690,15 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 			&config->device_rules[config->device_rules_count];
 		memset(rule, 0, sizeof(ConfigDeviceRule));
 
-		// Defaults: -1 / UINT32_MAX / empty string mean unset and fall back to
-		// the global config.
+		// Defaults: -1 / UINT32_MAX / NULL / empty string mean unset and fall
+		// back to the global config.
 		rule->repeat_rate = -1;
 		rule->repeat_delay = -1;
 		rule->natural_scrolling = -1;
 		rule->accel_profile = -1;
+		rule->accel_points = NULL;
+		rule->accel_npoints = 0; // uint
+		rule->accel_step = -1;
 		rule->left_handed = -1;
 		rule->middle_button_emulation = -1;
 		rule->scroll_method = UINT32_MAX;
@@ -1735,7 +1778,26 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				} else if (strcmp(key, "natural_scrolling") == 0) {
 					rule->natural_scrolling = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "accel_profile") == 0) {
-					rule->accel_profile = CLAMP_INT(atoi(val), 0, 2);
+					rule->accel_profile = CLAMP_INT(atoi(val), 0, 3);
+				} else if (strcmp(key, "accel_points") == 0) {
+					rule->accel_npoints = count_words(val);
+					rule->accel_points =
+						calloc(rule->accel_npoints, sizeof(double));
+					if (rule->accel_points) {
+						int i = 0;
+						for (char *tok = strtok(val, " "); tok;
+							 tok = strtok(NULL, " "), ++i) {
+							rule->accel_points[i] =
+								CLAMP_FLOAT(atof(tok), 0.0f, 255.0f);
+						}
+					} else {
+						mango_error(true, WLR_ERROR,
+									"Cant allocate accel_points. Size was %i",
+									rule->accel_npoints);
+						parse_error = true;
+					}
+				} else if (strcmp(key, "accel_step") == 0) {
+					rule->accel_step = CLAMP_FLOAT(atof(val), 0.0f, 255.0f);
 				} else if (strcmp(key, "accel_speed") == 0) {
 					rule->accel_speed = CLAMP_FLOAT(atof(val), -1.0, 1.0);
 				} else if (strcmp(key, "left_handed") == 0) {
@@ -2521,8 +2583,12 @@ void set_value_default() {
 	config.cursor_size = 24;
 	config.trackpad_natural_scrolling = 0;
 	config.mouse_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.mouse_accel_npoints = 0;
+	config.mouse_accel_step = 1;
 	config.mouse_accel_speed = 0.0;
 	config.trackpad_accel_profile = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+	config.trackpad_accel_npoints = 0;
+	config.trackpad_accel_step = 1;
 	config.trackpad_accel_speed = 0.0;
 	config.send_events_mode = LIBINPUT_CONFIG_SEND_EVENTS_ENABLED;
 	config.button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
@@ -2872,11 +2938,11 @@ void override_config(void) {
 		config.gesture_swipe_min_speed_to_force = 0;
 	config.mouse_natural_scrolling =
 		CLAMP_INT(config.mouse_natural_scrolling, 0, 1);
-	config.mouse_accel_profile = CLAMP_INT(config.mouse_accel_profile, 0, 2);
+	config.mouse_accel_profile = CLAMP_INT(config.mouse_accel_profile, 0, 3);
 	config.mouse_accel_speed =
 		CLAMP_FLOAT(config.mouse_accel_speed, -1.0f, 1.0f);
 	config.trackpad_accel_profile =
-		CLAMP_INT(config.trackpad_accel_profile, 0, 2);
+		CLAMP_INT(config.trackpad_accel_profile, 0, 3);
 	config.trackpad_accel_speed =
 		CLAMP_FLOAT(config.trackpad_accel_speed, -1.0f, 1.0f);
 	config.send_events_mode = CLAMP_INT(config.send_events_mode, 0, 2);

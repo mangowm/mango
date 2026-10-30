@@ -20,6 +20,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
+#include <libinput.h>
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
@@ -514,11 +515,29 @@ void handle_request_set_cursor_shape(struct wl_listener *listener, void *data) {
 	}
 }
 void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
-					   uint32_t mouse_accel_profile, double mouse_accel_speed) {
+					   uint32_t mouse_accel_profile, double mouse_accel_speed,
+					   double *accel_points, uint8_t accel_npoints,
+					   double accel_step) {
 	libinput_device_config_scroll_set_natural_scroll_enabled(device,
 															 natural_scrolling);
-	if (mouse_accel_profile &&
+	if (accel_points && mouse_accel_profile == 3 &&
 		libinput_device_config_accel_is_available(device)) {
+		struct libinput_config_accel *accel =
+			libinput_config_accel_create(LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM);
+		if (!accel) {
+			mango_error(true, WLR_ERROR, "Cant create acceleration profile");
+			return;
+		}
+
+		libinput_device_config_accel_set_profile(
+			device, LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM);
+		libinput_config_accel_set_points(accel, LIBINPUT_ACCEL_TYPE_MOTION,
+										 accel_step, accel_npoints,
+										 accel_points);
+		libinput_device_config_accel_apply(device, accel);
+		libinput_config_accel_destroy(accel);
+	} else if (mouse_accel_profile &&
+			   libinput_device_config_accel_is_available(device)) {
 		libinput_device_config_accel_set_profile(device, mouse_accel_profile);
 		libinput_device_config_accel_set_speed(device, mouse_accel_speed);
 	} else {
@@ -558,6 +577,18 @@ void configure_pointer(struct wlr_input_device *wlr_device,
 								 ? (uint32_t)rule->accel_profile
 								 : (is_trackpad ? config.trackpad_accel_profile
 												: config.mouse_accel_profile);
+	double *accel_points = rule && rule->accel_points
+							   ? rule->accel_points
+							   : (is_trackpad ? config.trackpad_accel_points
+											  : config.mouse_accel_points);
+	uint8_t accel_npoints = rule && rule->accel_npoints
+								? rule->accel_npoints
+								: (is_trackpad ? config.trackpad_accel_npoints
+											   : config.mouse_accel_npoints);
+	double accel_step = rule && rule->accel_step != -1
+							? rule->accel_step
+							: (is_trackpad ? config.trackpad_accel_step
+										   : config.mouse_accel_step);
 	double accel_speed = rule && !isnan(rule->accel_speed)
 							 ? rule->accel_speed
 							 : (is_trackpad ? config.trackpad_accel_speed
@@ -596,7 +627,8 @@ void configure_pointer(struct wlr_input_device *wlr_device,
 		libinput_device_config_tap_set_drag_lock_enabled(device, drag_lock);
 		libinput_device_config_tap_set_button_map(device, button_map);
 	}
-	pointer_set_accel(device, natural_scrolling, accel_profile, accel_speed);
+	pointer_set_accel(device, natural_scrolling, accel_profile, accel_speed,
+					  accel_points, accel_npoints, accel_step);
 
 	if (libinput_device_config_dwt_is_available(device))
 		libinput_device_config_dwt_set_enabled(device, disable_while_typing);

@@ -44,7 +44,9 @@ Configuration for external mice.
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `mouse_natural_scrolling` | `0` | Invert scrolling direction. |
-| `mouse_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `mouse_accel_profile` | `2` | Either `0` (None), `1` (Flat), `2` (Adaptive) or `3` ([Custom](https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html#the-custom-acceleration-profile)) |
+| `mouse_accel_step` | `1.0` | Custom accel profile step. Between 0.0f and 255.0f. |
+| `mouse_accel_points` | `unset` | Space-separated list of points for the custom accel profile. All between 0.0f and 255.0f. |
 | `mouse_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
 | `mouse_left_handed` | `0` | Swap left and right buttons. |
 | `mouse_middle_button_emulation` | `0` | Emulate middle button. |
@@ -65,7 +67,9 @@ Specific settings for laptop trackpads. Some settings may require a relogin to t
 | `tap_to_click` | `1` | Tap to trigger a left click. |
 | `tap_and_drag` | `1` | Tap and hold to drag items. |
 | `trackpad_natural_scrolling` | `0` | Invert scrolling direction (natural scrolling). |
-| `trackpad_accel_profile` | `2` | `0` (None), `1` (Flat), `2` (Adaptive). |
+| `trackpad_accel_profile` | `2` | Either `0` (None), `1` (Flat), `2` (Adaptive) or `3` ([Custom](https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html#the-custom-acceleration-profile)) |
+| `trackpad_accel_step` | `1.0` | Custom accel profile step. Between 0.0f and 255.0f. |
+| `trackpad_accel_points` | `unset` | Space-separated list of points for the custom accel profile. All between 0.0f and 255.0f. |
 | `trackpad_accel_speed` | `0.0` | Speed adjustment (-1.0 to 1.0). |
 | `trackpad_scroll_button` | `274` | The button used for button scrolling (272–279). |
 | `trackpad_scroll_method` | `1` | `1` (Two-finger), `2` (Edge), `4` (Button). |
