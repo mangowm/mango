@@ -1360,6 +1360,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->no_blur = 0;
 		rule->no_animation = 0;
 		rule->no_shadow = 0;
+		rule->blur_ignore_alpha = 0.0f;
 
 		bool parse_error = false;
 		char *token = strtok(value, ",");
@@ -1388,6 +1389,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->no_animation = CLAMP_INT(atoi(val), 0, 1);
 				} else if (strcmp(key, "no_shadow") == 0) {
 					rule->no_shadow = CLAMP_INT(atoi(val), 0, 1);
+				} else if (strcmp(key, "blur_ignore_alpha") == 0) {
+					rule->blur_ignore_alpha = CLAMP_FLOAT(atof(val), 0.0f, 1.0f);
 				} else {
 					mango_error(false, WLR_ERROR,
 								"Unknown "

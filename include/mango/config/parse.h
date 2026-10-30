@@ -217,6 +217,7 @@ typedef struct {
 	int32_t no_blur;
 	int32_t no_animation;
 	int32_t no_shadow;
+	float blur_ignore_alpha;
 } ConfigLayerRule;
 
 typedef struct {
