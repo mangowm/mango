@@ -251,3 +251,24 @@ void wl_list_safe_reinsert_next(struct wl_list *l1, struct wl_list *l2) {
 	wl_list_init(l2);
 	wl_list_insert(l1, l2);
 }
+
+int count_words(const char *const s) {
+	int ret = 0;
+	int in_word = 0;
+	const char *i = s;
+	do {
+		switch (*i) {
+		case '\0':
+		case ' ':
+			if (in_word) {
+				in_word = 0;
+				ret++;
+			}
+			break;
+		default:
+			in_word = 1;
+		};
+	} while (*i++);
+
+	return ret;
+}
