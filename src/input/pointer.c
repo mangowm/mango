@@ -520,14 +520,6 @@ void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
 					   double accel_step) {
 	libinput_device_config_scroll_set_natural_scroll_enabled(device,
 															 natural_scrolling);
-	FILE *f = fopen("/home/dummy/log.txt", "a");
-	fprintf(f, "p = %i\n", mouse_accel_profile);
-	fprintf(f, "s = %f\n", accel_step);
-	fprintf(f, "n = %u\n", accel_npoints);
-	for (int i = 0; i < accel_npoints; ++i) {
-		fprintf(f, "p%i = %f\t", i, accel_points[i]);
-	}
-	fprintf(f, "\n");
 	if (accel_points && mouse_accel_profile == 3 &&
 		libinput_device_config_accel_is_available(device)) {
 		struct libinput_config_accel *accel =
@@ -554,8 +546,6 @@ void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
 		libinput_device_config_accel_set_profile(device, 0);
 		libinput_device_config_accel_set_speed(device, 0);
 	}
-	fflush(f);
-	fclose(f);
 }
 
 void configure_pointer(struct wlr_input_device *wlr_device,
