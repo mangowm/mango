@@ -15,16 +15,6 @@
 #include <assert.h>
 #include <wlr/types/wlr_cursor.h>
 
-/* Minimum interval between drag layout updates: one per presented frame. */
-uint32_t drag_refresh_interval_ms(const Monitor *m) {
-	int32_t refresh_mhz = (m && m->wlr_output) ? m->wlr_output->refresh : 0;
-	if (refresh_mhz <= 0)
-		refresh_mhz = 60000;
-
-	int32_t ms = (int32_t)(1000.0 / ((double)refresh_mhz / 1000.0));
-	return ms > 0 ? (uint32_t)ms : 1;
-}
-
 void set_size_per(Monitor *m, Client *c, bool reset_proportion) {
 	Client *fc = NULL;
 	bool found = false;
@@ -107,8 +97,7 @@ static void persist_tile_size_weights(Monitor *m) {
 }
 
 void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
-								   int32_t offsety, uint32_t time,
-								   int32_t type) {
+								   int32_t offsety, int32_t type) {
 	Client *tc = NULL;
 	float delta_x, delta_y;
 	Client *next = NULL;
@@ -331,22 +320,12 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 
 		persist_tile_size_weights(gc->mon);
 
-		if (!isdrag) {
-			arrange(gc->mon, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(gc->mon)) {
-			arrange(gc->mon, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(gc->mon, false, false);
 	}
 }
 
 void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
-								 int32_t offsety, uint32_t time, int32_t type) {
+								 int32_t offsety, int32_t type) {
 	Client *tc = NULL;
 	float delta_x, delta_y;
 	Client *next = NULL;
@@ -514,38 +493,23 @@ void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
 
 		persist_tile_size_weights(gc->mon);
 
-		if (!isdrag) {
-			arrange(gc->mon, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(gc->mon)) {
-			arrange(gc->mon, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(gc->mon, false, false);
 	}
 }
 
 void resize_tile_dwindle(Client *gc, bool isdrag, int32_t offsetx,
-						 int32_t offsety, uint32_t time, bool isvertical) {
+						 int32_t offsety, bool isvertical) {
 
 	if (!isdrag) {
 		dwindle_resize_client_step(gc->mon, gc, offsetx, offsety);
 		return;
 	}
 
-	if (server.last_apply_drag_time == 0 ||
-		time - server.last_apply_drag_time >=
-			drag_refresh_interval_ms(gc->mon)) {
-		dwindle_resize_client(gc->mon, gc);
-		server.last_apply_drag_time = time;
-	}
+	dwindle_resize_client(gc->mon, gc);
 }
 
 void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
-						   int32_t offsety, uint32_t time) {
+						   int32_t offsety) {
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen)
 		return;
 	Monitor *m = gc->mon;
@@ -829,21 +793,12 @@ void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
 			}
 		}
 
-		if (!isdrag) {
-			arrange(m, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
-			arrange(m, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(m, false, false);
 	}
 }
 
 void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
-						  int32_t offsety, uint32_t time, bool isvertical) {
+						  int32_t offsety, bool isvertical) {
 
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen || !gc->mon)
 		return;
@@ -1046,21 +1001,12 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		/* Syncs back to the global fields. */
 		sync_scroller_state_to_clients(m, tag);
 
-		if (!isdrag) {
-			arrange(m, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
-			arrange(m, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(m, false, false);
 	}
 }
 
 void resize_tile_client(Client *gc, bool isdrag, int32_t offsetx,
-						int32_t offsety, uint32_t time) {
+						int32_t offsety) {
 
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen || !gc->mon)
 		return;
@@ -1068,29 +1014,34 @@ void resize_tile_client(Client *gc, bool isdrag, int32_t offsetx,
 	if (gc->mon->isoverview)
 		return;
 
+	/* Coalesce keyboard repeats and pointer motion to once per output frame. */
+	if (gc->mon->last_resize_frame == gc->mon->frame_serial)
+		return;
+	gc->mon->last_resize_frame = gc->mon->frame_serial;
+
 	const Layout *current_layout =
 		gc->mon->pertag->ltidxs[get_client_tag_idx(gc)];
 	if (current_layout->id == TILE || current_layout->id == DECK ||
 		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE
 
 	) {
-		resize_tile_master_horizontal(gc, isdrag, offsetx, offsety, time,
+		resize_tile_master_horizontal(gc, isdrag, offsetx, offsety,
 									  current_layout->id);
 	} else if (current_layout->id == VERTICAL_TILE ||
 			   current_layout->id == VERTICAL_DECK) {
-		resize_tile_master_vertical(gc, isdrag, offsetx, offsety, time,
+		resize_tile_master_vertical(gc, isdrag, offsetx, offsety,
 									current_layout->id);
 	} else if (current_layout->id == SCROLLER) {
-		resize_tile_scroller(gc, isdrag, offsetx, offsety, time, false);
+		resize_tile_scroller(gc, isdrag, offsetx, offsety, false);
 	} else if (current_layout->id == VERTICAL_SCROLLER) {
-		resize_tile_scroller(gc, isdrag, offsetx, offsety, time, true);
+		resize_tile_scroller(gc, isdrag, offsetx, offsety, true);
 	} else if (current_layout->id == DWINDLE) {
-		resize_tile_dwindle(gc, isdrag, offsetx, offsety, time, true);
+		resize_tile_dwindle(gc, isdrag, offsetx, offsety, true);
 	} else if (current_layout->id == GRID ||
 			   current_layout->id == VERTICAL_GRID ||
 			   current_layout->id == FAIR ||
 			   current_layout->id == VERTICAL_FAIR) {
-		resize_tile_grid_fair(gc, isdrag, offsetx, offsety, time);
+		resize_tile_grid_fair(gc, isdrag, offsetx, offsety);
 	}
 }
 
