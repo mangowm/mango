@@ -630,6 +630,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	struct wl_event_loop *loop = wl_display_get_event_loop(server.display);
 	m = wlr_output->data = ecalloc(1, sizeof(*m));
 	wlr_output_state_init(&m->pending);
+	m->frame_serial = 1;
 
 	m->iscleanuping = false;
 	m->skip_frame_timeout =
@@ -1340,6 +1341,8 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 
 	if (!m->wlr_output->enabled || !server.allow_frame_scheduling)
 		return;
+
+	m->frame_serial++;
 
 	// Draws layers and fade-out effects.
 	for (i = 0; i < LENGTH(m->layers); i++) {

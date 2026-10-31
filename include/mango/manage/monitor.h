@@ -33,6 +33,8 @@ struct Monitor {
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
+	uint64_t frame_serial;	  /* Incremented for every output frame. */
+	uint64_t last_resize_frame; /* Last frame that applied a resize. */
 	struct wl_listener destroy_lock_surface;
 	struct wl_listener commit_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;

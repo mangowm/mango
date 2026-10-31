@@ -1130,7 +1130,6 @@ void pointer_end_grab_client(bool follow_pointer) {
 	server.selected_monitor->sel = gc;
 	server.grab_client = NULL;
 	server.start_drag_window = false;
-	server.last_apply_drag_time = 0;
 	if (gc->drag_to_tile && config.drag_tile_to_tile) {
 		pointer_place_drag_tile(gc);
 		gc->float_geom = gc->drag_tile_float_backup_geom;
@@ -1368,16 +1367,15 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	} else if (server.cursor_mode == CurResize) {
 		if (server.grab_client->isfloating) {
 			server.grab_client->iscustomsize = 1;
-			if (server.last_apply_drag_time == 0 ||
-				time - server.last_apply_drag_time >=
-					drag_refresh_interval_ms(server.grab_client->mon)) {
+			Monitor *m = server.grab_client->mon;
+			if (m && m->last_resize_frame != m->frame_serial) {
+				m->last_resize_frame = m->frame_serial;
 				pointer_resize_floating_window(
 					server.grab_client, server.cursor->x, server.cursor->y);
-				server.last_apply_drag_time = time;
 			}
 			return;
 		} else {
-			resize_tile_client(server.grab_client, true, 0, 0, time);
+			resize_tile_client(server.grab_client, true, 0, 0);
 			return;
 		}
 	}
@@ -1874,7 +1872,6 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 				server.grab_client = NULL;
 				server.cursor_mode = CurNormal;
 				server.start_drag_window = false;
-				server.last_apply_drag_time = 0;
 				jc->drag_to_tile = false;
 				if (server.drop_client) {
 					server.drop_client->enable_drop_area_draw = false;

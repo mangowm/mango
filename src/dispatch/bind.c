@@ -852,7 +852,7 @@ int32_t resize_window(const Arg *arg) {
 			offsety = arg->i2;
 			break;
 		}
-		resize_tile_client(c, false, offsetx, offsety, 0);
+		resize_tile_client(c, false, offsetx, offsety);
 		config.animations = animations_state_backup;
 		return 0;
 	}
