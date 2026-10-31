@@ -733,7 +733,7 @@ void setup(void) {
 		wlr_server_decoration_manager_create(server.display),
 		WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 	server.decoration_manager =
-		wlr_xdg_decoration_manager_v1_create(server.display);
+		wlr_xdg_decoration_manager_v1_create(server.display, 2);
 	wl_signal_add(&server.decoration_manager->events.new_toplevel_decoration,
 				  &server.new_xdg_decoration_listener);
 
