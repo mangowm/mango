@@ -1929,7 +1929,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		config->exec_once_count++;
 
-	} else if (regex_match("^bind[s|l|r|p|c]*$", key)) {
+	} else if (regex_match("^bind[s|l|r|p|c|n]*$", key)) {
 		config->key_bindings =
 			realloc(config->key_bindings,
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
