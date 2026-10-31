@@ -4905,9 +4905,17 @@ void handle_xwayland_surface_commit(struct wl_listener *listener, void *data) {
 void handle_xwayland_surface_associate(struct wl_listener *listener,
 									   void *data) {
 	Client *c = wl_container_of(listener, c, associate);
+	struct wlr_surface *surface = client_surface(c);
 
-	LISTEN(&client_surface(c)->events.map, &c->map, handle_client_map);
-	LISTEN(&client_surface(c)->events.unmap, &c->unmap, handle_client_unmap);
+	LISTEN(&surface->events.map, &c->map, handle_client_map);
+	LISTEN(&surface->events.unmap, &c->unmap, handle_client_unmap);
+
+	/* Workaround a race in the upstream wlroots xwm.
+	 * TODO(wlroots): remove the workaround.
+	 * See: https://gitlab.freedesktop.org/wlroots/wlroots/-/merge_requests/5479 */
+	if (wlr_surface_has_buffer(surface)) {
+		wlr_surface_map(surface);
+	}
 }
 
 void handle_xwayland_surface_dissociate(struct wl_listener *listener,
