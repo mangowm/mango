@@ -259,8 +259,7 @@ int32_t focus_direction(const Arg *arg) {
 	Client *c = NULL;
 	c = direction_select(arg);
 
-	if (c && c->mon != server.selected_monitor &&
-		!config.focus_cross_monitor)
+	if (c && c->mon != server.selected_monitor && !config.focus_cross_monitor)
 		return 0;
 
 	if (c && !server.selected_monitor->isoverview) {
@@ -1066,8 +1065,7 @@ int32_t switch_proportion_preset(const Arg *arg) {
 			if (i == config.scroller_proportion_preset_count - 1)
 				target_proportion = config.scroller_proportion_preset[0];
 			else
-				target_proportion =
-					config.scroller_proportion_preset[i + 1];
+				target_proportion = config.scroller_proportion_preset[i + 1];
 			break;
 		}
 	}
@@ -1513,15 +1511,13 @@ int32_t tag(const Arg *arg) {
 }
 
 int32_t tag_monitor(const Arg *arg) {
-	Monitor *m = NULL, *cm = NULL, *oldmon = NULL;
+	Monitor *m = NULL, *cm = NULL;
 	if (!server.selected_monitor)
 		return 0;
 	Client *c = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 
 	if (!c)
 		return 0;
-
-	oldmon = c->mon;
 
 	if (arg->i == MON_NEXT || arg->i == MON_PREV) {
 		m = monitor_from_cycle(arg->i);
@@ -1552,33 +1548,17 @@ int32_t tag_monitor(const Arg *arg) {
 		return 0;
 	}
 
-	if (c == oldmon->sel) {
-		oldmon->sel = NULL;
-	}
+	if (!client_set_monitor_adapted(c, m, newtags, true))
+		return 0;
 
-	client_set_monitor(c, m, newtags, true);
-	client_update_oldmonname_record(c, m);
-
-	reset_foreign_tolevel(c, oldmon, c->mon);
-
-	c->float_geom.width =
-		(int32_t)(c->float_geom.width * c->mon->w.width / oldmon->w.width);
-	c->float_geom.height =
-		(int32_t)(c->float_geom.height * c->mon->w.height / oldmon->w.height);
 	set_selected_monitor(c->mon);
-	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+	target = get_tags_first_tag(c->tags);
 
+	client_switch_view(&(Arg){.ui = target}, true);
+	client_focus(c, 1);
 	if (c->isfloating) {
-		c->geom = c->float_geom;
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		resize(c, c->geom, (ResizeOpts){.interact = 1});
 	} else {
-		set_selected_monitor(c->mon);
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		arrange(server.selected_monitor, false, false);
 	}
 	if (config.warpcursor) {
@@ -1725,6 +1705,51 @@ int32_t toggle_scratchpad(const Arg *arg) {
 	return 0;
 }
 
+static void special_tag_migrate_clients(Monitor *target) {
+	bool layout_copied = false;
+	Client *c;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (!c->mon || !c->mon->wlr_output || c->mon == target ||
+			c->iskilling || !(c->tags & TAG0_MASK)) {
+			continue;
+		}
+
+		Monitor *oldmon = c->mon;
+		if (!layout_copied) {
+			monitor_copy_tag_layout(target, oldmon, 0);
+			layout_copied = true;
+		}
+		client_set_monitor_adapted(c, target, TAG0_MASK, false);
+	}
+}
+
+static uint32_t special_tag_previous_tagset(const Monitor *m) {
+	uint32_t previous = m->tagset[m->seltags ^ 1] & TAGMASK;
+	return previous
+			   ? previous
+			   : (m->pertag->prevtag ? (1U << (m->pertag->prevtag - 1)) : 1);
+}
+
+static void special_tag_prepare_target(Monitor *target) {
+	if (!config.special_tag_cross_monitor || !target || !target->wlr_output ||
+		!target->wlr_output->enabled) {
+		return;
+	}
+
+	Monitor *m;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m == target || !m->wlr_output || !m->wlr_output->enabled ||
+			m->isoverview || !is_special_active(m)) {
+			continue;
+		}
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, false);
+	}
+
+	special_tag_migrate_clients(target);
+}
+
 // toggle the special workspace view on a given monitor
 void toggle_special_tag_mon(Monitor *m) {
 	if (!m || m->isoverview)
@@ -1733,13 +1758,10 @@ void toggle_special_tag_mon(Monitor *m) {
 	set_selected_monitor(m);
 	if (is_special_active(m)) {
 		/* Toggle back to previous tagset (supports multi-tag views) */
-		uint32_t prev_set = m->tagset[m->seltags ^ 1] & TAGMASK;
-		uint32_t target =
-			prev_set
-				? prev_set
-				: (m->pertag->prevtag ? (1 << (m->pertag->prevtag - 1)) : 1);
-		client_switch_view(&(Arg){.ui = target}, true);
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, true);
 	} else {
+		special_tag_prepare_target(m);
 		/* Switch to tag 0 */
 		client_switch_view(&(Arg){.ui = TAG0_MASK}, true);
 	}
@@ -1774,6 +1796,7 @@ static void tag_special_tag_internal(const Arg *arg, bool silent) {
 
 	} else {
 		/* Send window to tag 0 */
+		special_tag_prepare_target(m);
 		if (silent)
 			tag_silent(&(Arg){.ui = TAG0_MASK, .tc = c});
 		else {

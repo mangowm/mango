@@ -33,7 +33,7 @@ struct Monitor {
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
-	uint64_t frame_serial;	  /* Incremented for every output frame. */
+	uint64_t frame_serial;		/* Incremented for every output frame. */
 	uint64_t last_resize_frame; /* Last frame that applied a resize. */
 	struct wl_listener destroy_lock_surface;
 	struct wl_listener commit_lock_surface;
@@ -130,6 +130,8 @@ void special_sync_top_layer(bool special_active);
 uint32_t get_tag_status(uint32_t tag, Monitor *m);
 uint32_t get_tags_first_tag_num(uint32_t source_tags);
 uint32_t get_tags_first_tag(uint32_t source_tags);
+void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
+							 uint32_t tag);
 Monitor *monitor_at_point(double x, double y);
 Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 bool match_monitor_spec(char *spec, Monitor *m);

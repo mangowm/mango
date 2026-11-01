@@ -187,6 +187,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->exchange_cross_monitor = atoi(value);
 	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
 		config->scratchpad_cross_monitor = atoi(value);
+	} else if (strcmp(key, "special_tag_cross_monitor") == 0) {
+		config->special_tag_cross_monitor = atoi(value);
 	} else if (strcmp(key, "focus_cross_tag") == 0) {
 		config->focus_cross_tag = atoi(value);
 	} else if (strcmp(key, "view_current_to_back") == 0) {
@@ -2449,6 +2451,7 @@ void set_value_default() {
 	config.focusdir_only_zone_overlap = 1;
 	config.exchange_cross_monitor = 0;
 	config.scratchpad_cross_monitor = 0;
+	config.special_tag_cross_monitor = 0;
 	config.focus_cross_tag = 0;
 	config.axis_scroll_factor = 1.0;
 	config.trackpad_scroll_factor = 1.0;
@@ -2828,6 +2831,8 @@ void override_config(void) {
 		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
 	config.scratchpad_cross_monitor =
 		CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
+	config.special_tag_cross_monitor =
+		CLAMP_INT(config.special_tag_cross_monitor, 0, 1);
 	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
 	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
 	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);

@@ -345,6 +345,7 @@ typedef struct {
 	int32_t focusdir_only_zone_overlap;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
+	int32_t special_tag_cross_monitor;
 	int32_t focus_cross_tag;
 	int32_t view_current_to_back;
 	int32_t no_border_when_single;

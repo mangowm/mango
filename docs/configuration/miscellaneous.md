@@ -40,6 +40,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `focus_cross_tag` | `0` | Allow directional focus to cross into other tags. |
 | `view_current_to_back` | `0` | Toggling the current tag switches back to the previously viewed tag. |
 | `scratchpad_cross_monitor` | `0` | Share the scratchpad pool across all monitors. |
+| `special_tag_cross_monitor` | `0` | Migrate windows on other monitors' special tags to the monitor where the special tag is activated, copying their special-tag layout. Floating windows are rescaled and centered for the target monitor. |
 | `single_scratchpad` | `1` | Only allow one scratchpad (named or standard) to be visible at a time. |
 | `tag_num` | `9` | Number of tags/workspaces (1–31). On config reload, clients on tags beyond this count are moved to the last tag. |
 | `tag_gather` | `0` | When `1`, occupied tags are compacted to consecutive tags starting at 1, eliminating gaps. For example, with windows on tags 1, 3 and 9, they move to 1, 2 and 3, and the current view follows. |
