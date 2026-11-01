@@ -2945,11 +2945,11 @@ void override_config(void) {
 	config.blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
 	config.blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
 	config.blur_params.brightness =
-		CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
+		CLAMP_FLOAT(config.blur_params.brightness, 0, 2);
 	config.blur_params.contrast =
-		CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
+		CLAMP_FLOAT(config.blur_params.contrast, 0, 2);
 	config.blur_params.saturation =
-		CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
+		CLAMP_FLOAT(config.blur_params.saturation, 0, 2);
 	config.shadows = CLAMP_INT(config.shadows, 0, 1);
 	config.shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
 	config.layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
