@@ -39,7 +39,7 @@ struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box,
 void client_set_drop_area(Client *c);
 
 /* ---------- central rendering entry point ---------- */
-void client_apply_clip(Client *c, float factor);
+void client_set_clip(Client *c, float factor);
 void client_animation_set_progress(Client *c, double p);
 void client_animation_resume(Client *c, double remaining);
 void fadeout_client_animation_next_tick(Client *c);
@@ -49,7 +49,7 @@ bool client_animations_enabled(const Client *c);
 
 /* Applies the final window state when animation is disabled: position,
  * clipping/visibility, and geometry state are synchronized. */
-void client_apply_finish_geometry(Client *c);
+void client_set_finish_geometry(Client *c);
 void client_commit(Client *c);
 void client_set_pending_state(Client *c);
 
@@ -68,7 +68,7 @@ void client_set_focused_opacity_animation(Client *c);
 void client_set_unfocused_opacity_animation(Client *c);
 void client_start_focus_animation(Client *c, bool focused);
 bool client_step_focus_animation(Client *c, double linear_progress);
-bool client_apply_focus_opacity(Client *c);
+bool client_set_focus_opacity(Client *c);
 bool client_draw_frame(Client *c);
 
 #endif
