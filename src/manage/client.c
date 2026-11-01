@@ -2450,6 +2450,10 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 		client_set_monitor(
 			c, NULL, 0, true); /* Make sure to reapply rules in mapnotify() */
 
+		if (!c->isfloating || c->force_tiled_state)
+			client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
+									WLR_EDGE_RIGHT);
+
 		uint32_t serial = wlr_xdg_surface_schedule_configure(c->surface.xdg);
 		if (serial > 0) {
 			c->configure_serial = serial;
