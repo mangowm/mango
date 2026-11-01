@@ -120,4 +120,12 @@ special_gap_inner_horizontal=10
 special_gap_inner_vertical=10
 special_gap_outer_horizontal=20
 special_gap_outer_vertical=20
+
+# Gather special tag windows from all monitors on the active monitor
+special_tag_cross_monitor=0
 ```
+
+With `special_tag_cross_monitor=1`, opening the special workspace or moving a
+window into it also migrates special-tag windows from other monitors and copies
+their special-tag layout. Floating windows are rescaled and centered for the
+target monitor.
