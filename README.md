@@ -3,7 +3,7 @@
 
   <h1>Mango Wayland Compositor</h1>
 
-  <p>A fast, feature-rich Wayland compositor built on <a href="https://codeberg.org/dwl/dwl">dwl</a></p>
+  <p>A fast, feature-rich Wayland compositor.</p>
 
 <a href="https://github.com/mangowm/mango/stargazers"><img src="https://img.shields.io/github/stars/mangowm/mango?style=flat&color=orange" alt="Stars"/></a>
 <a href="https://github.com/mangowm/mango/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat" alt="License"/></a>
@@ -24,18 +24,17 @@ https://github.com/user-attachments/assets/be85e13f-7798-456d-957e-f8931687392e
 
 ## Why Mango?
 
-Mango starts where dwl ends. It keeps the lightweight, fast-build philosophy while adding the features that make a compositor actually usable day-to-day — without the bloat.
-
-- **Lightweight & fast** — as lean as dwl, no functionality compromised
+- **Lightweight & fast** — no functionality compromised
 - **Excellent xwayland support** — run X11 apps without friction(Supports scale without blurring)
 - **Tags, not workspaces** — each tag maintains its own independent window layout
 - **Smooth animations** — window open/move/close, tag transitions, layer surfaces
-- **Flexible layouts** — scroller, master-stack, monocle, dwindle, grid, and more
-- **Rich window states** — swallow, minimize, maximize, global, overlay, fakefullscreen
+- **Flexible layouts** — scroller, vertical-scroller, master-stack, monocle, dwindle and more
+- **Rich window states** — swallow, group, minimize, maximize, global, overlay, fakefullscreen
 - **Window effects** — blur, shadow, corner radius, opacity (via scenefx)
 - **Excellent input method support** — text-input v2/v3
-- **Sway-like scratchpad** — named scratchpad support included
-- **Hycov-style overview** — see all windows at a glance
+- **Powerful scratchpad** — sway-style scratchpad, special workspace and named-scratchpad support
+- **label jump overview** — see all windows at a glance with easymotion jump label.
+- **Gnome-style application switcher** — quick switching between apps
 - **IPC** — send/receive messages from external programs
 - **Hot-reload config** — no restart needed for keybinding changes
 - **Zero flickering** — every frame is correct
