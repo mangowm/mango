@@ -989,7 +989,7 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 static void client_begin_drag_float(Client *c) {
 	c->drag_to_tile = true;
 	exit_scroller_stack(c);
-	client_set_floating(c, 1);
+	client_set_floating(c, 1, false);
 	c->drag_tile_float_backup_geom = c->float_geom;
 	c->old_stack_inner_per = 0.0f;
 	c->old_master_inner_per = 0.0f;
@@ -1663,7 +1663,7 @@ void pointer_place_drag_tile(Client *c) {
 			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
 
 		if (closest->drop_direction == UNDIR) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			wl_list_safe_reinsert_prev(&closest->link, &c->link);
 			arrange(closest->mon, false, false);
 			return;
@@ -1686,7 +1686,7 @@ void pointer_place_drag_tile(Client *c) {
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
 						   config.dwindle_split_ratio, insert_before, split_h,
 						   !config.dwindle_drop_simple_split);
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			return;
 		}
 
@@ -1700,7 +1700,7 @@ void pointer_place_drag_tile(Client *c) {
 			} else {
 				wl_list_safe_reinsert_next(&closest->link, &c->link);
 			}
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			return;
 		}
 
@@ -1711,7 +1711,7 @@ void pointer_place_drag_tile(Client *c) {
 		}
 	}
 
-	client_set_floating(c, 0);
+	client_set_floating(c, 0, false);
 }
 
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
