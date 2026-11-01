@@ -2139,6 +2139,7 @@ void init_client_properties(Client *c) {
 	c->isoverlay = 0;
 	c->isunglobal = 0;
 	c->is_in_scratchpad = 0;
+	c->isfloating_before_scratchpad = 0;
 	c->isnamedscratchpad = 0;
 	c->need_float_size_reduce = 0;
 	c->is_clip_to_hide = 0;
@@ -3302,7 +3303,7 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		resize(c, c->geom, (ResizeOpts){.interact = 0});
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
-		client_set_floating(c, c->isfloating);
+		client_set_floating(c, c->isfloating, false);
 		client_apply_fullscreen(c, c->isfullscreen,
 								true); /* This will call arrange(c->mon) */
 	}
@@ -3362,7 +3363,7 @@ void view_insert_shift_tags(Monitor *m, uint32_t target) {
 	}
 }
 
-void client_set_floating(Client *c, int32_t floating) {
+void client_set_floating(Client *c, int32_t floating, bool want_animation) {
 
 	Client *fc = NULL;
 	struct wlr_box target_box;
@@ -3437,7 +3438,7 @@ void client_set_floating(Client *c, int32_t floating) {
 
 	client_sync_tiled_hint(c);
 
-	arrange(c->mon, false, false);
+	arrange(c->mon, want_animation, false);
 
 	if (!c->isfloating) {
 		c->old_master_inner_per = c->master_inner_per;
@@ -3483,7 +3484,7 @@ void client_apply_fullscreen(
 	} else {
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
-			client_set_floating(c, 1);
+			client_set_floating(c, 1, false);
 	}
 
 	client_reparent_group(c);
@@ -3554,7 +3555,7 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 	} else {
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
-			client_set_floating(c, 1);
+			client_set_floating(c, 1, false);
 	}
 
 	client_reparent_group(c);
@@ -3592,6 +3593,9 @@ void set_minimized(Client *c) {
 
 	if (!c || !c->mon || c == server.grab_client)
 		return;
+
+	if (!c->is_in_scratchpad)
+		c->isfloating_before_scratchpad = c->isfloating;
 
 	c->isglobal = 0;
 
@@ -3717,7 +3721,7 @@ void show_scratchpad(Client *c) {
 	}
 
 	if (!c->isfloating) {
-		client_set_floating(c, 1);
+		client_set_floating(c, 1, false);
 	}
 
 	if (!c->iscustomsize) {
@@ -3913,6 +3917,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->isfloating = w->isfloating;
 	c->isurgent = w->isurgent;
 	c->is_in_scratchpad = w->is_in_scratchpad;
+	c->isfloating_before_scratchpad = w->isfloating_before_scratchpad;
 	c->tags = w->tags;
 	c->geom = w->geom;
 	c->float_geom = w->float_geom;

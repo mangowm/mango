@@ -769,7 +769,7 @@ int32_t move_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, 1);
+		client_set_floating(c, 1, false);
 
 	switch (arg->ui) {
 	case NUM_TYPE_MINUS:
@@ -918,8 +918,11 @@ int32_t restore_minimized(const Arg *arg) {
 	if (!c)
 		return 0;
 
+	bool isfloating_before_scratchpad = c->isfloating_before_scratchpad;
+
 	/* Clear scratchpad & minimized state */
 	c->is_in_scratchpad = 0;
+	c->isfloating_before_scratchpad = 0;
 	c->isnamedscratchpad = 0;
 	client_pending_minimized_state(c, 0);
 	c->iscustomsize = 0;
@@ -932,9 +935,9 @@ int32_t restore_minimized(const Arg *arg) {
 	c->oldtags = c->tags;
 	c->mon = server.selected_monitor;
 
-	client_set_floating(c, 0);
+	c->is_pending_open_animation = true;
+	client_set_floating(c, isfloating_before_scratchpad, true);
 	client_update_border_color(c);
-	arrange(c->mon, false, false);
 	client_focus(c, 1);
 	pointer_warp_to_client(c);
 	return 0;
@@ -1086,7 +1089,7 @@ int32_t smart_move_window(const Arg *arg) {
 	if (!c || c->isfullscreen || !c->mon)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nx = c->geom.x;
 	ny = c->geom.y;
 
@@ -1193,7 +1196,7 @@ int32_t smart_resize_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nw = c->geom.width;
 	nh = c->geom.height;
 
@@ -1814,7 +1817,7 @@ int32_t toggle_floating(const Arg *arg) {
 		isfloating = !sel->isfloating;
 	}
 
-	client_set_floating(sel, isfloating);
+	client_set_floating(sel, isfloating, false);
 	return 0;
 }
 
@@ -2665,7 +2668,7 @@ int32_t toggle_all_floating(const Arg *arg) {
 			}
 
 			if (c->isfloating != should_floating) {
-				client_set_floating(c, should_floating);
+				client_set_floating(c, should_floating, false);
 			}
 		}
 	}

@@ -885,11 +885,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 
 	if (vertical) {
 		if (closest->drop_direction == LEFT) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, true);
 			return;
 		} else if (closest->drop_direction == RIGHT) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == UP) {
@@ -903,11 +903,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 		}
 	} else {
 		if (closest->drop_direction == UP) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, true);
 			return;
 		} else if (closest->drop_direction == DOWN) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == LEFT) {
@@ -921,7 +921,7 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 		}
 	}
 
-	client_set_floating(c, 0);
+	client_set_floating(c, 0, false);
 }
 
 Client *scroll_get_stack_head_client(Client *c) {
