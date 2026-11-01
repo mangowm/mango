@@ -121,7 +121,7 @@ void reapply_property(void) {
 				c->bw = config.borderpx;
 			}
 			client_set_group_config(c);
-			client_apply_tab_bar_config(c);
+			client_set_tab_bar_config(c);
 		}
 	}
 }

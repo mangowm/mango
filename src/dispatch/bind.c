@@ -1841,9 +1841,9 @@ int32_t toggle_fullscreen(const Arg *arg) {
 	sel->isnamedscratchpad = 0;
 
 	if (sel->isfullscreen)
-		client_apply_fullscreen(sel, 0, true);
+		client_set_fullscreen(sel, 0, true);
 	else
-		client_apply_fullscreen(sel, 1, true);
+		client_set_fullscreen(sel, 1, true);
 	return 0;
 }
 
