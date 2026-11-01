@@ -1005,7 +1005,7 @@ void client_set_drop_area(Client *c) {
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
 }
-void client_apply_clip(Client *c, float factor) {
+void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
 
@@ -1259,7 +1259,7 @@ void client_animation_next_tick(Client *c) {
 	};
 
 	c->is_pending_open_animation = false;
-	client_apply_clip(c, factor);
+	client_set_clip(c, factor);
 
 	if (animation_passed >= 1.0) {
 		c->animation.action = MOVE;
@@ -1272,11 +1272,11 @@ void client_animation_next_tick(Client *c) {
 			client_update_visibility(c);
 			c->animation.tagouted = true;
 			c->animation.current = c->geom;
-			client_apply_clip(c, 1.0f);
+			client_set_clip(c, 1.0f);
 		} else {
 			/* Snap to the final box: an interpolated one can be a pixel off,
 			 * which leaves X11 content stretched (blurry). */
-			client_apply_finish_geometry(c);
+			client_set_finish_geometry(c);
 		}
 
 		Client *pointer_c = NULL;
@@ -1386,14 +1386,14 @@ void init_fadeout_client(Client *c) {
 
 	request_fresh_all_monitors();
 }
-void client_apply_finish_geometry(Client *c) {
+void client_set_finish_geometry(Client *c) {
 	if (!c || !c->scene)
 		return;
 
 	wlr_scene_node_set_position(&c->scene->node, c->pending.x, c->pending.y);
 	c->animation.current = c->animainit_geom = c->animation.initial =
 		c->pending = c->current = c->geom;
-	client_apply_clip(c, 1.0);
+	client_set_clip(c, 1.0);
 	c->need_output_flush = false;
 }
 void client_animation_set_progress(Client *c, double p) {
@@ -1424,7 +1424,7 @@ void client_animation_set_progress(Client *c, double p) {
 	};
 
 	c->is_pending_open_animation = false;
-	client_apply_clip(c, 1.0f);
+	client_set_clip(c, 1.0f);
 }
 void client_animation_resume(Client *c, double remaining) {
 	if (!c || !c->scene)
@@ -1476,7 +1476,7 @@ void client_commit(Client *c) {
 	// so pointer_process_motion focus does not hit the surface from the
 	// previous frame.
 	if (!client_animations_enabled(c))
-		client_apply_finish_geometry(c);
+		client_set_finish_geometry(c);
 
 	request_fresh_all_monitors();
 }
@@ -1539,7 +1539,7 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->geom.height = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
 	} else {
 		c->geom = geo;
-		client_apply_bounds(c, bbox);
+		client_set_bounds(c, bbox);
 	}
 
 	if (!c->no_size_hint && !c->ismaximizescreen && !c->isfullscreen &&
@@ -1756,7 +1756,7 @@ void client_set_focused_opacity_animation(Client *c) {
 	client_start_focus_animation(c, true);
 }
 
-bool client_apply_focus_opacity(Client *c) {
+bool client_set_focus_opacity(Client *c) {
 	if (config.blur && !c->no_blur && c->blur_opacity != 1.0f &&
 		c->animation.action != OPEN) {
 		c->blur_opacity = 1.0f;
@@ -1877,20 +1877,20 @@ bool client_draw_frame(Client *c) {
 
 	if (server.gesture_drive_active && c->mon == server.gesture_drive_mon &&
 		c->animation.running && c->need_output_flush) {
-		return client_apply_focus_opacity(c);
+		return client_set_focus_opacity(c);
 	}
 
 	if (!c->need_output_flush)
-		return client_apply_focus_opacity(c) || need_next_tick;
+		return client_set_focus_opacity(c) || need_next_tick;
 
 	if (config.animations && c->animation.running) {
 		need_next_tick = true;
 		client_animation_next_tick(c);
 	} else {
-		client_apply_finish_geometry(c);
+		client_set_finish_geometry(c);
 	}
 
-	bool need_fade_focus = client_apply_focus_opacity(c);
+	bool need_fade_focus = client_set_focus_opacity(c);
 
 	return need_next_tick || need_fade_focus;
 }

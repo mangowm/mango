@@ -61,12 +61,12 @@ void handle_foreign_fullscreen_request(struct wl_listener *listener,
 		return;
 
 	if (c->isfullscreen && !event->fullscreen) {
-		client_apply_fullscreen(c, 0, true);
+		client_set_fullscreen(c, 0, true);
 		return;
 	}
 
 	if (!c->isfullscreen && event->fullscreen) {
-		client_apply_fullscreen(c, 1, true);
+		client_set_fullscreen(c, 1, true);
 		return;
 	}
 }

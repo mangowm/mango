@@ -361,7 +361,7 @@ void client_update_tab_bar_title(Client *c) {
 									: 1.0f);
 }
 
-void client_apply_tab_bar_config(Client *c) {
+void client_set_tab_bar_config(Client *c) {
 	if (!c || !c->tab_bar)
 		return;
 	mango_bar_decoration_apply_config(c->tab_bar, &config.tabbardata);

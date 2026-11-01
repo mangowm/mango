@@ -357,11 +357,11 @@ void overview_restore(Client *c, const Arg *arg) {
 		if (want_restore_fullscreen(c) && c->ismaximizescreen) {
 			client_set_maximize_screen(c, 1, false);
 		} else if (want_restore_fullscreen(c) && c->isfullscreen) {
-			client_apply_fullscreen(c, 1, false);
+			client_set_fullscreen(c, 1, false);
 		} else {
 			client_pending_fullscreen_state(c, 0);
 			client_pending_maximized_state(c, 0);
-			client_apply_fullscreen(c, false, false);
+			client_set_fullscreen(c, false, false);
 		}
 	} else {
 		if (c->is_restoring_from_ov) {
