@@ -3242,6 +3242,40 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 	}
 }
 
+static void client_adapt_geometry_to_monitor(Client *c, Monitor *oldmon) {
+	if (!c || !c->mon || !oldmon || oldmon->w.width <= 0 ||
+		oldmon->w.height <= 0 || c->mon->w.width <= 0 ||
+		c->mon->w.height <= 0) {
+		return;
+	}
+
+	c->float_geom.width = (int32_t)((int64_t)c->float_geom.width *
+									c->mon->w.width / oldmon->w.width);
+	c->float_geom.height = (int32_t)((int64_t)c->float_geom.height *
+									 c->mon->w.height / oldmon->w.height);
+	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+}
+
+bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
+								bool focus) {
+	if (!c || !m || !c->mon || c->mon == m) {
+		return false;
+	}
+
+	Monitor *oldmon = c->mon;
+	client_set_monitor(c, m, newtags, focus);
+	if (c->mon != m) {
+		return false;
+	}
+
+	client_update_oldmonname_record(c, m);
+	client_adapt_geometry_to_monitor(c, oldmon);
+	if (c->isfloating) {
+		c->geom = c->float_geom;
+	}
+	return true;
+}
+
 void client_change_mon(Client *c, Monitor *m) {
 	client_set_monitor(c, m, c->tags, true);
 	if (c->isfloating) {
@@ -3683,13 +3717,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		reset_foreign_tolevel(c, oldmon, c->mon);
 		client_update_oldmonname_record(c, server.selected_monitor);
 
-		// Adjusts the window size for the new monitor.
-		c->float_geom.width =
-			(int32_t)(c->float_geom.width * c->mon->w.width / oldmon->w.width);
-		c->float_geom.height = (int32_t)(c->float_geom.height *
-										 c->mon->w.height / oldmon->w.height);
-
-		c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+		client_adapt_geometry_to_monitor(c, oldmon);
 
 		// Only a visible scratchpad needs focus and returns true.
 		if (SCRATCHPAD_SHOWN(c)) {
@@ -4921,7 +4949,8 @@ void handle_xwayland_surface_associate(struct wl_listener *listener,
 
 	/* Workaround a race in the upstream wlroots xwm.
 	 * TODO(wlroots): remove the workaround.
-	 * See: https://gitlab.freedesktop.org/wlroots/wlroots/-/merge_requests/5479 */
+	 * See: https://gitlab.freedesktop.org/wlroots/wlroots/-/merge_requests/5479
+	 */
 	if (wlr_surface_has_buffer(surface)) {
 		wlr_surface_map(surface);
 	}

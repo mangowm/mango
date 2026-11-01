@@ -395,6 +395,8 @@ void client_switch_view(const Arg *arg, bool want_animation);
 void tag_client(const Arg *arg, Client *target_client);
 void show_hide_client(Client *c);
 void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus);
+bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
+								bool focus);
 void client_change_mon(Client *c, Monitor *m);
 void view_insert_shift_tags(Monitor *m, uint32_t target);
 void client_set_floating(Client *c, int32_t floating, bool want_animation);
