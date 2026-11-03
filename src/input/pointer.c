@@ -888,7 +888,7 @@ static uint32_t client_resize_edge_at(Client *c, struct wlr_surface *surface,
 	if (y >= g->y + g->height - t)
 		edge |= WLR_EDGE_BOTTOM;
 
-	if (edge && !c->isfloating) {
+	if (edge && !client_is_effectively_floating(c)) {
 		if (!ISTILED(c))
 			return 0;
 		edge = tiled_shared_edges(c, edge);
@@ -917,7 +917,7 @@ static void pointer_update_resize_cursor(Client *c,
 		edge = client_resize_edge_at(c, surface, server.cursor->x,
 									 server.cursor->y);
 
-	bool floating = edge != 0 && c->isfloating;
+	bool floating = edge != 0 && client_is_effectively_floating(c);
 	bool changed = edge != server.hover_resize_edge ||
 				   floating != server.hover_resize_floating;
 	uint32_t previous = server.hover_resize_edge;
@@ -1010,7 +1010,7 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 	server.grab_client = gc;
 	server.grab_is_border_resize = edge != 0;
 
-	if (gc->isfloating == 0 && mode == CurMove)
+	if (!client_is_effectively_floating(gc) && mode == CurMove)
 		client_begin_drag_float(gc);
 
 	if (gc->drag_to_tile && config.drag_tile_to_tile &&
@@ -1029,7 +1029,7 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "grab");
 		break;
 	case CurResize:
-		if (gc->isfloating) {
+		if (client_is_effectively_floating(gc)) {
 			uint32_t resize_edge = edge;
 			if (resize_edge == 0) {
 				int32_t corner = config.drag_corner;
@@ -1365,7 +1365,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			   (ResizeOpts){.interact = 1});
 		return;
 	} else if (server.cursor_mode == CurResize) {
-		if (server.grab_client->isfloating) {
+		if (client_is_effectively_floating(server.grab_client)) {
 			server.grab_client->iscustomsize = 1;
 			Monitor *m = server.grab_client->mon;
 			if (m && m->last_resize_frame != m->frame_serial) {
