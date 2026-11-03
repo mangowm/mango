@@ -7,6 +7,7 @@
 void handle_foreign_activate_request(struct wl_listener *listener, void *data);
 void handle_foreign_maximize_request(struct wl_listener *listener, void *data);
 void handle_foreign_minimize_request(struct wl_listener *listener, void *data);
+void handle_foreign_set_rectangle(struct wl_listener *listener, void *data);
 void handle_foreign_fullscreen_request(struct wl_listener *listener,
 									   void *data);
 void handle_foreign_close_request(struct wl_listener *listener, void *data);

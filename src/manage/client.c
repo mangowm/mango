@@ -3603,7 +3603,10 @@ void minimize_client(Client *c) {
 		floating_layout_active(c->mon) && !c->is_clip_to_hide &&
 		!c->isminimized && VISIBLEON(c, c->mon)) {
 		c->user_minimized = true;
+		/* Scale into the dock icon when it told us where it is. */
+		c->minimizing = c->has_minimize_rect;
 		init_fadeout_client(c);
+		c->minimizing = false;
 	} else {
 		c->user_minimized = false;
 	}
@@ -3625,8 +3628,10 @@ void client_play_restore_animation(Client *c) {
 	c->animation.tag_from_rule = false;
 	c->animation.running = false;
 	c->is_pending_open_animation = true;
+	c->restore_from_rect = c->has_minimize_rect;
 	client_update_visibility(c);
 	resize(c, c->geom, (ResizeOpts){.interact = 0, .skip_ov_enter_anim = true});
+	c->restore_from_rect = false; /* never let it leak into a later open */
 }
 
 void unminimize(Client *c) {

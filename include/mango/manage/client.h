@@ -151,6 +151,7 @@ struct Client {
 	struct wl_listener foreign_close_request;
 	struct wl_listener foreign_destroy;
 	struct wl_listener foreign_minimize_request;
+	struct wl_listener foreign_set_rectangle;
 	struct wl_listener foreign_maximize_request;
 	struct wl_listener set_decoration_mode;
 	struct wl_listener destroy_decoration;
@@ -191,7 +192,17 @@ struct Client {
 	bool scratchpad_switching_mon;
 	bool scratchpad_tagin;
 	bool has_own_buttons; /* asked to move/minimize/maximize: draws its own */
-	bool user_minimized; /* minimized by the user, not a scratchpad hide */
+	bool user_minimized;  /* minimized by the user, not a scratchpad hide */
+	struct wlr_box
+		minimize_rect; /* dock icon box from set_rectangle (layout) */
+	bool has_minimize_rect;
+	bool minimizing;		/* minimize_client() is taking the snapshot */
+	bool restore_from_rect; /* next open animation grows out of minimize_rect */
+	/* Fade-out snapshots only: scale-into-the-dock minimize animation. */
+	bool minimize_scale;
+	struct wlr_box minimize_from;
+	struct MinimizeSnapItem *minimize_items;
+	int32_t minimize_item_count;
 	bool fake_no_border;
 	int32_t no_focus;
 	int32_t no_fade_in;

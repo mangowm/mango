@@ -3,6 +3,7 @@
 #include "mango/common/util.h"
 #include "mango/layout/arrange.h"
 #include "mango/manage/client.h"
+#include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/types/wlr_compositor.h>
@@ -52,6 +53,41 @@ void handle_foreign_minimize_request(struct wl_listener *listener, void *data) {
 		return;
 	}
 }
+/* The dock tells where a window's icon is (surface-local box). Store it in
+ * layout coordinates so the minimize animation can scale the window into it. */
+void handle_foreign_set_rectangle(struct wl_listener *listener, void *data) {
+	Client *c = wl_container_of(listener, c, foreign_set_rectangle);
+	struct wlr_foreign_toplevel_handle_v1_set_rectangle_event *event = data;
+	Client *pc = NULL;
+	LayerSurface *l = NULL;
+	int32_t lx = 0, ly = 0;
+
+	if (!event || !event->surface)
+		return;
+
+	if (event->width <= 0 || event->height <= 0) {
+		c->has_minimize_rect = false;
+		return;
+	}
+
+	int32_t type = toplevel_from_wlr_surface(event->surface, &pc, &l);
+	if (type == LayerShell && l && l->scene_layer) {
+		wlr_scene_node_coords(&l->scene_layer->tree->node, &lx, &ly);
+	} else if (pc && pc->scene) {
+		lx = pc->geom.x + pc->bw;
+		ly = pc->geom.y + pc->bw;
+	} else {
+		return;
+	}
+
+	c->minimize_rect = (struct wlr_box){
+		.x = lx + event->x,
+		.y = ly + event->y,
+		.width = event->width,
+		.height = event->height,
+	};
+	c->has_minimize_rect = true;
+}
 void handle_foreign_fullscreen_request(struct wl_listener *listener,
 									   void *data) {
 	Client *c = wl_container_of(listener, c, foreign_fullscreen_request);
@@ -80,6 +116,7 @@ void handle_foreign_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&c->foreign_activate_request.link);
 	wl_list_remove(&c->foreign_minimize_request.link);
 	wl_list_remove(&c->foreign_maximize_request.link);
+	wl_list_remove(&c->foreign_set_rectangle.link);
 	wl_list_remove(&c->foreign_fullscreen_request.link);
 	wl_list_remove(&c->foreign_close_request.link);
 	wl_list_remove(&c->foreign_destroy.link);
@@ -97,6 +134,8 @@ void add_foreign_toplevel(Client *c) {
 			   &c->foreign_activate_request, handle_foreign_activate_request);
 		LISTEN(&(c->foreign_toplevel->events.request_minimize),
 			   &c->foreign_minimize_request, handle_foreign_minimize_request);
+		LISTEN(&(c->foreign_toplevel->events.set_rectangle),
+			   &c->foreign_set_rectangle, handle_foreign_set_rectangle);
 		LISTEN(&(c->foreign_toplevel->events.request_maximize),
 			   &c->foreign_maximize_request, handle_foreign_maximize_request);
 		LISTEN(&(c->foreign_toplevel->events.request_fullscreen),

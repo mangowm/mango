@@ -5,10 +5,10 @@
 #include "mango/draw/dim-node.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
-#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
