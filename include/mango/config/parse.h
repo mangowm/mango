@@ -494,6 +494,7 @@ typedef struct {
 	uint32_t title_message_bar_gap;
 	int32_t always_show_group_bar;
 	int32_t group_bar_close_button_enable;
+	int32_t top_drag_zone;
 	uint32_t group_bar_button_size;
 	uint32_t group_bar_button_margin;
 	float group_bar_button_color[4];

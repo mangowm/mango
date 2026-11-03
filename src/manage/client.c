@@ -2106,6 +2106,8 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	LISTEN(&toplevel->events.destroy, &c->destroy, handle_client_destroy);
 	LISTEN(&toplevel->events.request_fullscreen, &c->fullscreen,
 		   handle_client_request_fullscreen);
+	LISTEN(&toplevel->events.request_move, &c->request_move,
+		   handle_client_request_move);
 	LISTEN(&toplevel->events.request_maximize, &c->maximize,
 		   handle_client_request_maximize);
 	LISTEN(&toplevel->events.request_minimize, &c->minimize,
@@ -2580,6 +2582,7 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	pointer_cancel_floating_move(c);
 	c->iskilling = 1;
 	if (c->tab_prev || c->tab_next)
 		tab_detach_client(c);
@@ -2749,6 +2752,7 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&c->destroy.link);
 	wl_list_remove(&c->set_title.link);
 	wl_list_remove(&c->fullscreen.link);
+	wl_list_remove(&c->request_move.link);
 	wl_list_remove(&c->maximize.link);
 	wl_list_remove(&c->minimize.link);
 #ifdef XWAYLAND
@@ -2777,6 +2781,27 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	switcher_remove_client(c);
 	pointer_client_destroyed(c);
 	free(c);
+}
+
+void handle_client_request_move(struct wl_listener *listener, void *data) {
+	Client *client = wl_container_of(listener, client, request_move);
+	struct wlr_seat_pointer_state *pointer = &server.seat->pointer_state;
+	Client *pressed_client = NULL;
+	if (server.cursor_mode != CurPressed || pointer->button_count != 1 ||
+		!pointer->focused_surface ||
+		toplevel_from_wlr_surface(pointer->focused_surface, &pressed_client,
+								  NULL) < 0 ||
+		pressed_client != client)
+		return;
+	if (client->type == XDGShell) {
+		struct wlr_xdg_toplevel_move_event *event = data;
+		if (event->seat->seat != server.seat ||
+			!wlr_seat_validate_pointer_grab_serial(
+				server.seat, client_surface(client), event->serial))
+			return;
+	}
+	pointer_begin_floating_move(client, pointer->grab_button, server.cursor->x,
+								server.cursor->y);
 }
 
 void handle_client_request_fullscreen(struct wl_listener *listener,
@@ -4983,6 +5008,8 @@ void handle_new_xwayland_surface(struct wl_listener *listener, void *data) {
 		   handle_xwayland_surface_request_configure);
 	LISTEN(&xsurface->events.request_fullscreen, &c->fullscreen,
 		   handle_client_request_fullscreen);
+	LISTEN(&xsurface->events.request_move, &c->request_move,
+		   handle_client_request_move);
 	LISTEN(&xsurface->events.set_hints, &c->set_hints,
 		   handle_xwayland_surface_set_hints);
 	LISTEN(&xsurface->events.set_title, &c->set_title, handle_client_set_title);

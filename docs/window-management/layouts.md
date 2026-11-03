@@ -38,6 +38,12 @@ saved floating geometry. Windows explicitly marked floating by a rule or
 changes that explicit state but cannot make an individual window tile.
 Fullscreen, maximize, and overview remain available.
 
+Existing application titlebars support dragging without a modifier key. For
+titlebar-less windows, an invisible 24-pixel drag strip is enabled by default;
+set `top_drag_zone=0` to disable it. The strip adds no titlebar or buttons. See
+[Floating Window Dragging](../configuration/input.md#floating-window-dragging)
+for input behavior and configuration.
+
 ```ini
 bind=SUPER,f,setlayout,floating
 circle_layout=tile,floating,scroller

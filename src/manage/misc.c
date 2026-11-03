@@ -544,6 +544,7 @@ void handle_new_session_lock(struct wl_listener *listener, void *data) {
 
 	lock->scene = wlr_scene_tree_create(server.layers[LyrBlock]);
 	server.current_lock = lock->lock = session_lock;
+	pointer_cancel_floating_move(NULL);
 	server.session_locked = 1;
 
 	LISTEN(&session_lock->events.new_surface, &lock->new_surface,

@@ -139,6 +139,10 @@ struct MangoServer {
 	double grab_pointer_x, grab_pointer_y; /* pointer at grab start */
 	int32_t drag_begin_cursor_x, drag_begin_cursor_y; /* client-relative */
 	bool start_drag_window;
+	uint32_t floating_drag_button;
+	bool floating_drag_seat_press;
+	Client *top_drag_client;
+	double top_drag_x, top_drag_y;
 
 	bool group_bar_drag_pending;
 	Client *group_bar_drag_client;

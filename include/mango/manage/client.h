@@ -102,6 +102,7 @@ struct Client {
 	struct wl_listener destroy;
 	struct wl_listener set_title;
 	struct wl_listener fullscreen;
+	struct wl_listener request_move;
 #ifdef XWAYLAND
 	struct wl_listener activate;
 	struct wl_listener associate;
@@ -387,6 +388,7 @@ void handle_client_commit(struct wl_listener *listener, void *data);
 void handle_client_unmap(struct wl_listener *listener, void *data);
 void handle_client_destroy(struct wl_listener *listener, void *data);
 void handle_client_request_fullscreen(struct wl_listener *listener, void *data);
+void handle_client_request_move(struct wl_listener *listener, void *data);
 void handle_client_request_maximize(struct wl_listener *listener, void *data);
 void handle_client_request_minimize(struct wl_listener *listener, void *data);
 void handle_client_set_title(struct wl_listener *listener, void *data);

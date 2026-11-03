@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import shlex
 import shutil
 import socket
 import subprocess
@@ -16,18 +17,62 @@ def rectangle(client):
     return tuple(client[key] for key in ("x", "y", "width", "height"))
 
 
-def run(build_dir, terminal, pointer_tool):
+def build_drag_client(directory, protocol_directory):
+    wayland_protocols = Path(subprocess.check_output(
+        ["pkg-config", "--variable=pkgdatadir", "wayland-protocols"], text=True,
+    ).strip())
+    protocols = {
+        "xdg-shell": wayland_protocols / "stable/xdg-shell/xdg-shell.xml",
+        "virtual-pointer": protocol_directory / "unstable/wlr-virtual-pointer-unstable-v1.xml",
+    }
+    sources = []
+    for name, xml in protocols.items():
+        source = directory / (name + ".c")
+        subprocess.run(["wayland-scanner", "client-header", str(xml),
+                        str(directory / (name + "-client.h"))], check=True)
+        subprocess.run(["wayland-scanner", "private-code", str(xml), str(source)], check=True)
+        sources.append(str(source))
+    flags = shlex.split(subprocess.check_output(
+        ["pkg-config", "--cflags", "--libs", "wayland-client"], text=True,
+    ))
+    has_xcb = subprocess.run(["pkg-config", "--exists", "xcb"]).returncode == 0
+    if has_xcb:
+        flags.extend(["-DHAVE_XCB", *shlex.split(subprocess.check_output(
+            ["pkg-config", "--cflags", "--libs", "xcb"], text=True,
+        ))])
+    executable = directory / "floating-drag-client"
+    subprocess.run([os.environ.get("CC", "cc"), "-Wall", "-Wextra",
+                    "-Wno-unused-parameter", "-I", str(directory),
+                    str(Path(__file__).with_name("floating-drag-client.c")),
+                    *sources, "-o", str(executable), *flags], check=True)
+    return executable, has_xcb
+
+
+def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=None):
     processes = []
+    effective_top_drag_zone = 12 if top_drag_zone is None else top_drag_zone
     with tempfile.TemporaryDirectory(prefix="mango-floating-") as temporary:
         directory = Path(temporary)
-        config = directory / "config.conf"
-        config.write_text(
+        config = directory / ("config.toml" if top_drag_zone == 12 else "config.conf")
+        conf_text = (
             "animations=0\nlayer_animations=0\nblur=0\nshadows=0\n"
             "enable_floating_snap=0\nfocus_on_activate=0\n"
             "circle_layout=tile,floating\n"
-            "tag_rule=id:3,layout_name:floating\n",
-            encoding="ascii",
+            "tag_rule=id:3,layout_name:floating\n"
         )
+        if top_drag_zone == 12:
+            config_text = (
+                "[global]\nanimations=0\nlayer_animations=0\nblur=0\nshadows=0\n"
+                "enable_floating_snap=0\nfocus_on_activate=0\n"
+                'circle_layout=["tile","floating"]\n'
+                f"top_drag_zone={top_drag_zone}\n"
+                '[[rule.tag_rule]]\nid=3\nlayout_name="floating"\n'
+            )
+        elif top_drag_zone == 0:
+            config_text = conf_text + "top_drag_zone=0\n"
+        else:
+            config_text = conf_text
+        config.write_text(config_text, encoding="ascii")
         environment = os.environ.copy()
         for key in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY",
                     "MANGO_INSTANCE_SIGNATURE"):
@@ -72,6 +117,235 @@ def run(build_dir, terminal, pointer_tool):
 
                 def client_state(client):
                     return next(item for item in clients() if item["id"] == client)
+
+                if drag_protocols:
+                    executable, has_xcb = build_drag_client(directory, drag_protocols)
+                    dispatch("setlayout,floating")
+                    fixture = subprocess.Popen(
+                        [str(executable)], env=environment, stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1,
+                    )
+                    processes.append(fixture)
+
+                    def fixture_response():
+                        with selectors.DefaultSelector() as selector:
+                            selector.register(fixture.stdout, selectors.EVENT_READ)
+                            assert selector.select(10), "drag fixture timed out"
+                        line = fixture.stdout.readline()
+                        assert line, "drag fixture exited"
+                        return json.loads(line)
+
+                    assert fixture_response()["ready"]
+                    fixture_id = next(item["id"] for item in clients()
+                                      if item["appid"] == "mango-floating-drag-test")
+
+                    def inject(command):
+                        fixture.stdin.write(command + "\n")
+                        fixture.stdin.flush()
+                        return fixture_response()
+
+                    def warp(x, y):
+                        current = request("get cursorpos")
+                        inject(f"move {x - current['x']} {y - current['y']}")
+
+                    dispatch("movewin,80,90", fixture_id)
+                    dispatch("resizewin,420,280", fixture_id)
+                    warp(120, 130)
+                    inject("mode 1")
+                    inject("press 272")
+                    warp(170, 170)
+                    assert rectangle(client_state(fixture_id))[:2] == (130, 130)
+                    inject("release 272")
+                    dropped = rectangle(client_state(fixture_id))
+                    warp(200, 200)
+                    assert rectangle(client_state(fixture_id)) == dropped
+                    dispatch("setlayout,tile")
+                    assert not client_state(fixture_id)["is_floating"]
+                    dispatch("setlayout,floating")
+                    assert rectangle(client_state(fixture_id)) == dropped
+                    print("PASS: native titlebar press-motion-release and geometry persistence")
+                    inject("mode 2")
+                    warp(170, 170)
+                    inject("press 272")
+                    warp(190, 190)
+                    assert rectangle(client_state(fixture_id)) == dropped
+                    inject("release 272")
+                    inject("stale")
+                    warp(210, 210)
+                    assert rectangle(client_state(fixture_id)) == dropped
+                    print("PASS: invalid and released pointer serials cannot start a move")
+
+                    dispatch("setlayout,tile")
+                    tiled = rectangle(client_state(fixture_id))
+                    inject("mode 1")
+                    warp(tiled[0] + 50, tiled[1] + 50)
+                    inject("press 272")
+                    inject("move 30 20")
+                    inject("release 272")
+                    assert rectangle(client_state(fixture_id)) == tiled
+                    dispatch("togglefloating", fixture_id)
+                    dispatch("movewin,80,90", fixture_id)
+                    warp(120, 130)
+                    inject("press 272")
+                    warp(170, 170)
+                    inject("release 272")
+                    assert rectangle(client_state(fixture_id))[:2] == (130, 130)
+                    dispatch("togglefloating", fixture_id)
+                    dispatch("setlayout,floating")
+                    print("PASS: native dragging respects tiled and explicit-floating state")
+
+                    dispatch("movewin,80,90", fixture_id)
+                    dispatch("resizewin,420,280", fixture_id)
+                    warp(120, 130)
+                    inject("mode 1")
+                    inject("press 272")
+                    inject("move 20 20")
+                    inject("press 273")
+                    inject("release 273")
+                    inject("move 10 10")
+                    inject("release 272")
+                    assert rectangle(client_state(fixture_id))[:2] == (110, 120)
+                    released = rectangle(client_state(fixture_id))
+                    inject("move 10 10")
+                    assert rectangle(client_state(fixture_id)) == released
+                    inject("mode 0")
+                    counts = inject("state")
+                    inject("press 272")
+                    next_click = inject("release 272")
+                    assert next_click["presses"] == counts["presses"] + 1
+                    assert next_click["releases"] == counts["releases"] + 1
+                    print("PASS: extra buttons do not interrupt a native drag; next click works")
+
+                    inject("mode 1")
+                    inject("press 272")
+                    inject("move 10 10")
+                    dispatch("setlayout,tile")
+                    canceled = rectangle(client_state(fixture_id))
+                    inject("move 20 20")
+                    inject("release 272")
+                    assert rectangle(client_state(fixture_id)) == canceled
+                    dispatch("setlayout,floating")
+                    inject("mode 0")
+                    print("PASS: changing to a tiled layout cancels the active native drag")
+
+                    if has_xcb:
+                        display_socket = directory / "display.sock"
+                        with socket.socket(socket.AF_UNIX) as listener:
+                            listener.settimeout(10)
+                            listener.bind(str(display_socket))
+                            listener.listen(1)
+                            dispatch(f"spawn,{executable} --display-socket {display_socket}")
+                            connection, _ = listener.accept()
+                            with connection:
+                                connection.settimeout(5)
+                                xdisplay = connection.recv(64).decode()
+                        if xdisplay:
+                            inject("x11 " + xdisplay)
+                            deadline = time.monotonic() + 10
+                            xclient = None
+                            while time.monotonic() < deadline:
+                                xclient = next((item for item in clients()
+                                                if item["title"] == "mango-floating-x11-test"), None)
+                                if xclient:
+                                    break
+                            assert xclient, ("XWayland test window did not map", clients())
+                            xclient_id = xclient["id"]
+                            dispatch("movewin,80,90", xclient_id)
+                            dispatch("resizewin,420,280", xclient_id)
+                            warp(120, 130)
+                            inject("press 272")
+                            inject("xmove")
+                            inject("move 50 40")
+                            inject("release 272")
+                            xrect = rectangle(client_state(xclient_id))
+                            assert xrect[:2] == (130, 130), xrect
+                            inject("move 20 20")
+                            assert rectangle(client_state(xclient_id)) == xrect
+                            inject("xmove")
+                            inject("move 20 20")
+                            assert rectangle(client_state(xclient_id)) == xrect
+                            dispatch("setlayout,tile")
+                            assert not client_state(xclient_id)["is_floating"]
+                            dispatch("setlayout,floating")
+                            assert rectangle(client_state(xclient_id)) == xrect
+                            inject("xclose")
+                            print("PASS: XWayland titlebar move requests and release validation")
+                        else:
+                            print("SKIP: XWayland runtime (compositor has no DISPLAY)")
+
+                    dispatch("movewin,80,90", fixture_id)
+                    dispatch("resizewin,420,280", fixture_id)
+                    before_strip = rectangle(client_state(fixture_id))
+                    strip_x = before_strip[0] + 40
+                    strip_y = before_strip[1] + 13
+                    warp(strip_x, strip_y)
+                    counts = inject("state")
+                    inject("press 272")
+                    inject("move 2 1")
+                    assert rectangle(client_state(fixture_id)) == before_strip, (
+                        before_strip, rectangle(client_state(fixture_id)), strip_x, strip_y
+                    )
+                    inject("release 272")
+                    after_click = inject("state")
+                    expected_clicks = 0 if effective_top_drag_zone else 1
+                    assert after_click["presses"] == counts["presses"] + expected_clicks
+                    assert after_click["releases"] == counts["releases"] + expected_clicks
+                    warp(strip_x, strip_y)
+                    inject("press 272")
+                    inject("move 50 40")
+                    inject("release 272")
+                    after_strip = rectangle(client_state(fixture_id))
+                    if effective_top_drag_zone:
+                        assert after_strip[:2] == (130, 130), after_strip
+                        assert inject("state") == after_click
+                        inject("move 30 20")
+                        assert rectangle(client_state(fixture_id)) == after_strip
+                        dispatch("setlayout,tile")
+                        assert not client_state(fixture_id)["is_floating"]
+                        dispatch("setlayout,floating")
+                        assert rectangle(client_state(fixture_id)) == after_strip
+                        print("PASS: invisible strip threshold, paired input capture and release")
+
+                        dispatch("movewin,80,90", fixture_id)
+                        dispatch("resizewin,420,280", fixture_id)
+                        warp(82, strip_y)
+                        inject("press 272")
+                        inject("frame")
+                        inject("move 20 0")
+                        inject("release 272")
+                        border_resize = rectangle(client_state(fixture_id))
+                        assert border_resize[0] == 100, border_resize
+                        assert border_resize[2] == 400, border_resize
+                        print("PASS: border resizing takes priority over the invisible strip")
+
+                        dispatch("movewin,80,90", fixture_id)
+                        warp(strip_x, strip_y)
+                        inject("press 272")
+                        dispatch("setoption,top_drag_zone,0")
+                        disabled = rectangle(client_state(fixture_id))
+                        inject("move 30 20")
+                        inject("release 272")
+                        assert rectangle(client_state(fixture_id)) == disabled
+                        dispatch(f"setoption,top_drag_zone,{effective_top_drag_zone}")
+                        print("PASS: disabling the strip cancels its pending gesture")
+                    else:
+                        assert after_strip == before_strip
+                        forwarded = inject("state")
+                        assert forwarded["presses"] == after_click["presses"] + 1
+                        assert forwarded["releases"] == after_click["releases"] + 1
+                        print("PASS: disabled strip leaves ordinary top-content input untouched")
+
+                    if effective_top_drag_zone:
+                        dispatch("movewin,80,90", fixture_id)
+                        warp(strip_x, strip_y)
+                        inject("press 272")
+                        inject("unmap")
+                        inject("move 30 20")
+                        inject("release 272")
+                        print("PASS: unmapping a pending strip window safely cancels the gesture")
+                    inject("unmap")
+                    fixture.terminate()
+                    fixture.wait(timeout=5)
 
                 def pointer_move_to(x, y):
                     current = request("get cursorpos")
@@ -241,7 +515,13 @@ if __name__ == "__main__":
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
     parser.add_argument("--terminal", default=shutil.which("foot"))
     parser.add_argument("--pointer-tool", default=shutil.which("wlrctl"))
+    parser.add_argument("--drag-protocols", type=Path,
+                        help="wlr-protocols data directory; enables real native drag tests")
     arguments = parser.parse_args()
     if not arguments.terminal:
         parser.error("foot is required; pass --terminal /path/to/foot")
-    run(arguments.build_dir.resolve(), arguments.terminal, arguments.pointer_tool)
+    for zone in ((None, 0, 12) if arguments.drag_protocols else (None, 0)):
+        if arguments.drag_protocols:
+            print(f"Testing with top_drag_zone={12 if zone is None else zone}")
+        run(arguments.build_dir.resolve(), arguments.terminal, arguments.pointer_tool,
+            arguments.drag_protocols, zone)

@@ -530,6 +530,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->drag_warp_cursor = atoi(value);
 	} else if (strcmp(key, "enable_border_resize") == 0) {
 		config->enable_border_resize = atoi(value);
+	} else if (strcmp(key, "top_drag_zone") == 0) {
+		config->top_drag_zone = atoi(value);
 	} else if (strcmp(key, "border_resize_size") == 0) {
 		config->border_resize_size = atoi(value);
 	} else if (strcmp(key, "smart_gaps") == 0) {
@@ -2509,6 +2511,7 @@ void set_value_default() {
 	config.drag_corner = 3;
 	config.drag_warp_cursor = 1;
 	config.enable_border_resize = 1;
+	config.top_drag_zone = 12;
 	config.border_resize_size = 10;
 
 	config.repeat_rate = 25;
@@ -2823,6 +2826,7 @@ void override_config(void) {
 	config.drag_corner = CLAMP_INT(config.drag_corner, 0, 4);
 	config.drag_warp_cursor = CLAMP_INT(config.drag_warp_cursor, 0, 1);
 	config.enable_border_resize = CLAMP_INT(config.enable_border_resize, 0, 1);
+	config.top_drag_zone = CLAMP_INT(config.top_drag_zone, 0, 200);
 	config.border_resize_size = CLAMP_INT(config.border_resize_size, 0, 50);
 	config.focus_cross_monitor = CLAMP_INT(config.focus_cross_monitor, 0, 1);
 	config.focusdir_only_zone_overlap =
