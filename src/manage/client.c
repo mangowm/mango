@@ -2434,6 +2434,9 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 
 	wl_list_insert(&server.focus_stack, &c->flink);
 
+	if (client_is_parked(c))
+		wl_list_insert(server.clients.prev, &c->link);
+
 	client_set_rules(c, NULL, NULL);
 
 	client_set_xwayland(c);
