@@ -164,6 +164,7 @@ void handle_renderer_lost(struct wl_listener *listener, void *data);
 void setgaps(int32_t oh, int32_t ov, int32_t ih, int32_t iv);
 bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 							   struct wlr_output_state *state);
+struct wlr_output_mode *get_max_refresh_mode(struct wlr_output *output);
 struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
 												int32_t width, int32_t height,
 												float refresh);
