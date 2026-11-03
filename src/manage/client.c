@@ -710,11 +710,31 @@ void client_set_tiled(Client *c, uint32_t edges) {
 }
 
 bool client_is_effectively_floating(const Client *c) {
+	return client_is_effectively_floating_for_tag(
+		c, c ? c->mon : NULL, c && c->mon ? get_mon_curtag(c->mon) : 0);
+}
+
+bool client_is_effectively_floating_for_tag(const Client *c, const Monitor *m,
+											uint32_t tag) {
 	return c &&
 		   (c->isfloating ||
-			(c->mon && c->mon->pertag && !c->mon->isoverview &&
-			 c->mon->pertag->ltidxs[get_mon_curtag(c->mon)] &&
-			 c->mon->pertag->ltidxs[get_mon_curtag(c->mon)]->id == FLOATING));
+			(m && m->pertag && !m->isoverview &&
+			 tag <= (uint32_t)config.tag_num && m->pertag->ltidxs[tag] &&
+			 m->pertag->ltidxs[tag]->id == FLOATING));
+}
+
+static void client_sync_tiled_hint_for_tag(Client *c, const Monitor *m,
+										   uint32_t tag) {
+	if (!c)
+		return;
+
+	if (!client_is_effectively_floating_for_tag(c, m, tag) ||
+		c->force_tiled_state) {
+		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
+							 WLR_EDGE_RIGHT);
+	} else {
+		client_set_tiled(c, WLR_EDGE_NONE);
+	}
 }
 
 void client_restore_float_geometry(Client *c) {
@@ -724,11 +744,11 @@ void client_restore_float_geometry(Client *c) {
 		geo = c->geom;
 		center = !client_is_x11(c) && !c->iscustompos;
 	}
-	if (geo.width >= c->mon->w.width - config.gappoh) {
+	if (geo.width > c->mon->w.width - config.gappoh) {
 		geo.width = c->mon->w.width * 0.9;
 		center = true;
 	}
-	if (geo.height >= c->mon->w.height - config.gappov) {
+	if (geo.height > c->mon->w.height - config.gappov) {
 		geo.height = c->mon->w.height * 0.9;
 		center = true;
 	}
@@ -741,12 +761,8 @@ void client_sync_tiled_hint(Client *c) {
 	if (!c)
 		return;
 
-	if (!client_is_effectively_floating(c) || c->force_tiled_state) {
-		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
-								WLR_EDGE_RIGHT);
-	} else {
-		client_set_tiled(c, WLR_EDGE_NONE);
-	}
+	client_sync_tiled_hint_for_tag(
+		c, c->mon, c->mon ? get_mon_curtag(c->mon) : 0);
 }
 
 int32_t client_should_ignore_focus(Client *c) {
@@ -1845,13 +1861,15 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	wl_list_for_each(fc, &server.clients,
 					 link) if (fc && fc != c && c->tags & fc->tags && c->mon &&
 							   VISIBLEON(fc, c->mon) && ISFULLSCREEN(fc) &&
-							   !client_is_effectively_floating(c)) {
+							   !client_is_effectively_floating_for_tag(
+								   c, c->mon, get_client_tag_idx(c))) {
 		clear_fullscreen_flag(fc);
 		arrange(c->mon, false, false);
 	}
 
-	if (client_is_effectively_floating(c) && !c->iscustompos &&
-		!c->isnamedscratchpad) {
+	if (client_is_effectively_floating_for_tag(
+			c, c->mon, get_client_tag_idx(c)) &&
+		!c->iscustompos && !c->isnamedscratchpad) {
 		wl_list_safe_reinsert_prev(&server.clients, &c->link);
 		set_float_malposition(c);
 	}
@@ -2296,8 +2314,10 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 
 	Monitor *m =
 		rule_mon ? rule_mon : (c->mon ? c->mon : server.selected_monitor);
-	if (!m || m->isoverview)
+	if (!m) {
+		client_sync_tiled_hint(c);
 		return;
+	}
 
 	int32_t bw = (int32_t)c->bw;
 	Monitor *saved_mon = c->mon;
@@ -2306,8 +2326,15 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 	c->mon = m;
 	client_reset_mon_tags(c, m, rule_tags);
 	check_match_tag_floating_rule(c, m);
+	uint32_t tag = get_client_tag_idx(c);
+	client_sync_tiled_hint_for_tag(c, m, tag);
+	if (m->isoverview) {
+		c->mon = saved_mon;
+		c->tags = saved_tags;
+		return;
+	}
 
-	if (client_is_effectively_floating(c) || c->isfullscreen ||
+	if (client_is_effectively_floating_for_tag(c, m, tag) || c->isfullscreen ||
 		c->ismaximizescreen || client_wants_fullscreen(c)) {
 		if (c->isfullscreen || client_wants_fullscreen(c))
 			client_configure_size(c, m->m, 0);
@@ -2325,7 +2352,6 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 		return;
 	}
 
-	uint32_t tag = get_mon_curtag(m);
 	const Layout *layout = m->pertag->ltidxs[tag];
 	if (!layout || !layout->predict) {
 		c->mon = saved_mon;
@@ -2514,7 +2540,6 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 		if (c->mon) {
 			client_set_scale(client_surface(c), c->mon->wlr_output->scale);
 		}
-		client_sync_tiled_hint(c);
 		client_set_monitor(
 			c, NULL, 0, true); /* Make sure to reapply rules in mapnotify() */
 
@@ -3283,7 +3308,10 @@ void tag_client(const Arg *arg, Client *target_client) {
 
 		wl_list_for_each(fc, &server.clients, link) {
 			if (fc && fc != target_client && target_client->tags & fc->tags &&
-				ISFULLSCREEN(fc) && !target_client->isfloating) {
+				ISFULLSCREEN(fc) &&
+				!client_is_effectively_floating_for_tag(
+					target_client, target_client->mon,
+					get_client_tag_idx(target_client))) {
 				clear_fullscreen_flag(fc);
 			}
 		}
@@ -3363,18 +3391,19 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 	}
 }
 
-static void client_adapt_geometry_to_monitor(Client *c, Monitor *oldmon) {
-	if (!c || !c->mon || !oldmon || oldmon->w.width <= 0 ||
-		oldmon->w.height <= 0 || c->mon->w.width <= 0 ||
-		c->mon->w.height <= 0) {
+static void client_adapt_geometry_to_monitor(Client *c, Monitor *oldmon,
+											 Monitor *newmon) {
+	if (!c || !oldmon || !newmon || oldmon->w.width <= 0 ||
+		oldmon->w.height <= 0 || newmon->w.width <= 0 ||
+		newmon->w.height <= 0) {
 		return;
 	}
 
 	c->float_geom.width = (int32_t)((int64_t)c->float_geom.width *
-									c->mon->w.width / oldmon->w.width);
+									newmon->w.width / oldmon->w.width);
 	c->float_geom.height = (int32_t)((int64_t)c->float_geom.height *
-									 c->mon->w.height / oldmon->w.height);
-	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+									 newmon->w.height / oldmon->w.height);
+	c->float_geom = client_center_geometry(c, newmon, c->float_geom, 0, 0);
 }
 
 bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
@@ -3384,16 +3413,13 @@ bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
 	}
 
 	Monitor *oldmon = c->mon;
+	client_adapt_geometry_to_monitor(c, oldmon, m);
 	client_set_monitor(c, m, newtags, focus);
 	if (c->mon != m) {
 		return false;
 	}
 
 	client_update_oldmonname_record(c, m);
-	client_adapt_geometry_to_monitor(c, oldmon);
-	if (client_is_effectively_floating(c)) {
-		c->geom = c->float_geom;
-	}
 	return true;
 }
 
@@ -3814,7 +3840,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		reset_foreign_tolevel(c, oldmon, c->mon);
 		client_update_oldmonname_record(c, server.selected_monitor);
 
-		client_adapt_geometry_to_monitor(c, oldmon);
+		client_adapt_geometry_to_monitor(c, oldmon, c->mon);
 
 		// Only a visible scratchpad needs focus and returns true.
 		if (SCRATCHPAD_SHOWN(c)) {

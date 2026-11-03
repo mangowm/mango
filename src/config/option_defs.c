@@ -2511,7 +2511,7 @@ void set_value_default() {
 	config.drag_corner = 3;
 	config.drag_warp_cursor = 1;
 	config.enable_border_resize = 1;
-	config.top_drag_zone = 12;
+	config.top_drag_zone = 0;
 	config.border_resize_size = 10;
 
 	config.repeat_rate = 25;

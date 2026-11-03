@@ -375,7 +375,5 @@ void overview_restore(Client *c, const Arg *arg) {
 		c->bw = c->no_border ? 0 : config.borderpx;
 	}
 
-	client_sync_tiled_hint(c);
-
 	client_sync_layer(c);
 }

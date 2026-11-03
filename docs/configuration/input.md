@@ -66,14 +66,14 @@ the client content for plain left-button dragging:
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `top_drag_zone` | `12` | Drag-strip height in logical pixels, from `0` to `200`. `0` disables the strip. |
+| `top_drag_zone` | `0` | Drag-strip height in logical pixels, from `0` to `200`. `0` disables the strip. |
 
 ```ini
-# 12 logical pixels is the default; set to 0 to disable the strip.
+# Set to a nonzero height to enable the drag strip.
 top_drag_zone=12
 ```
 
-In TOML, set `top_drag_zone = 12` in `[global]`.
+In TOML, set `top_drag_zone = 12` in `[global]` to enable it.
 
 The strip consumes clicks instead of sending them to the application. A short
 click focuses the window; moving at least 5 pixels while holding the left button

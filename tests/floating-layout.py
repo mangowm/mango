@@ -17,6 +17,11 @@ def rectangle(client):
     return tuple(client[key] for key in ("x", "y", "width", "height"))
 
 
+def assert_floating_state(client, explicit, effective):
+    assert client["is_floating"] is explicit
+    assert client["is_effectively_floating"] is effective
+
+
 def build_drag_client(directory, protocol_directory):
     wayland_protocols = Path(subprocess.check_output(
         ["pkg-config", "--variable=pkgdatadir", "wayland-protocols"], text=True,
@@ -50,7 +55,7 @@ def build_drag_client(directory, protocol_directory):
 
 def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=None):
     processes = []
-    effective_top_drag_zone = 12 if top_drag_zone is None else top_drag_zone
+    effective_top_drag_zone = 0 if top_drag_zone is None else top_drag_zone
     with tempfile.TemporaryDirectory(prefix="mango-floating-") as temporary:
         directory = Path(temporary)
         config = directory / ("config.toml" if top_drag_zone == 12 else "config.conf")
@@ -160,7 +165,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                     warp(200, 200)
                     assert rectangle(client_state(fixture_id)) == dropped
                     dispatch("setlayout,tile")
-                    assert not client_state(fixture_id)["is_floating"]
+                    assert_floating_state(client_state(fixture_id), False, False)
                     dispatch("setlayout,floating")
                     assert rectangle(client_state(fixture_id)) == dropped
                     print("PASS: native titlebar press-motion-release and geometry persistence")
@@ -265,13 +270,15 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                             inject("move 20 20")
                             assert rectangle(client_state(xclient_id)) == xrect
                             dispatch("setlayout,tile")
-                            assert not client_state(xclient_id)["is_floating"]
+                            assert_floating_state(client_state(xclient_id), False, False)
                             dispatch("setlayout,floating")
                             assert rectangle(client_state(xclient_id)) == xrect
                             inject("xclose")
                             print("PASS: XWayland titlebar move requests and release validation")
                         else:
                             print("SKIP: XWayland runtime (compositor has no DISPLAY)")
+                    else:
+                        print("SKIP: XWayland drag coverage (xcb development files unavailable)")
 
                     dispatch("movewin,80,90", fixture_id)
                     dispatch("resizewin,420,280", fixture_id)
@@ -301,7 +308,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                         inject("move 30 20")
                         assert rectangle(client_state(fixture_id)) == after_strip
                         dispatch("setlayout,tile")
-                        assert not client_state(fixture_id)["is_floating"]
+                        assert_floating_state(client_state(fixture_id), False, False)
                         dispatch("setlayout,floating")
                         assert rectangle(client_state(fixture_id)) == after_strip
                         print("PASS: invisible strip threshold, paired input capture and release")
@@ -386,10 +393,11 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                 dispatch("setlayout,tile")
                 first = launch("mango-floating-first")
                 second = launch("mango-floating-second")
-                assert not client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, False)
 
                 dispatch("setlayout,floating")
-                assert all(item["is_floating"] for item in clients())
+                assert all(not item["is_floating"] and
+                           item["is_effectively_floating"] for item in clients())
                 dispatch("movewin,80,90", first)
                 dispatch("resizewin,360,240", first)
                 saved = rectangle(client_state(first))
@@ -397,7 +405,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                 dispatch("setlayout,floating")
                 assert rectangle(client_state(first)) == saved
                 dispatch("setlayout,tile")
-                assert not client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, False)
                 assert rectangle(client_state(first)) != saved
                 dispatch("setlayout,floating")
                 assert rectangle(client_state(first)) == saved
@@ -411,7 +419,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                     assert not client_state(first)[flag]
                     assert rectangle(client_state(first)) == saved
                     dispatch("setlayout,tile")
-                    assert not client_state(first)["is_floating"]
+                    assert_floating_state(client_state(first), False, False)
                     dispatch("setlayout,floating")
                     assert rectangle(client_state(first)) == saved
                 print("PASS: fullscreen/maximize restore without permanent floating")
@@ -422,7 +430,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                 print("PASS: overview preserves floating geometry")
 
                 third = launch("mango-floating-new")
-                assert client_state(third)["is_floating"]
+                assert_floating_state(client_state(third), False, True)
                 assert rectangle(client_state(first)) == saved
                 dispatch("togglefullscreen", first)
                 launch("mango-floating-fullscreen-peer")
@@ -431,29 +439,30 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                 assert rectangle(client_state(first)) == saved
                 dispatch("togglefloating", second)
                 dispatch("setlayout,tile")
-                assert client_state(second)["is_floating"]
-                assert not client_state(first)["is_floating"]
-                assert not client_state(third)["is_floating"]
+                assert_floating_state(client_state(second), True, True)
+                assert_floating_state(client_state(first), False, False)
+                assert_floating_state(client_state(third), False, False)
                 dispatch("setlayout,floating")
                 assert rectangle(client_state(first)) == saved
                 print("PASS: new windows float; explicit floating intent survives")
 
                 dispatch("view,2")
                 dispatch("setlayout,tile")
+                assert_floating_state(client_state(first), False, True)
                 dispatch("view,3")
                 ruled = request("get all-monitors")
                 if isinstance(ruled, dict):
                     ruled = ruled["monitors"]
                 assert next(item for item in ruled if item["active"])["layout_symbol"] == "FL"
                 dispatch("view,1")
-                assert client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, True)
                 assert rectangle(client_state(first)) == saved
                 active = request("get all-monitors")
                 if isinstance(active, dict):
                     active = active["monitors"]
                 assert sum(item["layout_symbol"] == "FL" for item in active) == 1
                 dispatch("switch_layout")
-                assert not client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, False)
                 dispatch("switch_layout")
                 assert rectangle(client_state(first)) == saved
                 print("PASS: tag rules, tag/monitor isolation and layout cycling")
@@ -475,7 +484,7 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                     resized = rectangle(client_state(first))
                     assert resized[2:] != moved[2:], (moved, resized)
                     dispatch("setlayout,tile")
-                    assert not client_state(first)["is_floating"]
+                    assert_floating_state(client_state(first), False, False)
                     dispatch("setlayout,floating")
                     assert rectangle(client_state(first)) == resized
                     print("PASS: pointer move/resize preserve reversible floating state")
@@ -487,11 +496,11 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
                                    if item["name"] != source)
                 dispatch("tagmon," + destination, first)
                 assert client_state(first)["monitor"] == destination
-                assert not client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, False)
                 dispatch("tagmon," + source, first)
-                assert client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, True)
                 dispatch("setlayout,tile")
-                assert not client_state(first)["is_floating"]
+                assert_floating_state(client_state(first), False, False)
                 print("PASS: floating/tiled monitor transfers preserve explicit intent")
             except BaseException:
                 log.flush()
@@ -511,7 +520,11 @@ def run(build_dir, terminal, pointer_tool, drag_protocols=None, top_drag_zone=No
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Isolated floating-layout IPC regression checks")
+    parser = argparse.ArgumentParser(
+        description="Isolated floating-layout IPC regression checks",
+        epilog=("Without --drag-protocols, native drag, drag-strip, and XWayland "
+                "coverage is skipped."),
+    )
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
     parser.add_argument("--terminal", default=shutil.which("foot"))
     parser.add_argument("--pointer-tool", default=shutil.which("wlrctl"))
@@ -520,8 +533,11 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     if not arguments.terminal:
         parser.error("foot is required; pass --terminal /path/to/foot")
+    if not arguments.drag_protocols:
+        print("SKIP: native drag, drag-strip, and XWayland coverage "
+              "(pass --drag-protocols /path/to/wlr-protocols)")
     for zone in ((None, 0, 12) if arguments.drag_protocols else (None, 0)):
         if arguments.drag_protocols:
-            print(f"Testing with top_drag_zone={12 if zone is None else zone}")
+            print(f"Testing with top_drag_zone={0 if zone is None else zone}")
         run(arguments.build_dir.resolve(), arguments.terminal, arguments.pointer_tool,
             arguments.drag_protocols, zone)

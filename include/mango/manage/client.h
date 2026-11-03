@@ -329,6 +329,8 @@ void client_set_maximized(Client *c, bool maximized);
 void client_set_tiled(Client *c, uint32_t edges);
 void client_sync_tiled_hint(Client *c);
 bool client_is_effectively_floating(const Client *c);
+bool client_is_effectively_floating_for_tag(const Client *c, const Monitor *m,
+											uint32_t tag);
 void client_restore_float_geometry(Client *c);
 
 int32_t client_should_ignore_focus(Client *c);

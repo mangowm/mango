@@ -39,8 +39,9 @@ changes that explicit state but cannot make an individual window tile.
 Fullscreen, maximize, and overview remain available.
 
 Existing application titlebars support dragging without a modifier key. For
-titlebar-less windows, an invisible 24-pixel drag strip is enabled by default;
-set `top_drag_zone=0` to disable it. The strip adds no titlebar or buttons. See
+titlebar-less windows, an invisible drag strip can be enabled by setting
+`top_drag_zone` to a nonzero height; it is disabled by default. The strip adds
+no titlebar or buttons. See
 [Floating Window Dragging](../configuration/input.md#floating-window-dragging)
 for input behavior and configuration.
 

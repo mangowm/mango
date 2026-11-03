@@ -1379,7 +1379,8 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 										server.top_drag_x, server.top_drag_y);
 		}
 	}
-	if (server.floating_drag_button && server.cursor_mode != CurMove)
+	if (server.floating_drag_button && server.cursor_mode != CurMove &&
+		server.top_drag_client)
 		return;
 
 	/* If we are currently grabbing the mouse, handle and return */

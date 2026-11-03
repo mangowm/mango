@@ -1583,7 +1583,10 @@ int32_t tag_silent(const Arg *arg) {
 	client_reparent_group(target_client);
 	wl_list_for_each(fc, &server.clients, link) {
 		if (fc && fc != target_client && target_client->tags & fc->tags &&
-			ISFULLSCREEN(fc) && !target_client->isfloating) {
+			ISFULLSCREEN(fc) &&
+			!client_is_effectively_floating_for_tag(
+				target_client, target_client->mon,
+				get_client_tag_idx(target_client))) {
 			clear_fullscreen_flag(fc);
 		}
 	}
@@ -2442,6 +2445,16 @@ static void set_overview(const Arg *arg, bool enter) {
 	}
 
 	client_switch_view(&(Arg){.ui = target}, false);
+
+	if (!enter) {
+		wl_list_for_each(c, &server.clients, link) {
+			if (c && c->mon == server.selected_monitor && !c->iskilling &&
+				!client_is_unmanaged(c) && !c->isunglobal && !c->isminimized &&
+				!client_is_x11_popup(c) && client_surface(c)->mapped &&
+				!(c->tags & TAG0_MASK))
+				client_sync_tiled_hint(c);
+		}
+	}
 
 	/* Tab layout: rearrange after entering. */
 	if (enter && !server.selected_monitor->is_jump_mode &&

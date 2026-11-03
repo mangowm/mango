@@ -1167,12 +1167,16 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 			if (!only_calculate && !m->isoverview) {
 				bool layout_floating = cur_layout->id == FLOATING;
 				if (c->floating_layout_applied != layout_floating) {
-					c->floating_layout_applied = layout_floating;
-					if (layout_floating && !c->isfloating && !c->isfullscreen &&
-						!c->ismaximizescreen)
-						client_restore_float_geometry(c);
-					client_sync_tiled_hint(c);
-					client_reparent_group(c);
+					if (layout_floating &&
+						(c->isfullscreen || c->ismaximizescreen)) {
+						c->floating_layout_applied = true;
+						client_sync_tiled_hint(c);
+						client_reparent_group(c);
+					} else if (!layout_floating) {
+						c->floating_layout_applied = false;
+						client_sync_tiled_hint(c);
+						client_reparent_group(c);
+					}
 				}
 			}
 			if (from_view && !client_only_in_one_tag(c)) {
@@ -1388,9 +1392,22 @@ Layout overviewlayout = {"󰃇", overview, NULL, "overview"};
 static void floating(Monitor *m) {
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
-		if (VISIBLEON(c, m) && !c->iskilling && !c->isfullscreen &&
-			!c->ismaximizescreen)
+		if (!VISIBLEON(c, m) || c->iskilling || c->isfullscreen ||
+			c->ismaximizescreen)
+			continue;
+
+		if (!c->floating_layout_applied) {
+			c->floating_layout_applied = true;
+			if (!c->isfloating)
+				client_restore_float_geometry(c);
+			client_sync_tiled_hint(c);
+			client_reparent_group(c);
+		} else if (!c->animation.running &&
+				   wlr_box_equal(&c->geom, &c->current)) {
+			continue;
+		} else {
 			resize(c, c->geom, (ResizeOpts){0});
+		}
 	}
 }
 
