@@ -52,8 +52,9 @@ enum {
 	DWINDLE,
 	FAIR,
 	VERTICAL_FAIR,
+	GAPLESSGRID,
 };
 
-extern Layout layouts[14];
+extern Layout layouts[15];
 
 #endif

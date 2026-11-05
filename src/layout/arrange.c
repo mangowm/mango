@@ -1397,6 +1397,7 @@ Layout layouts[] = {
 	{"F", fair, fair_predict, "fair", FAIR},
 	{"VF", vertical_fair, vertical_fair_predict, "vertical_fair",
 	 VERTICAL_FAIR},
+	{"GG", gaplessgrid, gaplessgrid_predict, "gaplessgrid", GAPLESSGRID},
 };
 
 bool special_handle_empty_view(Monitor *m, bool from_view) {
