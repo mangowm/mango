@@ -24,6 +24,8 @@ void handle_xdg_decoration_destroy(struct wl_listener *listener, void *data);
 void handle_new_xdg_decoration(struct wl_listener *listener, void *data);
 void handle_new_idle_inhibitor(struct wl_listener *listener, void *data);
 void handle_session_lock_new_surface(struct wl_listener *listener, void *data);
+void handle_session_lock_surface_commit(struct wl_listener *listener,
+										void *data);
 void handle_idle_inhibitor_destroy(struct wl_listener *listener, void *data);
 bool session_lock_focus_missing(void);
 void session_lock_focus_restore(void);

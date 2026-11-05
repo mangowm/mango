@@ -547,6 +547,41 @@ void keyboard_group_destroy(struct wl_listener *listener, void *data) {
 	free(group);
 }
 
+/* Keycodes swallowed by a keybinding while pressed. */
+#define KEYBOARD_MAX_BOUND_KEYS 32
+static uint32_t bound_keycodes[KEYBOARD_MAX_BOUND_KEYS];
+static int32_t bound_keycode_count = 0;
+
+static int32_t keyboard_bound_key_index(uint32_t keycode) {
+	for (int32_t i = 0; i < bound_keycode_count; i++) {
+		if (bound_keycodes[i] == keycode)
+			return i;
+	}
+	return -1;
+}
+
+bool keyboard_is_bound_key(uint32_t keycode) {
+	return keyboard_bound_key_index(keycode) >= 0;
+}
+
+/* Record a key the compositor consumed, so clients never see it as held. */
+void keyboard_mark_bound_key(uint32_t keycode) {
+	if (bound_keycode_count >= KEYBOARD_MAX_BOUND_KEYS ||
+		keyboard_is_bound_key(keycode)) {
+		return;
+	}
+	bound_keycodes[bound_keycode_count++] = keycode;
+}
+
+/* Drop the key once it is released. */
+void keyboard_unmark_bound_key(uint32_t keycode) {
+	int32_t i = keyboard_bound_key_index(keycode);
+	if (i < 0) {
+		return;
+	}
+	bound_keycodes[i] = bound_keycodes[--bound_keycode_count];
+}
+
 int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 								  xkb_keysym_t sym, uint32_t keycode) {
 	/*
@@ -598,10 +633,14 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			   keycode == k->keysymcode.keycode.keycode3))) &&
 			k->func) {
 
-			if (!k->ispassapply)
+			if (!k->ispassapply) {
 				handled = 1;
-			else
+				/* Mark before running the binding: it may change focus. */
+				if (state == WL_KEYBOARD_KEY_STATE_PRESSED)
+					keyboard_mark_bound_key(keycode);
+			} else {
 				handled = 0;
+			}
 
 			if (k->func(&k->arg))
 				break;
@@ -720,6 +759,13 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 		handled = keyboard_check_keybinding(event->state, server.session_locked,
 											mods, syms[i], keycode) ||
 				  handled;
+
+	/* The press was swallowed, so swallow its release too. */
+	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&
+		keyboard_is_bound_key(keycode)) {
+		keyboard_unmark_bound_key(keycode);
+		handled = 1;
+	}
 
 	if (handled && group->keyboard->repeat_info.delay > 0 &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {

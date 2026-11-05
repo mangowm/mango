@@ -56,9 +56,9 @@ You can also color-code windows based on their state:
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `jump_label_decorate_fg_color` | `0xc4939dff` | text color. |
-| `jump_label_decorate_bg_color` | `0x201b14ff` | background color.|
-| `jump_label_decorate_focus_fg_color` | `0x201b14ff` |  text color for focus. |
-| `jump_label_decorate_focus_bg_color` | `0xc4939dff` | background color for focus.|
+| `jump_label_decorate_bg_color` | `0x323232ff` | background color.|
+| `jump_label_decorate_focus_fg_color` | `0xeda6b4ff` |  text color for focus. |
+| `jump_label_decorate_focus_bg_color` | `0x4e453cff` | background color for focus.|
 | `jump_label_decorate_border_color` | `0x8BAA9Bff` | border color.|
 | `jump_label_decorate_border_width` | `4` | border width.|
 | `jump_label_decorate_corner_radius` | `5` | corner radius.|
@@ -69,9 +69,9 @@ You can also color-code windows based on their state:
 ### Group Bar
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `always_show_group_bar` | `0` | Show the group bar (with close button) on every window. |
+| `always_show_group_bar` | `0` | Show the group bar on every window. |
 | `group_bar_height` | `33` | Group bar height. |
-| `group_bar_close_button_enable` | `1` | Show the close button. |
+| `group_bar_close_button_enable` | `0` | Show the close button. Independent of `always_show_group_bar`. |
 | `group_bar_button_size` | `16` | Close button size in px. |
 | `group_bar_button_margin` | `4` | Close button inset from the right edge in px. |
 | `group_bar_button_color` | `0xad401fff` | Close button colour. |
@@ -100,6 +100,27 @@ You can also color-code windows based on their state:
 | `tab_bar_decorate_padding_x` | `0` | horizontal padding.|
 | `tab_bar_decorate_padding_y` | `0` | vertical padding.|
 | `tab_bar_decorate_font_desc` | `monospace Bold 13` | font set.|
+
+### Title Message Bar
+
+Shown below the focused window in `overcircle` mode and below the switcher
+panel, using the highlighted window's title and app id on two lines. The width
+follows the focused overview card or the switcher panel.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `title_message_bar_height` | `52` | Title message bar height. Set to `0` to disable it. |
+| `title_message_bar_gap` | `20` | Gap between the bar and the focused overview card or switcher panel. |
+| `title_message_bar_decorate_fg_color` | `0xc0caf5ff` | Text color. |
+| `title_message_bar_decorate_bg_color` | `0x1d2021ff` | Background color. |
+| `title_message_bar_decorate_focus_fg_color` | `0x9ece6aff` | Text color while focused. |
+| `title_message_bar_decorate_focus_bg_color` | `0x3c3836ff` | Background color while focused. |
+| `title_message_bar_decorate_border_color` | `0x3b4261ff` | Border color. |
+| `title_message_bar_decorate_border_width` | `0` | Border width. |
+| `title_message_bar_decorate_corner_radius` | `15` | Corner radius. |
+| `title_message_bar_decorate_padding_x` | `0` | Horizontal padding. |
+| `title_message_bar_decorate_padding_y` | `0` | Vertical padding. |
+| `title_message_bar_decorate_font_desc` | `monospace Bold 13` | Font description. |
 
 ## Borders
 

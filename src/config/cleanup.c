@@ -325,6 +325,11 @@ void free_config(void) {
 		config.tabbardata.font_desc = NULL;
 	}
 
+	if (config.title_message_bardata.font_desc) {
+		free((void *)config.title_message_bardata.font_desc);
+		config.title_message_bardata.font_desc = NULL;
+	}
+
 	if (config.jump_labels) {
 		free(config.jump_labels);
 		config.jump_labels = NULL;

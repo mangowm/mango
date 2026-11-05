@@ -1,6 +1,7 @@
 #include "mango/animation/common.h"
 #include "mango/common/scene_node.h"
 #include "mango/common/server.h"
+#include "mango/common/util.h"
 #include "mango/config/parse.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
@@ -184,6 +185,9 @@ bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,
 		}
 		meta->orig_width = scene_buffer->dst_width;
 		meta->orig_height = scene_buffer->dst_height;
+		meta->orig_src_box = scene_buffer->src_box;
+		meta->orig_x = 0;
+		meta->orig_y = 0;
 		meta->type = Snapshot;
 
 		struct wlr_scene_surface *scene_surface =
@@ -292,6 +296,186 @@ struct wlr_scene_tree *wlr_scene_tree_snapshot(struct wlr_scene_node *node,
 	wlr_scene_node_set_enabled(&snapshot->node, true);
 
 	return snapshot;
+}
+
+static void snapshot_dest_to_source(enum wl_output_transform transform, float x,
+									float y, float *src_x, float *src_y) {
+	switch (transform) {
+	case WL_OUTPUT_TRANSFORM_90:
+		*src_x = 1.0f - y;
+		*src_y = x;
+		break;
+	case WL_OUTPUT_TRANSFORM_180:
+		*src_x = 1.0f - x;
+		*src_y = 1.0f - y;
+		break;
+	case WL_OUTPUT_TRANSFORM_270:
+		*src_x = y;
+		*src_y = 1.0f - x;
+		break;
+	case WL_OUTPUT_TRANSFORM_FLIPPED:
+		*src_x = 1.0f - x;
+		*src_y = y;
+		break;
+	case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+		*src_x = y;
+		*src_y = x;
+		break;
+	case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+		*src_x = x;
+		*src_y = 1.0f - y;
+		break;
+	case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+		*src_x = 1.0f - y;
+		*src_y = 1.0f - x;
+		break;
+	case WL_OUTPUT_TRANSFORM_NORMAL:
+	default:
+		*src_x = x;
+		*src_y = y;
+		break;
+	}
+}
+
+struct SnapshotClipData {
+	struct wlr_box bounds;
+	int32_t width;
+	int32_t height;
+	bool scale;
+};
+
+static void scene_snapshot_enable_buffers(struct wlr_scene_node *node) {
+	if (node->type == WLR_SCENE_NODE_BUFFER) {
+		if (!node->enabled) {
+			wlr_scene_node_set_enabled(node, true);
+		}
+		return;
+	}
+	if (node->type != WLR_SCENE_NODE_TREE) {
+		return;
+	}
+
+	struct wlr_scene_tree *tree = wlr_scene_tree_from_node(node);
+	struct wlr_scene_node *child;
+	wl_list_for_each(child, &tree->children, link) {
+		scene_snapshot_enable_buffers(child);
+	}
+}
+
+static void scene_snapshot_clip_buffer(struct wlr_scene_buffer *buffer,
+									   int32_t sx, int32_t sy, void *data) {
+	struct SnapshotClipData *clip = data;
+	MangoSceneNode *snapshot_node = mango_scene_node_find(&buffer->node);
+	if (!snapshot_node || snapshot_node->type != Snapshot ||
+		!snapshot_node->owner) {
+		return;
+	}
+
+	SnapshotMetadata *meta = snapshot_node->owner;
+	int32_t child_x = buffer->node.x;
+	int32_t child_y = buffer->node.y;
+	int32_t base_x = sx - child_x + meta->orig_x;
+	int32_t base_y = sy - child_y + meta->orig_y;
+	int32_t dest_width = meta->orig_width;
+	int32_t dest_height = meta->orig_height;
+
+	if (clip->scale) {
+		dest_width = clip->width;
+		dest_height = clip->height;
+	}
+	if (dest_width <= 0 || dest_height <= 0) {
+		dest_width = buffer->WLR_PRIVATE.buffer_width;
+		dest_height = buffer->WLR_PRIVATE.buffer_height;
+		if (buffer->transform & WL_OUTPUT_TRANSFORM_90) {
+			int32_t tmp = dest_width;
+			dest_width = dest_height;
+			dest_height = tmp;
+		}
+	}
+
+	wlr_scene_node_set_position(&buffer->node, meta->orig_x, meta->orig_y);
+	if (dest_width <= 0 || dest_height <= 0) {
+		wlr_scene_node_set_enabled(&buffer->node, false);
+		return;
+	}
+
+	struct wlr_box buffer_box = {
+		.x = base_x,
+		.y = base_y,
+		.width = dest_width,
+		.height = dest_height,
+	};
+	struct wlr_box visible;
+	if (!wlr_box_intersection(&visible, &buffer_box, &clip->bounds)) {
+		wlr_scene_node_set_enabled(&buffer->node, false);
+		return;
+	}
+
+	wlr_scene_node_set_enabled(&buffer->node, true);
+	int32_t left = visible.x - buffer_box.x;
+	int32_t top = visible.y - buffer_box.y;
+	wlr_scene_node_set_position(&buffer->node, meta->orig_x + left,
+								meta->orig_y + top);
+	wlr_scene_buffer_set_dest_size(buffer, visible.width, visible.height);
+
+	struct wlr_fbox src_box = meta->orig_src_box;
+	int32_t src_width = buffer->WLR_PRIVATE.buffer_width;
+	int32_t src_height = buffer->WLR_PRIVATE.buffer_height;
+	if (!wlr_fbox_empty(&src_box)) {
+		src_width = src_box.width;
+		src_height = src_box.height;
+	} else {
+		src_box.x = 0;
+		src_box.y = 0;
+		src_box.width = src_width;
+		src_box.height = src_height;
+	}
+
+	if (left == 0 && top == 0 && visible.width == dest_width &&
+		visible.height == dest_height) {
+		wlr_scene_buffer_set_source_box(
+			buffer,
+			wlr_fbox_empty(&meta->orig_src_box) ? NULL : &meta->orig_src_box);
+		return;
+	}
+
+	float nx0 = (float)left / (float)dest_width;
+	float ny0 = (float)top / (float)dest_height;
+	float nx1 = (float)(left + visible.width) / (float)dest_width;
+	float ny1 = (float)(top + visible.height) / (float)dest_height;
+	float ax, ay, bx, by;
+	snapshot_dest_to_source(buffer->transform, nx0, ny0, &ax, &ay);
+	snapshot_dest_to_source(buffer->transform, nx1, ny1, &bx, &by);
+
+	float sx0 = MANGO_MIN(ax, bx);
+	float sy0 = MANGO_MIN(ay, by);
+	float sx1 = MANGO_MAX(ax, bx);
+	float sy1 = MANGO_MAX(ay, by);
+	struct wlr_fbox clipped_src = {
+		.x = src_box.x + sx0 * src_width,
+		.y = src_box.y + sy0 * src_height,
+		.width = (sx1 - sx0) * src_width,
+		.height = (sy1 - sy0) * src_height,
+	};
+	wlr_scene_buffer_set_source_box(buffer, &clipped_src);
+}
+
+void scene_snapshot_clip_to_box(struct wlr_scene_tree *snapshot,
+								const struct wlr_box *bounds, bool scale,
+								int32_t width, int32_t height) {
+	if (!snapshot || !bounds || bounds->width <= 0 || bounds->height <= 0) {
+		return;
+	}
+
+	struct SnapshotClipData clip = {
+		.bounds = *bounds,
+		.width = width,
+		.height = height,
+		.scale = scale,
+	};
+	scene_snapshot_enable_buffers(&snapshot->node);
+	wlr_scene_node_for_each_buffer(&snapshot->node, scene_snapshot_clip_buffer,
+								   &clip);
 }
 
 void request_fresh_all_monitors(void) {

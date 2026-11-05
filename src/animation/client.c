@@ -3,6 +3,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/draw/traffic-lights.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/layout/dwindle.h"
 #include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
@@ -34,6 +35,18 @@ static int32_t client_close_animation_type(const Client *c) {
 	return c->animation_type_close != ANIM_TYPE_UNSET
 			   ? c->animation_type_close
 			   : config.animation_type_close;
+}
+
+static bool client_no_radius_active(const Client *c) {
+	if (!c || !c->mon)
+		return false;
+
+	if (c->isfullscreen ||
+		(config.no_radius_when_single && c->mon->visible_tiling_clients == 1))
+		return true;
+
+	return config.monocle_no_radius && ISFAKETILED(c) && !c->mon->isoverview &&
+		   is_monocle_layout(c->mon);
 }
 
 bool client_animations_enabled(const Client *c) {
@@ -75,6 +88,9 @@ void set_rect_size(struct wlr_scene_rect *rect, int32_t width, int32_t height) {
 struct fx_corner_radii set_client_corner_location(Client *c) {
 	struct fx_corner_radii current_corner_location =
 		corner_radii_all(config.border_radius);
+
+	if (client_no_radius_active(c))
+		return corner_radii_none();
 
 	if (client_is_ignore_output_clip(c))
 		return current_corner_location;
@@ -137,10 +153,19 @@ int32_t is_special_animation_rule(Client *c) {
 }
 
 void set_overview_enter_animation(Client *c) {
-	struct wlr_box start = c->overview_backup_geom;
-	if (start.width <= 0 || start.height <= 0)
-		start = c->animation.current;
-	c->animainit_geom = start;
+	if (client_gesture_driven(c)) {
+		struct wlr_box start = c->overview_backup_geom;
+		if (start.width <= 0 || start.height <= 0)
+			start = c->animation.current;
+		c->animainit_geom = start;
+		return;
+	}
+
+	struct wlr_box geo = c->geom;
+	c->animainit_geom.width = geo.width * 1.2;
+	c->animainit_geom.height = geo.height * 1.2;
+	c->animainit_geom.x = geo.x + (geo.width - c->animainit_geom.width) / 2;
+	c->animainit_geom.y = geo.y + (geo.height - c->animainit_geom.height) / 2;
 }
 
 /* Uniform scale that fits a window of from_w x from_h inside the dock icon. */
@@ -248,12 +273,6 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	}
 }
 
-void snap_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
-									int32_t sy, void *data) {
-	BufferData *buffer_data = (BufferData *)data;
-	wlr_scene_buffer_set_dest_size(buffer, buffer_data->width,
-								   buffer_data->height);
-}
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data) {
 	BufferData *buffer_data = (BufferData *)data;
@@ -330,8 +349,7 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c == server.grab_client)
 		data.should_scale = false;
 
-	if (c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1))
+	if (client_no_radius_active(c))
 		data.corner_location = corner_radii_none();
 
 	if (config.blur && !c->no_blur)
@@ -363,10 +381,7 @@ void client_draw_shadow(Client *c, struct ivec2 offsets) {
 
 	bool hit_no_border = check_hit_no_border(c);
 	struct fx_corner_radii current_corner_location =
-		c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1)
-			? corner_radii_none()
-			: set_client_corner_location(c);
+		set_client_corner_location(c);
 
 	int32_t bw = (int32_t)c->bw;
 	int32_t bwoffset = bw != 0 && hit_no_border ? bw : 0;
@@ -595,8 +610,7 @@ void client_draw_dim(Client *c, struct ivec2 clip_box) {
 	}
 
 	int32_t radius = 0;
-	if (!c->isfullscreen && !(config.no_radius_when_single && c->mon &&
-							  c->mon->visible_tiling_clients == 1)) {
+	if (!client_no_radius_active(c)) {
 		radius = config.border_radius;
 	}
 
@@ -606,7 +620,7 @@ void client_draw_dim(Client *c, struct ivec2 clip_box) {
 }
 
 void client_draw_blur(Client *c, struct ivec2 clip_box) {
-	if (c->isfullscreen) {
+	if (c->isfullscreen && !client_uses_transparent_rendering(c)) {
 		if (c->blur->node.enabled)
 			wlr_scene_node_set_enabled(&c->blur->node, false);
 		return;
@@ -743,10 +757,7 @@ void client_draw_border(Client *c, struct ivec2 offsets) {
 	client_draw_split_border(c, hit_no_border, offsets);
 
 	struct fx_corner_radii current_corner_location =
-		c->isfullscreen || (config.no_radius_when_single && c->mon &&
-							c->mon->visible_tiling_clients == 1)
-			? corner_radii_none()
-			: set_client_corner_location(c);
+		set_client_corner_location(c);
 
 	struct wlr_box cur = c->animation.current;
 	int32_t bw = (int32_t)c->bw;
@@ -1077,7 +1088,7 @@ void client_fill_surface_to_box(Client *c, const struct wlr_box *box) {
 								   fill_main_surface_buffer, (void *)box);
 }
 
-void client_apply_clip(Client *c, float factor) {
+void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
 
@@ -1108,6 +1119,9 @@ void client_apply_clip(Client *c, float factor) {
 		client_draw_traffic_lights(c);
 
 		overview_layout_card(c);
+		if (config.title_message_bar_height > 0 && is_overcircle_mode(c->mon) &&
+			c == c->mon->sel)
+			title_message_bar_update_geometry(c->mon);
 		overview_card_set_corner_radii(c, set_client_corner_location(c));
 		return;
 	}
@@ -1425,15 +1439,10 @@ void fadeout_client_animation_next_tick(Client *c) {
 		wlr_scene_node_for_each_buffer(&c->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
 
-	if (!c->minimize_scale &&
-		client_close_animation_type(c) == ANIM_TYPE_ZOOM) {
-		BufferData buffer_data;
-		buffer_data.width = width;
-		buffer_data.height = height;
-		buffer_data.width_scale = animation_passed;
-		buffer_data.height_scale = animation_passed;
-		wlr_scene_node_for_each_buffer(
-			&c->scene->node, snap_scene_buffer_apply_effect, &buffer_data);
+	if (c->mon && !c->minimize_scale) {
+		bool scaling = client_close_animation_type(c) == ANIM_TYPE_ZOOM;
+		scene_snapshot_clip_to_box(c->scene, &c->mon->m, scaling, width,
+								   height);
 	}
 
 	if (animation_passed >= 1.0) {
@@ -1474,7 +1483,7 @@ void client_animation_next_tick(Client *c) {
 	};
 
 	c->is_pending_open_animation = false;
-	client_apply_clip(c, factor);
+	client_set_clip(c, factor);
 
 	if (animation_passed >= 1.0) {
 		c->animation.action = MOVE;
@@ -1487,11 +1496,11 @@ void client_animation_next_tick(Client *c) {
 			client_update_visibility(c);
 			c->animation.tagouted = true;
 			c->animation.current = c->geom;
-			client_apply_clip(c, 1.0f);
+			client_set_clip(c, 1.0f);
 		} else {
 			/* Snap to the final box: an interpolated one can be a pixel off,
 			 * which leaves X11 content stretched (blurry). */
-			client_apply_finish_geometry(c);
+			client_set_finish_geometry(c);
 		}
 
 		Client *pointer_c = NULL;
@@ -1510,7 +1519,7 @@ void client_animation_next_tick(Client *c) {
 	}
 }
 void init_fadeout_client(Client *c) {
-	if (!c->mon || client_is_unmanaged(c))
+	if (!c->mon || c->mon->iscleanuping || client_is_unmanaged(c))
 		return;
 
 	if (!c->scene)
@@ -1604,14 +1613,14 @@ void init_fadeout_client(Client *c) {
 
 	request_fresh_all_monitors();
 }
-void client_apply_finish_geometry(Client *c) {
+void client_set_finish_geometry(Client *c) {
 	if (!c || !c->scene)
 		return;
 
 	wlr_scene_node_set_position(&c->scene->node, c->pending.x, c->pending.y);
 	c->animation.current = c->animainit_geom = c->animation.initial =
 		c->pending = c->current = c->geom;
-	client_apply_clip(c, 1.0);
+	client_set_clip(c, 1.0);
 	c->need_output_flush = false;
 }
 void client_animation_set_progress(Client *c, double p) {
@@ -1642,7 +1651,7 @@ void client_animation_set_progress(Client *c, double p) {
 	};
 
 	c->is_pending_open_animation = false;
-	client_apply_clip(c, 1.0f);
+	client_set_clip(c, 1.0f);
 }
 void client_animation_resume(Client *c, double remaining) {
 	if (!c || !c->scene)
@@ -1694,7 +1703,7 @@ void client_commit(Client *c) {
 	// so pointer_process_motion focus does not hit the surface from the
 	// previous frame.
 	if (!client_animations_enabled(c))
-		client_apply_finish_geometry(c);
+		client_set_finish_geometry(c);
 
 	request_fresh_all_monitors();
 }
@@ -1757,7 +1766,7 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		c->geom.height = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
 	} else {
 		c->geom = geo;
-		client_apply_bounds(c, bbox);
+		client_set_bounds(c, bbox);
 	}
 
 	if (!c->no_size_hint && !c->ismaximizescreen && !c->isfullscreen &&
@@ -1879,9 +1888,17 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 
 	if (!opts.skip_ov_enter_anim && c->mon->isoverview &&
 		c->animation.overining && !c->animation.overview_enter_anim_set) {
-		set_overview_enter_animation(c);
-		c->animation.overining = false;
-		c->animation.overview_enter_anim_set = true;
+		if (client_gesture_driven(c)) {
+			set_overview_enter_animation(c);
+			c->animation.overining = false;
+			c->animation.overview_enter_anim_set = true;
+		} else {
+			c->animation.overining = false;
+			if (c != c->mon->sel && c->animation.action == OVERVIEW) {
+				c->animation.overview_enter_anim_set = true;
+				set_overview_enter_animation(c);
+			}
+		}
 	}
 
 	client_set_pending_state(c);
@@ -1973,7 +1990,7 @@ void client_set_focused_opacity_animation(Client *c) {
 	client_start_focus_animation(c, true);
 }
 
-bool client_apply_focus_opacity(Client *c) {
+bool client_set_focus_opacity(Client *c) {
 	if (config.blur && !c->no_blur && c->blur_opacity != 1.0f &&
 		c->animation.action != OPEN) {
 		c->blur_opacity = 1.0f;
@@ -2094,20 +2111,20 @@ bool client_draw_frame(Client *c) {
 
 	if (server.gesture_drive_active && c->mon == server.gesture_drive_mon &&
 		c->animation.running && c->need_output_flush) {
-		return client_apply_focus_opacity(c);
+		return client_set_focus_opacity(c);
 	}
 
 	if (!c->need_output_flush)
-		return client_apply_focus_opacity(c) || need_next_tick;
+		return client_set_focus_opacity(c) || need_next_tick;
 
 	if (config.animations && c->animation.running) {
 		need_next_tick = true;
 		client_animation_next_tick(c);
 	} else {
-		client_apply_finish_geometry(c);
+		client_set_finish_geometry(c);
 	}
 
-	bool need_fade_focus = client_apply_focus_opacity(c);
+	bool need_fade_focus = client_set_focus_opacity(c);
 
 	return need_next_tick || need_fade_focus;
 }

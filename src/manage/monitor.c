@@ -6,6 +6,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/hdr.h"
@@ -144,6 +145,11 @@ bool is_centertile_layout(Monitor *m) {
 	return false;
 }
 
+bool is_overcircle_mode(const Monitor *m) {
+	return m && m->isoverview && m->ov_tab_layout && !m->is_jump_mode &&
+		   !m->ov_normal_mode;
+}
+
 void special_sync_top_layer(bool special_active) {
 	if (special_active) {
 		wlr_scene_node_reparent(&server.layers[LyrTop]->node,
@@ -209,6 +215,33 @@ uint32_t get_tags_first_tag_num(uint32_t source_tags) {
 	} else {
 		return i;
 	}
+}
+
+void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
+							 uint32_t tag) {
+	if (!target || !source || !target->pertag || !source->pertag ||
+		tag >= PERTAG_SLOTS || !source->pertag->ltidxs[tag]) {
+		return;
+	}
+
+	Pertag *dst = target->pertag;
+	const Pertag *src = source->pertag;
+
+	dst->nmasters[tag] = src->nmasters[tag];
+	dst->mfacts[tag] = src->mfacts[tag];
+	dst->no_hide[tag] = src->no_hide[tag];
+	dst->no_render_border[tag] = src->no_render_border[tag];
+	dst->open_as_floating[tag] = src->open_as_floating[tag];
+	dst->scroller_default_proportion[tag] =
+		src->scroller_default_proportion[tag];
+	dst->scroller_default_proportion_single[tag] =
+		src->scroller_default_proportion_single[tag];
+	dst->scroller_ignore_proportion_single[tag] =
+		src->scroller_ignore_proportion_single[tag];
+	dst->ltidxs[tag] = src->ltidxs[tag];
+
+	/* Layout trees and scroller nodes are monitor-owned and rebuilt on the
+	 * target after the clients have moved. */
 }
 
 // Gets the tagmask of the first tag in tags.
@@ -456,9 +489,16 @@ struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
 }
 
 void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
+	if (m->vrr_enable_failed) {
+		wlr_output_state_set_adaptive_sync_enabled(state, false);
+		return;
+	}
+
 	wlr_output_state_set_adaptive_sync_enabled(state, true);
 	if (!wlr_output_test_state(m->wlr_output, state)) {
 		wlr_output_state_set_adaptive_sync_enabled(state, false);
+		m->is_vrr_enabling = false;
+		m->vrr_enable_failed = true;
 		mango_error(true, WLR_DEBUG,
 					"failed to enable adaptive sync for output %s",
 					m->wlr_output->name);
@@ -472,6 +512,7 @@ void enable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 void disable_adaptive_sync(Monitor *m, struct wlr_output_state *state) {
 	wlr_output_state_set_adaptive_sync_enabled(state, false);
 	m->is_vrr_enabling = false;
+	m->vrr_enable_failed = false;
 }
 
 bool monitor_matches_rule(Monitor *m, const ConfigMonitorRule *rule) {
@@ -560,6 +601,7 @@ void monitor_set_icc(Monitor *m, const char *path) {
 bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 						 struct wlr_output_state *state) {
 	bool mode_set = false;
+	m->vrr_enable_failed = false;
 	m->vrr_global_enable = rule->vrr >= 0 ? rule->vrr : 0;
 	m->hdr_enable = rule->hdr >= 0 ? rule->hdr : 0;
 	m->prefer_disable = rule->disable >= 0 ? rule->disable : 0;
@@ -575,8 +617,10 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 					m->wlr_output->name);
 
 	if (rule->width > 0 && rule->height > 0 && rule->refresh > 0) {
-		struct wlr_output_mode *internal_mode = get_nearest_output_mode(
-			m->wlr_output, rule->width, rule->height, rule->refresh);
+		struct wlr_output_mode *internal_mode = NULL;
+		if (!rule->custom)
+			internal_mode = get_nearest_output_mode(
+				m->wlr_output, rule->width, rule->height, rule->refresh);
 		if (internal_mode) {
 			wlr_output_state_set_mode(state, internal_mode);
 			mode_set = true;
@@ -625,6 +669,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	struct wl_event_loop *loop = wl_display_get_event_loop(server.display);
 	m = wlr_output->data = ecalloc(1, sizeof(*m));
 	wlr_output_state_init(&m->pending);
+	m->frame_serial = 1;
 
 	m->iscleanuping = false;
 	m->skip_frame_timeout =
@@ -635,6 +680,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	m->carousel_anim_dir = 0;
 	m->vrr_global_enable = false;
 	m->is_vrr_enabling = false;
+	m->vrr_enable_failed = false;
 	m->hdr_enable = false;
 	m->prefer_disable = false;
 	m->is_hdr_enabling = false;
@@ -857,6 +903,24 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 
 	m->iscleanuping = true;
 
+	Client *c, *ctmp;
+	wl_list_for_each_safe(c, ctmp, &server.fadeout_clients, fadeout_link) {
+		if (c->mon != m) {
+			continue;
+		}
+		wl_list_remove(&c->fadeout_link);
+		wlr_scene_node_destroy(&c->scene->node);
+		free(c);
+	}
+	wl_list_for_each_safe(l, tmp, &server.fadeout_layers, fadeout_link) {
+		if (l->mon != m) {
+			continue;
+		}
+		wl_list_remove(&l->fadeout_link);
+		wlr_scene_node_destroy(&l->scene->node);
+		free(l);
+	}
+
 	/* m->layers[i] are intentionally not unlinked */
 	for (i = 0; i < LENGTH(m->layers); i++) {
 		wl_list_for_each_safe(l, tmp, &m->layers[i], link)
@@ -888,6 +952,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		wlr_scene_node_destroy(&m->special_dim_rect->node);
 		m->special_dim_rect = NULL;
 	}
+	title_message_bar_finish(m);
 	if (m->skip_frame_timeout) {
 		monitor_stop_skip_frame_timer(m);
 		wl_event_source_remove(m->skip_frame_timeout);
@@ -1229,6 +1294,7 @@ void output_manager_apply_or_test(struct wlr_output_configuration_v1 *config,
 		wlr_output_state_set_transform(&state, config_head->state.transform);
 		wlr_output_state_set_scale(&state, config_head->state.scale);
 
+		m->vrr_enable_failed = false;
 		if (config_head->state.adaptive_sync_enabled) {
 			enable_adaptive_sync(m, &state);
 		} else {
@@ -1330,6 +1396,8 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 	if (!m->wlr_output->enabled || !server.allow_frame_scheduling)
 		return;
 
+	m->frame_serial++;
+
 	// Draws layers and fade-out effects.
 	for (i = 0; i < LENGTH(m->layers); i++) {
 		layer_list = &m->layers[i];
@@ -1394,13 +1462,14 @@ void check_vrr_enable(Client *c) {
 		return;
 
 	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
-		!c->mon->is_vrr_enabling) {
+		!c->mon->is_vrr_enabling && !c->mon->vrr_enable_failed) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 		return;
 	}
 
-	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable) {
+	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable &&
+		!c->mon->vrr_enable_failed) {
 		enable_adaptive_sync(c->mon, &m->pending);
 		mango_output_commit(m);
 	} else if (c->mon->is_vrr_enabling && !c->mon->vrr_global_enable &&

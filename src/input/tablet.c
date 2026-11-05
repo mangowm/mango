@@ -259,6 +259,7 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 	}
 
 	if (config.sloppyfocus && c && c->scene && c->scene->node.enabled &&
+		(!c->mon || !is_overcircle_mode(c->mon)) &&
 		(surface != server.seat->pointer_state.focused_surface ||
 		 (server.selected_monitor && server.selected_monitor->sel &&
 		  c != server.selected_monitor->sel)) &&

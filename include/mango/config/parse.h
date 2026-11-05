@@ -345,12 +345,14 @@ typedef struct {
 	int32_t focusdir_only_zone_overlap;
 	int32_t exchange_cross_monitor;
 	int32_t scratchpad_cross_monitor;
+	int32_t special_tag_cross_monitor;
 	int32_t focus_cross_tag;
 	int32_t view_current_to_back;
 	int32_t no_border_when_single;
 	int32_t no_radius_when_single;
 	int32_t monocle_no_border;
 	int32_t monocle_no_gap;
+	int32_t monocle_no_radius;
 	int32_t snap_distance;
 	int32_t enable_floating_snap;
 	int32_t float_full_to_top;
@@ -482,6 +484,7 @@ typedef struct {
 	/* appearance */
 	int32_t smartgaps;
 	int32_t monocle_tab_mode;
+	int32_t monocle_right_button_close;
 	int32_t deck_tab_mode;
 	uint32_t gappih;
 	uint32_t gappiv;
@@ -494,6 +497,8 @@ typedef struct {
 	uint32_t borderpx;
 	uint32_t group_bar_height;
 	uint32_t tab_bar_height;
+	uint32_t title_message_bar_height;
+	uint32_t title_message_bar_gap;
 	int32_t always_show_group_bar;
 	int32_t group_bar_close_button_enable;
 	uint32_t group_bar_button_size;
@@ -587,6 +592,7 @@ typedef struct {
 	DecorateDrawData jumplabeldata;
 	DecorateDrawData groupbardata;
 	DecorateDrawData tabbardata;
+	DecorateDrawData title_message_bardata;
 
 	int32_t hdr_depth;
 } Config;

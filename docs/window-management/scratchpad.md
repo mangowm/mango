@@ -65,11 +65,17 @@ bind=alt,k,toggle_named_scratchpad,none,kitty-scratch,kitty -T kitty-scratch
 ## Appearance
 
 You can customize the size of scratchpad windows relative to the screen.
+When a named scratchpad rule does not specify `width` or `height`, its floating
+window uses these ratios. An explicit `width` or `height` in the rule takes
+precedence.
 
 ```ini
 scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
 scratchpad_color=0x516c93ff
+
+# Uses the ratios above because no width or height is set
+window_rule=is_named_scratchpad:1,app_id:st-yazi
 ```
 
 ---
@@ -114,4 +120,12 @@ special_gap_inner_horizontal=10
 special_gap_inner_vertical=10
 special_gap_outer_horizontal=20
 special_gap_outer_vertical=20
+
+# Gather special tag windows from all monitors on the active monitor
+special_tag_cross_monitor=0
 ```
+
+With `special_tag_cross_monitor=1`, opening the special workspace or moving a
+window into it also migrates special-tag windows from other monitors and copies
+their special-tag layout. Floating windows are rescaled and centered for the
+target monitor.

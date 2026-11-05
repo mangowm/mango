@@ -92,27 +92,26 @@ static bool tab_member_kept(Monitor *m, uint32_t cur, Client *c) {
 }
 
 static bool tab_member_in_view(Client *c, Monitor *m) {
-	return c && c->mon == m && VISIBLEON(c, m);
+	return c && c->mon == m && !m->isoverview && VISIBLEON(c, m);
 }
 
-static bool tab_member_shown_in_view(Client *c, Monitor *m) {
-	return c && c->mon == m && !c->isfullscreen && !c->ismaximizescreen &&
-		   !m->isoverview && VISIBLEON(c, m);
+static bool tab_focus_can_render(const Client *c) {
+	return c && !c->isfullscreen && !c->ismaximizescreen;
 }
 
 static void tab_refresh_bars(Client *head) {
-	int32_t shown = 0;
+	int32_t members = 0;
 	Client *focus = head;
 
 	for (Client *it = head; it; it = it->tab_next) {
 		if (it->is_tab_focus)
 			focus = it;
-		if (tab_member_shown_in_view(it, head->mon))
-			shown++;
+		if (tab_member_in_view(it, head->mon))
+			members++;
 	}
 
-	bool stacked = shown >= 2;
-	bool strip = stacked && tab_member_shown_in_view(focus, head->mon);
+	bool stacked = members >= 2;
+	bool strip = stacked && tab_focus_can_render(focus);
 	int32_t layer = client_target_layer(focus);
 
 	for (Client *it = head; it; it = it->tab_next) {
@@ -122,10 +121,9 @@ static void tab_refresh_bars(Client *head) {
 									server.layers[layer]);
 
 		bool in_view = tab_member_in_view(it, head->mon);
-		bool shown = tab_member_shown_in_view(it, head->mon);
 		if (in_view)
-			it->is_tab_hidden = stacked && shown && !it->is_tab_focus;
-		tab_bar_set_enabled(it, strip && shown);
+			it->is_tab_hidden = stacked && !it->is_tab_focus;
+		tab_bar_set_enabled(it, strip && in_view);
 		client_update_visibility(it);
 	}
 }
@@ -143,17 +141,17 @@ void tab_update_input_penetration(Client *c) {
 
 	Client *head = tab_head(c);
 	Client *focus = head;
-	int32_t shown = 0;
+	int32_t members = 0;
 
 	for (Client *it = head; it; it = it->tab_next) {
 		if (it->is_tab_focus)
 			focus = it;
-		if (tab_member_shown_in_view(it, c->mon))
-			shown++;
+		if (tab_member_in_view(it, c->mon))
+			members++;
 	}
 
-	bool strip = shown >= 2 && tab_layout_active(c->mon) &&
-				 tab_member_shown_in_view(focus, c->mon);
+	bool strip = members >= 2 && tab_layout_active(c->mon) &&
+				 tab_focus_can_render(focus);
 	bool ignore_hit = !strip;
 
 	for (Client *it = head; it; it = it->tab_next) {
@@ -363,7 +361,7 @@ void client_update_tab_bar_title(Client *c) {
 									: 1.0f);
 }
 
-void client_apply_tab_bar_config(Client *c) {
+void client_set_tab_bar_config(Client *c) {
 	if (!c || !c->tab_bar)
 		return;
 	mango_bar_decoration_apply_config(c->tab_bar, &config.tabbardata);
@@ -382,18 +380,18 @@ void client_draw_tabbar(Client *c, struct ivec2 offsets) {
 	if (!c || !c->tab_bar || !c->mon || !c->is_tab_focus)
 		return;
 
-	if (!tab_layout_active(c->mon)) {
-		Client *head = tab_head(c);
+	Client *head = tab_head(c);
+
+	if (!tab_layout_active(c->mon) || !tab_focus_can_render(c)) {
 		for (Client *it = head; it; it = it->tab_next)
 			tab_bar_set_enabled(it, false);
 		return;
 	}
 
-	Client *head = tab_head(c);
 	int32_t count = 0;
 
 	for (Client *it = head; it; it = it->tab_next)
-		if (tab_member_shown_in_view(it, c->mon))
+		if (tab_member_in_view(it, c->mon))
 			count++;
 
 	if (count < 2)
@@ -438,7 +436,7 @@ void client_draw_tabbar(Client *c, struct ivec2 offsets) {
 	int32_t i = 0;
 
 	for (Client *cur = head; cur && i < count; cur = cur->tab_next) {
-		if (!tab_member_shown_in_view(cur, c->mon))
+		if (!tab_member_in_view(cur, c->mon))
 			continue;
 		int32_t w = bar_w + (i < rem ? 1 : 0);
 		global_draw_tab_bar(cur, x, tab_y, w, th);

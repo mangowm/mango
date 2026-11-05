@@ -4,6 +4,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/config/parse.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/xdg-activation.h"
@@ -247,11 +248,31 @@ int32_t focus_direction(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
 
+	Client *sel = server.selected_monitor->sel;
+	if (is_monocle_layout(server.selected_monitor) && sel && !sel->isfloating &&
+		(arg->i == LEFT || arg->i == RIGHT)) {
+		Arg a = *arg;
+		a.i = (arg->i == LEFT) ? PREV : NEXT;
+		return focus_stack(&a);
+	}
+
 	Client *c = NULL;
 	c = direction_select(arg);
 
-	if (!server.selected_monitor->isoverview)
-		c = get_focused_stack_client(c, arg->tc);
+	if (c && c->mon != server.selected_monitor && !config.focus_cross_monitor)
+		return 0;
+
+	if (c && !server.selected_monitor->isoverview) {
+		if (c->mon != server.selected_monitor) {
+			Monitor *m = c->mon;
+			c = client_focus_top(m);
+			if (!c)
+				return 0;
+			set_selected_monitor(m);
+		} else {
+			c = get_focused_stack_client(c, arg->tc);
+		}
+	}
 	if (c) {
 		client_focus(c, 1);
 		if (config.warpcursor)
@@ -704,6 +725,33 @@ int32_t kill_client(const Arg *arg) {
 	return 0;
 }
 
+int32_t smart_kill_client(const Arg *arg) {
+	Client *c =
+		arg->tc
+			? arg->tc
+			: (server.selected_monitor ? server.selected_monitor->sel : NULL);
+	if (!c || !c->mon)
+		return 0;
+
+	if (client_only_in_one_tag(c)) {
+		pending_kill_client(c);
+		return 0;
+	}
+
+	uint32_t view_tags = c->mon->tagset[c->mon->seltags] & TAGMASK;
+	uint32_t remaining_tags = c->tags & ~view_tags;
+	if (!remaining_tags) {
+		pending_kill_client(c);
+		return 0;
+	}
+
+	c->tags = remaining_tags;
+	client_reparent_group(c);
+	client_focus(client_focus_top(server.selected_monitor), 1);
+	arrange(c->mon, false, false);
+	return 0;
+}
+
 int32_t move_resize(const Arg *arg) {
 	Client *c = NULL;
 	MangoBarDecoration *bar = NULL;
@@ -728,7 +776,7 @@ int32_t move_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, 1);
+		client_set_floating(c, 1, false);
 
 	switch (arg->ui) {
 	case NUM_TYPE_MINUS:
@@ -803,7 +851,7 @@ int32_t resize_window(const Arg *arg) {
 			offsety = arg->i2;
 			break;
 		}
-		resize_tile_client(c, false, offsetx, offsety, 0);
+		resize_tile_client(c, false, offsetx, offsety);
 		config.animations = animations_state_backup;
 		return 0;
 	}
@@ -877,8 +925,11 @@ int32_t restore_minimized(const Arg *arg) {
 	if (!c)
 		return 0;
 
+	bool isfloating_before_scratchpad = c->isfloating_before_scratchpad;
+
 	/* Clear scratchpad & minimized state */
 	c->is_in_scratchpad = 0;
+	c->isfloating_before_scratchpad = 0;
 	c->isnamedscratchpad = 0;
 	client_pending_minimized_state(c, 0);
 	c->iscustomsize = 0;
@@ -891,9 +942,9 @@ int32_t restore_minimized(const Arg *arg) {
 	c->oldtags = c->tags;
 	c->mon = server.selected_monitor;
 
-	client_set_floating(c, 0);
+	c->is_pending_open_animation = true;
+	client_set_floating(c, isfloating_before_scratchpad, true);
 	client_update_border_color(c);
-	arrange(c->mon, false, false);
 	client_focus(c, 1);
 	pointer_warp_to_client(c);
 	return 0;
@@ -1011,21 +1062,10 @@ int32_t switch_proportion_preset(const Arg *arg) {
 
 	for (int32_t i = 0; i < config.scroller_proportion_preset_count; i++) {
 		if (config.scroller_proportion_preset[i] == current_proportion) {
-			if (arg->i == NEXT) {
-				if (i == config.scroller_proportion_preset_count - 1)
-					target_proportion = config.scroller_proportion_preset[0];
-				else
-					target_proportion =
-						config.scroller_proportion_preset[i + 1];
-			} else {
-				if (i == 0)
-					target_proportion =
-						config.scroller_proportion_preset
-							[config.scroller_proportion_preset_count - 1];
-				else
-					target_proportion =
-						config.scroller_proportion_preset[i - 1];
-			}
+			if (i == config.scroller_proportion_preset_count - 1)
+				target_proportion = config.scroller_proportion_preset[0];
+			else
+				target_proportion = config.scroller_proportion_preset[i + 1];
 			break;
 		}
 	}
@@ -1055,7 +1095,7 @@ int32_t smart_move_window(const Arg *arg) {
 	if (!c || c->isfullscreen || !c->mon)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nx = c->geom.x;
 	ny = c->geom.y;
 
@@ -1162,7 +1202,7 @@ int32_t smart_resize_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nw = c->geom.width;
 	nh = c->geom.height;
 
@@ -1471,15 +1511,13 @@ int32_t tag(const Arg *arg) {
 }
 
 int32_t tag_monitor(const Arg *arg) {
-	Monitor *m = NULL, *cm = NULL, *oldmon = NULL;
+	Monitor *m = NULL, *cm = NULL;
 	if (!server.selected_monitor)
 		return 0;
 	Client *c = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 
 	if (!c)
 		return 0;
-
-	oldmon = c->mon;
 
 	if (arg->i == MON_NEXT || arg->i == MON_PREV) {
 		m = monitor_from_cycle(arg->i);
@@ -1510,33 +1548,17 @@ int32_t tag_monitor(const Arg *arg) {
 		return 0;
 	}
 
-	if (c == oldmon->sel) {
-		oldmon->sel = NULL;
-	}
+	if (!client_set_monitor_adapted(c, m, newtags, true))
+		return 0;
 
-	client_set_monitor(c, m, newtags, true);
-	client_update_oldmonname_record(c, m);
-
-	reset_foreign_tolevel(c, oldmon, c->mon);
-
-	c->float_geom.width =
-		(int32_t)(c->float_geom.width * c->mon->w.width / oldmon->w.width);
-	c->float_geom.height =
-		(int32_t)(c->float_geom.height * c->mon->w.height / oldmon->w.height);
 	set_selected_monitor(c->mon);
-	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+	target = get_tags_first_tag(c->tags);
 
+	client_switch_view(&(Arg){.ui = target}, true);
+	client_focus(c, 1);
 	if (c->isfloating) {
-		c->geom = c->float_geom;
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		resize(c, c->geom, (ResizeOpts){.interact = 1});
 	} else {
-		set_selected_monitor(c->mon);
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		arrange(server.selected_monitor, false, false);
 	}
 	if (config.warpcursor) {
@@ -1683,6 +1705,51 @@ int32_t toggle_scratchpad(const Arg *arg) {
 	return 0;
 }
 
+static void special_tag_migrate_clients(Monitor *target) {
+	bool layout_copied = false;
+	Client *c;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (!c->mon || !c->mon->wlr_output || c->mon == target ||
+			c->iskilling || !(c->tags & TAG0_MASK)) {
+			continue;
+		}
+
+		Monitor *oldmon = c->mon;
+		if (!layout_copied) {
+			monitor_copy_tag_layout(target, oldmon, 0);
+			layout_copied = true;
+		}
+		client_set_monitor_adapted(c, target, TAG0_MASK, false);
+	}
+}
+
+static uint32_t special_tag_previous_tagset(const Monitor *m) {
+	uint32_t previous = m->tagset[m->seltags ^ 1] & TAGMASK;
+	return previous
+			   ? previous
+			   : (m->pertag->prevtag ? (1U << (m->pertag->prevtag - 1)) : 1);
+}
+
+static void special_tag_prepare_target(Monitor *target) {
+	if (!config.special_tag_cross_monitor || !target || !target->wlr_output ||
+		!target->wlr_output->enabled) {
+		return;
+	}
+
+	Monitor *m;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m == target || !m->wlr_output || !m->wlr_output->enabled ||
+			m->isoverview || !is_special_active(m)) {
+			continue;
+		}
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, false);
+	}
+
+	special_tag_migrate_clients(target);
+}
+
 // toggle the special workspace view on a given monitor
 void toggle_special_tag_mon(Monitor *m) {
 	if (!m || m->isoverview)
@@ -1691,13 +1758,10 @@ void toggle_special_tag_mon(Monitor *m) {
 	set_selected_monitor(m);
 	if (is_special_active(m)) {
 		/* Toggle back to previous tagset (supports multi-tag views) */
-		uint32_t prev_set = m->tagset[m->seltags ^ 1] & TAGMASK;
-		uint32_t target =
-			prev_set
-				? prev_set
-				: (m->pertag->prevtag ? (1 << (m->pertag->prevtag - 1)) : 1);
-		client_switch_view(&(Arg){.ui = target}, true);
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, true);
 	} else {
+		special_tag_prepare_target(m);
 		/* Switch to tag 0 */
 		client_switch_view(&(Arg){.ui = TAG0_MASK}, true);
 	}
@@ -1732,6 +1796,7 @@ static void tag_special_tag_internal(const Arg *arg, bool silent) {
 
 	} else {
 		/* Send window to tag 0 */
+		special_tag_prepare_target(m);
 		if (silent)
 			tag_silent(&(Arg){.ui = TAG0_MASK, .tc = c});
 		else {
@@ -1783,7 +1848,7 @@ int32_t toggle_floating(const Arg *arg) {
 		isfloating = !sel->isfloating;
 	}
 
-	client_set_floating(sel, isfloating);
+	client_set_floating(sel, isfloating, false);
 	return 0;
 }
 
@@ -1799,9 +1864,9 @@ int32_t toggle_fullscreen(const Arg *arg) {
 	sel->isnamedscratchpad = 0;
 
 	if (sel->isfullscreen)
-		client_apply_fullscreen(sel, 0, true);
+		client_set_fullscreen(sel, 0, true);
 	else
-		client_apply_fullscreen(sel, 1, true);
+		client_set_fullscreen(sel, 1, true);
 	return 0;
 }
 
@@ -2286,6 +2351,7 @@ static void set_overview(const Arg *arg, bool enter) {
 
 	if (!enter) {
 		server.selected_monitor->ov_tab_layout = 0;
+		title_message_bar_hide(server.selected_monitor);
 		if (server.selected_monitor->is_jump_mode)
 			finish_jump_mode(server.selected_monitor);
 	}
@@ -2313,6 +2379,7 @@ static void set_overview(const Arg *arg, bool enter) {
 		} else {
 			server.selected_monitor->isoverview = false;
 			server.selected_monitor->ov_tab_layout = 0;
+			title_message_bar_hide(server.selected_monitor);
 			return;
 		}
 	} else if (sel && (sel->tags & TAGMASK) != 0) {
@@ -2388,7 +2455,6 @@ static void set_overview(const Arg *arg, bool enter) {
 		}
 		arrange(server.selected_monitor, true, false);
 	}
-
 	fix_mon_tagset_from_overview(server.selected_monitor);
 	refresh_monitors_workspaces_status(server.selected_monitor);
 
@@ -2633,7 +2699,7 @@ int32_t toggle_all_floating(const Arg *arg) {
 			}
 
 			if (c->isfloating != should_floating) {
-				client_set_floating(c, should_floating);
+				client_set_floating(c, should_floating, false);
 			}
 		}
 	}

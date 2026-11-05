@@ -33,7 +33,10 @@ struct Monitor {
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
+	uint64_t frame_serial;		/* Incremented for every output frame. */
+	uint64_t last_resize_frame; /* Last frame that applied a resize. */
 	struct wl_listener destroy_lock_surface;
+	struct wl_listener commit_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;
 	struct wl_event_source *skip_frame_timeout;
 	struct wlr_box m;		  /* monitor area, layout-relative */
@@ -74,12 +77,14 @@ struct Monitor {
 	uint32_t hide_clients;
 	struct wlr_scene_optimized_blur *blur;
 	struct wlr_scene_rect *special_dim_rect;
+	MangoBarDecoration *title_message_bar;
 	char last_open_surface[256];
 	struct wlr_ext_workspace_group_handle_v1 *ext_group;
 	bool iscleanuping;
 	int8_t carousel_anim_dir;
 	bool vrr_global_enable;
 	bool is_vrr_enabling;
+	bool vrr_enable_failed;
 	bool hdr_enable;
 	bool prefer_disable;
 	bool is_hdr_enabling;
@@ -119,11 +124,14 @@ Monitor *monitor_from_cycle(int32_t dir);
 bool is_scroller_layout(Monitor *m);
 bool is_monocle_layout(Monitor *m);
 bool is_centertile_layout(Monitor *m);
+bool is_overcircle_mode(const Monitor *m);
 void special_update_dim(Monitor *m);
 void special_sync_top_layer(bool special_active);
 uint32_t get_tag_status(uint32_t tag, Monitor *m);
 uint32_t get_tags_first_tag_num(uint32_t source_tags);
 uint32_t get_tags_first_tag(uint32_t source_tags);
+void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
+							 uint32_t tag);
 Monitor *monitor_at_point(double x, double y);
 Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 bool match_monitor_spec(char *spec, Monitor *m);

@@ -22,7 +22,8 @@ enum {
 	XdgPopup,
 	XdgImPopup,
 	GroupBar,
-	TabBar
+	TabBar,
+	TitleMessageBar
 }; /* client types */
 
 #ifdef XWAYLAND
@@ -159,6 +160,7 @@ struct Client {
 	int32_t animation_type_open;
 	int32_t animation_type_close;
 	int32_t is_in_scratchpad;
+	int32_t isfloating_before_scratchpad;
 	int32_t iscustomsize;
 	int32_t iscustompos;
 	int32_t iscustom_scroller_proportion;
@@ -270,7 +272,6 @@ struct Client {
 void client_update_geometry(Client *c);
 void client_init_xwayland(Client *c);
 bool client_init_unmanaged(Client *c);
-void client_apply_xwayland(Client *c);
 void client_park(Client *c);
 void client_unpark(Client *c, Client *anchor);
 bool client_is_parked(Client *c);
@@ -294,6 +295,7 @@ Monitor *xwayland_monitor(Client *c);
 
 int32_t client_is_x11(Client *c);
 struct wlr_surface *client_surface(Client *c);
+bool client_uses_transparent_rendering(Client *c);
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
 								  LayerSurface **pl);
 
@@ -304,6 +306,9 @@ uint32_t get_client_tag_idx(const Client *c);
 int32_t client_get_pid(Client *c);
 void client_get_clip(Client *c, struct wlr_box *clip);
 void client_get_geometry(Client *c, struct wlr_box *geom);
+void client_surface_get_source_box(struct wlr_surface *surface,
+								   const struct wlr_fbox *surface_box,
+								   struct wlr_fbox *source_box);
 Client *client_get_parent(Client *c);
 int32_t client_has_children(Client *c);
 const char *client_get_title(Client *c);
@@ -315,7 +320,6 @@ void client_send_close(Client *c);
 void client_set_border_color(Client *c, const float color[4]);
 void client_set_state_colors(Client *c, const float border_color[4],
 							 const float dim_color[4]);
-void client_set_fullscreen(Client *c, int32_t fullscreen);
 void client_set_scale(struct wlr_surface *s, float scale);
 
 /*
@@ -379,7 +383,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r);
 void set_float_malposition(Client *tc);
 void client_reset_mon_tags(Client *c, Monitor *mon, uint32_t newtags);
 void check_match_tag_floating_rule(Client *c, Monitor *mon);
-void client_apply_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags);
+void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags);
 void apply_window_snap(Client *c);
 /*
  * Client management: window lifecycle, rules, focus, tiled/floating/fullscreen
@@ -388,7 +392,7 @@ void apply_window_snap(Client *c);
 void client_update_geometry(Client *c);
 void client_init_xwayland(Client *c);
 bool client_init_unmanaged(Client *c);
-void client_apply_xwayland(Client *c);
+void client_set_xwayland(Client *c);
 bool xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
 											   double *sx, double *sy);
 void handle_new_xdg_toplevel(struct wl_listener *listener, void *data);
@@ -421,10 +425,12 @@ void client_switch_view(const Arg *arg, bool want_animation);
 void tag_client(const Arg *arg, Client *target_client);
 void show_hide_client(Client *c);
 void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus);
+bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
+								bool focus);
 void client_change_mon(Client *c, Monitor *m);
 void view_insert_shift_tags(Monitor *m, uint32_t target);
-void client_set_floating(Client *c, int32_t floating);
-void client_apply_fullscreen(Client *c, int32_t fullscreen, bool rearrange);
+void client_set_floating(Client *c, int32_t floating, bool want_animation);
+void client_set_fullscreen(Client *c, int32_t fullscreen, bool rearrange);
 void client_set_fake_fullscreen(Client *c, int32_t fakefullscreen);
 void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 								bool rearrange);
@@ -452,7 +458,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 bool client_jump_to_monitor(Client *c, Monitor *m, int32_t dir);
 void client_move_to_monitor(Client *c, Client *target, int32_t dir);
 void client_update_oldmonname_record(Client *c, Monitor *m);
-void client_apply_bounds(Client *c, struct wlr_box *bbox);
+void client_set_bounds(Client *c, struct wlr_box *bbox);
 void client_swap_layout_properties(Client *c1, Client *c2);
 void client_swap_monitors_and_tags(Client *c1, Client *c2);
 void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,
@@ -467,7 +473,7 @@ void client_sync_layer(Client *c);
 void client_add_group_bar(Client *c);
 bool client_wants_group_bar(Client *c);
 void client_update_group_bar_title(Client *c);
-void client_apply_group_bar_config(Client *c);
+void client_set_group_bar_config(Client *c);
 void client_remove_group_bar(Client *c);
 bool client_group_swap_focus(Client *c);
 void client_focus_group_member(Client *c);

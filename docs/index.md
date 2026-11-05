@@ -6,7 +6,7 @@ description: A lightweight and feature-rich Wayland compositor based on dwl.
 
 **mango** is a Wayland compositor based on [dwl](https://codeberg.org/dwl/dwl/). It aims to be as lightweight as `dwl` and can be built completely within a few seconds, without compromising on functionality.
 
-> **Philosophy:** **Lightweight & Fast**: mango is designed to be minimal yet functional. It compiles in seconds and offers a robust set of features out of the box.
+> **Philosophy:** **Lightweight & Fast**: mango is designed to be minimal yet functional.
 
 ## Feature Highlights
 

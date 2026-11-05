@@ -43,6 +43,15 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 
+static bool is_title_message_bar_decorate_key(const char *key,
+											  const char *name) {
+	char candidate[128];
+
+	snprintf(candidate, sizeof(candidate), "title_message_bar_decorate_%s",
+			 name);
+	return strcmp(key, candidate) == 0;
+}
+
 bool parse_option(Config *config, char *key, char *value, int line_number) {
 	if (strcmp(key, "key_mode") == 0) {
 		snprintf(config->keymode, sizeof(config->keymode), "%.27s", value);
@@ -178,6 +187,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->exchange_cross_monitor = atoi(value);
 	} else if (strcmp(key, "scratchpad_cross_monitor") == 0) {
 		config->scratchpad_cross_monitor = atoi(value);
+	} else if (strcmp(key, "special_tag_cross_monitor") == 0) {
+		config->special_tag_cross_monitor = atoi(value);
 	} else if (strcmp(key, "focus_cross_tag") == 0) {
 		config->focus_cross_tag = atoi(value);
 	} else if (strcmp(key, "view_current_to_back") == 0) {
@@ -246,6 +257,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->monocle_no_border = atoi(value);
 	} else if (strcmp(key, "monocle_no_gap") == 0) {
 		config->monocle_no_gap = atoi(value);
+	} else if (strcmp(key, "monocle_no_radius") == 0) {
+		config->monocle_no_radius = atoi(value);
 	} else if (strcmp(key, "snap_distance") == 0) {
 		config->snap_distance = atoi(value);
 	} else if (strcmp(key, "enable_floating_snap") == 0) {
@@ -523,6 +536,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->smartgaps = atoi(value);
 	} else if (strcmp(key, "monocle_tab_mode") == 0) {
 		config->monocle_tab_mode = atoi(value);
+	} else if (strcmp(key, "monocle_right_button_close") == 0) {
+		config->monocle_right_button_close = atoi(value);
 	} else if (strcmp(key, "deck_tab_mode") == 0) {
 		config->deck_tab_mode = atoi(value);
 	} else if (strcmp(key, "repeat_rate") == 0) {
@@ -623,6 +638,85 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->groupbardata.padding_x = CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "group_bar_decorate_padding_y") == 0) {
 		config->groupbardata.padding_y = CLAMP_INT(atoi(value), 0, 100);
+	} else if (is_title_message_bar_decorate_key(key, "font_desc")) {
+		if (config->title_message_bardata.font_desc)
+			free((void *)config->title_message_bardata.font_desc);
+		config->title_message_bardata.font_desc = strdup(value);
+	} else if (is_title_message_bar_decorate_key(key, "fg_color")) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid "
+						"title_message_bar_decorate_fg_color "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_message_bardata.fg_color, color);
+		}
+	} else if (is_title_message_bar_decorate_key(key, "bg_color")) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid "
+						"title_message_bar_decorate_bg_color "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_message_bardata.bg_color, color);
+		}
+	} else if (is_title_message_bar_decorate_key(key, "focus_fg_color")) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid "
+						"title_message_bar_decorate_focus_fg_color "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_message_bardata.focus_fg_color,
+								color);
+		}
+	} else if (is_title_message_bar_decorate_key(key, "focus_bg_color")) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid "
+						"title_message_bar_decorate_focus_bg_color "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_message_bardata.focus_bg_color,
+								color);
+		}
+	} else if (is_title_message_bar_decorate_key(key, "border_color")) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid "
+						"title_message_bar_decorate_border_color "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->title_message_bardata.border_color,
+								color);
+		}
+	} else if (is_title_message_bar_decorate_key(key, "border_width")) {
+		config->title_message_bardata.border_width =
+			CLAMP_INT(atoi(value), 0, 100);
+	} else if (is_title_message_bar_decorate_key(key, "corner_radius")) {
+		config->title_message_bardata.corner_radius =
+			CLAMP_INT(atoi(value), 0, 100);
+	} else if (is_title_message_bar_decorate_key(key, "padding_x")) {
+		config->title_message_bardata.padding_x =
+			CLAMP_INT(atoi(value), 0, 100);
+	} else if (is_title_message_bar_decorate_key(key, "padding_y")) {
+		config->title_message_bardata.padding_y =
+			CLAMP_INT(atoi(value), 0, 100);
 	} else if (strcmp(key, "tab_bar_decorate_font_desc") == 0) {
 		if (config->tabbardata.font_desc)
 			free((void *)config->tabbardata.font_desc);
@@ -837,6 +931,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->group_bar_height = atoi(value);
 	} else if (strcmp(key, "tab_bar_height") == 0) {
 		config->tab_bar_height = atoi(value);
+	} else if (strcmp(key, "title_message_bar_height") == 0) {
+		config->title_message_bar_height = atoi(value);
+	} else if (strcmp(key, "title_message_bar_gap") == 0) {
+		config->title_message_bar_gap = atoi(value);
 	} else if (strcmp(key, "always_show_group_bar") == 0) {
 		config->always_show_group_bar = atoi(value);
 	} else if (strcmp(key, "group_bar_close_button_enable") == 0) {
@@ -1156,6 +1254,29 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 						"Monitor rule "
 						"must have at least one of the following "
 						"options: name, make, model, serial\n");
+			return false;
+		}
+
+		bool has_width = rule->width > 0;
+		bool has_height = rule->height > 0;
+		bool has_refresh = rule->refresh > 0.0f;
+		if (has_width != has_height || has_width != has_refresh) {
+			mango_error(false, WLR_ERROR,
+						"Monitor rule must set width, height and refresh "
+						"together\n");
+			return false;
+		}
+
+		if (rule->custom && !has_width) {
+			mango_error(false, WLR_ERROR,
+						"Monitor rule with custom must set width, height and "
+						"refresh\n");
+			return false;
+		}
+
+		if ((rule->x == INT32_MAX) != (rule->y == INT32_MAX)) {
+			mango_error(false, WLR_ERROR,
+						"Monitor rule must set x and y together\n");
 			return false;
 		}
 
@@ -2340,6 +2461,7 @@ void set_value_default() {
 	config.hotarea_disable_on_fullscreen = 1;
 	config.smartgaps = 0;
 	config.monocle_tab_mode = 1;
+	config.monocle_right_button_close = 0;
 	config.deck_tab_mode = 1;
 	config.sloppyfocus = 1;
 	config.gappih = 5;
@@ -2367,6 +2489,7 @@ void set_value_default() {
 	config.focusdir_only_zone_overlap = 1;
 	config.exchange_cross_monitor = 0;
 	config.scratchpad_cross_monitor = 0;
+	config.special_tag_cross_monitor = 0;
 	config.focus_cross_tag = 0;
 	config.axis_scroll_factor = 1.0;
 	config.trackpad_scroll_factor = 1.0;
@@ -2386,6 +2509,7 @@ void set_value_default() {
 	config.no_radius_when_single = 0;
 	config.monocle_no_border = 0;
 	config.monocle_no_gap = 0;
+	config.monocle_no_radius = 0;
 	config.snap_distance = 30;
 	config.drag_tile_to_tile = 1;
 	config.drag_tile_small = 1;
@@ -2403,8 +2527,10 @@ void set_value_default() {
 	config.borderpx = 4;
 	config.group_bar_height = 33;
 	config.tab_bar_height = 33;
+	config.title_message_bar_height = 52;
+	config.title_message_bar_gap = 20;
 	config.always_show_group_bar = 0;
-	config.group_bar_close_button_enable = 1;
+	config.group_bar_close_button_enable = 0;
 	config.group_bar_button_size = 16;
 	config.top_drag_zone = 0;
 	config.group_bar_button_margin = 4;
@@ -2553,6 +2679,9 @@ void set_value_default() {
 	config.groupbardata.corner_radius = 5;
 	config.groupbardata.padding_x = 0;
 	config.groupbardata.padding_y = 0;
+	config.title_message_bardata = config.groupbardata;
+	config.title_message_bardata.border_width = 0;
+	config.title_message_bardata.corner_radius = 15;
 
 	config.tabbardata.fg_color[0] = 0xc0 / 255.0f;
 	config.tabbardata.fg_color[1] = 0xca / 255.0f;
@@ -2750,6 +2879,8 @@ void override_config(void) {
 		CLAMP_INT(config.exchange_cross_monitor, 0, 1);
 	config.scratchpad_cross_monitor =
 		CLAMP_INT(config.scratchpad_cross_monitor, 0, 1);
+	config.special_tag_cross_monitor =
+		CLAMP_INT(config.special_tag_cross_monitor, 0, 1);
 	config.focus_cross_tag = CLAMP_INT(config.focus_cross_tag, 0, 1);
 	config.view_current_to_back = CLAMP_INT(config.view_current_to_back, 0, 1);
 	config.enable_floating_snap = CLAMP_INT(config.enable_floating_snap, 0, 1);
@@ -2762,6 +2893,9 @@ void override_config(void) {
 		CLAMP_INT(config.no_radius_when_single, 0, 1);
 	config.monocle_no_border = CLAMP_INT(config.monocle_no_border, 0, 1);
 	config.monocle_no_gap = CLAMP_INT(config.monocle_no_gap, 0, 1);
+	config.monocle_no_radius = CLAMP_INT(config.monocle_no_radius, 0, 1);
+	config.monocle_right_button_close =
+		CLAMP_INT(config.monocle_right_button_close, 0, 1);
 	config.cursor_hide_timeout =
 		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
 	config.cursor_hide_on_keypress =
@@ -2842,6 +2976,10 @@ void override_config(void) {
 	config.borderpx = CLAMP_INT(config.borderpx, 0, 200);
 	config.group_bar_height = CLAMP_INT(config.group_bar_height, 0, 500);
 	config.tab_bar_height = CLAMP_INT(config.tab_bar_height, 0, 500);
+	config.title_message_bar_height =
+		CLAMP_INT(config.title_message_bar_height, 0, 500);
+	config.title_message_bar_gap =
+		CLAMP_INT(config.title_message_bar_gap, 0, 500);
 	config.always_show_group_bar =
 		CLAMP_INT(config.always_show_group_bar, 0, 1);
 	config.group_bar_close_button_enable =
@@ -2861,11 +2999,11 @@ void override_config(void) {
 	config.blur_params.radius = CLAMP_INT(config.blur_params.radius, 0, 100);
 	config.blur_params.noise = CLAMP_FLOAT(config.blur_params.noise, 0, 1);
 	config.blur_params.brightness =
-		CLAMP_FLOAT(config.blur_params.brightness, 0, 1);
+		CLAMP_FLOAT(config.blur_params.brightness, 0, 2);
 	config.blur_params.contrast =
-		CLAMP_FLOAT(config.blur_params.contrast, 0, 1);
+		CLAMP_FLOAT(config.blur_params.contrast, 0, 2);
 	config.blur_params.saturation =
-		CLAMP_FLOAT(config.blur_params.saturation, 0, 1);
+		CLAMP_FLOAT(config.blur_params.saturation, 0, 2);
 	config.shadows = CLAMP_INT(config.shadows, 0, 1);
 	config.shadow_only_floating = CLAMP_INT(config.shadow_only_floating, 0, 1);
 	config.layer_shadows = CLAMP_INT(config.layer_shadows, 0, 1);
@@ -2891,6 +3029,15 @@ void override_config(void) {
 		CLAMP_INT(config.groupbardata.padding_x, 0, 100);
 	config.groupbardata.padding_y =
 		CLAMP_INT(config.groupbardata.padding_y, 0, 100);
+
+	config.title_message_bardata.border_width =
+		CLAMP_INT(config.title_message_bardata.border_width, 0, 100);
+	config.title_message_bardata.corner_radius =
+		CLAMP_INT(config.title_message_bardata.corner_radius, 0, 100);
+	config.title_message_bardata.padding_x =
+		CLAMP_INT(config.title_message_bardata.padding_x, 0, 100);
+	config.title_message_bardata.padding_y =
+		CLAMP_INT(config.title_message_bardata.padding_y, 0, 100);
 
 	config.tabbardata.border_width =
 		CLAMP_INT(config.tabbardata.border_width, 0, 100);

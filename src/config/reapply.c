@@ -19,6 +19,7 @@
 #include "mango/config/error_store.h"
 #include "mango/config/watcher.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/hdr.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
@@ -120,7 +121,7 @@ void reapply_property(void) {
 				c->bw = config.borderpx;
 			}
 			client_set_group_config(c);
-			client_apply_tab_bar_config(c);
+			client_set_tab_bar_config(c);
 		}
 	}
 }
@@ -175,8 +176,11 @@ void reset_option(void) {
 	 * space on all outputs. */
 	Monitor *m = NULL;
 	wl_list_for_each(m, &server.monitors, link) {
-		if (m->wlr_output->enabled)
+		if (m->wlr_output->enabled) {
+			title_message_bar_apply_config(m);
+			title_message_bar_update(m);
 			arrange(m, false, false);
+		}
 	}
 }
 

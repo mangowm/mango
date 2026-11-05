@@ -824,7 +824,7 @@ void scroller_insert_stack(Client *c, Client *target_client,
 		return;
 
 	if (c->isfullscreen)
-		client_apply_fullscreen(c, 0, true);
+		client_set_fullscreen(c, 0, true);
 	if (c->ismaximizescreen)
 		client_set_maximize_screen(c, 0, true);
 
@@ -866,7 +866,7 @@ void scroller_insert_stack(Client *c, Client *target_client,
 	if (stack_head->ismaximizescreen)
 		client_set_maximize_screen(stack_head, 0, true);
 	if (stack_head->isfullscreen)
-		client_apply_fullscreen(stack_head, 0, true);
+		client_set_fullscreen(stack_head, 0, true);
 
 	/* Syncs to the Client fields. */
 	sync_scroller_state_to_clients(m, tag);
@@ -885,11 +885,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 
 	if (vertical) {
 		if (closest->drop_direction == LEFT) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, true);
 			return;
 		} else if (closest->drop_direction == RIGHT) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == UP) {
@@ -903,11 +903,11 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 		}
 	} else {
 		if (closest->drop_direction == UP) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, true);
 			return;
 		} else if (closest->drop_direction == DOWN) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			scroller_insert_stack(c, closest, false);
 			return;
 		} else if (closest->drop_direction == LEFT) {
@@ -921,7 +921,7 @@ void scroller_drop_tile(Client *c, Client *closest, int vertical) {
 		}
 	}
 
-	client_set_floating(c, 0);
+	client_set_floating(c, 0, false);
 }
 
 Client *scroll_get_stack_head_client(Client *c) {

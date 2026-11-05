@@ -32,7 +32,7 @@ jobs:
 
       - name: Sync docs
         run: |
-          TARGET=website/apps/web/content/docs
+          TARGET=website/apps/docs/content
           rm -rf "$TARGET"
           mkdir -p "$TARGET"
 
@@ -67,12 +67,22 @@ jobs:
             done
           } | jq -Rn '[inputs | select(length > 0)] | {pages: .}' > "$TARGET/meta.json"
 
+      - name: Normalize docs links
+        run: |
+          TARGET="$PWD/website/apps/docs/content"
+
+          find "$TARGET" -type f \( -name '*.md' -o -name '*.mdx' \) -exec sed -i \
+            -e 's#](/docs/#](/#g' \
+            -e 's#href="/docs/#href="/#g' {} +
+
+          (cd "$RUNNER_TEMP" && npx --yes oxfmt "$TARGET")
+
       - name: Commit and push
         working-directory: website
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/web/content/docs
+          git add apps/docs/content
           git diff --staged --quiet || git commit \
             -m "docs: content update from mangowm/mango" \
             -m "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"

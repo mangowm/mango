@@ -79,6 +79,7 @@ int32_t exchange_client(const Arg *arg);
 int32_t move_client(const Arg *arg);
 int32_t exchange_stack_client(const Arg *arg);
 int32_t kill_client(const Arg *arg);
+int32_t smart_kill_client(const Arg *arg);
 int32_t toggle_global(const Arg *arg);
 int32_t inc_nmaster(const Arg *arg);
 int32_t focus_monitor(const Arg *arg);

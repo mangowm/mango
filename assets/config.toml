@@ -82,6 +82,7 @@ dwindle_preserve_split = 0
 monocle_tab_mode = 1
 monocle_no_border = 0
 monocle_no_gap = 0
+monocle_no_radius = 0
 
 # Deck Layout Setting
 deck_tab_mode = 1
@@ -93,6 +94,8 @@ hotarea_disable_on_fullscreen = 1
 overview_gap_inner = 5
 overview_gap_outer = 30
 overcircle_center_ratio = 0.5
+title_message_bar_height = 52
+title_message_bar_gap = 20
 
 # Misc
 no_border_when_single = 0

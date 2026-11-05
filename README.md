@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="https://github.com/mangowm/mango/blob/main/assets/mango-transparency-256.png" alt="Mango Logo" width="120"/>
+  <img src="assets/mango.svg" alt="Mango Logo" width="120"/>
 
   <h1>Mango Wayland Compositor</h1>
 
-  <p>A fast, feature-rich Wayland compositor built on <a href="https://codeberg.org/dwl/dwl">dwl</a></p>
+  <p>A fast, feature-rich Wayland compositor.</p>
 
 <a href="https://github.com/mangowm/mango/stargazers"><img src="https://img.shields.io/github/stars/mangowm/mango?style=flat&color=orange" alt="Stars"/></a>
 <a href="https://github.com/mangowm/mango/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat" alt="License"/></a>
@@ -24,18 +24,17 @@ https://github.com/user-attachments/assets/be85e13f-7798-456d-957e-f8931687392e
 
 ## Why Mango?
 
-Mango starts where dwl ends. It keeps the lightweight, fast-build philosophy while adding the features that make a compositor actually usable day-to-day — without the bloat.
-
-- **Lightweight & fast** — as lean as dwl, no functionality compromised
+- **Lightweight & fast** — no functionality compromised
 - **Excellent xwayland support** — run X11 apps without friction(Supports scale without blurring)
 - **Tags, not workspaces** — each tag maintains its own independent window layout
 - **Smooth animations** — window open/move/close, tag transitions, layer surfaces
-- **Flexible layouts** — scroller, master-stack, monocle, dwindle, grid, and more
-- **Rich window states** — swallow, minimize, maximize, global, overlay, fakefullscreen
+- **Flexible layouts** — scroller, vertical-scroller, master-stack, monocle, dwindle and more
+- **Rich window states** — swallow, group, minimize, maximize, global, overlay, fakefullscreen
 - **Window effects** — blur, shadow, corner radius, opacity (via scenefx)
 - **Excellent input method support** — text-input v2/v3
-- **Sway-like scratchpad** — named scratchpad support included
-- **Hycov-style overview** — see all windows at a glance
+- **Powerful scratchpad** — sway-style scratchpad, special workspace and named-scratchpad support
+- **label jump overview** — see all windows at a glance with easymotion jump label.
+- **Gnome-style application switcher** — quick switching between apps
 - **IPC** — send/receive messages from external programs
 - **Hot-reload config** — no restart needed for keybinding changes
 - **Zero flickering** — every frame is correct
@@ -47,6 +46,12 @@ Mango starts where dwl ends. It keeps the lightweight, fast-build philosophy whi
 **Practicality over novelty.** Features get added when they genuinely improve daily workflows — not for the sake of completeness.
 
 **Focused scope.** Niche requests are evaluated by community interest. Significant upvotes move things forward.
+
+## AI Policy
+
+- **Pull requests:** AI may be used to assist in preparing a pull request (PR), but direct AI-generated PRs are not accepted. Contributors must clearly understand what the code does, whether the implementation is reasonable and rigorous, whether it wastes resources, and whether the implementation is sufficiently convergent rather than scattered.
+
+- **Bug reports:** Using AI to report bugs is acceptable. AI-provided information may serve as reference material, which is preferable to reports that provide no reference information.
 
 ## Installation
 

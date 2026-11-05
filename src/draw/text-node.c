@@ -180,9 +180,9 @@ static void measure_text(struct mango_text_measure *measure,
 	pango_layout_get_pixel_size(measure->layout, out_pixel_w, out_pixel_h);
 }
 
-static char *text_ellipsize(struct mango_text_measure *measure,
-							const char *font_desc, const char *text,
-							float scale, int32_t max_pixel_w) {
+static char *text_ellipsize_line(struct mango_text_measure *measure,
+								 const char *font_desc, const char *text,
+								 float scale, int32_t max_pixel_w) {
 	int32_t pixel_w = 0, pixel_h = 0;
 	int32_t best = 0;
 	const char *end = text + strlen(text);
@@ -205,6 +205,41 @@ static char *text_ellipsize(struct mango_text_measure *measure,
 	}
 
 	return g_strdup_printf("%.*s…", best, text);
+}
+
+static char *text_ellipsize(struct mango_text_measure *measure,
+							const char *font_desc, const char *text,
+							float scale, int32_t max_pixel_w) {
+	if (!strchr(text, '\n'))
+		return text_ellipsize_line(measure, font_desc, text, scale,
+								   max_pixel_w);
+
+	GString *result = g_string_new(NULL);
+	const char *line = text;
+
+	while (true) {
+		const char *newline = strchr(line, '\n');
+		size_t length = newline ? (size_t)(newline - line) : strlen(line);
+		char *part = g_strndup(line, length);
+		int32_t pixel_w = 0, pixel_h = 0;
+		measure_text(measure, font_desc, part, scale, &pixel_w, &pixel_h);
+		if (pixel_w <= max_pixel_w) {
+			g_string_append(result, part);
+		} else {
+			char *ellipsized = text_ellipsize_line(measure, font_desc, part,
+												   scale, max_pixel_w);
+			g_string_append(result, ellipsized);
+			g_free(ellipsized);
+		}
+		g_free(part);
+
+		if (!newline)
+			break;
+		g_string_append_c(result, '\n');
+		line = newline + 1;
+	}
+
+	return g_string_free(result, false);
 }
 
 static cairo_surface_t *
@@ -248,6 +283,56 @@ text_surface_create(struct mango_text_measure *measure, const char *font_desc,
 	g_object_unref(layout);
 	g_object_unref(context);
 	cairo_destroy(cr);
+
+	*out_pixel_w = width;
+	*out_pixel_h = height;
+	return surface;
+}
+
+static cairo_surface_t *text_surface_create_two_lines(
+	struct mango_text_measure *measure, const char *font_desc,
+	const char *first, const char *second, float scale, const float color[4],
+	int32_t *out_pixel_w, int32_t *out_pixel_h) {
+	int32_t first_w, first_h, second_w, second_h;
+	cairo_surface_t *first_surface = text_surface_create(
+		measure, font_desc, first, scale, color, &first_w, &first_h);
+	cairo_surface_t *second_surface = text_surface_create(
+		measure, font_desc, second, scale, color, &second_w, &second_h);
+	if (!first_surface || !second_surface) {
+		if (first_surface)
+			cairo_surface_destroy(first_surface);
+		if (second_surface)
+			cairo_surface_destroy(second_surface);
+		return NULL;
+	}
+
+	int32_t width = first_w > second_w ? first_w : second_w;
+	int32_t height = first_h + second_h;
+	cairo_surface_t *surface =
+		cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+	if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+		cairo_surface_destroy(surface);
+		cairo_surface_destroy(first_surface);
+		cairo_surface_destroy(second_surface);
+		return NULL;
+	}
+
+	cairo_t *cr = cairo_create(surface);
+	cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+	cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
+	cairo_paint(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+	cairo_set_source_surface(cr, first_surface, 0, 0);
+	cairo_paint(cr);
+	cairo_set_source_surface(cr, second_surface, (width - second_w) / 2,
+							 first_h);
+	cairo_paint(cr);
+	cairo_surface_flush(surface);
+
+	cairo_destroy(cr);
+	cairo_surface_destroy(first_surface);
+	cairo_surface_destroy(second_surface);
 
 	*out_pixel_w = width;
 	*out_pixel_h = height;
@@ -429,9 +514,8 @@ static void jump_label_apply_geometry(MangoJumpLabel *node) {
 	node->logical_width = width;
 	node->logical_height = height;
 
-	rect_apply_border(node->border, node->border_color,
-					  node->corner_radius + border, node->corner_radius, border,
-					  width, height);
+	rect_apply_border(node->border, node->border_color, node->corner_radius,
+					  node->corner_radius, border, width, height);
 	rect_apply(node->bg, node->focused ? node->focus_bg_color : node->bg_color,
 			   node->corner_radius, border, border, width - 2 * border,
 			   height - 2 * border);
@@ -656,9 +740,8 @@ static void bar_decoration_apply_geometry(MangoBarDecoration *node) {
 		return;
 	}
 
-	rect_apply_border(node->border, node->border_color,
-					  node->corner_radius + border, node->corner_radius, border,
-					  width, height);
+	rect_apply_border(node->border, node->border_color, node->corner_radius,
+					  node->corner_radius, border, width, height);
 	rect_apply(node->bg, node->focused ? node->focus_bg_color : node->bg_color,
 			   node->corner_radius, border, border, inner_w, inner_h);
 
@@ -694,7 +777,8 @@ void mango_bar_decoration_set_size(MangoBarDecoration *node, int32_t width,
 	if (height < 0)
 		height = 0;
 
-	if (node->target_width == width && node->target_height == height)
+	if (node->target_width == width && node->target_height == height &&
+		node->cached_text)
 		return;
 
 	node->target_width = width;
@@ -819,6 +903,18 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 	}
 	node->last_scale = scale;
 
+	/*
+	 * Keep the pending text current while hidden, but do not rasterize it.
+	 * Invalidating cached_text makes the next visible set_size/update render
+	 * with the final target geometry instead of a zero-width hidden layout.
+	 */
+	if (!node->scene->node.enabled) {
+		g_free(node->cached_text);
+		node->cached_text = NULL;
+		node->cached_scale = -1.0f;
+		return;
+	}
+
 	const float *fg_color =
 		node->focused ? node->focus_fg_color : node->fg_color;
 
@@ -838,6 +934,7 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 		strcmp(node->cached_font_desc, node->font_desc) != 0 ||
 		memcmp(node->cached_fg_color, fg_color, sizeof(node->fg_color)) != 0 ||
 		node->cached_focused != node->focused ||
+		node->cached_center_secondary_line != node->center_secondary_line ||
 		node->cached_clip_pixel_w != clip_pixel_w;
 
 	if (dirty) {
@@ -856,11 +953,23 @@ void mango_bar_decoration_update(MangoBarDecoration *node, const char *text,
 		node->cached_scale = scale;
 		memcpy(node->cached_fg_color, fg_color, sizeof(node->cached_fg_color));
 		node->cached_focused = node->focused;
+		node->cached_center_secondary_line = node->center_secondary_line;
 		node->cached_clip_pixel_w = clip_pixel_w;
 
-		cairo_surface_t *surface = text_surface_create(
-			&node->measure, node->font_desc, display, scale, fg_color,
-			&node->surface_pixel_w, &node->surface_pixel_h);
+		cairo_surface_t *surface = NULL;
+		const char *second_line =
+			node->center_secondary_line ? strchr(display, '\n') : NULL;
+		if (second_line) {
+			char *first = g_strndup(display, second_line - display);
+			surface = text_surface_create_two_lines(
+				&node->measure, node->font_desc, first, second_line + 1, scale,
+				fg_color, &node->surface_pixel_w, &node->surface_pixel_h);
+			g_free(first);
+		} else {
+			surface = text_surface_create(
+				&node->measure, node->font_desc, display, scale, fg_color,
+				&node->surface_pixel_w, &node->surface_pixel_h);
+		}
 		text_node_install(node->scene_buffer, &node->buffer, surface,
 						  node->surface_pixel_w, node->surface_pixel_h);
 		g_free(ellipsized);
@@ -874,6 +983,18 @@ void mango_bar_decoration_set_focus(MangoBarDecoration *node, bool focused) {
 	if (!node || node->focused == focused)
 		return;
 	node->focused = focused;
+	if (node->last_text) {
+		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
+		mango_bar_decoration_update(node, node->last_text, scale);
+	}
+}
+
+void mango_bar_decoration_set_center_secondary_line(MangoBarDecoration *node,
+													bool centered) {
+	if (!node || node->center_secondary_line == centered)
+		return;
+
+	node->center_secondary_line = centered;
 	if (node->last_text) {
 		float scale = node->last_scale > 0.0f ? node->last_scale : 1.0f;
 		mango_bar_decoration_update(node, node->last_text, scale);

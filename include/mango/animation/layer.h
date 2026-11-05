@@ -13,9 +13,6 @@ void layer_draw_shield(LayerSurface *l);
 void layer_draw_shadow(LayerSurface *l);
 void layer_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									 int32_t sx, int32_t sy, void *data);
-void layer_fadeout_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
-											 int32_t sx, int32_t sy,
-											 void *data);
 void fadeout_layer_animation_next_tick(LayerSurface *l);
 void layer_animation_next_tick(LayerSurface *l);
 
