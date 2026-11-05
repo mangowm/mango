@@ -596,6 +596,10 @@ cJSON *build_client_json(Client *c) {
 	cJSON_AddBoolToObject(obj, "is_focused", c->isfocusing);
 	cJSON_AddBoolToObject(obj, "is_fullscreen", c->isfullscreen);
 	cJSON_AddBoolToObject(obj, "is_floating", c->isfloating);
+	cJSON_AddBoolToObject(
+		obj, "is_effectively_floating",
+		client_is_effectively_floating_for_tag(c, c->mon,
+											   get_client_tag_idx(c)));
 	cJSON_AddBoolToObject(obj, "is_maximized", c->ismaximizescreen);
 	cJSON_AddBoolToObject(obj, "is_global", c->isglobal);
 	cJSON_AddBoolToObject(obj, "is_unglobal", c->isunglobal);

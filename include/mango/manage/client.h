@@ -41,16 +41,17 @@ enum {
 enum { UP, DOWN, LEFT, RIGHT, UNDIR, ALLDIR }; /* smartmovewin */
 
 #define ISTILED(A)                                                             \
-	(A && !(A)->isfloating && !(A)->isminimized && !(A)->iskilling &&          \
-	 !(A)->ismaximizescreen && !(A)->isfullscreen && !(A)->isunglobal)
+	(A && !client_is_effectively_floating(A) && !(A)->isminimized &&           \
+	 !(A)->iskilling && !(A)->ismaximizescreen && !(A)->isfullscreen &&        \
+	 !(A)->isunglobal)
 #define ISNORMAL(A)                                                            \
 	(A && !(A)->isminimized && !(A)->iskilling && !(A)->isunglobal)
 #define ISSCROLLTILED(A)                                                       \
-	(A && !(A)->isfloating && !(A)->isminimized && !(A)->iskilling &&          \
-	 !(A)->isunglobal)
+	(A && !client_is_effectively_floating(A) && !(A)->isminimized &&           \
+	 !(A)->iskilling && !(A)->isunglobal)
 #define ISFAKETILED(A)                                                         \
-	(A && !(A)->isfloating && !(A)->isminimized && !(A)->iskilling &&          \
-	 !(A)->isunglobal)
+	(A && !client_is_effectively_floating(A) && !(A)->isminimized &&           \
+	 !(A)->iskilling && !(A)->isunglobal)
 #define VISIBLEON(C, M)                                                        \
 	((C) && (M) && (C)->mon == (M) && !(C)->isminimized &&                     \
 	 (((C)->tags & (M)->tagset[(M)->seltags] || (C)->isglobal ||               \
@@ -70,6 +71,7 @@ struct Client {
 		overview_backup_geom, current,
 		drag_begin_geom; /* layout-relative, includes border */
 	Monitor *mon;
+	bool floating_layout_applied;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border; /* top, bottom, left, right */
 	struct wlr_scene_rect *droparea;
@@ -100,6 +102,7 @@ struct Client {
 	struct wl_listener destroy;
 	struct wl_listener set_title;
 	struct wl_listener fullscreen;
+	struct wl_listener request_move;
 #ifdef XWAYLAND
 	struct wl_listener activate;
 	struct wl_listener associate;
@@ -325,6 +328,10 @@ void client_set_minimized(Client *c, bool minimize_window);
 void client_set_maximized(Client *c, bool maximized);
 void client_set_tiled(Client *c, uint32_t edges);
 void client_sync_tiled_hint(Client *c);
+bool client_is_effectively_floating(const Client *c);
+bool client_is_effectively_floating_for_tag(const Client *c, const Monitor *m,
+											uint32_t tag);
+void client_restore_float_geometry(Client *c);
 
 int32_t client_should_ignore_focus(Client *c);
 int32_t client_is_x11_popup(Client *c);
@@ -383,6 +390,7 @@ void handle_client_commit(struct wl_listener *listener, void *data);
 void handle_client_unmap(struct wl_listener *listener, void *data);
 void handle_client_destroy(struct wl_listener *listener, void *data);
 void handle_client_request_fullscreen(struct wl_listener *listener, void *data);
+void handle_client_request_move(struct wl_listener *listener, void *data);
 void handle_client_request_maximize(struct wl_listener *listener, void *data);
 void handle_client_request_minimize(struct wl_listener *listener, void *data);
 void handle_client_set_title(struct wl_listener *listener, void *data);
