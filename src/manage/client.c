@@ -6,6 +6,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/draw/traffic-lights.h"
 #include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/text-input.h"
@@ -14,6 +15,7 @@
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
 #include "mango/manage/layer.h"
@@ -2080,6 +2082,10 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 		   handle_client_request_maximize);
 	LISTEN(&toplevel->events.request_minimize, &c->minimize,
 		   handle_client_request_minimize);
+	LISTEN(&toplevel->events.request_move, &c->request_move,
+		   handle_client_request_move);
+	LISTEN(&toplevel->events.request_resize, &c->request_resize,
+		   handle_client_request_resize);
 	LISTEN(&toplevel->events.set_title, &c->set_title, handle_client_set_title);
 }
 
@@ -2151,6 +2157,8 @@ void init_client_properties(Client *c) {
 	c->drag_to_tile = false;
 	c->scratchpad_switching_mon = false;
 	c->scratchpad_tagin = false;
+	c->user_minimized = false;
+	c->has_own_buttons = false;
 	c->fake_no_border = false;
 	c->focused_opacity = config.focused_opacity;
 	c->unfocused_opacity = config.unfocused_opacity;
@@ -2162,8 +2170,10 @@ void init_client_properties(Client *c) {
 	c->no_size_hint = 0;
 	c->no_radius = 0;
 	c->no_shadow = 0;
-	c->ignore_maximize = 1;
-	c->ignore_minimize = 1;
+	/* Windows with their own title bar (Chrome, GTK, Qt) need these to make
+	 * their minimize/maximize buttons work; rules can still set them to 1. */
+	c->ignore_maximize = 0;
+	c->ignore_minimize = 0;
 	c->iscustomsize = 0;
 	c->iscustompos = 0;
 	c->iscustom_scroller_proportion = 0;
@@ -2316,6 +2326,23 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 	c->tags = saved_tags;
 }
 
+/* Runs after wlroots rebuilt the surface node, which resets its size. Skipped
+ * while an animation owns the box. */
+static void handle_client_commit_fill(struct wl_listener *listener,
+									  void *data) {
+	Client *c = wl_container_of(listener, c, commit_fill);
+
+	if (!c->scene_surface || c->iskilling || !client_surface(c)->mapped)
+		return;
+
+	if (c->animation.running)
+		return;
+
+	struct wlr_box box;
+	client_get_clip(c, &box);
+	client_fill_surface_to_box(c, &box);
+}
+
 void handle_client_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	Client *c = wl_container_of(listener, c, map);
@@ -2332,6 +2359,17 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 			? wlr_scene_xdg_surface_create(c->scene, c->surface.xdg)
 			: wlr_scene_subsurface_tree_create(c->scene, client_surface(c));
 	mango_scene_node_set(&c->scene->node, c->type, c);
+
+	/*
+	 * Must be registered after wlr_scene_xdg_surface_create() so this listener
+	 * runs after wlroots' own commit callback, which resets the surface node
+	 * size that the fill sets. Registered with c->commit instead it would run
+	 * before wlroots and be overwritten.
+	 */
+	if (c->type == XDGShell) {
+		LISTEN(&client_surface(c)->events.commit, &c->commit_fill,
+			   handle_client_commit_fill);
+	}
 
 	client_init_xwayland(c);
 
@@ -2401,6 +2439,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	client_add_tab_bar(c);
 	client_add_jump_label_node(c);
 	client_add_dim_node(c);
+	client_add_traffic_lights(c);
 
 	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
@@ -2556,6 +2595,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	floating_note(c);
+	floating_flush();
 	c->iskilling = 1;
 	if (c->tab_prev || c->tab_next)
 		tab_detach_client(c);
@@ -2647,6 +2688,14 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	}
 #endif
 
+	if (c->type == XDGShell) {
+		if (c->commit_fill.link.prev && c->commit_fill.link.next &&
+			c->commit_fill.link.prev != &c->commit_fill.link) {
+			wl_list_remove(&c->commit_fill.link);
+			wl_list_init(&c->commit_fill.link);
+		}
+	}
+
 	if (client_is_unmanaged(c)) {
 #ifdef XWAYLAND
 		if (client_is_x11(c)) {
@@ -2706,6 +2755,7 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		mango_dim_node_destroy(c->dim_node);
 		c->dim_node = NULL;
 	}
+	client_remove_traffic_lights(c);
 
 	if (c->image_capture_scene) {
 		wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
@@ -2740,6 +2790,8 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 		wl_list_remove(&c->commit.link);
 		wl_list_remove(&c->map.link);
 		wl_list_remove(&c->unmap.link);
+		wl_list_remove(&c->request_move.link);
+		wl_list_remove(&c->request_resize.link);
 	}
 	/*
 	 * Decoration listeners are attached to deco->events; wlroots tears down
@@ -2766,9 +2818,52 @@ void handle_client_request_fullscreen(struct wl_listener *listener,
 	client_set_fullscreen(c, client_wants_fullscreen(c), true);
 }
 
+/* A window may only start a move/resize while the button that was pressed on
+ * it is still held. */
+static bool client_owns_pointer_press(Client *c) {
+	Client *fc = NULL;
+	struct wlr_surface *focused = server.seat->pointer_state.focused_surface;
+
+	return server.cursor_mode == CurPressed && focused &&
+		   toplevel_from_wlr_surface(focused, &fc, NULL) >= 0 && fc == c;
+}
+
+/* Windows with their own title bar (GTK headerbars, Chrome, Qt/Electron) ask
+ * the compositor to move them when that bar is dragged. */
+void handle_client_request_move(struct wl_listener *listener, void *data) {
+	Client *c = wl_container_of(listener, c, request_move);
+
+	if (c)
+		c->has_own_buttons = true;
+
+	if (!c || c->iskilling || server.session_locked ||
+		!client_owns_pointer_press(c))
+		return;
+
+	if (pointer_begin_move_resize(c, CurMove, server.cursor->x,
+								  server.cursor->y, 0))
+		wlr_seat_pointer_clear_focus(server.seat);
+}
+
+void handle_client_request_resize(struct wl_listener *listener, void *data) {
+	struct wlr_xdg_toplevel_resize_event *event = data;
+	Client *c = wl_container_of(listener, c, request_resize);
+
+	if (!c || c->iskilling || server.session_locked ||
+		!client_owns_pointer_press(c))
+		return;
+
+	if (pointer_begin_move_resize(c, CurResize, server.cursor->x,
+								  server.cursor->y, event->edges))
+		wlr_seat_pointer_clear_focus(server.seat);
+}
+
 void handle_client_request_maximize(struct wl_listener *listener, void *data) {
 
 	Client *c = wl_container_of(listener, c, maximize);
+
+	if (pointer_button_recent(c))
+		c->has_own_buttons = true;
 
 	if (!c || !c->mon || c->iskilling || c->ignore_maximize ||
 		client_is_parked(c))
@@ -2789,12 +2884,15 @@ void handle_client_request_minimize(struct wl_listener *listener, void *data) {
 
 	Client *c = wl_container_of(listener, c, minimize);
 
+	if (pointer_button_recent(c))
+		c->has_own_buttons = true;
+
 	if (!c || !c->mon || c->iskilling || c->isminimized || client_is_parked(c))
 		return;
 
 	if (client_request_minimize(c, data) && !c->ignore_minimize) {
 		if (!c->isminimized)
-			set_minimized(c);
+			minimize_client(c);
 		client_set_minimized(c, true);
 	} else {
 		if (c->isminimized)
@@ -3650,6 +3748,48 @@ void set_minimized(Client *c) {
 	wl_list_insert(server.clients.prev, &c->link); // Inserts it at the tail.
 }
 
+/* Minimize by the user (button, dispatch, taskbar): plays the close animation
+ * instead of the scratchpad slide, and the open animation when restored. */
+void minimize_client(Client *c) {
+	if (!c || !c->mon || c == server.grab_client)
+		return;
+
+	/* Only in the floating layout; tiling keeps its own animations. */
+	if (config.animations && !c->no_animation && !client_is_parked(c) &&
+		floating_layout_active(c->mon) && !c->is_clip_to_hide &&
+		!c->isminimized && VISIBLEON(c, c->mon)) {
+		c->user_minimized = true;
+		/* Scale into the dock icon when it told us where it is. */
+		c->minimizing = c->has_minimize_rect;
+		init_fadeout_client(c);
+		c->minimizing = false;
+	} else {
+		c->user_minimized = false;
+	}
+	set_minimized(c);
+}
+
+/* A user-minimized window is shown again: start its open animation. */
+void client_play_restore_animation(Client *c) {
+	if (!c || !c->user_minimized || !c->mon)
+		return;
+
+	c->user_minimized = false;
+	if (!client_animations_enabled(c) || !floating_layout_active(c->mon))
+		return;
+
+	c->animation.tagining = false;
+	c->animation.tagouting = false;
+	c->animation.tagouted = false;
+	c->animation.tag_from_rule = false;
+	c->animation.running = false;
+	c->is_pending_open_animation = true;
+	c->restore_from_rect = c->has_minimize_rect;
+	client_update_visibility(c);
+	resize(c, c->geom, (ResizeOpts){.interact = 0, .skip_ov_enter_anim = true});
+	c->restore_from_rect = false; /* never let it leak into a later open */
+}
+
 void unminimize(Client *c) {
 	if (!c || !c->mon)
 		return;
@@ -3742,6 +3882,8 @@ void client_pending_maximized_state(Client *c, int32_t ismaximized) {
 
 void client_pending_minimized_state(Client *c, int32_t isminimized) {
 	c->isminimized = isminimized;
+	if (!isminimized && c->user_minimized && c->mon && VISIBLEON(c, c->mon))
+		client_play_restore_animation(c);
 	if (c->foreign_toplevel && !c->iskilling)
 		wlr_foreign_toplevel_handle_v1_set_minimized(c->foreign_toplevel,
 													 isminimized);

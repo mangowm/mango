@@ -85,6 +85,7 @@ struct Client {
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoDimNode *dim_node;
+	MangoDimNode *traffic_light[3]; /* close, minimize, maximize */
 	struct wl_list link;
 	struct wl_list flink;
 	struct wl_list fadeout_link;
@@ -93,9 +94,12 @@ struct Client {
 		struct wlr_xwayland_surface *xwayland;
 	} surface;
 	struct wl_listener commit;
+	struct wl_listener commit_fill;
 	struct wl_listener map;
 	struct wl_listener maximize;
 	struct wl_listener minimize;
+	struct wl_listener request_move;
+	struct wl_listener request_resize;
 	struct wl_listener unmap;
 	struct wl_listener destroy;
 	struct wl_listener set_title;
@@ -130,6 +134,8 @@ struct Client {
 		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
 		vrr_only_fullscreen, force_render, activation_bypass;
 	int32_t ismaximizescreen;
+	/* floating layout: forced float, restored from floating.txt */
+	int32_t float_forced, float_restored;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
 		fullscreen_backup_h;
@@ -146,6 +152,7 @@ struct Client {
 	struct wl_listener foreign_close_request;
 	struct wl_listener foreign_destroy;
 	struct wl_listener foreign_minimize_request;
+	struct wl_listener foreign_set_rectangle;
 	struct wl_listener foreign_maximize_request;
 	struct wl_listener set_decoration_mode;
 	struct wl_listener destroy_decoration;
@@ -186,6 +193,18 @@ struct Client {
 	bool drag_to_tile;
 	bool scratchpad_switching_mon;
 	bool scratchpad_tagin;
+	bool has_own_buttons; /* asked to move/minimize/maximize: draws its own */
+	bool user_minimized;  /* minimized by the user, not a scratchpad hide */
+	struct wlr_box
+		minimize_rect; /* dock icon box from set_rectangle (layout) */
+	bool has_minimize_rect;
+	bool minimizing;		/* minimize_client() is taking the snapshot */
+	bool restore_from_rect; /* next open animation grows out of minimize_rect */
+	/* Fade-out snapshots only: scale-into-the-dock minimize animation. */
+	bool minimize_scale;
+	struct wlr_box minimize_from;
+	struct MinimizeSnapItem *minimize_items;
+	int32_t minimize_item_count;
 	bool fake_no_border;
 	int32_t no_focus;
 	int32_t no_fade_in;
@@ -383,6 +402,8 @@ void handle_client_commit(struct wl_listener *listener, void *data);
 void handle_client_unmap(struct wl_listener *listener, void *data);
 void handle_client_destroy(struct wl_listener *listener, void *data);
 void handle_client_request_fullscreen(struct wl_listener *listener, void *data);
+void handle_client_request_move(struct wl_listener *listener, void *data);
+void handle_client_request_resize(struct wl_listener *listener, void *data);
 void handle_client_request_maximize(struct wl_listener *listener, void *data);
 void handle_client_request_minimize(struct wl_listener *listener, void *data);
 void handle_client_set_title(struct wl_listener *listener, void *data);
@@ -415,6 +436,8 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 								bool rearrange);
 void reset_maximizescreen_size(Client *c);
 void set_minimized(Client *c);
+void minimize_client(Client *c);
+void client_play_restore_animation(Client *c);
 void unminimize(Client *c);
 void exit_scroller_stack(Client *c);
 void clear_fullscreen_and_maximized_state(Monitor *m);

@@ -2,8 +2,10 @@
 #include "mango/animation/common.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
+#include "mango/draw/traffic-lights.h"
 #include "mango/draw/title-message-bar.h"
 #include "mango/layout/dwindle.h"
+#include "mango/layout/floating.h"
 #include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
@@ -166,6 +168,14 @@ void set_overview_enter_animation(Client *c) {
 	c->animainit_geom.y = geo.y + (geo.height - c->animainit_geom.height) / 2;
 }
 
+/* Uniform scale that fits a window of from_w x from_h inside the dock icon. */
+static double minimize_end_scale(int32_t from_w, int32_t from_h,
+								 const struct wlr_box *rect) {
+	double s =
+		MANGO_MIN((double)rect->width / from_w, (double)rect->height / from_h);
+	return MANGO_MAX(MANGO_MIN(s, 1.0), 0.02);
+}
+
 void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t slide_direction;
 	int32_t horizontal, horizontal_value;
@@ -173,6 +183,27 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	int32_t special_direction;
 	int32_t center_x, center_y;
 	int32_t type = client_open_animation_type(c);
+
+	/* Restored from the dock: grow out of the icon, mirroring the minimize. */
+	if (c->restore_from_rect) {
+		c->restore_from_rect = false;
+		if (c->has_minimize_rect && c->animation.duration != 0 &&
+			geo.width > 0 && geo.height > 0) {
+			double s =
+				minimize_end_scale(geo.width, geo.height, &c->minimize_rect);
+			c->animainit_geom.width =
+				MANGO_MAX((int32_t)lround(geo.width * s), 1);
+			c->animainit_geom.height =
+				MANGO_MAX((int32_t)lround(geo.height * s), 1);
+			c->animainit_geom.x = c->minimize_rect.x +
+								  c->minimize_rect.width / 2 -
+								  c->animainit_geom.width / 2;
+			c->animainit_geom.y = c->minimize_rect.y +
+								  c->minimize_rect.height / 2 -
+								  c->animainit_geom.height / 2;
+			return;
+		}
+	}
 
 	if (type == ANIM_TYPE_NONE || c->animation.duration == 0) {
 		c->animainit_geom = geo;
@@ -1005,6 +1036,58 @@ void client_set_drop_area(Client *c) {
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
 }
+
+static void fill_main_surface_buffer(struct wlr_scene_buffer *buffer,
+									 int32_t sx, int32_t sy, void *data) {
+	struct wlr_box *box = data;
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+
+	if (scene_surface == NULL)
+		return;
+
+	struct wlr_surface *surface = scene_surface->surface;
+	if (wlr_subsurface_try_from_wlr_surface(surface) != NULL)
+		return;
+	if (wlr_xdg_popup_try_from_wlr_surface(surface) != NULL)
+		return;
+	if (box->width <= 0 || box->height <= 0)
+		return;
+
+	/*
+	 * Stretch only the window-geometry part of the buffer. Clients with CSD
+	 * (Chrome, PWAs) have a surface larger than their geometry (shadow
+	 * margin); stretching the whole buffer into the geometry-sized box
+	 * squeezes the content and shifts it by the margin.
+	 */
+	struct wlr_xdg_surface *xdg = wlr_xdg_surface_try_from_wlr_surface(surface);
+	if (xdg && xdg->geometry.width > 0 && xdg->geometry.height > 0) {
+		double s = surface->current.scale > 0 ? surface->current.scale : 1;
+		struct wlr_fbox src = {
+			.x = xdg->geometry.x * s,
+			.y = xdg->geometry.y * s,
+			.width = xdg->geometry.width * s,
+			.height = xdg->geometry.height * s,
+		};
+		wlr_scene_buffer_set_source_box(buffer, &src);
+	} else {
+		wlr_scene_buffer_set_source_box(buffer, NULL);
+	}
+	wlr_scene_buffer_set_dest_size(buffer, box->width, box->height);
+}
+
+/* Stretch the client's last frame into the box it occupies, so a window whose
+ * client has not repainted yet does not trail its own frame. */
+void client_fill_surface_to_box(Client *c, const struct wlr_box *box) {
+	if (client_is_x11(c) || c->overview_scene_surface ||
+		c->animation.tagining || c->animation.tagouting ||
+		c->animation.tagouted)
+		return;
+
+	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+								   fill_main_surface_buffer, (void *)box);
+}
+
 void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
@@ -1033,6 +1116,7 @@ void client_set_clip(Client *c, float factor) {
 		client_draw_blur(c, surface_clip_offset);
 		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
+		client_draw_traffic_lights(c);
 
 		overview_layout_card(c);
 		if (config.title_message_bar_height > 0 && is_overcircle_mode(c->mon) &&
@@ -1070,6 +1154,7 @@ void client_set_clip(Client *c, float factor) {
 		client_draw_blur(c, surface_clip_offset);
 		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
+		client_draw_traffic_lights(c);
 
 		should_render_client_surface =
 			clip_box.width > 0 && clip_box.height > 0;
@@ -1093,6 +1178,8 @@ void client_set_clip(Client *c, float factor) {
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
 										  current_corner_location, true});
+		if (c != server.grab_client)
+			client_fill_surface_to_box(c, &clip_box);
 		return;
 	}
 
@@ -1121,6 +1208,7 @@ void client_set_clip(Client *c, float factor) {
 	client_draw_tabbar(c, offsets);
 	client_draw_shield(c, surface_clip_offset);
 	client_draw_dim(c, surface_clip_offset);
+	client_draw_traffic_lights(c);
 	client_draw_blur(c, surface_clip_offset);
 	/*
 	 * During animation, sync the X11 root surface dest_size / clipping
@@ -1170,6 +1258,137 @@ void client_set_clip(Client *c, float factor) {
 	}
 
 	buffer_set_effect(c, buffer_data);
+
+	if (factor == 1.0 && c != server.grab_client)
+		client_fill_surface_to_box(c, &clip_box);
+}
+
+/* One node of a minimize snapshot, flattened under the snapshot root. */
+struct MinimizeSnapItem {
+	struct wlr_scene_node *node;
+	int32_t x, y, w, h; /* relative to the window's top-left corner */
+};
+
+static bool minimize_items_push(Client *fc, struct wlr_scene_node *node,
+								int32_t w, int32_t h) {
+	int32_t ax, ay;
+	if (w <= 0 || h <= 0 || !wlr_scene_node_coords(node, &ax, &ay))
+		return true;
+
+	struct MinimizeSnapItem *items = realloc(
+		fc->minimize_items, sizeof(*items) * (fc->minimize_item_count + 1));
+	if (!items)
+		return false;
+	fc->minimize_items = items;
+	items[fc->minimize_item_count++] = (struct MinimizeSnapItem){
+		.node = node,
+		.x = ax - fc->minimize_from.x,
+		.y = ay - fc->minimize_from.y,
+		.w = w,
+		.h = h,
+	};
+	return true;
+}
+
+/* Collect the drawable nodes of a snapshot in painting order. Anything that
+ * cannot be scaled (shadow, blur) is hidden. */
+static bool minimize_collect_nodes(Client *fc, struct wlr_scene_tree *tree) {
+	struct wlr_scene_node *child;
+	wl_list_for_each(child, &tree->children, link) {
+		if (!child->enabled)
+			continue;
+		switch (child->type) {
+		case WLR_SCENE_NODE_TREE:
+			if (!minimize_collect_nodes(fc, wlr_scene_tree_from_node(child)))
+				return false;
+			break;
+		case WLR_SCENE_NODE_BUFFER: {
+			struct wlr_scene_buffer *sb = wlr_scene_buffer_from_node(child);
+			int32_t w = sb->dst_width, h = sb->dst_height;
+			if ((w <= 0 || h <= 0) && sb->buffer) {
+				w = sb->buffer->width;
+				h = sb->buffer->height;
+			}
+			if (!minimize_items_push(fc, child, w, h))
+				return false;
+			break;
+		}
+		case WLR_SCENE_NODE_RECT: {
+			struct wlr_scene_rect *r = wlr_scene_rect_from_node(child);
+			if (!minimize_items_push(fc, child, r->width, r->height))
+				return false;
+			break;
+		}
+		default:
+			wlr_scene_node_set_enabled(child, false);
+			break;
+		}
+	}
+	return true;
+}
+
+/* Prepare a fade-out snapshot to be scaled into the dock icon rectangle. */
+static void fadeout_setup_minimize_scale(Client *fc, const Client *src) {
+	fc->minimize_from = src->animation.current;
+	fc->minimize_rect = src->minimize_rect;
+	fc->minimize_items = NULL;
+	fc->minimize_item_count = 0;
+
+	if (fc->minimize_from.width <= 0 || fc->minimize_from.height <= 0)
+		return;
+
+	if (!minimize_collect_nodes(fc, fc->scene) ||
+		fc->minimize_item_count == 0) {
+		free(fc->minimize_items);
+		fc->minimize_items = NULL;
+		fc->minimize_item_count = 0;
+		return;
+	}
+
+	/* Flatten: every node directly under the root, which stays at 0,0, so
+	 * the tick can place them in absolute layout coordinates. */
+	for (int32_t i = 0; i < fc->minimize_item_count; i++)
+		wlr_scene_node_reparent(fc->minimize_items[i].node, fc->scene);
+	wlr_scene_node_set_position(&fc->scene->node, 0, 0);
+	fc->minimize_scale = true;
+}
+
+static void fadeout_minimize_scale_tick(Client *c, double factor) {
+	const struct wlr_box *from = &c->minimize_from;
+	const struct wlr_box *to = &c->minimize_rect;
+
+	/* Uniform scale that fits the window inside the icon. */
+	double end_scale = minimize_end_scale(from->width, from->height, to);
+	double scale = 1.0 + (end_scale - 1.0) * factor;
+
+	double cx0 = from->x + from->width / 2.0;
+	double cy0 = from->y + from->height / 2.0;
+	double cx1 = to->x + to->width / 2.0;
+	double cy1 = to->y + to->height / 2.0;
+	double cx = cx0 + (cx1 - cx0) * factor;
+	double cy = cy0 + (cy1 - cy0) * factor;
+
+	for (int32_t i = 0; i < c->minimize_item_count; i++) {
+		struct MinimizeSnapItem *it = &c->minimize_items[i];
+		int32_t w = MANGO_MAX((int32_t)lround(it->w * scale), 1);
+		int32_t h = MANGO_MAX((int32_t)lround(it->h * scale), 1);
+		int32_t x = (int32_t)lround(cx + (it->x - from->width / 2.0) * scale);
+		int32_t y = (int32_t)lround(cy + (it->y - from->height / 2.0) * scale);
+
+		wlr_scene_node_set_position(it->node, x, y);
+		if (it->node->type == WLR_SCENE_NODE_BUFFER)
+			wlr_scene_buffer_set_dest_size(wlr_scene_buffer_from_node(it->node),
+										   w, h);
+		else if (it->node->type == WLR_SCENE_NODE_RECT)
+			wlr_scene_rect_set_size(wlr_scene_rect_from_node(it->node), w, h);
+	}
+
+	c->animation.current = (struct wlr_box){
+		.x = (int32_t)lround(cx - from->width * scale / 2.0),
+		.y = (int32_t)lround(cy - from->height * scale / 2.0),
+		.width = (int32_t)lround(from->width * scale),
+		.height = (int32_t)lround(from->height * scale),
+	};
 }
 
 void fadeout_client_animation_next_tick(Client *c) {
@@ -1197,14 +1416,18 @@ void fadeout_client_animation_next_tick(Client *c) {
 	int32_t y = c->animation.initial.y +
 				(c->current.y - c->animation.initial.y) * factor;
 
-	wlr_scene_node_set_position(&c->scene->node, x, y);
+	if (c->minimize_scale) {
+		fadeout_minimize_scale_tick(c, factor);
+	} else {
+		wlr_scene_node_set_position(&c->scene->node, x, y);
 
-	c->animation.current = (struct wlr_box){
-		.x = x,
-		.y = y,
-		.width = width,
-		.height = height,
-	};
+		c->animation.current = (struct wlr_box){
+			.x = x,
+			.y = y,
+			.width = width,
+			.height = height,
+		};
+	}
 
 	double opacity_eased_progress =
 		find_animation_curve_at(animation_passed, OPAFADEOUT);
@@ -1216,7 +1439,7 @@ void fadeout_client_animation_next_tick(Client *c) {
 		wlr_scene_node_for_each_buffer(&c->scene->node,
 									   scene_buffer_apply_opacity, &opacity);
 
-	if (c->mon) {
+	if (c->mon && !c->minimize_scale) {
 		bool scaling = client_close_animation_type(c) == ANIM_TYPE_ZOOM;
 		scene_snapshot_clip_to_box(c->scene, &c->mon->m, scaling, width,
 								   height);
@@ -1225,6 +1448,7 @@ void fadeout_client_animation_next_tick(Client *c) {
 	if (animation_passed >= 1.0) {
 		wl_list_remove(&c->fadeout_link);
 		wlr_scene_node_destroy(&c->scene->node);
+		free(c->minimize_items);
 		free(c);
 	}
 }
@@ -1304,7 +1528,7 @@ void init_fadeout_client(Client *c) {
 	if (c->shield_when_capture && server.active_capture_count > 0)
 		return;
 
-	if (client_close_animation_type(c) == ANIM_TYPE_NONE)
+	if (client_close_animation_type(c) == ANIM_TYPE_NONE && !c->minimizing)
 		return;
 
 	Client *fadeout_client = ecalloc(1, sizeof(*fadeout_client));
@@ -1379,6 +1603,9 @@ void init_fadeout_client(Client *c) {
 		fadeout_client->current.height =
 			fadeout_client->geom.height * config.zoom_end_ratio;
 	}
+
+	if (c->minimizing && c->has_minimize_rect && !c->ov_card_tree)
+		fadeout_setup_minimize_scale(fadeout_client, c);
 
 	fadeout_client->animation.time_started = get_now_in_ms();
 	wlr_scene_node_set_enabled(&fadeout_client->scene->node, true);
@@ -1553,6 +1780,10 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 			c->geom.y = anchor_bottom - c->geom.height;
 	}
 
+	floating_note(c);
+	if (!opts.interact)
+		floating_flush();
+
 	if (!c->is_pending_open_animation)
 		c->animation.begin_fade_in = false;
 
@@ -1627,12 +1858,15 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		struct ivec2 surface_clip_offset = clip_to_hide(c, &clip, offsets);
 		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
+		client_draw_traffic_lights(c);
 		client_draw_blur(c, surface_clip_offset);
 
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip);
-		else
+		else {
 			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
+			client_fill_surface_to_box(c, &clip);
+		}
 		return;
 	}
 
