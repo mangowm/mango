@@ -1668,7 +1668,8 @@ int32_t toggle_render_border(const Arg *arg) {
 
 int32_t toggle_scratchpad(const Arg *arg) {
 	Client *c = NULL;
-	bool hit = false;
+	Client *shown = NULL;
+	Client *hidden = NULL;
 	Client *tmp = NULL;
 
 	if (server.selected_monitor && server.selected_monitor->isoverview)
@@ -1689,11 +1690,16 @@ int32_t toggle_scratchpad(const Arg *arg) {
 		if (c->isnamedscratchpad)
 			continue;
 
-		if (hit)
-			continue;
-
-		hit = switch_scratchpad_client_state(c);
+		if (!shown && SCRATCHPAD_SHOWN(c))
+			shown = c;
+		else if (c->is_in_scratchpad)
+			hidden = c; // LIFO insertion puts the oldest scratchpad last.
 	}
+
+	if (shown)
+		switch_scratchpad_client_state(shown);
+	else if (hidden)
+		switch_scratchpad_client_state(hidden);
 	return 0;
 }
 

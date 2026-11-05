@@ -3647,7 +3647,7 @@ void set_minimized(Client *c) {
 													 false);
 
 	wl_list_remove(&c->link); // Removes it from its previous position.
-	wl_list_insert(server.clients.prev, &c->link); // Inserts it at the tail.
+	wl_list_insert(&server.clients, &c->link); // Inserts it at the tail.
 }
 
 void unminimize(Client *c) {
