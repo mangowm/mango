@@ -66,7 +66,8 @@ int32_t keyboard_repeat(void *data);
 bool is_keyboard_shortcut_inhibitor(struct wlr_surface *surface);
 
 int32_t keyboard_check_keybinding(uint32_t state, bool locked, uint32_t mods,
-								  xkb_keysym_t sym, uint32_t keycode);
+								  xkb_keysym_t sym, uint32_t keycode,
+								  bool is_repeat);
 
 void keyboard_cancel_pending_release_bind(void);
 

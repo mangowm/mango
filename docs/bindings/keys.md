@@ -23,6 +23,7 @@ bind[flags]=MODIFIERS,KEY,COMMAND,PARAMETERS
 - `r`: Triggers on key release instead of press.
 - `p`: Pass key event to client.
 - `c`: allow keybind conflict(need set in all conflict key).
+- `n`: Fire once per press and ignore key repeat while the key is held (other binds keep repeating at `repeat_rate` / `repeat_delay`).
 
 > **Info:** `c` has no effect on the `reload_config` and `load_config_file` dispatches, which always stop the current key event.
 
@@ -48,6 +49,9 @@ bind=alt,shift_l,switch_keyboard_layout
 # Allow keybind conflict
 bindc=SUPER,a,resizewin,+10,0
 bindc=SUPER,a,centerwin
+
+# Fire once per press, ignore key repeat
+bindn=SUPER,Return,spawn,foot
 ```
 
 ## Key Modes (Submaps)
