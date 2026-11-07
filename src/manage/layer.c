@@ -336,7 +336,9 @@ bool popup_unconstrain(Popup *popup) {
 		return true;
 	}
 
-	struct wlr_box usable = type == LayerShell ? l->mon->m : c->mon->w;
+	// a fullscreen client's popups can legitimately cover an exclusive panel
+	struct wlr_box usable =
+		(type == LayerShell || c->isfullscreen) ? c->mon->m : c->mon->w;
 
 	int lx, ly;
 	struct wlr_box constraint_box;
