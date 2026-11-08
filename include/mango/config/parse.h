@@ -5,6 +5,7 @@
 #include "mango/dispatch/bind.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <wlr/types/wlr_switch.h>
 #include <xkbcommon/xkbcommon.h>
 
 #include "mango/draw/text-node.h"
@@ -29,9 +30,8 @@
 	if (rule->prop > 0.0f)                                                     \
 	obj->prop = rule->prop
 
-/* Tag animation / folding / global switch state. */
+/* Tag animation / global switch state. */
 enum { VERTICAL, HORIZONTAL };
-enum { UNFOLD, FOLD, INVALIDFOLD };
 enum { STATE_UNSPECIFIED = 0, STATE_ENABLED, STATE_DISABLED };
 
 enum animation_type {
@@ -277,7 +277,12 @@ typedef struct {
 } GestureBinding;
 
 typedef struct {
-	uint32_t fold;
+	enum wlr_switch_type type;
+	enum wlr_switch_state state;
+} SwitchAction;
+
+typedef struct {
+	SwitchAction switch_action;
 	int32_t (*func)(const Arg *);
 	Arg arg;
 	char mode[28];
@@ -615,7 +620,7 @@ int32_t parse_monitor_arg(const char *str);
 
 int32_t parse_force(const char *str);
 
-int32_t parse_fold_state(const char *str);
+bool parse_switch_action(const char *str, SwitchAction *action);
 
 int64_t parse_color(const char *hex_str);
 
