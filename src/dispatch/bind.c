@@ -248,14 +248,6 @@ int32_t focus_direction(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
 
-	Client *sel = server.selected_monitor->sel;
-	if (is_monocle_layout(server.selected_monitor) && sel && !sel->isfloating &&
-		(arg->i == LEFT || arg->i == RIGHT)) {
-		Arg a = *arg;
-		a.i = (arg->i == LEFT) ? PREV : NEXT;
-		return focus_stack(&a);
-	}
-
 	Client *c = NULL;
 	c = direction_select(arg);
 
