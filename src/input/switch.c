@@ -20,10 +20,12 @@ void handle_switch_toggle(struct wl_listener *listener, void *data) {
 
 	for (ji = 0; ji < config.switch_bindings_count; ji++) {
 		s = &config.switch_bindings[ji];
+		/* One switch device may report lid, tablet mode, and keypad events. */
 		if ((s->iscommonmode ||
 			 (s->isdefaultmode && server.key_mode.isdefault) ||
 			 (strcmp(server.key_mode.mode, s->mode) == 0)) &&
-			event->switch_state == s->fold && s->func) {
+			event->switch_type == s->switch_action.type &&
+			event->switch_state == s->switch_action.state && s->func) {
 			s->func(&s->arg);
 			return;
 		}
