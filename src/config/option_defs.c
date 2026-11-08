@@ -2211,7 +2211,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		binding->line_number = line_number;
 		binding->file_index = config_current_file_index();
 
-		char fold_str[256], func_name[256],
+		char switch_state_str[256], func_name[256],
 			arg_value[256] = "0\0", arg_value2[256] = "0\0",
 			arg_value3[256] = "0\0", arg_value4[256] = "0\0",
 			arg_value5[256] = "0\0";
@@ -2219,15 +2219,15 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				   "%255[^,],%255[^,],%255[^,],%255[^,],%255[^,],%255[^"
 				   ",],%255["
 				   "^\n]",
-				   fold_str, func_name, arg_value, arg_value2, arg_value3,
-				   arg_value4, arg_value5) < 3) {
+				   switch_state_str, func_name, arg_value, arg_value2,
+				   arg_value3, arg_value4, arg_value5) < 3) {
 			mango_error(false, WLR_ERROR,
 						"Invalid switchbind "
 						"format: \033[1m\033[31m%s\033[0m\n",
 						value);
 			return false;
 		}
-		trim_whitespace(fold_str);
+		trim_whitespace(switch_state_str);
 		trim_whitespace(func_name);
 		trim_whitespace(arg_value);
 		trim_whitespace(arg_value2);
@@ -2235,7 +2235,13 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		trim_whitespace(arg_value4);
 		trim_whitespace(arg_value5);
 
-		binding->fold = parse_fold_state(fold_str);
+		if (!parse_switch_action(switch_state_str, &binding->switch_action)) {
+			mango_error(false, WLR_ERROR,
+						"Invalid switch state in switchbind: "
+						"\033[1m\033[31m%s\033[0m\n",
+						switch_state_str);
+			return false;
+		}
 		binding->func =
 			parse_func_name(func_name, &binding->arg, arg_value, arg_value2,
 							arg_value3, arg_value4, arg_value5);

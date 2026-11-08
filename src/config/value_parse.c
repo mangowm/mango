@@ -293,24 +293,47 @@ int32_t parse_force(const char *str) {
 	}
 }
 
-int32_t parse_fold_state(const char *str) {
-	// Converts the input string to lowercase.
-	char lowerStr[10];
-	int32_t i = 0;
-	while (str[i] && i < 9) {
-		lowerStr[i] = tolower(str[i]);
-		i++;
+bool parse_switch_action(const char *str, SwitchAction *action) {
+	if (!str || !action) {
+		return false;
 	}
-	lowerStr[i] = '\0';
 
-	// Returns the matching enum value from the lowercased string.
-	if (strcmp(lowerStr, "fold") == 0) {
-		return FOLD;
-	} else if (strcmp(lowerStr, "unfold") == 0) {
-		return UNFOLD;
-	} else {
-		return INVALIDFOLD;
+	char normalized[32];
+	size_t len = strlen(str);
+	if (len == 0 || len >= sizeof(normalized)) {
+		return false;
 	}
+
+	/* Accept both Mango's underscore spelling and Sway-style "type:state". */
+	for (size_t i = 0; i <= len; i++) {
+		normalized[i] =
+			str[i] == ':' ? '_' : (char)tolower((unsigned char)str[i]);
+	}
+
+	if (strcmp(normalized, "fold") == 0 || strcmp(normalized, "lid_on") == 0) {
+		action->type = WLR_SWITCH_TYPE_LID;
+		action->state = WLR_SWITCH_STATE_ON;
+	} else if (strcmp(normalized, "unfold") == 0 ||
+			   strcmp(normalized, "lid_off") == 0) {
+		action->type = WLR_SWITCH_TYPE_LID;
+		action->state = WLR_SWITCH_STATE_OFF;
+	} else if (strcmp(normalized, "tablet_on") == 0) {
+		action->type = WLR_SWITCH_TYPE_TABLET_MODE;
+		action->state = WLR_SWITCH_STATE_ON;
+	} else if (strcmp(normalized, "tablet_off") == 0) {
+		action->type = WLR_SWITCH_TYPE_TABLET_MODE;
+		action->state = WLR_SWITCH_STATE_OFF;
+	} else if (strcmp(normalized, "keypad_slide_on") == 0) {
+		action->type = WLR_SWITCH_TYPE_KEYPAD_SLIDE;
+		action->state = WLR_SWITCH_STATE_ON;
+	} else if (strcmp(normalized, "keypad_slide_off") == 0) {
+		action->type = WLR_SWITCH_TYPE_KEYPAD_SLIDE;
+		action->state = WLR_SWITCH_STATE_OFF;
+	} else {
+		return false;
+	}
+
+	return true;
 }
 
 uint32_t parse_tag_mask(char *str) {

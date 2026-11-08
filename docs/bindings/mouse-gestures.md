@@ -108,15 +108,29 @@ gesturebind=none,down,4,toggleoverview
 
 ## Switch Bindings
 
-Trigger actions on hardware events like laptop lid open/close.
+Trigger actions on hardware switch events such as lid open/close, tablet mode,
+and keypad slide.
 
 ### Syntax
 
 ```ini
-switchbind=FOLD_STATE,COMMAND,PARAMETERS
+switchbind=SWITCH_STATE,COMMAND,PARAMETERS
 ```
 
-- **Fold State**: `fold` (lid closed), `unfold` (lid opened)
+| Switch state | Meaning |
+| :--- | :--- |
+| `lid_on`, `fold` | Lid closed (`fold` is the legacy alias) |
+| `lid_off`, `unfold` | Lid opened (`unfold` is the legacy alias) |
+| `tablet_on` | Convertible switched to tablet mode |
+| `tablet_off` | Convertible left tablet mode |
+| `keypad_slide_on` | Sliding keypad exposed |
+| `keypad_slide_off` | Sliding keypad hidden |
+
+The Sway-style spellings `lid:on`, `lid:off`, `tablet:on`, `tablet:off`,
+`keypad_slide:on`, and `keypad_slide:off` are also accepted.
+
+Each binding matches both the switch type and its state. In particular, a
+`fold` or `lid_on` action is not run when a convertible enters tablet mode.
 
 > **Warning:** Disable system lid handling in `/etc/systemd/logind.conf`:
 >
@@ -131,4 +145,6 @@ switchbind=FOLD_STATE,COMMAND,PARAMETERS
 ```ini
 switchbind=fold,spawn,swaylock -f -c 000000
 switchbind=unfold,spawn,wlr-dpms on
+switchbind=tablet_on,spawn,on-screen-keyboard
+switchbind=tablet_off,spawn,killall on-screen-keyboard
 ```
