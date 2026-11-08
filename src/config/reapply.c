@@ -32,6 +32,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/zoom.h"
 #include "mango/switcher/switcher.h"
 #include <scenefx/types/wlr_scene.h>
 #include <unistd.h>
@@ -170,6 +171,7 @@ void reset_option(void) {
 
 	reapply_tagrule();
 	reapply_monitor_rules();
+	screen_zoom_reapply();
 
 	/* A global reload must re-apply every monitor, not just the selected one:
 	 * layout-affecting options such as always_show_group_bar reserve or release

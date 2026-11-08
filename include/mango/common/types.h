@@ -112,6 +112,7 @@ struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_surface_v1;
 struct wlr_session_lock_v1;
 struct wlr_surface;
+struct wlr_swapchain;
 struct wlr_switch;
 struct wlr_tablet_manager_v2;
 struct wlr_tablet_v2_tablet;

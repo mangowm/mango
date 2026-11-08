@@ -21,6 +21,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/zoom.h"
 #include "mango/overview/overview.h"
 #include <fcntl.h>
 #include <unistd.h>
@@ -2297,6 +2298,30 @@ int32_t zoom(const Arg *arg) {
 
 	client_focus(sel, 1);
 	arrange(server.selected_monitor, false, false);
+	return 0;
+}
+
+int32_t screen_zoom_in(const Arg *arg) {
+	screen_zoom_by(config.screen_zoom_step);
+	return 0;
+}
+
+int32_t screen_zoom_out(const Arg *arg) {
+	screen_zoom_by(-config.screen_zoom_step);
+	return 0;
+}
+
+int32_t screen_zoom(const Arg *arg) {
+	/* The sign lives in the argument, so one command serves both wheel
+	 * directions: axisbind=SUPER,UP,screen_zoom,0.25 zooms in and
+	 * axisbind=SUPER,DOWN,screen_zoom,-0.25 zooms out. Without an argument
+	 * it steps in by screen_zoom_step, like screen_zoom_in. */
+	screen_zoom_by(arg->f != 0.0f ? arg->f : config.screen_zoom_step);
+	return 0;
+}
+
+int32_t screen_zoom_reset(const Arg *arg) {
+	screen_zoom_off();
 	return 0;
 }
 

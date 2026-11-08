@@ -538,6 +538,15 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		(*arg).f = atof(arg_value);
 	} else if (strcmp(func_name, "zoom") == 0) {
 		func = zoom;
+	} else if (strcmp(func_name, "screen_zoom_in") == 0) {
+		func = screen_zoom_in;
+	} else if (strcmp(func_name, "screen_zoom_out") == 0) {
+		func = screen_zoom_out;
+	} else if (strcmp(func_name, "screen_zoom") == 0) {
+		func = screen_zoom;
+		(*arg).f = atof(arg_value);
+	} else if (strcmp(func_name, "screen_zoom_reset") == 0) {
+		func = screen_zoom_reset;
 	} else if (strcmp(func_name, "exchange_client") == 0) {
 		func = exchange_client;
 		(*arg).i = parse_direction(arg_value);
