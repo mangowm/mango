@@ -114,8 +114,10 @@ and keypad slide.
 ### Syntax
 
 ```ini
-switchbind=SWITCH_STATE,COMMAND,PARAMETERS
+switchbind=SWITCH_STATE,COMMAND[,PARAMETERS]
 ```
+
+`PARAMETERS` is optional for commands that do not require an argument.
 
 | Switch state | Meaning |
 | :--- | :--- |

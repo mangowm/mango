@@ -2220,7 +2220,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				   ",],%255["
 				   "^\n]",
 				   switch_state_str, func_name, arg_value, arg_value2,
-				   arg_value3, arg_value4, arg_value5) < 3) {
+				   arg_value3, arg_value4, arg_value5) < 2) {
 			mango_error(false, WLR_ERROR,
 						"Invalid switchbind "
 						"format: \033[1m\033[31m%s\033[0m\n",
