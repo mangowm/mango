@@ -310,11 +310,10 @@ bool parse_switch_action(const char *str, SwitchAction *action) {
 			str[i] == ':' ? '_' : (char)tolower((unsigned char)str[i]);
 	}
 
-	if (strcmp(normalized, "fold") == 0 || strcmp(normalized, "lid_on") == 0) {
+	if (strcmp(normalized, "lid_on") == 0) {
 		action->type = WLR_SWITCH_TYPE_LID;
 		action->state = WLR_SWITCH_STATE_ON;
-	} else if (strcmp(normalized, "unfold") == 0 ||
-			   strcmp(normalized, "lid_off") == 0) {
+	} else if (strcmp(normalized, "lid_off") == 0) {
 		action->type = WLR_SWITCH_TYPE_LID;
 		action->state = WLR_SWITCH_STATE_OFF;
 	} else if (strcmp(normalized, "tablet_on") == 0) {
