@@ -25,4 +25,7 @@ bool grid_predict(Monitor *m, Client *c, struct wlr_box *out);
 void fair(Monitor *m);
 bool fair_predict(Monitor *m, Client *c, struct wlr_box *out);
 
+void gaplessgrid(Monitor *m);
+bool gaplessgrid_predict(Monitor *m, Client *c, struct wlr_box *out);
+
 #endif

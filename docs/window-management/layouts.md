@@ -21,6 +21,7 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `dwindle`
 - `fair`
 - `vertical_fair`
+- `gaplessgrid`
 
 ---
 

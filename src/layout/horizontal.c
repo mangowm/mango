@@ -13,6 +13,7 @@ static void deck_core(Monitor *m, const LayoutContext *ctx);
 static void monocle_core(Monitor *m, const LayoutContext *ctx);
 static void grid_core(Monitor *m, const LayoutContext *ctx);
 static void fair_core(Monitor *m, const LayoutContext *ctx);
+static void gaplessgrid_core(Monitor *m, const LayoutContext *ctx);
 
 static void tile_core(Monitor *m, const LayoutContext *ctx) {
 	int32_t i, n = 0, h, r, ie = server.enable_gaps, mw, my, ty;
@@ -1083,4 +1084,229 @@ void fair(Monitor *m) { fair_core(m, NULL); }
 
 bool fair_predict(Monitor *m, Client *c, struct wlr_box *out) {
 	return layout_predict_box(fair_core, m, c, out);
+}
+
+static void gaplessgrid_core(Monitor *m, const LayoutContext *ctx) {
+
+	int32_t i, n;
+	int32_t cw, ch;
+	int32_t cols, rows, overcols;
+	Client *c = NULL;
+	n = 0;
+	int32_t target_gappo = server.enable_gaps ? config.gappoh : 0;
+	int32_t target_gappi = server.enable_gaps ? config.gappih : 0;
+	struct wlr_box target_geom;
+
+	n = m->visible_fake_tiling_clients;
+
+	if (n == 0)
+		return;
+
+	if (n == 1) {
+		wl_list_for_each(c, &server.clients, link) {
+			if (c->mon != m)
+				continue;
+			if (VISIBLEON(c, m) && !c->isunglobal &&
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
+				cw = m->w.width - 2 * target_gappo;
+				ch = m->w.height - 2 * target_gappo;
+				target_geom.x = m->w.x + target_gappo;
+				target_geom.y = m->w.y + target_gappo;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0, ctx);
+				return;
+			}
+		}
+	}
+
+	if (n == 2) {
+		float col_pers[2] = {1.0f, 1.0f};
+		// First extracts the existing column ratios of these two windows.
+		i = 0;
+		wl_list_for_each(c, &server.clients, link) {
+			if (c->mon != m)
+				continue;
+			if (VISIBLEON(c, m) && !c->isunglobal &&
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
+				if (i < 2)
+					col_pers[i] =
+						(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
+				i++;
+			}
+		}
+
+		float sum_col = col_pers[0] + col_pers[1];
+		float avail_w = m->w.width - 2 * target_gappo - target_gappi;
+		ch = m->w.height - 2 * target_gappo;
+
+		i = 0;
+		wl_list_for_each(c, &server.clients, link) {
+			if (c->mon != m)
+				continue;
+			if (VISIBLEON(c, m) && !c->isunglobal &&
+				((m->isoverview && !client_is_x11_popup(c)) ||
+				 ISFAKETILED(c))) {
+				c->grid_col_idx = i;
+				c->grid_row_idx = 0;
+				c->grid_col_per = col_pers[i];
+				c->grid_row_per = 1.0f;
+
+				// Computes the current window width dynamically from the
+				// assigned weight.
+				cw = avail_w * (col_pers[i] / sum_col);
+
+				if (i == 0) {
+					target_geom.x = m->w.x + target_gappo;
+				} else if (i == 1) {
+					// The second window X coordinate follows right after the
+					// first window.
+					float cw0 = avail_w * (col_pers[0] / sum_col);
+					target_geom.x = m->w.x + target_gappo + cw0 + target_gappi;
+				}
+				target_geom.y = m->w.y + target_gappo;
+				target_geom.width = cw;
+				target_geom.height = ch;
+				client_tile_resize(c, target_geom, 0, ctx);
+				i++;
+			}
+		}
+		return;
+	}
+
+	// Computes the column and row counts.
+	int32_t best_cols = 1;
+	float best_score = -1.0f;
+	float mon_aspect =
+		m->w.height > 0 ? (float)m->w.width / (float)m->w.height : 16.0f / 9.0f;
+	for (int32_t cc = 1; cc <= n; cc++) {
+		int32_t rr = (n + cc - 1) / cc;
+		int32_t rem = n - (rr - 1) * cc;
+		if (rem <= 0)
+			rem = cc;
+		float full_a = mon_aspect * (float)rr / (float)cc;
+		float last_a = mon_aspect * (float)rr / (float)rem;
+		float dh = full_a > 16.0f / 9.0f ? full_a - 16.0f / 9.0f : 16.0f / 9.0f - full_a;
+		float dq = full_a > 4.0f / 3.0f ? full_a - 4.0f / 3.0f : 4.0f / 3.0f - full_a;
+		float dlh = last_a > 16.0f / 9.0f ? last_a - 16.0f / 9.0f : 16.0f / 9.0f - last_a;
+		float dlq = last_a > 4.0f / 3.0f ? last_a - 4.0f / 3.0f : 4.0f / 3.0f - last_a;
+		float dfull = dh < dq ? dh : dq;
+		float dlast = dlh < dlq ? dlh : dlq;
+		float score = ((float)(n - rem) * dfull + (float)rem * dlast) / (float)n;
+		if (best_score < 0.0f || score < best_score) {
+			best_score = score;
+			best_cols = cc;
+		}
+	}
+	cols = best_cols;
+	rows = (n + cols - 1) / cols;
+	overcols = n % cols;
+
+	float *col_pers = calloc(cols, sizeof(*col_pers));
+	float *row_pers = calloc(rows, sizeof(*row_pers));
+	if (!col_pers || !row_pers) {
+		free(col_pers);
+		free(row_pers);
+		return;
+	}
+	for (i = 0; i < cols; i++)
+		col_pers[i] = 1.0f;
+	for (i = 0; i < rows; i++)
+		row_pers[i] = 1.0f;
+
+	// Extracts the first window ratio.
+	i = 0;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m)
+			continue;
+		if (VISIBLEON(c, m) && !c->isunglobal &&
+			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
+			int32_t c_idx = i % cols;
+			int32_t r_idx = i / cols;
+			if (r_idx == 0)
+				col_pers[c_idx] =
+					(c->grid_col_per > 0.0f) ? c->grid_col_per : 1.0f;
+			if (c_idx == 0)
+				row_pers[r_idx] =
+					(c->grid_row_per > 0.0f) ? c->grid_row_per : 1.0f;
+			i++;
+		}
+	}
+
+	float sum_col = 0.0f, sum_row = 0.0f;
+	for (i = 0; i < cols; i++)
+		sum_col += col_pers[i];
+	for (i = 0; i < rows; i++)
+		sum_row += row_pers[i];
+
+	float avail_w = m->w.width - 2 * target_gappo - (cols - 1) * target_gappi;
+	float avail_h = m->w.height - 2 * target_gappo - (rows - 1) * target_gappi;
+
+	// Assigns positions and sizes.
+	i = 0;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m)
+			continue;
+		if (VISIBLEON(c, m) && !c->isunglobal &&
+			((m->isoverview && !client_is_x11_popup(c)) || ISFAKETILED(c))) {
+			int32_t c_idx = i % cols;
+			int32_t r_idx = i / cols;
+
+			// Fixes properties and marks indices.
+			c->grid_col_per = col_pers[c_idx];
+			c->grid_row_per = row_pers[r_idx];
+			c->grid_col_idx = c_idx;
+			c->grid_row_idx = r_idx;
+
+			// X coordinate and width computation.
+			float fl_cx = m->w.x + target_gappo;
+			float fl_cw = 0.0f;
+
+			if (overcols && i >= n - overcols) {
+				int32_t k = i - (n - overcols);
+				float full_w = m->w.width - 2 * target_gappo;
+				float w_each = (full_w - (overcols - 1) * target_gappi) / overcols;
+				fl_cx += k * (w_each + target_gappi);
+				fl_cw = (k == overcols - 1)
+					? (m->w.x + m->w.width - target_gappo - fl_cx)
+					: w_each;
+				c->grid_col_per = 1.0f;
+				c->grid_col_idx = k;
+				c->grid_row_per = row_pers[r_idx];
+				c->grid_row_idx = r_idx;
+			} else {
+				for (int j = 0; j < c_idx; j++)
+					fl_cx += avail_w * (col_pers[j] / sum_col) + target_gappi;
+				fl_cw = (c_idx == cols - 1)
+							? (m->w.x + m->w.width - target_gappo - fl_cx)
+							: avail_w * (col_pers[c_idx] / sum_col);
+			}
+
+			// Y coordinate and height computation.
+			float fl_cy = m->w.y + target_gappo;
+			for (int j = 0; j < r_idx; j++)
+				fl_cy += avail_h * (row_pers[j] / sum_row) + target_gappi;
+			float fl_ch = (r_idx == rows - 1)
+							  ? (m->w.y + m->w.height - target_gappo - fl_cy)
+							  : avail_h * (row_pers[r_idx] / sum_row);
+
+			target_geom.x = (int32_t)fl_cx;
+			target_geom.y = (int32_t)fl_cy;
+			target_geom.width = (int32_t)fl_cw;
+			target_geom.height = (int32_t)fl_ch;
+			client_tile_resize(c, target_geom, 0, ctx);
+			i++;
+		}
+	}
+
+	free(col_pers);
+	free(row_pers);
+}
+
+void gaplessgrid(Monitor *m) { gaplessgrid_core(m, NULL); }
+
+bool gaplessgrid_predict(Monitor *m, Client *c, struct wlr_box *out) {
+	return layout_predict_box(gaplessgrid_core, m, c, out);
 }
