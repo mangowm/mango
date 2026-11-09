@@ -119,8 +119,8 @@ switchbind=SWITCH_STATE,COMMAND,PARAMETERS
 
 | Switch state | Meaning |
 | :--- | :--- |
-| `lid_on`, `fold` | Lid closed (`fold` is the legacy alias) |
-| `lid_off`, `unfold` | Lid opened (`unfold` is the legacy alias) |
+| `lid_on` | Lid closed |
+| `lid_off` | Lid opened |
 | `tablet_on` | Convertible switched to tablet mode |
 | `tablet_off` | Convertible left tablet mode |
 | `keypad_slide_on` | Sliding keypad exposed |
@@ -130,7 +130,7 @@ The Sway-style spellings `lid:on`, `lid:off`, `tablet:on`, `tablet:off`,
 `keypad_slide:on`, and `keypad_slide:off` are also accepted.
 
 Each binding matches both the switch type and its state. In particular, a
-`fold` or `lid_on` action is not run when a convertible enters tablet mode.
+`lid_on` action is not run when a convertible enters tablet mode.
 
 > **Warning:** Disable system lid handling in `/etc/systemd/logind.conf`:
 >
@@ -143,8 +143,8 @@ Each binding matches both the switch type and its state. In particular, a
 ### Examples
 
 ```ini
-switchbind=fold,spawn,swaylock -f -c 000000
-switchbind=unfold,spawn,wlr-dpms on
+switchbind=lid_on,spawn,swaylock -f -c 000000
+switchbind=lid_off,spawn,wlr-dpms on
 switchbind=tablet_on,spawn,on-screen-keyboard
 switchbind=tablet_off,spawn,killall on-screen-keyboard
 ```
