@@ -55,6 +55,35 @@ Configuration for external mice.
 | `axis_scroll_factor` | `1.0` | Scroll factor for axis scroll speed (0.1–10.0). |
 ---
 
+### Floating Window Dragging
+
+Windows with their own titlebar can request modifier-free dragging when they
+are floating. This works in the `floating` layout and for windows floated by a
+rule or `togglefloating`. No additional titlebar or window controls are drawn.
+
+For windows without a titlebar, an optional invisible strip reserves the top of
+the client content for plain left-button dragging:
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `top_drag_zone` | `0` | Drag-strip height in logical pixels, from `0` to `200`. `0` disables the strip. |
+
+```ini
+# Set to a nonzero height to enable the drag strip.
+top_drag_zone=12
+```
+
+In TOML, set `top_drag_zone = 12` in `[global]` to enable it.
+
+The strip consumes clicks instead of sending them to the application. A short
+click focuses the window; moving at least 5 pixels while holding the left button
+starts a drag. Content outside the strip is unaffected. Existing mouse bindings,
+window decorations, and border/corner resizing take priority. Popup menus and
+subsurfaces do not activate the strip. Fullscreen, maximized, and overview
+windows cannot be dragged this way.
+
+---
+
 ### Trackpad Settings
 
 Specific settings for laptop trackpads. Some settings may require a relogin to take effect.

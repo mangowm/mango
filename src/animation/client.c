@@ -128,21 +128,23 @@ bool is_horizontal_right_stack_layout(Monitor *m) {
 }
 
 int32_t is_special_animation_rule(Client *c) {
-	if (is_scroller_layout(c->mon) && !c->isfloating) {
+	if (is_scroller_layout(c->mon) && !client_is_effectively_floating(c)) {
 		return DOWN;
-	} else if (c->mon->visible_tiling_clients == 1 && !c->isfloating) {
+	} else if (c->mon->visible_tiling_clients == 1 &&
+			   !client_is_effectively_floating(c)) {
 		return DOWN;
-	} else if (c->mon->visible_tiling_clients == 2 && !c->isfloating &&
-			   !config.new_is_master && is_horizontal_stack_layout(c->mon)) {
+	} else if (c->mon->visible_tiling_clients == 2 &&
+			   !client_is_effectively_floating(c) && !config.new_is_master &&
+			   is_horizontal_stack_layout(c->mon)) {
 		return RIGHT;
-	} else if (!c->isfloating && config.new_is_master &&
+	} else if (!client_is_effectively_floating(c) && config.new_is_master &&
 			   is_horizontal_stack_layout(c->mon)) {
 		return LEFT;
-	} else if (c->mon->visible_tiling_clients == 2 && !c->isfloating &&
-			   !config.new_is_master &&
+	} else if (c->mon->visible_tiling_clients == 2 &&
+			   !client_is_effectively_floating(c) && !config.new_is_master &&
 			   is_horizontal_right_stack_layout(c->mon)) {
 		return LEFT;
-	} else if (!c->isfloating && config.new_is_master &&
+	} else if (!client_is_effectively_floating(c) && config.new_is_master &&
 			   is_horizontal_right_stack_layout(c->mon)) {
 		return RIGHT;
 	} else {
@@ -339,7 +341,7 @@ void client_draw_shadow(Client *c, struct ivec2 offsets) {
 		return;
 
 	if (!config.shadows || c->isfullscreen ||
-		(!c->isfloating && config.shadow_only_floating)) {
+		(!client_is_effectively_floating(c) && config.shadow_only_floating)) {
 		if (c->shadow->node.enabled)
 			wlr_scene_node_set_enabled(&c->shadow->node, false);
 		return;
@@ -1527,13 +1529,14 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	c->need_output_flush = true;
 	c->dirty = true;
 
-	struct wlr_box *bbox = (opts.interact || c->isfloating || c->isfullscreen)
-							   ? &server.scene_geometry
-							   : &c->mon->w;
+	struct wlr_box *bbox =
+		(opts.interact || client_is_effectively_floating(c) || c->isfullscreen)
+			? &server.scene_geometry
+			: &c->mon->w;
 	struct wlr_box clip;
 
 	if (is_scroller_layout(c->mon) &&
-		(!c->isfloating || c == server.grab_client)) {
+		(!client_is_effectively_floating(c) || c == server.grab_client)) {
 		c->geom = geo;
 		c->geom.width = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.width);
 		c->geom.height = MANGO_MAX(1 + 2 * (int32_t)c->bw, c->geom.height);
@@ -1543,7 +1546,7 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	}
 
 	if (!c->no_size_hint && !c->ismaximizescreen && !c->isfullscreen &&
-		c->isfloating) {
+		client_is_effectively_floating(c)) {
 		int32_t anchor_right = c->geom.x + c->geom.width;
 		int32_t anchor_bottom = c->geom.y + c->geom.height;
 		client_set_size_bound(c);
@@ -1552,6 +1555,11 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		if (opts.drag_edge & WLR_EDGE_TOP)
 			c->geom.y = anchor_bottom - c->geom.height;
 	}
+	if (c->floating_layout_applied && !c->mon->isoverview &&
+		client_is_effectively_floating(c) && !c->isfullscreen &&
+		!c->ismaximizescreen && !c->drag_to_tile && !c->iskilling &&
+		!c->animation.tagouting)
+		c->float_geom = c->geom;
 
 	if (!c->is_pending_open_animation)
 		c->animation.begin_fade_in = false;
@@ -1645,11 +1653,11 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 	if (c->swallowdby)
 		c->animainit_geom = c->geom;
 
-	if ((c->isglobal || c->isunglobal) && c->isfloating &&
+	if ((c->isglobal || c->isunglobal) && client_is_effectively_floating(c) &&
 		c->animation.action == TAG)
 		c->animainit_geom = c->geom;
 
-	if (c->scratchpad_switching_mon && c->isfloating)
+	if (c->scratchpad_switching_mon && client_is_effectively_floating(c))
 		c->animainit_geom = c->geom;
 
 	if (!opts.skip_ov_enter_anim && c->mon->isoverview &&

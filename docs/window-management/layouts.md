@@ -21,6 +21,41 @@ mangowm supports a variety of layouts that can be assigned per tag.
 - `dwindle`
 - `fair`
 - `vertical_fair`
+- `floating`
+
+---
+
+## Floating Layout
+
+The `floating` layout lets windows overlap and move or resize independently.
+It applies to the selected tag on its monitor and uses the status symbol `FL`.
+Selecting it restores each window's saved floating position and size, falling
+back to normal floating placement when none is saved. New windows also float.
+
+Switching back to a tiled layout retiles ordinary windows without losing their
+saved floating geometry. Windows explicitly marked floating by a rule or
+`togglefloating` remain floating. While this layout is selected, `togglefloating`
+changes that explicit state but cannot make an individual window tile.
+Fullscreen, maximize, and overview remain available.
+
+Existing application titlebars support dragging without a modifier key. For
+titlebar-less windows, an invisible drag strip can be enabled by setting
+`top_drag_zone` to a nonzero height; it is disabled by default. The strip adds
+no titlebar or buttons. See
+[Floating Window Dragging](../configuration/input.md#floating-window-dragging)
+for input behavior and configuration.
+
+```ini
+bind=SUPER,f,setlayout,floating
+circle_layout=tile,floating,scroller
+tag_rule=id:3,layout_name:floating
+# Limit a tag rule to one monitor:
+tag_rule=id:4,monitor_name:HDMI-A-1,layout_name:floating
+```
+
+For immediate selection, run `mmsg dispatch setlayout,floating`.
+Unlike `open_as_floating=1`, selecting this layout does not permanently set
+each window's floating state.
 
 ---
 

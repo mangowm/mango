@@ -176,7 +176,7 @@ int32_t exchange_client(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
-	if (!c || c->isfloating)
+	if (!c || client_is_effectively_floating(c))
 		return 0;
 
 	if ((c->isfullscreen || c->ismaximizescreen) && !is_scroller_layout(c->mon))
@@ -197,7 +197,7 @@ int32_t move_client(const Arg *arg) {
 		return 0;
 
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
-	if (!c || !c->mon || c->isfloating)
+	if (!c || !c->mon || client_is_effectively_floating(c))
 		return 0;
 
 	if ((c->isfullscreen || c->ismaximizescreen) && !is_scroller_layout(c->mon))
@@ -228,7 +228,8 @@ int32_t exchange_stack_client(const Arg *arg) {
 
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	Client *tc = NULL;
-	if (!c || c->isfloating || c->isfullscreen || c->ismaximizescreen)
+	if (!c || client_is_effectively_floating(c) || c->isfullscreen ||
+		c->ismaximizescreen)
 		return 0;
 	if (arg->i == NEXT) {
 		tc = get_next_stack_client(c, false);
@@ -767,7 +768,7 @@ int32_t move_window(const Arg *arg) {
 			: (server.selected_monitor ? server.selected_monitor->sel : NULL);
 	if (!c || c->isfullscreen)
 		return 0;
-	if (!c->isfloating)
+	if (!client_is_effectively_floating(c))
 		client_set_floating(c, 1, false);
 
 	switch (arg->ui) {
@@ -816,7 +817,7 @@ int32_t resize_window(const Arg *arg) {
 		return 0;
 
 	int32_t animations_state_backup = config.animations;
-	if (!c->isfloating)
+	if (!client_is_effectively_floating(c))
 		config.animations = 0;
 
 	if (ISTILED(c)) {
@@ -1086,7 +1087,7 @@ int32_t smart_move_window(const Arg *arg) {
 	c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!c || c->isfullscreen || !c->mon)
 		return 0;
-	if (!c->isfloating)
+	if (!client_is_effectively_floating(c))
 		client_set_floating(c, true, false);
 	nx = c->geom.x;
 	ny = c->geom.y;
@@ -1098,8 +1099,8 @@ int32_t smart_move_window(const Arg *arg) {
 		ny -= c->mon->w.height / 4;
 
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.x + c->geom.width < tc->geom.x ||
 				c->geom.x > tc->geom.x + tc->geom.width)
@@ -1119,8 +1120,8 @@ int32_t smart_move_window(const Arg *arg) {
 		ny += c->mon->w.height / 4;
 
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.x + c->geom.width < tc->geom.x ||
 				c->geom.x > tc->geom.x + tc->geom.width)
@@ -1140,8 +1141,8 @@ int32_t smart_move_window(const Arg *arg) {
 		nx -= c->mon->w.width / 6;
 
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.y + c->geom.height < tc->geom.y ||
 				c->geom.y > tc->geom.y + tc->geom.height)
@@ -1160,8 +1161,8 @@ int32_t smart_move_window(const Arg *arg) {
 		right = c->geom.x + c->geom.width;
 		nx += c->mon->w.width / 6;
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.y + c->geom.height < tc->geom.y ||
 				c->geom.y > tc->geom.y + tc->geom.height)
@@ -1193,7 +1194,7 @@ int32_t smart_resize_window(const Arg *arg) {
 	c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!c || c->isfullscreen)
 		return 0;
-	if (!c->isfloating)
+	if (!client_is_effectively_floating(c))
 		client_set_floating(c, true, false);
 	nw = c->geom.width;
 	nh = c->geom.height;
@@ -1209,8 +1210,8 @@ int32_t smart_resize_window(const Arg *arg) {
 		nh += server.selected_monitor->w.height / 8;
 
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.x + c->geom.width < tc->geom.x ||
 				c->geom.x > tc->geom.x + tc->geom.width)
@@ -1235,8 +1236,8 @@ int32_t smart_resize_window(const Arg *arg) {
 		right = c->geom.x + c->geom.width;
 		nw += server.selected_monitor->w.width / 16;
 		wl_list_for_each(tc, &server.clients, link) {
-			if (!VISIBLEON(tc, server.selected_monitor) || !tc->isfloating ||
-				tc == c)
+			if (!VISIBLEON(tc, server.selected_monitor) ||
+				!client_is_effectively_floating(tc) || tc == c)
 				continue;
 			if (c->geom.y + c->geom.height < tc->geom.y ||
 				c->geom.y > tc->geom.y + tc->geom.height)
@@ -1271,7 +1272,7 @@ int32_t center_window(const Arg *arg) {
 	if (!c || c->isfullscreen || c->ismaximizescreen)
 		return 0;
 
-	if (c->isfloating) {
+	if (client_is_effectively_floating(c)) {
 		c->float_geom = client_center_geometry(c, c->mon, c->geom, 0, 0);
 		c->iscustomsize = 1;
 		resize(c, c->float_geom, (ResizeOpts){.interact = 1});
@@ -1574,7 +1575,10 @@ int32_t tag_silent(const Arg *arg) {
 	client_reparent_group(target_client);
 	wl_list_for_each(fc, &server.clients, link) {
 		if (fc && fc != target_client && target_client->tags & fc->tags &&
-			ISFULLSCREEN(fc) && !target_client->isfloating) {
+			ISFULLSCREEN(fc) &&
+			!client_is_effectively_floating_for_tag(
+				target_client, target_client->mon,
+				get_client_tag_idx(target_client))) {
 			clear_fullscreen_flag(fc);
 		}
 	}
@@ -2439,6 +2443,16 @@ static void set_overview(const Arg *arg, bool enter) {
 	}
 
 	client_switch_view(&(Arg){.ui = target}, false);
+
+	if (!enter) {
+		wl_list_for_each(c, &server.clients, link) {
+			if (c && c->mon == server.selected_monitor && !c->iskilling &&
+				!client_is_unmanaged(c) && !c->isunglobal && !c->isminimized &&
+				!client_is_x11_popup(c) && client_surface(c)->mapped &&
+				!(c->tags & TAG0_MASK))
+				client_sync_tiled_hint(c);
+		}
+	}
 
 	/* Tab layout: rearrange after entering. */
 	if (enter && !server.selected_monitor->is_jump_mode &&

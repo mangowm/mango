@@ -1161,7 +1161,9 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 #endif
 			// floating window position auto adjust the change of monitor
 			// position
-			if (c->isfloating && c->mon == m) {
+			if (c->mon == m &&
+				client_is_effectively_floating_for_tag(
+					c, m, get_client_tag_idx(c))) {
 				c->geom.x += mon_pos_offsetx;
 				c->geom.y += mon_pos_offsety;
 				c->float_geom = c->geom;

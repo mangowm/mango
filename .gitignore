@@ -5,6 +5,7 @@
 /mango-wlonly
 config.h
 /mango
+/tests/__pycache__
 mango.o
 util.o
 *-protocol.h

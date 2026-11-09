@@ -709,16 +709,60 @@ void client_set_tiled(Client *c, uint32_t edges) {
 	}
 }
 
+bool client_is_effectively_floating(const Client *c) {
+	return client_is_effectively_floating_for_tag(
+		c, c ? c->mon : NULL, c && c->mon ? get_mon_curtag(c->mon) : 0);
+}
+
+bool client_is_effectively_floating_for_tag(const Client *c, const Monitor *m,
+											uint32_t tag) {
+	return c &&
+		   (c->isfloating ||
+			(m && m->pertag && !m->isoverview &&
+			 tag <= (uint32_t)config.tag_num && m->pertag->ltidxs[tag] &&
+			 m->pertag->ltidxs[tag]->id == FLOATING));
+}
+
+static void client_sync_tiled_hint_for_tag(Client *c, const Monitor *m,
+										   uint32_t tag) {
+	if (!c)
+		return;
+
+	if (!client_is_effectively_floating_for_tag(c, m, tag) ||
+		c->force_tiled_state) {
+		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
+							 WLR_EDGE_RIGHT);
+	} else {
+		client_set_tiled(c, WLR_EDGE_NONE);
+	}
+}
+
+void client_restore_float_geometry(Client *c) {
+	struct wlr_box geo = c->float_geom;
+	bool center = false;
+	if (geo.width <= 0 || geo.height <= 0) {
+		geo = c->geom;
+		center = !client_is_x11(c) && !c->iscustompos;
+	}
+	if (geo.width > c->mon->w.width - config.gappoh) {
+		geo.width = c->mon->w.width * 0.9;
+		center = true;
+	}
+	if (geo.height > c->mon->w.height - config.gappov) {
+		geo.height = c->mon->w.height * 0.9;
+		center = true;
+	}
+	if (center)
+		geo = client_center_geometry(c, c->mon, geo, 0, 0);
+	resize(c, geo, (ResizeOpts){0});
+}
+
 void client_sync_tiled_hint(Client *c) {
 	if (!c)
 		return;
 
-	if (!c->isfloating || c->force_tiled_state) {
-		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
-								WLR_EDGE_RIGHT);
-	} else {
-		client_set_tiled(c, WLR_EDGE_NONE);
-	}
+	client_sync_tiled_hint_for_tag(
+		c, c->mon, c->mon ? get_mon_curtag(c->mon) : 0);
 }
 
 int32_t client_should_ignore_focus(Client *c) {
@@ -1563,8 +1607,9 @@ void set_float_malposition(Client *tc) {
 	offset = MANGO_MIN(tc->mon->w.width / 20, tc->mon->w.height / 20);
 
 	wl_list_for_each(c, &server.clients, link) {
-		if (c->isfloating && c != tc && VISIBLEON(c, tc->mon) &&
-			abs(x - c->geom.x) < offset && abs(y - c->geom.y) < offset) {
+		if (client_is_effectively_floating(c) && c != tc &&
+			VISIBLEON(c, tc->mon) && abs(x - c->geom.x) < offset &&
+			abs(y - c->geom.y) < offset) {
 
 			x = c->geom.x + offset * xreverse;
 			y = c->geom.y + offset * yreverse;
@@ -1816,12 +1861,15 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	wl_list_for_each(fc, &server.clients,
 					 link) if (fc && fc != c && c->tags & fc->tags && c->mon &&
 							   VISIBLEON(fc, c->mon) && ISFULLSCREEN(fc) &&
-							   !c->isfloating) {
+							   !client_is_effectively_floating_for_tag(
+								   c, c->mon, get_client_tag_idx(c))) {
 		clear_fullscreen_flag(fc);
 		arrange(c->mon, false, false);
 	}
 
-	if (c->isfloating && !c->iscustompos && !c->isnamedscratchpad) {
+	if (client_is_effectively_floating_for_tag(
+			c, c->mon, get_client_tag_idx(c)) &&
+		!c->iscustompos && !c->isnamedscratchpad) {
 		wl_list_safe_reinsert_prev(&server.clients, &c->link);
 		set_float_malposition(c);
 	}
@@ -1860,11 +1908,11 @@ void apply_window_snap(Client *c) {
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
 		return;
 
-	if (!c->isfloating || !config.enable_floating_snap)
+	if (!client_is_effectively_floating(c) || !config.enable_floating_snap)
 		return;
 
 	wl_list_for_each(tc, &server.clients, link) {
-		if (tc && tc->isfloating && !tc->iskilling &&
+		if (tc && client_is_effectively_floating(tc) && !tc->iskilling &&
 			client_surface(tc)->mapped && VISIBLEON(tc, c->mon)) {
 
 			tcbw = !server.render_border || tc->fake_no_border ? tc->bw : 0;
@@ -2076,6 +2124,8 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	LISTEN(&toplevel->events.destroy, &c->destroy, handle_client_destroy);
 	LISTEN(&toplevel->events.request_fullscreen, &c->fullscreen,
 		   handle_client_request_fullscreen);
+	LISTEN(&toplevel->events.request_move, &c->request_move,
+		   handle_client_request_move);
 	LISTEN(&toplevel->events.request_maximize, &c->maximize,
 		   handle_client_request_maximize);
 	LISTEN(&toplevel->events.request_minimize, &c->minimize,
@@ -2264,8 +2314,10 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 
 	Monitor *m =
 		rule_mon ? rule_mon : (c->mon ? c->mon : server.selected_monitor);
-	if (!m || m->isoverview)
+	if (!m) {
+		client_sync_tiled_hint(c);
 		return;
+	}
 
 	int32_t bw = (int32_t)c->bw;
 	Monitor *saved_mon = c->mon;
@@ -2274,9 +2326,16 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 	c->mon = m;
 	client_reset_mon_tags(c, m, rule_tags);
 	check_match_tag_floating_rule(c, m);
+	uint32_t tag = get_client_tag_idx(c);
+	client_sync_tiled_hint_for_tag(c, m, tag);
+	if (m->isoverview) {
+		c->mon = saved_mon;
+		c->tags = saved_tags;
+		return;
+	}
 
-	if (c->isfloating || c->isfullscreen || c->ismaximizescreen ||
-		client_wants_fullscreen(c)) {
+	if (client_is_effectively_floating_for_tag(c, m, tag) || c->isfullscreen ||
+		c->ismaximizescreen || client_wants_fullscreen(c)) {
 		if (c->isfullscreen || client_wants_fullscreen(c))
 			client_configure_size(c, m->m, 0);
 		else if (c->ismaximizescreen)
@@ -2293,7 +2352,6 @@ static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
 		return;
 	}
 
-	uint32_t tag = get_mon_curtag(m);
 	const Layout *layout = m->pertag->ltidxs[tag];
 	if (!layout || !layout->predict) {
 		c->mon = saved_mon;
@@ -2438,10 +2496,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 
 	client_set_xwayland(c);
 
-	if (!c->isfloating || c->force_tiled_state) {
-		client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
-								WLR_EDGE_RIGHT);
-	}
+	client_sync_tiled_hint(c);
 
 	// apply buffer effects of client
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
@@ -2487,10 +2542,6 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 		}
 		client_set_monitor(
 			c, NULL, 0, true); /* Make sure to reapply rules in mapnotify() */
-
-		if (!c->isfloating || c->force_tiled_state)
-			client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
-									WLR_EDGE_RIGHT);
 
 		uint32_t serial = wlr_xdg_surface_schedule_configure(c->surface.xdg);
 		if (serial > 0) {
@@ -2556,6 +2607,7 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	pointer_cancel_floating_move(c);
 	c->iskilling = 1;
 	if (c->tab_prev || c->tab_next)
 		tab_detach_client(c);
@@ -2725,6 +2777,7 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&c->destroy.link);
 	wl_list_remove(&c->set_title.link);
 	wl_list_remove(&c->fullscreen.link);
+	wl_list_remove(&c->request_move.link);
 	wl_list_remove(&c->maximize.link);
 	wl_list_remove(&c->minimize.link);
 #ifdef XWAYLAND
@@ -2753,6 +2806,27 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	switcher_remove_client(c);
 	pointer_client_destroyed(c);
 	free(c);
+}
+
+void handle_client_request_move(struct wl_listener *listener, void *data) {
+	Client *client = wl_container_of(listener, client, request_move);
+	struct wlr_seat_pointer_state *pointer = &server.seat->pointer_state;
+	Client *pressed_client = NULL;
+	if (server.cursor_mode != CurPressed || pointer->button_count != 1 ||
+		!pointer->focused_surface ||
+		toplevel_from_wlr_surface(pointer->focused_surface, &pressed_client,
+								  NULL) < 0 ||
+		pressed_client != client)
+		return;
+	if (client->type == XDGShell) {
+		struct wlr_xdg_toplevel_move_event *event = data;
+		if (event->seat->seat != server.seat ||
+			!wlr_seat_validate_pointer_grab_serial(
+				server.seat, client_surface(client), event->serial))
+			return;
+	}
+	pointer_begin_floating_move(client, pointer->grab_button, server.cursor->x,
+								server.cursor->y);
 }
 
 void handle_client_request_fullscreen(struct wl_listener *listener,
@@ -3234,7 +3308,10 @@ void tag_client(const Arg *arg, Client *target_client) {
 
 		wl_list_for_each(fc, &server.clients, link) {
 			if (fc && fc != target_client && target_client->tags & fc->tags &&
-				ISFULLSCREEN(fc) && !target_client->isfloating) {
+				ISFULLSCREEN(fc) &&
+				!client_is_effectively_floating_for_tag(
+					target_client, target_client->mon,
+					get_client_tag_idx(target_client))) {
 				clear_fullscreen_flag(fc);
 			}
 		}
@@ -3289,6 +3366,7 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 	}
 
 	c->mon = m;
+	c->floating_layout_applied = false;
 
 	/* Scene graph sends surface leave/enter events on move and resize */
 	if (oldmon)
@@ -3313,18 +3391,19 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 	}
 }
 
-static void client_adapt_geometry_to_monitor(Client *c, Monitor *oldmon) {
-	if (!c || !c->mon || !oldmon || oldmon->w.width <= 0 ||
-		oldmon->w.height <= 0 || c->mon->w.width <= 0 ||
-		c->mon->w.height <= 0) {
+static void client_adapt_geometry_to_monitor(Client *c, Monitor *oldmon,
+											 Monitor *newmon) {
+	if (!c || !oldmon || !newmon || oldmon->w.width <= 0 ||
+		oldmon->w.height <= 0 || newmon->w.width <= 0 ||
+		newmon->w.height <= 0) {
 		return;
 	}
 
 	c->float_geom.width = (int32_t)((int64_t)c->float_geom.width *
-									c->mon->w.width / oldmon->w.width);
+									newmon->w.width / oldmon->w.width);
 	c->float_geom.height = (int32_t)((int64_t)c->float_geom.height *
-									 c->mon->w.height / oldmon->w.height);
-	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+									 newmon->w.height / oldmon->w.height);
+	c->float_geom = client_center_geometry(c, newmon, c->float_geom, 0, 0);
 }
 
 bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
@@ -3334,22 +3413,19 @@ bool client_set_monitor_adapted(Client *c, Monitor *m, uint32_t newtags,
 	}
 
 	Monitor *oldmon = c->mon;
+	client_adapt_geometry_to_monitor(c, oldmon, m);
 	client_set_monitor(c, m, newtags, focus);
 	if (c->mon != m) {
 		return false;
 	}
 
 	client_update_oldmonname_record(c, m);
-	client_adapt_geometry_to_monitor(c, oldmon);
-	if (c->isfloating) {
-		c->geom = c->float_geom;
-	}
 	return true;
 }
 
 void client_change_mon(Client *c, Monitor *m) {
 	client_set_monitor(c, m, c->tags, true);
-	if (c->isfloating) {
+	if (client_is_effectively_floating(c)) {
 		c->float_geom = c->geom =
 			client_center_geometry(c, c->mon, c->geom, 0, 0);
 	}
@@ -3400,15 +3476,11 @@ void view_insert_shift_tags(Monitor *m, uint32_t target) {
 void client_set_floating(Client *c, int32_t floating, bool want_animation) {
 
 	Client *fc = NULL;
-	struct wlr_box target_box;
 	int32_t old_floating_state = c->isfloating;
 	c->isfloating = floating;
-	bool window_size_outofrange = false;
 
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling)
 		return;
-
-	target_box = c->geom;
 
 	if (floating == 1 && c != server.grab_client) {
 
@@ -3420,32 +3492,8 @@ void client_set_floating(Client *c, int32_t floating, bool want_animation) {
 		client_pending_maximized_state(c, 0);
 		exit_scroller_stack(c);
 
-		// Recomputes the centered coordinates.
-		if (!client_is_x11(c) && !c->iscustompos)
-			target_box = client_center_geometry(c, c->mon, target_box, 0, 0);
-		else
-			target_box = c->geom;
-
-		// restore to the memeroy geom
-		if (c->float_geom.width > 0 && c->float_geom.height > 0) {
-			if (c->mon &&
-				c->float_geom.width >= c->mon->w.width - config.gappoh) {
-				c->float_geom.width = c->mon->w.width * 0.9;
-				window_size_outofrange = true;
-			}
-			if (c->mon &&
-				c->float_geom.height >= c->mon->w.height - config.gappov) {
-				c->float_geom.height = c->mon->w.height * 0.9;
-				window_size_outofrange = true;
-			}
-			if (window_size_outofrange) {
-				c->float_geom =
-					client_center_geometry(c, c->mon, c->float_geom, 0, 0);
-			}
-			resize(c, c->float_geom, (ResizeOpts){.interact = 0});
-		} else {
-			resize(c, target_box, (ResizeOpts){.interact = 0});
-		}
+		client_restore_float_geometry(c);
+		c->float_geom = c->geom;
 
 		c->need_float_size_reduce = 0;
 	} else if (c->isfloating && c == server.grab_client) {
@@ -3519,6 +3567,8 @@ void client_set_fullscreen(
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
 			client_set_floating(c, 1, false);
+		else if (client_is_effectively_floating(c))
+			client_restore_float_geometry(c);
 	}
 
 	client_reparent_group(c);
@@ -3590,6 +3640,8 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
 			client_set_floating(c, 1, false);
+		else if (client_is_effectively_floating(c))
+			client_restore_float_geometry(c);
 	}
 
 	client_reparent_group(c);
@@ -3788,7 +3840,7 @@ bool switch_scratchpad_client_state(Client *c) {
 		reset_foreign_tolevel(c, oldmon, c->mon);
 		client_update_oldmonname_record(c, server.selected_monitor);
 
-		client_adapt_geometry_to_monitor(c, oldmon);
+		client_adapt_geometry_to_monitor(c, oldmon, c->mon);
 
 		// Only a visible scratchpad needs focus and returns true.
 		if (SCRATCHPAD_SHOWN(c)) {
@@ -4361,35 +4413,36 @@ void client_add_jump_label_node(Client *c) {
 // belong to the special layers
 uint32_t client_target_layer(Client *c) {
 	bool special_overlay = (c->tags & TAG0_MASK);
+	bool floating = client_is_effectively_floating(c);
 
 	if (c->isoverlay)
 		return special_overlay ? LyrSpecialOverlay : LyrOverlay;
 
 	if (config.float_full_to_top) {
 		if (special_overlay)
-			return c->isfloating || c->isfullscreen ? LyrTop
-				   : c->ismaximizescreen			? LyrSpecialMaximize
-													: LyrSpecialTile;
+			return floating || c->isfullscreen ? LyrTop
+				   : c->ismaximizescreen	   ? LyrSpecialMaximize
+											   : LyrSpecialTile;
 
 		if (is_special_active(c->mon))
 			return c->isfullscreen		 ? LyrFullscreen
-				   : c->isfloating		 ? LyrFloat
+				   : floating			 ? LyrFloat
 				   : c->ismaximizescreen ? LyrMaximize
 										 : LyrTile;
 
-		return c->isfloating || c->isfullscreen ? LyrTop
-			   : c->ismaximizescreen			? LyrMaximize
-												: LyrTile;
+		return floating || c->isfullscreen ? LyrTop
+			   : c->ismaximizescreen	   ? LyrMaximize
+										   : LyrTile;
 	}
 
 	if (special_overlay)
 		return c->isfullscreen		 ? LyrSpecialFullscreen
-			   : c->isfloating		 ? LyrSpecialFloat
+			   : floating			 ? LyrSpecialFloat
 			   : c->ismaximizescreen ? LyrSpecialMaximize
 									 : LyrSpecialTile;
 
 	return c->isfullscreen		 ? LyrFullscreen
-		   : c->isfloating		 ? LyrFloat
+		   : floating			 ? LyrFloat
 		   : c->ismaximizescreen ? LyrMaximize
 								 : LyrTile;
 }
@@ -4937,7 +4990,8 @@ void handle_xwayland_surface_request_configure(struct wl_listener *listener,
 	 */
 	c->xwl_req_valid = false;
 
-	if (c->isfloating && c != server.grab_client) {
+	if (client_is_effectively_floating(c) && c != server.grab_client &&
+		!c->isfullscreen && !c->ismaximizescreen) {
 		new_geo.x = new_geo.x - c->bw;
 		new_geo.y = new_geo.y - c->bw;
 		new_geo.width = new_geo.width + c->bw * 2;
@@ -4980,6 +5034,8 @@ void handle_new_xwayland_surface(struct wl_listener *listener, void *data) {
 		   handle_xwayland_surface_request_configure);
 	LISTEN(&xsurface->events.request_fullscreen, &c->fullscreen,
 		   handle_client_request_fullscreen);
+	LISTEN(&xsurface->events.request_move, &c->request_move,
+		   handle_client_request_move);
 	LISTEN(&xsurface->events.set_hints, &c->set_hints,
 		   handle_xwayland_surface_set_hints);
 	LISTEN(&xsurface->events.set_title, &c->set_title, handle_client_set_title);

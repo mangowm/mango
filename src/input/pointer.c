@@ -211,6 +211,7 @@ void pointer_check_confine_client(void) {
 }
 
 void pointer_client_destroyed(Client *c) {
+	pointer_cancel_floating_move(c);
 	if (confine_pointer_last == c) {
 		confine_pointer_last = NULL;
 	}
@@ -888,7 +889,7 @@ static uint32_t client_resize_edge_at(Client *c, struct wlr_surface *surface,
 	if (y >= g->y + g->height - t)
 		edge |= WLR_EDGE_BOTTOM;
 
-	if (edge && !c->isfloating) {
+	if (edge && !client_is_effectively_floating(c)) {
 		if (!ISTILED(c))
 			return 0;
 		edge = tiled_shared_edges(c, edge);
@@ -917,7 +918,7 @@ static void pointer_update_resize_cursor(Client *c,
 		edge = client_resize_edge_at(c, surface, server.cursor->x,
 									 server.cursor->y);
 
-	bool floating = edge != 0 && c->isfloating;
+	bool floating = edge != 0 && client_is_effectively_floating(c);
 	bool changed = edge != server.hover_resize_edge ||
 				   floating != server.hover_resize_floating;
 	uint32_t previous = server.hover_resize_edge;
@@ -996,6 +997,40 @@ static void client_begin_drag_float(Client *c) {
 	set_size_per(c->mon, c, false);
 }
 
+static bool pointer_floating_move_eligible(Client *client) {
+	return client && client->mon && client->scene && !client->iskilling &&
+		   !client_is_parked(client) && VISIBLEON(client, client->mon) &&
+		   client_surface(client)->mapped && !client->mon->isoverview &&
+		   !server.session_locked && !server.seat->drag &&
+		   !switcher_is_active() && !client_is_unmanaged(client) &&
+		   !client->isfullscreen && !client->ismaximizescreen &&
+		   client_is_effectively_floating(client);
+}
+
+void pointer_cancel_floating_move(Client *client) {
+	if (!client || server.top_drag_client == client)
+		server.top_drag_client = NULL;
+	if (server.floating_drag_button && server.grab_client &&
+		(!client || server.grab_client == client)) {
+		server.grab_client = NULL;
+		server.cursor_mode = CurNormal;
+		server.start_drag_window = false;
+	}
+}
+
+bool pointer_begin_floating_move(Client *client, uint32_t button,
+								 double pointer_x, double pointer_y) {
+	if (!pointer_floating_move_eligible(client) || !button)
+		return false;
+	if (!pointer_begin_move_resize(client, CurMove, pointer_x, pointer_y, 0))
+		return false;
+	server.floating_drag_button = button;
+	server.floating_drag_seat_press =
+		server.seat->pointer_state.button_count > 0;
+	wlr_seat_pointer_clear_focus(server.seat);
+	return true;
+}
+
 bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 							   uint32_t edge) {
 	if (server.cursor_mode != CurNormal && server.cursor_mode != CurPressed)
@@ -1010,7 +1045,7 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 	server.grab_client = gc;
 	server.grab_is_border_resize = edge != 0;
 
-	if (gc->isfloating == 0 && mode == CurMove)
+	if (!client_is_effectively_floating(gc) && mode == CurMove)
 		client_begin_drag_float(gc);
 
 	if (gc->drag_to_tile && config.drag_tile_to_tile &&
@@ -1029,7 +1064,7 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "grab");
 		break;
 	case CurResize:
-		if (gc->isfloating) {
+		if (client_is_effectively_floating(gc)) {
 			uint32_t resize_edge = edge;
 			if (resize_edge == 0) {
 				int32_t corner = config.drag_corner;
@@ -1325,6 +1360,29 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 
 	pointer_update_resize_cursor(c, surface);
 
+	if (server.floating_drag_button) {
+		Client *drag_client = server.top_drag_client ? server.top_drag_client
+													 : server.grab_client;
+		if (drag_client &&
+			(!pointer_floating_move_eligible(drag_client) ||
+			 (server.top_drag_client && config.top_drag_zone <= 0)))
+			pointer_cancel_floating_move(drag_client);
+	}
+	if (server.top_drag_client) {
+		double horizontal = server.cursor->x - server.top_drag_x;
+		double vertical = server.cursor->y - server.top_drag_y;
+		if (horizontal * horizontal + vertical * vertical >= 25.0) {
+			Client *drag_client = server.top_drag_client;
+			server.top_drag_client = NULL;
+			pointer_begin_floating_move(drag_client,
+										server.floating_drag_button,
+										server.top_drag_x, server.top_drag_y);
+		}
+	}
+	if (server.floating_drag_button && server.cursor_mode != CurMove &&
+		server.top_drag_client)
+		return;
+
 	/* If we are currently grabbing the mouse, handle and return */
 	if (server.cursor_mode == CurMove) {
 		/* Move the grabbed client to the new position. */
@@ -1365,7 +1423,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 			   (ResizeOpts){.interact = 1});
 		return;
 	} else if (server.cursor_mode == CurResize) {
-		if (server.grab_client->isfloating) {
+		if (client_is_effectively_floating(server.grab_client)) {
 			server.grab_client->iscustomsize = 1;
 			Monitor *m = server.grab_client->mon;
 			if (m && m->last_resize_frame != m->frame_serial) {
@@ -1737,6 +1795,24 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	}
 
 	keyboard_cancel_pending_release_bind();
+	if (server.floating_drag_button) {
+		if (event->button == server.floating_drag_button &&
+			event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+			server.top_drag_client = NULL;
+			if (server.floating_drag_seat_press) {
+				wlr_seat_pointer_clear_focus(server.seat);
+				wlr_seat_pointer_notify_button(server.seat, event->time_msec,
+											   event->button, event->state);
+			}
+			server.floating_drag_button = 0;
+			server.floating_drag_seat_press = false;
+			if (server.cursor_mode == CurMove)
+				pointer_end_grab_client(true);
+			else
+				server.cursor_mode = CurNormal;
+		}
+		return true;
+	}
 
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
@@ -1857,6 +1933,27 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 				pointer_begin_move_resize(c, CurResize, server.cursor->x,
 										  server.cursor->y, edge))
 				return true;
+		}
+		if (event->button == BTN_LEFT && !CLEANMASK(mods) && !bar &&
+			config.top_drag_zone > 0 && pointer_floating_move_eligible(c) &&
+			surface == client_surface(c) &&
+			!server.seat->pointer_state.button_count) {
+			int32_t left = c->geom.x + c->bw;
+			int32_t top = c->geom.y + c->bw;
+			int32_t content_width = c->geom.width - 2 * c->bw;
+			int32_t content_height = c->geom.height - 2 * c->bw;
+			if (server.cursor->x >= left &&
+				server.cursor->x < left + content_width &&
+				server.cursor->y >= top &&
+				server.cursor->y <
+					top + MANGO_MIN(config.top_drag_zone, content_height)) {
+				server.top_drag_client = c;
+				server.top_drag_x = server.cursor->x;
+				server.top_drag_y = server.cursor->y;
+				server.floating_drag_button = event->button;
+				server.floating_drag_seat_press = false;
+				return true;
+			}
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:

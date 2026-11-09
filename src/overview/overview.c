@@ -375,9 +375,5 @@ void overview_restore(Client *c, const Arg *arg) {
 		c->bw = c->no_border ? 0 : config.borderpx;
 	}
 
-	if (c->isfloating && !c->force_tiled_state) {
-		client_set_tiled(c, WLR_EDGE_NONE);
-	}
-
 	client_sync_layer(c);
 }

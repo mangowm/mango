@@ -1,4 +1,5 @@
 #include "mango/layout/arrange.h"
+#include "mango/animation/client.h"
 #include "mango/animation/tag.h"
 #include "mango/common/server.h"
 #include "mango/dispatch/bind.h"
@@ -1163,6 +1164,21 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		}
 
 		if (VISIBLEON(c, m)) {
+			if (!only_calculate && !m->isoverview) {
+				bool layout_floating = cur_layout->id == FLOATING;
+				if (c->floating_layout_applied != layout_floating) {
+					if (layout_floating &&
+						(c->isfullscreen || c->ismaximizescreen)) {
+						c->floating_layout_applied = true;
+						client_sync_tiled_hint(c);
+						client_reparent_group(c);
+					} else if (!layout_floating) {
+						c->floating_layout_applied = false;
+						client_sync_tiled_hint(c);
+						client_reparent_group(c);
+					}
+				}
+			}
 			if (from_view && !client_only_in_one_tag(c)) {
 				set_size_per(m, c, true);
 			}
@@ -1373,6 +1389,28 @@ void tag_gather_apply(Monitor *m) {
 
 Layout overviewlayout = {"󰃇", overview, NULL, "overview"};
 
+static void floating(Monitor *m) {
+	Client *c;
+	wl_list_for_each(c, &server.clients, link) {
+		if (!VISIBLEON(c, m) || c->iskilling || c->isfullscreen ||
+			c->ismaximizescreen)
+			continue;
+
+		if (!c->floating_layout_applied) {
+			c->floating_layout_applied = true;
+			if (!c->isfloating)
+				client_restore_float_geometry(c);
+			client_sync_tiled_hint(c);
+			client_reparent_group(c);
+		} else if (!c->animation.running &&
+				   wlr_box_equal(&c->geom, &c->current)) {
+			continue;
+		} else {
+			resize(c, c->geom, (ResizeOpts){0});
+		}
+	}
+}
+
 Layout layouts[] = {
 	// At least two are required; fewer than two cannot be removed.
 	/* symbol     arrange function   name */
@@ -1397,6 +1435,7 @@ Layout layouts[] = {
 	{"F", fair, fair_predict, "fair", FAIR},
 	{"VF", vertical_fair, vertical_fair_predict, "vertical_fair",
 	 VERTICAL_FAIR},
+	{"FL", floating, NULL, "floating", FLOATING},
 };
 
 bool special_handle_empty_view(Monitor *m, bool from_view) {
