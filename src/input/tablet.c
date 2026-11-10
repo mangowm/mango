@@ -224,7 +224,6 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 	if (!change_x && !change_y)
 		return;
 
-	// TODO: apply constraints
 	switch (tool->tool_v2->wlr_tool->type) {
 	case WLR_TABLET_TOOL_TYPE_LENS:
 	case WLR_TABLET_TOOL_TYPE_MOUSE:
@@ -271,7 +270,6 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 
 	if (surface != tool->curr_surface) {
 		if (tool->curr_surface) {
-			// TODO: wait until all buttons released before leaving
 			wlr_tablet_v2_tablet_tool_notify_proximity_out(tool->tool_v2);
 			wl_list_for_each(tablet_pad, &server.tablet_pads, link) {
 				if (tablet_pad->tablet && tablet_pad->tablet == tablet)
