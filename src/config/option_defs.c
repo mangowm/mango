@@ -2831,9 +2831,9 @@ void override_config(void) {
 	config.gappoh = CLAMP_INT(config.gappoh, 0, 1000);
 	config.gappov = CLAMP_INT(config.gappov, 0, 1000);
 	config.scratchpad_width_ratio =
-		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.1f, 1.0f);
+		CLAMP_FLOAT(config.scratchpad_width_ratio, 0.0f, 1.0f);
 	config.scratchpad_height_ratio =
-		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.1f, 1.0f);
+		CLAMP_FLOAT(config.scratchpad_height_ratio, 0.0f, 1.0f);
 	config.special_dim = CLAMP_FLOAT(config.special_dim, 0.0f, 1.0f);
 	config.special_gappih = CLAMP_INT(config.special_gappih, 0, 1000);
 	config.special_gappiv = CLAMP_INT(config.special_gappiv, 0, 1000);
