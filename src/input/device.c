@@ -143,7 +143,6 @@ void handle_new_input_device(struct wl_listener *listener, void *data) {
 		switch_create(wlr_switch_from_input_device(device));
 		break;
 	default:
-		/* TODO handle other input device types */
 		break;
 	}
 

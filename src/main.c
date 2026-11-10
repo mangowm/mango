@@ -430,10 +430,6 @@ void run(char *startup_cmd, int readiness_fd) {
 	 */
 	set_selected_monitor(monitor_at_point(server.cursor->x, server.cursor->y));
 
-	/* TODO hack to get cursor to display in its initial location (100, 100)
-	 * instead of (0, 0) and then jumping. still may not be fully
-	 * initialized, as the image/coordinates are not transformed for the
-	 * monitor when displayed here */
 	wlr_cursor_warp_closest(server.cursor, NULL, server.cursor->x,
 							server.cursor->y);
 	wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "left_ptr");

@@ -454,11 +454,6 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	/* TODO: allow usage of scroll whell for mousebindings, it can be
-	 * implemented checking the event's orientation and the delta of the event
-	 */
-	/* Notify the client with pointer focus of the axis event. */
-
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
 							   ? config.trackpad_scroll_factor
 							   : config.axis_scroll_factor;
