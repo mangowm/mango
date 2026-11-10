@@ -9,28 +9,11 @@
 #include "mango/layout/vertical.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include <wlr/util/box.h>
-
-struct LayoutContext {
-	Client *probe;
-	struct wlr_box *out;
-};
-
-static inline bool
-layout_predict_box(void (*core)(Monitor *m, const struct LayoutContext *ctx),
-				   Monitor *m, Client *c, struct wlr_box *out) {
-	struct wlr_box geo = {0};
-	struct LayoutContext ctx = {.probe = c, .out = &geo};
-	core(m, &ctx);
-	*out = geo;
-	return geo.width > 0 && geo.height > 0;
-}
 
 /* layout(s) */
 typedef struct Layout {
 	const char *symbol;
 	void (*arrange)(Monitor *);
-	bool (*predict)(Monitor *m, Client *c, struct wlr_box *out);
 	const char *name;
 	uint32_t id;
 } Layout;

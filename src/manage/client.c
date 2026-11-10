@@ -1752,13 +1752,8 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 
 	// rule action only apply after map not apply in the init commit
 	struct wlr_surface *surface = client_surface(c);
-	if (!surface || !surface->mapped) {
-		if (rule_mon)
-			*rule_mon = mon;
-		if (rule_tags)
-			*rule_tags = newtags;
+	if (!surface || !surface->mapped)
 		return;
-	}
 
 	// apply swallow rule
 	c->pid = client_get_pid(c);
@@ -2249,73 +2244,6 @@ static void client_insert_tiling_order(Client *c) {
 		wl_list_insert(server.clients.prev, &c->link);
 }
 
-static void client_configure_size(Client *c, struct wlr_box geo, int32_t bw) {
-	if ((int32_t)geo.width <= 2 * bw || (int32_t)geo.height <= 2 * bw)
-		return;
-
-	client_set_size(c, (uint32_t)((int32_t)geo.width - 2 * bw),
-					(uint32_t)((int32_t)geo.height - 2 * bw), false);
-}
-
-static void client_negotiate_initial_size(Client *c, Monitor *rule_mon,
-										  uint32_t rule_tags) {
-	if (!c)
-		return;
-
-	Monitor *m =
-		rule_mon ? rule_mon : (c->mon ? c->mon : server.selected_monitor);
-	if (!m || m->isoverview)
-		return;
-
-	int32_t bw = (int32_t)c->bw;
-	Monitor *saved_mon = c->mon;
-	uint32_t saved_tags = c->tags;
-
-	c->mon = m;
-	client_reset_mon_tags(c, m, rule_tags);
-	check_match_tag_floating_rule(c, m);
-
-	if (c->isfloating || c->isfullscreen || c->ismaximizescreen ||
-		client_wants_fullscreen(c)) {
-		if (c->isfullscreen || client_wants_fullscreen(c))
-			client_configure_size(c, m->m, 0);
-		else if (c->ismaximizescreen)
-			client_configure_size(c, m->w, bw);
-		else
-			client_configure_size(c,
-								  c->float_geom.width > 0 &&
-										  c->float_geom.height > 0
-									  ? c->float_geom
-									  : c->geom,
-								  bw);
-		c->mon = saved_mon;
-		c->tags = saved_tags;
-		return;
-	}
-
-	uint32_t tag = get_mon_curtag(m);
-	const Layout *layout = m->pertag->ltidxs[tag];
-	if (!layout || !layout->predict) {
-		c->mon = saved_mon;
-		c->tags = saved_tags;
-		return;
-	}
-
-	client_insert_tiling_order(c);
-	pre_calculate_before_arrange(m, false, false, true);
-
-	struct wlr_box geo = {0};
-	if (layout->predict(m, c, &geo))
-		client_configure_size(c, geo, bw);
-
-	wl_list_remove(&c->link);
-	wl_list_init(&c->link);
-	pre_calculate_before_arrange(m, false, false, true);
-
-	c->mon = saved_mon;
-	c->tags = saved_tags;
-}
-
 void handle_client_map(struct wl_listener *listener, void *data) {
 	/* Called when the surface is mapped, or ready to display on-screen. */
 	Client *c = wl_container_of(listener, c, map);
@@ -2478,10 +2406,7 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 	if (c->surface.xdg->initial_commit) {
 		// xdg client will first enter this before mapnotify
 		init_client_properties(c);
-		Monitor *rule_mon = NULL;
-		uint32_t rule_tags = 0;
-		client_set_rules(c, &rule_mon, &rule_tags);
-		client_negotiate_initial_size(c, rule_mon, rule_tags);
+		client_set_rules(c, NULL, NULL);
 		if (c->mon) {
 			client_set_scale(client_surface(c), c->mon->wlr_output->scale);
 		}
@@ -4237,14 +4162,7 @@ void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,
 		pointer_warp_to_client(c1);
 }
 
-void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact,
-						const LayoutContext *ctx) {
-	if (ctx && ctx->probe) {
-		if (c == ctx->probe && ctx->out)
-			*ctx->out = geo;
-		return;
-	}
-
+void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!ISFAKETILED(c) || !c->mon)
 		return;
 
