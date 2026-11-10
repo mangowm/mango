@@ -2,7 +2,6 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/layout/arrange.h"
-#include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 
@@ -228,8 +227,7 @@ static void scroller_normalize_stack_weights(struct ScrollerStackNode *head) {
 }
 
 void scroller_arrange_stack_node(struct ScrollerStackNode *head,
-								 struct wlr_box geometry, int32_t gappiv,
-								 const LayoutContext *ctx) {
+								 struct wlr_box geometry, int32_t gappiv) {
 	int32_t stack_size = 0;
 	struct ScrollerStackNode *iter = head;
 	while (iter) {
@@ -256,7 +254,7 @@ void scroller_arrange_stack_node(struct ScrollerStackNode *head,
 									  .y = current_y,
 									  .width = geometry.width,
 									  .height = client_height};
-		client_tile_resize(iter->client, client_geom, 0, ctx);
+		client_tile_resize(iter->client, client_geom, 0);
 		remain_proportion -= iter->scroller_stack_proportion;
 		remain_client_height -= client_height;
 		current_y += client_height + gappiv;
@@ -266,8 +264,7 @@ void scroller_arrange_stack_node(struct ScrollerStackNode *head,
 
 void scroller_arrange_stack_vertical_node(struct ScrollerStackNode *head,
 										  struct wlr_box geometry,
-										  int32_t gappih,
-										  const LayoutContext *ctx) {
+										  int32_t gappih) {
 	int32_t stack_size = 0;
 	struct ScrollerStackNode *iter = head;
 	while (iter) {
@@ -294,7 +291,7 @@ void scroller_arrange_stack_vertical_node(struct ScrollerStackNode *head,
 									  .x = current_x,
 									  .height = geometry.height,
 									  .width = client_width};
-		client_tile_resize(iter->client, client_geom, 0, ctx);
+		client_tile_resize(iter->client, client_geom, 0);
 		remain_proportion -= iter->scroller_stack_proportion;
 		remain_client_width -= client_width;
 		current_x += client_width + gappih;
@@ -302,7 +299,7 @@ void scroller_arrange_stack_vertical_node(struct ScrollerStackNode *head,
 	}
 }
 
-static void scroller_core(Monitor *m, const LayoutContext *ctx) {
+void scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
 	Client *c = NULL;
@@ -378,7 +375,7 @@ static void scroller_core(Monitor *m, const LayoutContext *ctx) {
 		target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
 		target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
 		horizontal_check_scroller_root_inside_mon(head->client, &target_geom);
-		scroller_arrange_stack_node(head, target_geom, cur_gappiv, ctx);
+		scroller_arrange_stack_node(head, target_geom, cur_gappiv);
 		sync_scroller_state_to_clients(m, tag);
 		free(heads);
 		return;
@@ -480,14 +477,14 @@ static void scroller_core(Monitor *m, const LayoutContext *ctx) {
 		target_geom.x = m->m.x;
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
-		scroller_arrange_stack_node(heads[focus_index], target_geom, cur_gappiv,
-									ctx);
+		scroller_arrange_stack_node(heads[focus_index], target_geom,
+									cur_gappiv);
 	} else if (heads[focus_index]->client->ismaximizescreen) {
 		target_geom.x = m->w.x + cur_gappoh;
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
-		scroller_arrange_stack_node(heads[focus_index], target_geom, cur_gappiv,
-									ctx);
+		scroller_arrange_stack_node(heads[focus_index], target_geom,
+									cur_gappiv);
 	} else if (need_scroller) {
 		if (need_apply_center) {
 			target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
@@ -512,14 +509,14 @@ static void scroller_core(Monitor *m, const LayoutContext *ctx) {
 		}
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
-		scroller_arrange_stack_node(heads[focus_index], target_geom, cur_gappiv,
-									ctx);
+		scroller_arrange_stack_node(heads[focus_index], target_geom,
+									cur_gappiv);
 	} else {
 		target_geom.x = root_client->geom.x;
 		horizontal_check_scroller_root_inside_mon(heads[focus_index]->client,
 												  &target_geom);
-		scroller_arrange_stack_node(heads[focus_index], target_geom, cur_gappiv,
-									ctx);
+		scroller_arrange_stack_node(heads[focus_index], target_geom,
+									cur_gappiv);
 	}
 
 	/* Arranges the left stack. */
@@ -531,7 +528,7 @@ static void scroller_core(Monitor *m, const LayoutContext *ctx) {
 		horizontal_scroll_adjust_fullandmax(cur->client, &left_geom);
 		left_geom.x = heads[focus_index - i + 1]->client->geom.x - cur_gappih -
 					  left_geom.width;
-		scroller_arrange_stack_node(cur, left_geom, cur_gappiv, ctx);
+		scroller_arrange_stack_node(cur, left_geom, cur_gappiv);
 	}
 
 	/* Arranges the right stack. */
@@ -543,14 +540,14 @@ static void scroller_core(Monitor *m, const LayoutContext *ctx) {
 		horizontal_scroll_adjust_fullandmax(cur->client, &right_geom);
 		right_geom.x = heads[focus_index + i - 1]->client->geom.x + cur_gappih +
 					   heads[focus_index + i - 1]->client->geom.width;
-		scroller_arrange_stack_node(cur, right_geom, cur_gappiv, ctx);
+		scroller_arrange_stack_node(cur, right_geom, cur_gappiv);
 	}
 
 	sync_scroller_state_to_clients(m, tag);
 	free(heads);
 }
 
-static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
+void vertical_scroller(Monitor *m) {
 	uint32_t tag = get_mon_curtag(m);
 	int32_t bar_height = 0;
 	struct TagScrollerState *st = ensure_scroller_state(m, tag);
@@ -622,8 +619,7 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
 		target_geom.x = m->w.x + (m->w.width - target_geom.width) / 2;
 		vertical_check_scroller_root_inside_mon(head->client, &target_geom);
-		scroller_arrange_stack_vertical_node(head, target_geom, cur_gappih,
-											 ctx);
+		scroller_arrange_stack_vertical_node(head, target_geom, cur_gappih);
 		sync_scroller_state_to_clients(m, tag);
 		free(heads);
 		return;
@@ -724,13 +720,13 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		scroller_arrange_stack_vertical_node(heads[focus_index], target_geom,
-											 cur_gappih, ctx);
+											 cur_gappih);
 	} else if (heads[focus_index]->client->ismaximizescreen) {
 		target_geom.y = m->w.y + cur_gappov;
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		scroller_arrange_stack_vertical_node(heads[focus_index], target_geom,
-											 cur_gappih, ctx);
+											 cur_gappih);
 	} else if (need_scroller) {
 		if (need_apply_center) {
 			target_geom.y = m->w.y + (m->w.height - target_geom.height) / 2;
@@ -756,7 +752,7 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		scroller_arrange_stack_vertical_node(heads[focus_index], target_geom,
-											 cur_gappih, ctx);
+											 cur_gappih);
 	} else {
 		bar_height =
 			!root_client->isfullscreen && client_wants_group_bar(root_client)
@@ -767,7 +763,7 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		vertical_check_scroller_root_inside_mon(heads[focus_index]->client,
 												&target_geom);
 		scroller_arrange_stack_vertical_node(heads[focus_index], target_geom,
-											 cur_gappih, ctx);
+											 cur_gappih);
 	}
 
 	for (int i = 1; i <= focus_index; i++) {
@@ -785,7 +781,7 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 
 		up_geom.y = heads[focus_index - i + 1]->client->geom.y - cur_gappiv -
 					up_geom.height - bar_height;
-		scroller_arrange_stack_vertical_node(cur, up_geom, cur_gappih, ctx);
+		scroller_arrange_stack_vertical_node(cur, up_geom, cur_gappih);
 	}
 
 	for (int i = 1; i < n_heads - focus_index; i++) {
@@ -796,7 +792,7 @@ static void vertical_scroller_core(Monitor *m, const LayoutContext *ctx) {
 		vertical_scroll_adjust_fullandmax(cur->client, &down_geom);
 		down_geom.y = heads[focus_index + i - 1]->client->geom.y + cur_gappiv +
 					  heads[focus_index + i - 1]->client->geom.height;
-		scroller_arrange_stack_vertical_node(cur, down_geom, cur_gappih, ctx);
+		scroller_arrange_stack_vertical_node(cur, down_geom, cur_gappih);
 	}
 
 	sync_scroller_state_to_clients(m, tag);
@@ -1145,16 +1141,4 @@ void exchange_two_scroller_clients(Client *c1, Client *c2) {
 	finish_exchange_arrange_and_focus(c1, c2, m1, m2);
 
 	return;
-}
-
-void scroller(Monitor *m) { scroller_core(m, NULL); }
-
-bool scroller_predict(Monitor *m, Client *c, struct wlr_box *out) {
-	return layout_predict_box(scroller_core, m, c, out);
-}
-
-void vertical_scroller(Monitor *m) { vertical_scroller_core(m, NULL); }
-
-bool vertical_scroller_predict(Monitor *m, Client *c, struct wlr_box *out) {
-	return layout_predict_box(vertical_scroller_core, m, c, out);
 }

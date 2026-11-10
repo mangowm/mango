@@ -431,8 +431,7 @@ void client_swap_layout_properties(Client *c1, Client *c2);
 void client_swap_monitors_and_tags(Client *c1, Client *c2);
 void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,
 									   Monitor *m2);
-void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact,
-						const LayoutContext *ctx);
+void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact);
 uint32_t generate_client_id(void);
 void client_pending_force_kill(Client *c);
 void client_add_jump_label_node(Client *c);
