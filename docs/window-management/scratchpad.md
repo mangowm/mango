@@ -69,6 +69,11 @@ When a named scratchpad rule does not specify `width` or `height`, its floating
 window uses these ratios. An explicit `width` or `height` in the rule takes
 precedence.
 
+Setting either ratio to `0` disables forcing that dimension: the window keeps
+whatever width or height the application requested (or the size it had before
+being sent to the scratchpad). Setting both to `0` leaves the scratchpad size
+entirely untouched.
+
 ```ini
 scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
