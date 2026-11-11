@@ -467,6 +467,33 @@ bool mango_output_commit(Monitor *m) {
 	return committed;
 }
 
+struct wlr_output_mode *get_max_refresh_mode(struct wlr_output *output) {
+	struct wlr_output_mode *mode, *best = NULL;
+	struct wlr_output_mode *preferred = wlr_output_preferred_mode(output);
+	if (preferred != NULL) {
+		wl_list_for_each(mode, &output->modes, link) {
+			if (mode->width == preferred->width &&
+				mode->height == preferred->height) {
+				if (best == NULL || mode->refresh > best->refresh) {
+					best = mode;
+				}
+			}
+		}
+		if (best != NULL) {
+			return best;
+		}
+		return preferred;
+	}
+	wl_list_for_each(mode, &output->modes, link) {
+		if (best == NULL || mode->refresh > best->refresh ||
+			(mode->refresh == best->refresh &&
+			 mode->width * mode->height > best->width * best->height)) {
+			best = mode;
+		}
+	}
+	return best;
+}
+
 struct wlr_output_mode *get_nearest_output_mode(struct wlr_output *output,
 												int32_t width, int32_t height,
 												float refresh) {
@@ -735,10 +762,9 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	}
 
 	if (!custom_monitor_mode) {
-		struct wlr_output_mode *preferred_mode =
-			wlr_output_preferred_mode(wlr_output);
-		if (preferred_mode) {
-			wlr_output_state_set_mode(&pending, preferred_mode);
+		struct wlr_output_mode *max_mode = get_max_refresh_mode(wlr_output);
+		if (max_mode) {
+			wlr_output_state_set_mode(&pending, max_mode);
 		} else {
 			struct wlr_output_state custom_test_mode;
 			wlr_output_state_init(&custom_test_mode);
@@ -772,8 +798,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 											 pending.custom_mode.refresh);
 		}
 	} else {
-		// Fallback: use the preferred mode.
-		struct wlr_output_mode *pref = wlr_output_preferred_mode(wlr_output);
+		struct wlr_output_mode *pref = get_max_refresh_mode(wlr_output);
 		if (pref)
 			wlr_output_state_set_mode(&state, pref);
 	}
