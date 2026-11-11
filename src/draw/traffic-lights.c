@@ -259,12 +259,10 @@ void client_draw_traffic_lights(Client *c) {
 	}
 }
 
-bool traffic_lights_click(Client *c, double px, double py) {
-	/* FORCE is 0, so say UNFORCE: the red dot asks the window to close. */
-	Arg arg = {.tc = c, .i = UNFORCE};
-
+/* Index of the dot under (px, py) in layout coordinates, or -1. */
+static int32_t tl_hit(Client *c, double px, double py) {
 	if (!tl_visible(c))
-		return false;
+		return -1;
 
 	for (int32_t i = 0; i < TL_COUNT; i++) {
 		int32_t size = config.traffic_light_size;
@@ -279,16 +277,29 @@ bool traffic_lights_click(Client *c, double px, double py) {
 
 		cx = c->geom.x + (int32_t)c->bw + x + size / 2.0;
 		cy = c->geom.y + (int32_t)c->bw + y + size / 2.0;
-		if ((px - cx) * (px - cx) + (py - cy) * (py - cy) > r * r)
-			continue;
-
-		if (i == 0)
-			kill_client(&arg);
-		else if (i == 1)
-			minimize_window(&arg);
-		else
-			toggle_maximize_screen(&arg);
-		return true;
+		if ((px - cx) * (px - cx) + (py - cy) * (py - cy) <= r * r)
+			return i;
 	}
-	return false;
+	return -1;
+}
+
+bool traffic_lights_hover(Client *c, double px, double py) {
+	return tl_hit(c, px, py) >= 0;
+}
+
+bool traffic_lights_click(Client *c, double px, double py) {
+	/* FORCE is 0, so say UNFORCE: the red dot asks the window to close. */
+	Arg arg = {.tc = c, .i = UNFORCE};
+	int32_t i = tl_hit(c, px, py);
+
+	if (i < 0)
+		return false;
+
+	if (i == 0)
+		kill_client(&arg);
+	else if (i == 1)
+		minimize_window(&arg);
+	else
+		toggle_maximize_screen(&arg);
+	return true;
 }

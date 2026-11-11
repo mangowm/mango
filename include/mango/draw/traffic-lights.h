@@ -16,4 +16,7 @@ void client_draw_traffic_lights(Client *c);
  * when a dot was hit, so the click must not reach the window. */
 bool traffic_lights_click(Client *c, double x, double y);
 
+/* True when (x, y) is over a dot, so the pointer must show an arrow. */
+bool traffic_lights_hover(Client *c, double x, double y);
+
 #endif

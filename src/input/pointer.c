@@ -503,7 +503,7 @@ void handle_request_set_cursor_shape(struct wl_listener *listener, void *data) {
 		return;
 	/* While the resize strip owns the cursor keep showing it: the client
 	 * gets the cursor back, and re-sends it, once the strip is left. */
-	if (server.hover_resize_edge)
+	if (server.hover_resize_edge || server.hover_traffic_light)
 		return;
 	/* This can be sent by any client, so we check to make sure this one is
 	 * actually has pointer focus first. If so, we can tell the cursor to
@@ -951,6 +951,33 @@ static void pointer_update_resize_cursor(Client *c,
 	}
 }
 
+/* While the pointer is over a traffic light dot it shows a plain arrow: the
+ * window under it (a terminal, a text editor) would otherwise keep its own
+ * cursor, such as an I-beam. Mirrors the resize strip above. */
+static void pointer_update_traffic_cursor(Client *c) {
+	bool hover, changed;
+
+	if (server.cursor_mode != CurNormal || server.session_locked)
+		return;
+
+	hover = c && !server.cursor_hidden && !server.seat->drag &&
+			!server.hover_resize_edge &&
+			traffic_lights_hover(c, server.cursor->x, server.cursor->y);
+	changed = hover != server.hover_traffic_light;
+	server.hover_traffic_light = hover;
+
+	if (server.cursor_hidden)
+		return;
+
+	if (hover) {
+		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
+	} else if (changed && !server.seat->drag) {
+		/* Leaving the dot hands the cursor back to the client: drop the
+		 * pointer focus so it re-enters and sends its own cursor again. */
+		wlr_seat_pointer_clear_focus(server.seat);
+	}
+}
+
 void pointer_resize_floating_window(Client *gc, double x, double y) {
 	uint32_t edge = server.resize_edge;
 	int32_t bw = (int32_t)gc->bw;
@@ -1334,6 +1361,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	}
 
 	pointer_update_resize_cursor(c, surface);
+	pointer_update_traffic_cursor(c);
 
 	if (top_drag_client) {
 		if (server.cursor_mode != CurPressed || top_drag_client->iskilling) {
@@ -1560,7 +1588,7 @@ void handle_request_set_cursor(struct wl_listener *listener, void *data) {
 		return;
 	/* While the resize strip owns the cursor keep showing it: the client
 	 * gets the cursor back, and re-sends it, once the strip is left. */
-	if (server.hover_resize_edge)
+	if (server.hover_resize_edge || server.hover_traffic_light)
 		return;
 	/* This can be sent by any client, so we check to make sure this one is
 	 * actually has pointer focus first. If so, we can tell the cursor to

@@ -133,6 +133,7 @@ struct MangoServer {
 	Client *grab_client, *drop_client;
 	uint32_t resize_edge;
 	uint32_t hover_resize_edge;
+	bool hover_traffic_light; /* pointer is over a traffic light dot */
 	bool hover_resize_floating;
 	bool grab_is_border_resize;			   /* grab started by a border click */
 	int32_t grab_offset_x, grab_offset_y;  /* client-relative */
