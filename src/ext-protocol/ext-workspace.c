@@ -10,6 +10,7 @@ static struct wl_list workspaces;
 
 void goto_workspace(struct workspace *target) {
 	uint32_t tag;
+	set_selected_monitor(target->m);
 	tag = 1 << (target->tag - 1);
 	if (target->tag == 0) {
 		toggle_overview(&(Arg){0});
@@ -21,6 +22,7 @@ void goto_workspace(struct workspace *target) {
 
 void toggle_workspace(struct workspace *target) {
 	uint32_t tag;
+	set_selected_monitor(target->m);
 	tag = 1 << (target->tag - 1);
 	if (target->tag == 0) {
 		toggle_view(&(Arg){.i = -1});
