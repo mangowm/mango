@@ -1918,8 +1918,10 @@ int32_t toggle_maximize_screen(const Arg *arg) {
 
 	if (sel->ismaximizescreen)
 		client_set_maximize_screen(sel, 0, true);
-	else
+	else {
+		client_clear_fullscreen_maximize_backup(sel);
 		client_set_maximize_screen(sel, 1, true);
+	}
 
 	client_update_border_color(sel);
 	return 0;
