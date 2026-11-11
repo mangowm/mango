@@ -112,6 +112,7 @@ typedef struct {
 	int32_t is_once_applied;
 	uint32_t tags;
 	int32_t isfloating;
+	int32_t stayfocused;
 	int32_t isfullscreen;
 	int32_t isfakefullscreen;
 	float scroller_proportion;
