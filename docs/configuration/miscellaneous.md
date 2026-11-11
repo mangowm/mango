@@ -54,6 +54,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `float_full_to_top` | `0` | Let fullscreen, floating and layer-shell `top` windows share one layer so they can cover each other; which one ends up on top depends on which was opened or raised last. When `0`, they are split into separate layers instead: floating windows below, fullscreen windows above layer-shell `top` windows. |
 | `no_border_when_single` | `0` | Remove window borders when only one window is visible on the tag. |
 | `smart_gaps` | `0` | Disable gaps when only one window is present. |
+| `single_window_aspect_ratio` | `0:0` | Keep a lone tiled window at this aspect ratio (e.g. `16:9`), centered in its area. `0:0` disables it. |
 | `idle_inhibit_ignore_visible` | `0` | Allow invisible clients (e.g., background audio players) to inhibit idle. |
 | `idle_inhibit_when_fullscreen` | `0` | Keep idle inhibited while a fullscreen window is focused. |
 | `tag_carousel` | `0` | Enable tag carousel (cycling through tags). |

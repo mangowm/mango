@@ -481,6 +481,7 @@ typedef struct {
 
 	/* appearance */
 	int32_t smartgaps;
+	float single_window_aspect_ratio;
 	int32_t monocle_tab_mode;
 	int32_t monocle_right_button_close;
 	int32_t deck_tab_mode;
