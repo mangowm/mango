@@ -1256,8 +1256,20 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		/* Update selected_monitor (even while dragging a window) */
 		if (config.sloppyfocus) {
 			Monitor *oldmon = server.selected_monitor;
-			set_selected_monitor(
-				monitor_at_point(server.cursor->x, server.cursor->y));
+			Monitor *newmon =
+				monitor_at_point(server.cursor->x, server.cursor->y);
+
+			/* monitor_at_point() returns NULL in gaps between outputs.
+			 * Keep the previous monitor instead: a NULL selected_monitor
+			 * defeats client_focus()'s "already focused" fast path and turns
+			 * every motion into a full focus transition. */
+			if (!newmon)
+				newmon =
+					oldmon ? oldmon
+						   : get_monitor_nearest_to((int32_t)server.cursor->x,
+													(int32_t)server.cursor->y);
+
+			set_selected_monitor(newmon);
 			if (oldmon != server.selected_monitor)
 				printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
 		}
@@ -1447,11 +1459,23 @@ void pointer_focus(Client *c, struct wlr_surface *surface, double sx, double sy,
 	if (config.sloppyfocus && !server.start_drag_window && !server.seat->drag &&
 		c && time && c->scene && c->scene->node.enabled &&
 		(!c->mon || !is_overcircle_mode(c->mon)) && !c->animation.tagining &&
-		(surface != server.seat->pointer_state.focused_surface ||
-		 (server.selected_monitor && server.selected_monitor->isoverview &&
-		  server.selected_monitor->sel != c)) &&
-		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
-		client_focus(c, 0);
+		!client_is_unmanaged(c) && VISIBLEON(c, c->mon)) {
+		/* Pointer focus is tracked per surface, so popups, subsurfaces and
+		 * overview mode leave it pointing at something other than the client's
+		 * toplevel surface. Compare against the keyboard focus target instead:
+		 * a client that already owns keyboard focus must not be re-focused on
+		 * every motion, which would restart its focus animation and re-run
+		 * arrange/VRR/IPC on each event. */
+		if (surface != server.seat->pointer_state.focused_surface ||
+			(server.selected_monitor && server.selected_monitor->isoverview &&
+			 server.selected_monitor->sel != c)) {
+			Client *kb_client = NULL;
+			toplevel_from_wlr_surface(
+				server.seat->keyboard_state.focused_surface, &kb_client, NULL);
+			if (kb_client != c)
+				client_focus(c, 0);
+		}
+	}
 
 	/* Pointer-driven layer constraints: deactivate as soon as the pointer
 	 * leaves their surface. Toplevel constraints are managed by focusclient

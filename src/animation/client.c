@@ -1679,13 +1679,34 @@ bool client_draw_fadeout_frame(Client *c) {
 	return true;
 }
 
+static bool focus_animation_color_matches(const float target[4],
+										  const float color[4]) {
+	for (int32_t i = 0; i < 4; i++) {
+		if (fabsf(target[i] - color[i]) >= 0.001f)
+			return false;
+	}
+	return true;
+}
+
 void client_start_focus_animation(Client *c, bool focused) {
 	float *border_color = get_border_color(c);
 	float *dim_color = get_dim_color(c);
+	float target_opacity = focused ? c->focused_opacity : c->unfocused_opacity;
+
+	/* A focus refresh that asks for the state we are already animating to must
+	 * not restart the animation: every restart keeps the client requesting
+	 * frames for another full duration, which starves video playback when the
+	 * refresh happens on pointer motion. */
+	if (c->opacity_animation.running &&
+		fabsf(c->opacity_animation.target_opacity - target_opacity) < 0.001f &&
+		focus_animation_color_matches(c->opacity_animation.target_border_color,
+									  border_color) &&
+		focus_animation_color_matches(c->opacity_animation.target_dim_color,
+									  dim_color))
+		return;
 
 	c->opacity_animation.duration = config.animation_duration_focus;
-	c->opacity_animation.target_opacity =
-		focused ? c->focused_opacity : c->unfocused_opacity;
+	c->opacity_animation.target_opacity = target_opacity;
 	memcpy(c->opacity_animation.target_border_color, border_color,
 		   sizeof(c->opacity_animation.target_border_color));
 	memcpy(c->opacity_animation.target_dim_color, dim_color,
