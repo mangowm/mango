@@ -19,6 +19,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/manage/zoom.h"
 #include "mango/switcher/switcher.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/libinput.h>
@@ -1181,6 +1182,10 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	struct wlr_surface *surface = NULL;
 	bool should_lock = false;
 
+	/* A constraint can warp the pointer instead of moving it, so the crop
+	 * follows from here rather than from the motion branch. */
+	screen_zoom_refresh();
+
 	/* time is 0 in internal calls meant to restore pointer focus. */
 	if (time) {
 		wlr_relative_pointer_manager_v1_send_relative_motion(
@@ -1605,6 +1610,7 @@ void pointer_warp_to_monitor(Monitor *m) {
 							m->w.y + m->w.height / 2.0);
 	wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
 	pointer_cursor_activity();
+	screen_zoom_refresh();
 }
 
 void handle_new_virtual_pointer(struct wl_listener *listener, void *data) {

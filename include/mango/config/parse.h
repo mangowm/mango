@@ -337,6 +337,11 @@ typedef struct {
 	double animation_curve_opafadein[4];
 	double animation_curve_opafadeout[4];
 
+	/* Screen magnifier, see manage/zoom.c. */
+	float screen_zoom_max;
+	float screen_zoom_step;
+	uint32_t screen_zoom_duration;
+
 	int32_t scroller_structs;
 	float scroller_default_proportion;
 	float scroller_default_proportion_single;

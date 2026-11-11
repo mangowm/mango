@@ -215,6 +215,35 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `enable_monitor` | `monitor_spec` | add monitor. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 | `toggle_monitor` | `monitor_spec` | Toggle monitor add/remove. Accepts a [monitor spec](/docs/configuration/monitors#monitor-spec-format). |
 
+### Screen Magnifier
+
+Magnifies the output under the pointer around the cursor. The level is shared by
+all outputs, so moving the pointer to another output magnifies it at the same
+level. These commands are unrelated to `zoom`, which swaps the focused window
+with master.
+
+| Command | Param | Description |
+| :--- | :--- | :--- |
+| `screen_zoom_in` | - | Magnify the output under the pointer by `screen_zoom_step`, clamped to `screen_zoom_max` (`1` keeps the magnifier off). |
+| `screen_zoom_out` | - | Reduce the magnification by `screen_zoom_step`, down to 1x. |
+| `screen_zoom` | `<delta>` | Move the magnification by `<delta>`; negative zooms out, and omitting the argument steps in by `screen_zoom_step`. Meant for `axisbind`, so the wheel can zoom. |
+| `screen_zoom_reset` | - | Animate back to 1x. |
+
+```ini
+bind=SUPER,equal,screen_zoom_in
+bind=SUPER,minus,screen_zoom_out
+bind=SUPER,0,screen_zoom_reset
+
+# Hold Super and scroll the wheel to zoom. Nothing is bound by default.
+axis_bind_apply_timeout=0
+axisbind=SUPER,up,screen_zoom,0.25
+axisbind=SUPER,down,screen_zoom,-0.25
+```
+
+`axis_bind_apply_timeout=0` makes every wheel event count instead of at most one
+per 100 ms; the level animates with `screen_zoom_duration`, so notches blend into
+one movement. Scrolling without Super still goes to the client.
+
 ### Media Controls
 
 > **Warning:** Some keyboards don't send standard media keys. Run `wev` and press your key to check the exact key name.
