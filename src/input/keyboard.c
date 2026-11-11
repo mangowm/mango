@@ -438,6 +438,10 @@ uint32_t keyboard_hard_modifiers(void) {
 		if (group->keyboard)
 			mods |= wlr_keyboard_get_modifiers(group->keyboard);
 	}
+	wl_list_for_each(group, &server.virtual_keyboards, link) {
+		if (group->keyboard)
+			mods |= wlr_keyboard_get_modifiers(group->keyboard);
+	}
 	return mods;
 }
 
