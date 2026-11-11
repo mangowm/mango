@@ -4174,6 +4174,15 @@ void client_tile_resize(Client *c, struct wlr_box geo, int32_t interact) {
 	if (!ISFAKETILED(c) || !c->mon)
 		return;
 
+	float ratio = config.single_window_aspect_ratio;
+	if (ratio > 0 && ISTILED(c) && !c->mon->isoverview &&
+		c->mon->visible_fake_tiling_clients == 1) {
+		int32_t w = MANGO_MIN(geo.width, (int32_t)(geo.height * ratio));
+		int32_t h = MANGO_MIN(geo.height, (int32_t)(geo.width / ratio));
+		geo = (struct wlr_box){geo.x + (geo.width - w) / 2,
+							   geo.y + (geo.height - h) / 2, w, h};
+	}
+
 	if (!c->mon->isoverview && !c->isfullscreen && client_wants_group_bar(c)) {
 		geo.y = geo.y + config.group_bar_height;
 		geo.height -= config.group_bar_height;

@@ -534,6 +534,10 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->border_resize_size = atoi(value);
 	} else if (strcmp(key, "smart_gaps") == 0) {
 		config->smartgaps = atoi(value);
+	} else if (strcmp(key, "single_window_aspect_ratio") == 0) {
+		float w, h;
+		config->single_window_aspect_ratio =
+			sscanf(value, "%f:%f", &w, &h) == 2 && w > 0 && h > 0 ? w / h : 0;
 	} else if (strcmp(key, "monocle_tab_mode") == 0) {
 		config->monocle_tab_mode = atoi(value);
 	} else if (strcmp(key, "monocle_right_button_close") == 0) {
@@ -2428,6 +2432,7 @@ void set_value_default() {
 	config.enable_hotarea = 0;
 	config.hotarea_disable_on_fullscreen = 1;
 	config.smartgaps = 0;
+	config.single_window_aspect_ratio = 0;
 	config.monocle_tab_mode = 1;
 	config.monocle_right_button_close = 0;
 	config.deck_tab_mode = 1;
