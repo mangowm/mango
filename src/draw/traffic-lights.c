@@ -5,6 +5,7 @@
 #include "mango/draw/dim-node.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -79,7 +80,9 @@ static bool tl_client_draws_buttons(Client *c) {
 	}
 #endif
 
-	/* It asked to move, minimize or maximize itself: it has its own bar. */
+	/* It asked to minimize or maximize itself right after a click: it has
+	 * its own buttons. A move request is NOT evidence: GTK windows with a
+	 * hidden or empty title bar (and toolbars) ask to be moved too. */
 	if (c->has_own_buttons)
 		return true;
 
@@ -99,23 +102,24 @@ static bool tl_client_draws_buttons(Client *c) {
 			return false;
 	}
 
-	/* No negotiation (e.g. GTK headerbars): such windows declare a window
-	 * geometry smaller than their surface to leave room for their shadow. */
-	return xdg->geometry.x > 0 || xdg->geometry.y > 0 ||
-		   xdg->geometry.width < xdg->surface->current.width ||
-		   xdg->geometry.height < xdg->surface->current.height;
+	/* No negotiation (e.g. GTK): a CSD window reserves a shadow margin, so its
+	 * window geometry starts inside the surface. Only that offset counts. The
+	 * old width/height comparison also fired whenever the surface and the
+	 * geometry were briefly out of step (focus change, move, resize), which
+	 * made the dots vanish on the first click or drag. */
+	return xdg->geometry.x > 0 || xdg->geometry.y > 0;
 }
 
-/* App ids listed in traffic_light_ignore never get dots. */
-static bool tl_ignored(Client *c) {
+/* True when the app id of c is in the comma/space separated list. */
+static bool tl_in_list(Client *c, const char *src) {
 	const char *appid = client_get_appid(c);
 	char *list, *save = NULL, *tok;
 	bool hit = false;
 
-	if (!appid || !*appid || !config.traffic_light_ignore[0])
+	if (!appid || !*appid || !src[0])
 		return false;
 
-	list = strdup(config.traffic_light_ignore);
+	list = strdup(src);
 	if (!list)
 		return false;
 	for (tok = strtok_r(list, ", \t", &save); tok;
@@ -129,26 +133,87 @@ static bool tl_ignored(Client *c) {
 	return hit;
 }
 
-/* Dots are for the main window of an app, not for dialogs. */
-static bool tl_visible(Client *c) {
+/* App ids listed in traffic_light_ignore never get dots. */
+static bool tl_ignored(Client *c) {
+	return tl_in_list(c, config.traffic_light_ignore);
+}
+
+/* App ids listed in traffic_light_force always get dots, skipping the
+ * client-side decoration guess. */
+static bool tl_forced(Client *c) {
+	return tl_in_list(c, config.traffic_light_force);
+}
+
+/* Why the dots are hidden for c, or NULL when they should show. */
+static const char *tl_hide_reason(Client *c) {
 	int32_t sw, total;
 
-	if (!c || !c->mon || !config.traffic_lights || !c->isfloating)
-		return false;
-	if (c->isfullscreen || c->iskilling || c->isminimized ||
-		c->mon->isoverview || !VISIBLEON(c, c->mon))
-		return false;
-	if (client_is_float_type(c) || client_get_parent(c))
-		return false;
+	if (!c || !c->mon)
+		return "no-monitor";
+	if (!config.traffic_lights)
+		return "disabled";
+	if (!c->isfloating)
+		return "not-floating";
+	if (c->isfullscreen)
+		return "fullscreen";
+	if (c->iskilling)
+		return "killing";
+	if (c->isminimized)
+		return "minimized";
+	if (c->mon->isoverview)
+		return "overview";
+	if (!VISIBLEON(c, c->mon))
+		return "not-visible-on-monitor";
+	if (client_is_float_type(c))
+		return "float-type(min==max size or dialog hint)";
+	if (client_get_parent(c))
+		return "has-parent";
 	if (tl_ignored(c))
-		return false;
-	if (!config.traffic_light_on_csd && tl_client_draws_buttons(c))
-		return false;
+		return "ignored";
+	if (!config.traffic_light_on_csd && !tl_forced(c) &&
+		tl_client_draws_buttons(c))
+		return "client-draws-buttons";
 
 	sw = c->geom.width - 2 * (int32_t)c->bw;
 	total = config.traffic_light_count * config.traffic_light_size +
 			(config.traffic_light_count - 1) * tl_gap();
-	return sw > total + 2 * tl_margin();
+	if (sw <= total + 2 * tl_margin())
+		return "too-narrow";
+	return NULL;
+}
+
+/* Dots are for the main window of an app, not for dialogs. */
+static bool tl_visible(Client *c) { return tl_hide_reason(c) == NULL; }
+
+/* With MANGO_TL_DEBUG=1 in the environment, log whenever the reason a window
+ * has no dots changes. Output goes to the compositor log (stderr). */
+static void tl_debug(Client *c, const char *reason) {
+	static Client *seen_c[32];
+	static const char *seen_r[32];
+	static int32_t next;
+	static int32_t enabled = -1;
+	int32_t i;
+
+	if (enabled < 0)
+		enabled = getenv("MANGO_TL_DEBUG") != NULL;
+	if (!enabled)
+		return;
+
+	for (i = 0; i < 32; i++) {
+		if (seen_c[i] != c)
+			continue;
+		if (seen_r[i] == reason)
+			return;
+		seen_r[i] = reason;
+		goto print;
+	}
+	i = next++ % 32;
+	seen_c[i] = c;
+	seen_r[i] = reason;
+print:
+	fprintf(stderr, "traffic-lights: appid=%s %s\n",
+			client_get_appid(c) ? client_get_appid(c) : "?",
+			reason ? reason : "shown");
 }
 
 /* Top-left corner of dot i, relative to the window surface. */
@@ -167,7 +232,11 @@ void client_draw_traffic_lights(Client *c) {
 	if (!c || !c->traffic_light[0])
 		return;
 
-	show = tl_visible(c);
+	{
+		const char *reason = tl_hide_reason(c);
+		show = reason == NULL;
+		tl_debug(c, reason);
+	}
 	for (int32_t i = 0; i < TL_COUNT; i++) {
 		int32_t x, y;
 

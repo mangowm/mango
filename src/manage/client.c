@@ -2833,8 +2833,8 @@ static bool client_owns_pointer_press(Client *c) {
 void handle_client_request_move(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, request_move);
 
-	if (c)
-		c->has_own_buttons = true;
+	/* A move request is not proof that the window draws its own buttons: GTK
+	 * asks for one from any draggable area, so it must not hide the dots. */
 
 	if (!c || c->iskilling || server.session_locked ||
 		!client_owns_pointer_press(c))

@@ -984,6 +984,9 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->traffic_lights = atoi(value);
 	} else if (strcmp(key, "traffic_light_size") == 0) {
 		config->traffic_light_size = atoi(value);
+	} else if (strcmp(key, "traffic_light_force") == 0) {
+		snprintf(config->traffic_light_force,
+				 sizeof(config->traffic_light_force), "%s", value);
 	} else if (strcmp(key, "traffic_light_ignore") == 0) {
 		snprintf(config->traffic_light_ignore,
 				 sizeof(config->traffic_light_ignore), "%s", value);
@@ -2612,6 +2615,7 @@ void set_value_default() {
 	config.traffic_light_size = 12;
 	config.traffic_light_on_csd = 0;
 	config.traffic_light_ignore[0] = '\0';
+	config.traffic_light_force[0] = '\0';
 	config.traffic_light_right = 1;
 	config.traffic_light_count = 3;
 	config.traffic_light_order[0] = 0;
