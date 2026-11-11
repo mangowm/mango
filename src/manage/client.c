@@ -3684,13 +3684,21 @@ void show_scratchpad(Client *c) {
 	}
 
 	if (!c->iscustomsize) {
-		c->geom.width = c->mon->w.width * config.scratchpad_width_ratio;
-		c->geom.height = c->mon->w.height * config.scratchpad_height_ratio;
-		// Recomputes the centered coordinates.
-		c->float_geom = c->geom = c->animainit_geom = c->animation.current =
-			client_center_geometry(c, c->mon, c->geom, 0, 0);
-		c->iscustomsize = 1;
-		resize(c, c->geom, (ResizeOpts){.interact = 0});
+		bool force_width = config.scratchpad_width_ratio > 0.0f;
+		bool force_height = config.scratchpad_height_ratio > 0.0f;
+
+		if (force_width || force_height) {
+			if (force_width)
+				c->geom.width = c->mon->w.width * config.scratchpad_width_ratio;
+			if (force_height)
+				c->geom.height =
+					c->mon->w.height * config.scratchpad_height_ratio;
+			// Recomputes the centered coordinates.
+			c->float_geom = c->geom = c->animainit_geom = c->animation.current =
+				client_center_geometry(c, c->mon, c->geom, 0, 0);
+			c->iscustomsize = 1;
+			resize(c, c->geom, (ResizeOpts){.interact = 0});
+		}
 	}
 
 	client_reparent_group(c);
