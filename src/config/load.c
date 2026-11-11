@@ -57,7 +57,7 @@ static int current_file_index = -1;
 
 #define CHVT(n)                                                                \
 	{                                                                          \
-		WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT,                                  \
+		0,                                                                     \
 			{.keysym = XKB_KEY_XF86Switch_VT_##n, .type = KEY_TYPE_SYM},       \
 			change_vt, {                                                       \
 			.ui = (n)                                                          \
