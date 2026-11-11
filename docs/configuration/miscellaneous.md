@@ -20,6 +20,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | :--- | :--- | :--- |
 | `focus_on_activate` | `1` | Automatically focus windows when they request activation. |
 | `sloppy_focus` | `1` | Focus follows the mouse cursor. |
+| `monitor_focus_follow_mouse` | `0` | Move the selected monitor with the cursor across displays without focusing the window under it. Useful together with `sloppy_focus = 0` to combine click-to-focus windows with mouse-driven monitor focus. Has no effect when `sloppy_focus = 1`, since window focus already follows the mouse. |
 | `warp_cursor` | `1` | Warp the cursor to the center of the window when focus changes via keyboard. |
 | `cursor_hide_timeout` | `0` | Hide the cursor after `N` seconds of inactivity (`0` to disable). |
 | `cursor_hide_on_keypress` | `0` | Hide the cursor on keypress. |
