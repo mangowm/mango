@@ -507,6 +507,7 @@ typedef struct {
 	float special_dim;
 	float rootcolor[4];
 	float bordercolor[4];
+	float floatingcolor[4];
 	float dropcolor[4];
 	float splitcolor[4];
 	float focuscolor[4];
