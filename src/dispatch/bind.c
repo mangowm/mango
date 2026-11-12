@@ -1979,34 +1979,33 @@ int32_t toggle_tag(const Arg *arg) {
 	return 0;
 }
 
-int32_t toggle_view(const Arg *arg) {
-	if (!server.selected_monitor)
-		return 0;
-	if (server.selected_monitor->isoverview)
-		return 0;
-
+void toggle_view_on_monitor(const Arg *arg, Monitor *m) {
 	uint32_t newtagset;
 	uint32_t target;
 	Client *c = NULL;
 
+	if (!m || m->isoverview)
+		return;
+
 	target = arg->ui == 0 ? ~0 & TAGMASK : arg->ui;
 
-	newtagset =
-		server.selected_monitor->tagset[server.selected_monitor->seltags] ^
-		(target & TAGMASK);
+	newtagset = m->tagset[m->seltags] ^ (target & TAGMASK);
 
 	if (newtagset) {
-		server.selected_monitor->tagset[server.selected_monitor->seltags] =
-			newtagset;
-		client_focus(client_focus_top(server.selected_monitor), 1);
+		m->tagset[m->seltags] = newtagset;
+		client_focus(client_focus_top(m), 1);
 		wl_list_for_each(c, &server.clients, link) {
-			if (VISIBLEON(c, server.selected_monitor) && ISTILED(c)) {
-				set_size_per(server.selected_monitor, c, true);
+			if (VISIBLEON(c, m) && ISTILED(c)) {
+				set_size_per(m, c, true);
 			}
 		}
-		arrange(server.selected_monitor, false, false);
+		arrange(m, false, false);
 	}
 	printstatus(IPC_WATCH_ARRANGGE);
+}
+
+int32_t toggle_view(const Arg *arg) {
+	toggle_view_on_monitor(arg, server.selected_monitor);
 	return 0;
 }
 
@@ -2336,30 +2335,33 @@ static bool overview_client_on_current_tags(Client *c, bool only_current,
 	return !only_current || c->isglobal || (c->tags & current_tags);
 }
 
-/* Enter or leave overview mode on the selected monitor. */
-static void set_overview(const Arg *arg, bool enter) {
+/* Enter or leave overview mode on the given monitor. */
+void set_overview(const Arg *arg, bool enter, Monitor *m) {
 	Client *c = NULL;
-	Client *sel = arg->tc ? arg->tc : server.selected_monitor->sel;
+	Client *sel = NULL;
 	uint32_t target = 0;
 	uint32_t visible_client_number = 0;
-	bool only_current = arg->i == 1;
+	bool only_current = false;
 	uint32_t current_tags = 0;
 
-	server.selected_monitor->isoverview = enter;
+	if (!arg || !m)
+		return;
+
+	only_current = arg->i == 1;
+	sel = arg->tc ? arg->tc : m->sel;
+	m->isoverview = enter;
 
 	if (!enter) {
-		server.selected_monitor->ov_tab_layout = 0;
-		title_message_bar_hide(server.selected_monitor);
-		if (server.selected_monitor->is_jump_mode)
-			finish_jump_mode(server.selected_monitor);
+		m->ov_tab_layout = 0;
+		title_message_bar_hide(m);
+		if (m->is_jump_mode)
+			finish_jump_mode(m);
 	}
 
 	if (enter) {
-		current_tags =
-			server.selected_monitor->tagset[server.selected_monitor->seltags] &
-			TAGMASK;
+		current_tags = m->tagset[m->seltags] & TAGMASK;
 		wl_list_for_each(c, &server.clients, link) {
-			if (!c || c->mon != server.selected_monitor)
+			if (!c || c->mon != m)
 				continue;
 			if (!client_is_unmanaged(c) && !client_is_x11_popup(c) &&
 				!c->isminimized && !c->isunglobal && !(c->tags & TAG0_MASK) &&
@@ -2367,28 +2369,22 @@ static void set_overview(const Arg *arg, bool enter) {
 				visible_client_number++;
 		}
 		if (visible_client_number > 0) {
-			server.selected_monitor->ovbk_current_tagset =
-				server.selected_monitor
-					->tagset[server.selected_monitor->seltags];
-			server.selected_monitor->ovbk_prev_tagset =
-				server.selected_monitor
-					->tagset[server.selected_monitor->seltags ^ 1];
+			m->ovbk_current_tagset = m->tagset[m->seltags];
+			m->ovbk_prev_tagset = m->tagset[m->seltags ^ 1];
 			target = only_current ? current_tags : (~0 & TAGMASK);
 		} else {
-			server.selected_monitor->isoverview = false;
-			server.selected_monitor->ov_tab_layout = 0;
-			title_message_bar_hide(server.selected_monitor);
+			m->isoverview = false;
+			m->ov_tab_layout = 0;
+			title_message_bar_hide(m);
 			return;
 		}
 	} else if (sel && (sel->tags & TAGMASK) != 0) {
 		target = get_tags_first_tag(sel->tags);
 	} else {
 		target =
-			server.selected_monitor->ovbk_current_tagset
-				? (server.selected_monitor->ovbk_current_tagset & TAGMASK)
-				: (server.selected_monitor->pertag->prevtag
-					   ? (1 << (server.selected_monitor->pertag->prevtag - 1))
-					   : 1);
+			m->ovbk_current_tagset
+				? (m->ovbk_current_tagset & TAGMASK)
+				: (m->pertag->prevtag ? (1 << (m->pertag->prevtag - 1)) : 1);
 		if (!target)
 			target = 1;
 	}
@@ -2404,7 +2400,7 @@ static void set_overview(const Arg *arg, bool enter) {
 		}
 
 		wl_list_for_each(c, &server.clients, link) {
-			if (!c || c->mon != server.selected_monitor)
+			if (!c || c->mon != m)
 				continue;
 			if (client_is_unmanaged(c) || client_is_x11_popup(c) ||
 				c->isunglobal || c->isminimized || (c->tags & TAG0_MASK) ||
@@ -2412,8 +2408,7 @@ static void set_overview(const Arg *arg, bool enter) {
 				!overview_client_on_current_tags(c, only_current, current_tags))
 				continue;
 			c->animation.overining = true;
-			if (!server.selected_monitor->is_jump_mode &&
-				!server.selected_monitor->ov_normal_mode)
+			if (!m->is_jump_mode && !m->ov_normal_mode)
 				/* Tab layout: skip view arrangement first; set it when the
 				 * unified rearrange runs after entering. */
 				c->animation.overview_enter_anim_set = true;
@@ -2423,38 +2418,34 @@ static void set_overview(const Arg *arg, bool enter) {
 			overview_backup(c);
 		}
 	} else {
-		server.selected_monitor->ov_normal_mode =
+		m->ov_normal_mode =
 			0; /* Clears hot-area normal mode when exiting overview. */
 
-		server.selected_monitor->tagset[server.selected_monitor->seltags] =
-			target;
+		m->tagset[m->seltags] = target;
 		wl_list_for_each(c, &server.clients, link) {
-			if (c && c->mon == server.selected_monitor && !c->iskilling &&
-				!client_is_unmanaged(c) && !c->isunglobal && !c->isminimized &&
-				!client_is_x11_popup(c) && client_surface(c)->mapped &&
-				!(c->tags & TAG0_MASK)) {
+			if (c && c->mon == m && !c->iskilling && !client_is_unmanaged(c) &&
+				!c->isunglobal && !c->isminimized && !client_is_x11_popup(c) &&
+				client_surface(c)->mapped && !(c->tags & TAG0_MASK)) {
 				overview_restore(c, &(Arg){.ui = target});
 			}
 		}
 	}
 
-	client_switch_view(&(Arg){.ui = target}, false);
+	client_view_on_monitor(&(Arg){.ui = target}, false, m, true);
 
 	/* Tab layout: rearrange after entering. */
-	if (enter && !server.selected_monitor->is_jump_mode &&
-		!server.selected_monitor->ov_normal_mode) {
+	if (enter && !m->is_jump_mode && !m->ov_normal_mode) {
 
 		Client *cc = NULL;
 		wl_list_for_each(cc, &server.clients, link) {
-			if (cc && cc->mon == server.selected_monitor &&
-				!client_is_unmanaged(cc) && !client_is_x11_popup(cc) &&
-				!(cc->tags & TAG0_MASK))
+			if (cc && cc->mon == m && !client_is_unmanaged(cc) &&
+				!client_is_x11_popup(cc) && !(cc->tags & TAG0_MASK))
 				cc->animation.overview_enter_anim_set = false;
 		}
-		arrange(server.selected_monitor, true, false);
+		arrange(m, true, false);
 	}
-	fix_mon_tagset_from_overview(server.selected_monitor);
-	refresh_monitors_workspaces_status(server.selected_monitor);
+	fix_mon_tagset_from_overview(m);
+	refresh_monitors_workspaces_status(m);
 
 	if (!enter && sel && (sel->tags & target)) {
 		client_focus(sel, 1);
@@ -2467,7 +2458,8 @@ int32_t toggle_overview(const Arg *arg) {
 	if (!server.selected_monitor || server.grab_client)
 		return 0;
 
-	set_overview(arg, !server.selected_monitor->isoverview);
+	set_overview(arg, !server.selected_monitor->isoverview,
+				 server.selected_monitor);
 	return 0;
 }
 
@@ -2476,7 +2468,7 @@ int32_t enter_overview(const Arg *arg) {
 		server.selected_monitor->isoverview)
 		return 0;
 
-	set_overview(arg, true);
+	set_overview(arg, true, server.selected_monitor);
 	return 0;
 }
 
@@ -2485,7 +2477,7 @@ int32_t leave_overview(const Arg *arg) {
 		!server.selected_monitor->isoverview)
 		return 0;
 
-	set_overview(arg, false);
+	set_overview(arg, false, server.selected_monitor);
 	return 0;
 }
 

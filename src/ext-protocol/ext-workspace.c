@@ -12,10 +12,10 @@ void goto_workspace(struct workspace *target) {
 	uint32_t tag;
 	tag = 1 << (target->tag - 1);
 	if (target->tag == 0) {
-		toggle_overview(&(Arg){0});
+		set_overview(&(Arg){0}, true, target->m);
 		return;
 	} else {
-		client_switch_view(&(Arg){.ui = tag}, true);
+		client_view_on_monitor(&(Arg){.ui = tag}, true, target->m, true);
 	}
 }
 
@@ -23,10 +23,10 @@ void toggle_workspace(struct workspace *target) {
 	uint32_t tag;
 	tag = 1 << (target->tag - 1);
 	if (target->tag == 0) {
-		toggle_view(&(Arg){.i = -1});
+		set_overview(&(Arg){0}, false, target->m);
 		return;
 	} else {
-		toggle_view(&(Arg){.ui = tag});
+		toggle_view_on_monitor(&(Arg){.ui = tag}, target->m);
 	}
 }
 
