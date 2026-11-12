@@ -239,8 +239,15 @@ void tablet_tool_motion(struct TabletTool *tool, bool change_x, bool change_y,
 
 	if (config.sloppyfocus) {
 		Monitor *oldmon = server.selected_monitor;
-		set_selected_monitor(
-			monitor_at_point(server.cursor->x, server.cursor->y));
+		Monitor *newmon = monitor_at_point(server.cursor->x, server.cursor->y);
+
+		/* See pointer_process_motion(): never leave selected_monitor NULL. */
+		if (!newmon)
+			newmon = oldmon ? oldmon
+							: get_monitor_nearest_to((int32_t)server.cursor->x,
+													 (int32_t)server.cursor->y);
+
+		set_selected_monitor(newmon);
 		if (oldmon != server.selected_monitor)
 			printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
 	}

@@ -1448,35 +1448,42 @@ skip:
 void check_vrr_enable(Client *c) {
 	Monitor *m = c && c->mon ? c->mon : server.selected_monitor;
 
-	if (!m)
+	if (!m || m->iscleanuping)
 		return;
 
-	if (!c && m && !m->iscleanuping && m->is_vrr_enabling &&
-		!m->vrr_global_enable) {
+	if (!c) {
+		if (m->is_vrr_enabling && !m->vrr_global_enable) {
+			disable_adaptive_sync(m, &m->pending);
+			mango_output_commit(m);
+		}
+		return;
+	}
+
+	/* Desired state: global VRR keeps adaptive sync on for the focused client,
+	 * while vrr_only_fullscreen enables it only for a fullscreen client. */
+	bool desired =
+		m->vrr_global_enable || (c->mon && c->vrr_only_fullscreen &&
+								 c->isfullscreen && VISIBLEON(c, c->mon));
+
+	if (m->vrr_enable_failed)
+		desired = false;
+
+	/* Never commit the output when the requested state already matches the
+	 * current one: that presents a frame outside the scene frame loop and is
+	 * what made repeated focus changes stutter video playback. */
+	if (desired == m->is_vrr_enabling)
+		return;
+
+	if (desired)
+		enable_adaptive_sync(m, &m->pending);
+	else
 		disable_adaptive_sync(m, &m->pending);
-		mango_output_commit(m);
-		return;
-	}
 
-	if (!c)
+	/* enable_adaptive_sync() falls back to disabled when the test fails. */
+	if (m->is_vrr_enabling != desired)
 		return;
 
-	if (VISIBLEON(c, c->mon) && c->vrr_only_fullscreen && c->isfullscreen &&
-		!c->mon->is_vrr_enabling && !c->mon->vrr_enable_failed) {
-		enable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
-		return;
-	}
-
-	if (!c->mon->is_vrr_enabling && c->mon->vrr_global_enable &&
-		!c->mon->vrr_enable_failed) {
-		enable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
-	} else if (c->mon->is_vrr_enabling && !c->mon->vrr_global_enable &&
-			   (!c->vrr_only_fullscreen || !c->isfullscreen)) {
-		disable_adaptive_sync(c->mon, &m->pending);
-		mango_output_commit(m);
-	}
+	mango_output_commit(m);
 }
 
 /*

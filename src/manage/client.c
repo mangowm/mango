@@ -2878,8 +2878,24 @@ void client_focus(Client *c, int32_t lift) {
 		client_raise_tab(c);
 	}
 
-	if (c && client_surface(c) == old_keyboard_focus_surface &&
-		server.selected_monitor && server.selected_monitor->sel) {
+	/* Keyboard focus is already on this client. Replaying the whole focus
+	 * transition (focus animations, VRR re-check, arrange, IPC) on every
+	 * pointer motion is expensive and keeps the compositor redrawing for the
+	 * whole animation duration, which shows up as video stutter. Only repair
+	 * the monitor selection bookkeeping that callers rely on. */
+	if (c && client_surface(c) == old_keyboard_focus_surface) {
+		if (c->mon && !client_is_unmanaged(c)) {
+			/* Fill in a missing selection, but don't fight the sloppy
+			 * pointer-follow selection of another monitor. */
+			if (!server.selected_monitor)
+				set_selected_monitor(c->mon);
+			if (server.selected_monitor == c->mon &&
+				server.selected_monitor->sel != c) {
+				server.selected_monitor->prevsel = server.selected_monitor->sel;
+				server.selected_monitor->sel = c;
+			}
+			c->isfocusing = true;
+		}
 		client_ensure_constraint(c);
 		return;
 	}
