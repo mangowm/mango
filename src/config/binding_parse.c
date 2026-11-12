@@ -83,6 +83,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 		case 'c':
 			kb->isallowconflict = true;
 			break;
+		case 'n':
+			kb->isnorepeat = true;
+			break;
 		default:
 			mango_error(false, WLR_ERROR,
 						"Unknown bind flag: \033[1m\033[31m%c\033[0m\n",
