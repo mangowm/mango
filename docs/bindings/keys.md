@@ -186,6 +186,7 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `dwindle_split_horizontal` | - | Set split window direction to horizontal in dwindle layout. |
 | `dwindle_split_vertical` | - | Set split window direction to vertical in dwindle layout. |
 | `dwindle_toggle_current_split` | - | Toggle split direction of current window in dwindle layout. |
+| `dwindle_rotate_split` | `[angle]` | Rotate the current window's split by a multiple of 90 degrees (default `90`, negative is counter-clockwise) in dwindle layout. |
 
 ### System
 

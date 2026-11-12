@@ -2762,28 +2762,55 @@ int32_t dwindle_split_vertical(const Arg *arg) {
 	return 0;
 }
 
-int32_t dwindle_toggle_current_split(const Arg *arg) {
+static DwindleNode *dwindle_sel_split(const Arg *arg, Monitor **m) {
 	if (!server.selected_monitor)
-		return 0;
+		return NULL;
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!c || !c->mon || c->isfloating)
-		return 0;
+		return NULL;
 
 	uint32_t tag = get_client_tag_idx(c);
-	const Layout *layout = c->mon->pertag->ltidxs[tag];
-	if (layout->id != DWINDLE)
+	if (c->mon->pertag->ltidxs[tag]->id != DWINDLE)
+		return NULL;
+
+	DwindleNode *leaf = dwindle_find_leaf(c->mon->pertag->dwindle_root[tag], c);
+	if (!leaf)
+		return NULL;
+
+	*m = c->mon;
+	return leaf->parent;
+}
+
+int32_t dwindle_toggle_current_split(const Arg *arg) {
+	Monitor *m;
+	DwindleNode *parent = dwindle_sel_split(arg, &m);
+	if (!parent)
 		return 0;
 
-	DwindleNode *root = c->mon->pertag->dwindle_root[tag];
-	DwindleNode *leaf = dwindle_find_leaf(root, c);
-	if (!leaf || !leaf->parent)
-		return 0;
-
-	DwindleNode *parent = leaf->parent;
 	parent->split_h = !parent->split_h;
 	parent->split_locked = true;
+	arrange(m, false, false);
+	return 0;
+}
 
-	arrange(c->mon, false, false);
+int32_t dwindle_rotate_split(const Arg *arg) {
+	Monitor *m;
+	DwindleNode *parent = dwindle_sel_split(arg, &m);
+	int32_t steps = ((arg->i / 90) % 4 + 4) % 4;
+	if (!parent || !steps)
+		return 0;
+
+	if (steps == 2 || parent->split_h == (steps == 3)) {
+		DwindleNode *first = parent->first;
+		parent->first = parent->second;
+		parent->second = first;
+		parent->ratio = 1.0f - parent->ratio;
+	}
+	if (steps != 2) {
+		parent->split_h = !parent->split_h;
+		parent->split_locked = true;
+	}
+	arrange(m, false, false);
 	return 0;
 }
 

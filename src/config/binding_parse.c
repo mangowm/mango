@@ -856,6 +856,9 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = dwindle_split_vertical;
 	} else if (strcmp(func_name, "dwindle_toggle_current_split") == 0) {
 		func = dwindle_toggle_current_split;
+	} else if (strcmp(func_name, "dwindle_rotate_split") == 0) {
+		func = dwindle_rotate_split;
+		(*arg).i = *arg_value ? atoi(arg_value) : 90;
 	} else {
 		return NULL;
 	}
