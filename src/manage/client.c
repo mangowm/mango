@@ -1307,6 +1307,8 @@ float *get_border_color(Client *c) {
 	} else if (c->isglobal && server.selected_monitor &&
 			   c == server.selected_monitor->sel) {
 		return config.globalcolor;
+	} else if (c->isfloating) {
+		return config.floatingcolor;
 	} else if (c->isoverlay && server.selected_monitor &&
 			   c == server.selected_monitor->sel) {
 		return config.overlaycolor;
