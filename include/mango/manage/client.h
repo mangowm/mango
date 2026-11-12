@@ -134,7 +134,7 @@ struct Client {
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
 		fullscreen_backup_h;
 	int32_t overview_isfullscreenbak, overview_ismaximizescreenbak,
-		overview_isfloatingbak;
+		overview_isfloatingbak, fullscreen_ismaximizescreenbak;
 
 	struct wlr_scene_tree *ov_card_tree; /* Overview card tree (root surface
 											plus all subsurface nodes). */
@@ -410,6 +410,8 @@ void client_change_mon(Client *c, Monitor *m);
 void view_insert_shift_tags(Monitor *m, uint32_t target);
 void client_set_floating(Client *c, int32_t floating, bool want_animation);
 void client_set_fullscreen(Client *c, int32_t fullscreen, bool rearrange);
+void client_backup_maximize_for_fullscreen(Client *c);
+void client_clear_fullscreen_maximize_backup(Client *c);
 void client_set_fake_fullscreen(Client *c, int32_t fakefullscreen);
 void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 								bool rearrange);
