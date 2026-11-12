@@ -687,7 +687,8 @@ bool layer_draw_frame(LayerSurface *l) {
 		return false;
 
 	if (l->layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_TOP &&
-		l->layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+		l->layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY &&
+		l->layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM) {
 		return false;
 	}
 
