@@ -23,6 +23,15 @@
 #include <wlr/xwayland.h>
 #endif
 
+/*
+ * TODO: Remove this validation once wlroots MR !5513 is released.
+ * https://gitlab.freedesktop.org/wlroots/wlroots/-/merge_requests/5513
+ */
+struct source_box_validation_data {
+	const struct wlr_box *clip;
+	bool valid;
+};
+
 static int32_t client_open_animation_type(const Client *c) {
 	return c->animation_type_open != ANIM_TYPE_UNSET
 			   ? c->animation_type_open
@@ -1005,6 +1014,56 @@ void client_set_drop_area(Client *c) {
 	wlr_scene_node_set_position(&c->droparea->node, drop_box.x, drop_box.y);
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
 }
+
+static void validate_surface_source_box(struct wlr_surface *surface, int sx,
+										int sy, void *data) {
+	struct source_box_validation_data *validation = data;
+	if (!validation->valid)
+		return;
+
+	struct wlr_box surface_box = {
+		.x = sx,
+		.y = sy,
+		.width = surface->current.width,
+		.height = surface->current.height,
+	};
+	struct wlr_box intersection;
+	if (!wlr_box_intersection(&intersection, validation->clip, &surface_box))
+		return;
+
+	struct wlr_fbox surface_clip = {
+		.x = intersection.x - sx,
+		.y = intersection.y - sy,
+		.width = intersection.width,
+		.height = intersection.height,
+	};
+	struct wlr_fbox source_box;
+	client_surface_get_source_box(surface, &surface_clip, &source_box);
+
+	if (source_box.x < 0 || source_box.y < 0 || source_box.width < 0 ||
+		source_box.height < 0) {
+		validation->valid = false;
+	}
+}
+
+static bool client_clip_source_boxes_valid(Client *c,
+										   const struct wlr_box *clip) {
+	struct source_box_validation_data validation = {
+		.clip = clip,
+		.valid = true,
+	};
+	wlr_surface_for_each_surface(client_surface(c), validate_surface_source_box,
+								 &validation);
+	return validation.valid;
+}
+
+static void client_set_surface_clip(Client *c, const struct wlr_box *clip) {
+	if (!client_clip_source_boxes_valid(c, clip))
+		return;
+
+	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, clip);
+}
+
 void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
@@ -1087,8 +1146,7 @@ void client_set_clip(Client *c, float factor) {
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip_box);
 		else if (!c->overview_scene_surface)
-			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
-											   &clip_box);
+			client_set_surface_clip(c, &clip_box);
 
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
@@ -1144,7 +1202,7 @@ void client_set_clip(Client *c, float factor) {
 	 * and cannot be used for X11.
 	 */
 	if (!c->overview_scene_surface && !client_is_x11(c))
-		wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip_box);
+		client_set_surface_clip(c, &clip_box);
 
 	int32_t actual_surface_width =
 		geometry.width - surface_clip_offset.x - surface_clip_offset.width;
@@ -1632,7 +1690,7 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip);
 		else
-			wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
+			client_set_surface_clip(c, &clip);
 		return;
 	}
 
