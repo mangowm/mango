@@ -2252,13 +2252,13 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	c->id = generate_client_id();
 
 	/* Create scene tree for this client and its border */
-	c->scene = client_surface(c)->data =
-		wlr_scene_tree_create(server.layers[LyrTile]);
+	c->scene = wlr_scene_tree_create(server.layers[LyrTile]);
 	wlr_scene_node_set_enabled(&c->scene->node, c->type != XDGShell);
 	c->scene_surface =
 		c->type == XDGShell
 			? wlr_scene_xdg_surface_create(c->scene, c->surface.xdg)
 			: wlr_scene_subsurface_tree_create(c->scene, client_surface(c));
+	client_surface(c)->data = c->scene_surface;
 	mango_scene_node_set(&c->scene->node, c->type, c);
 
 	client_init_xwayland(c);
