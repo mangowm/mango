@@ -401,26 +401,19 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 	}
 }
 
-void // Mouse scroll wheel event
-handle_cursor_axis(struct wl_listener *listener, void *data) {
-	/* This event is forwarded by the cursor when a pointer emits an axis event,
-	 * for example when you move the scroll wheel. */
-	struct wlr_pointer_axis_event *event = data;
-	ipc_notify_device_event(&event->pointer->base);
-	uint32_t mods;
+/* Return true when a local binding consumes the event,
+ * including when its timeout suppresses execution. */
+static bool
+pointer_handle_axis_binding(const struct wlr_pointer_axis_event *event) {
+	if (is_keyboard_shortcut_inhibitor(
+			server.seat->keyboard_state.focused_surface)) {
+		return false;
+	}
+
+	uint32_t mods = keyboard_hard_modifiers();
 	AxisBinding *a;
 	int32_t ji;
 	uint32_t adir;
-	double target_scroll_factor;
-	// IDLE_NOTIFY_ACTIVITY;
-	pointer_cursor_activity();
-	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
-
-	if (check_trackpad_disabled(event->pointer)) {
-		return;
-	}
-
-	mods = keyboard_hard_modifiers();
 
 	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
 		adir = event->delta > 0 ? AxisDown : AxisUp;
@@ -442,16 +435,32 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 					config.axis_bind_apply_timeout ||
 				server.axis_apply_dir * event->delta < 0) {
 				a->func(&a->arg);
-				server.axis_apply_time = event->time_msec;
-				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
-				return; // If matched, do not forward this scroll event to the
-						// client.
-			} else {
-				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
-				server.axis_apply_time = event->time_msec;
-				return;
 			}
+			server.axis_apply_time = event->time_msec;
+			server.axis_apply_dir = event->delta > 0 ? 1 : -1;
+			return true;
 		}
+	}
+	return false;
+}
+
+void // Mouse scroll wheel event
+handle_cursor_axis(struct wl_listener *listener, void *data) {
+	/* This event is forwarded by the cursor when a pointer emits an axis event,
+	 * for example when you move the scroll wheel. */
+	struct wlr_pointer_axis_event *event = data;
+	ipc_notify_device_event(&event->pointer->base);
+	double target_scroll_factor;
+	// IDLE_NOTIFY_ACTIVITY;
+	pointer_cursor_activity();
+	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
+
+	if (check_trackpad_disabled(event->pointer)) {
+		return;
+	}
+
+	if (pointer_handle_axis_binding(event)) {
+		return;
 	}
 
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
