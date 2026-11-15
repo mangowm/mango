@@ -2710,6 +2710,10 @@ void set_value_default() {
 	config.bordercolor[1] = 0x44 / 255.0f;
 	config.bordercolor[2] = 0x44 / 255.0f;
 	config.bordercolor[3] = 1.0f;
+	config.floatingcolor[0] = 0x0 / 255.0f;
+	config.floatingcolor[1] = 0x0 / 255.0f;
+	config.floatingcolor[2] = 0xff / 255.0f;
+	config.floatingcolor[3] = 1.0f;
 	config.dropcolor[0] = 0xd5 / 255.0f;
 	config.dropcolor[1] = 0x89 / 255.0f;
 	config.dropcolor[2] = 0x9d / 255.0f;
