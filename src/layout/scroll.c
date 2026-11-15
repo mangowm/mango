@@ -27,6 +27,38 @@ struct ScrollerStackNode *find_scroller_node(struct TagScrollerState *st,
 	return NULL;
 }
 
+static struct ScrollerStackNode *
+find_scroller_stack_head(struct TagScrollerState *st, Client *c) {
+	struct ScrollerStackNode *node = find_scroller_node(st, c);
+	if (!node)
+		return NULL;
+	while (node->prev_in_stack)
+		node = node->prev_in_stack;
+	return node;
+}
+
+static struct ScrollerStackNode *
+find_scroller_focus_root(Monitor *m, struct TagScrollerState *st) {
+	struct ScrollerStackNode *root = NULL;
+
+	if (m->sel && ISSCROLLTILED(m->sel)) {
+		root = find_scroller_stack_head(st, m->sel);
+		if (root)
+			return root;
+	}
+
+	if (m->sel) {
+		root = find_scroller_stack_head(st, center_tiled_select(m));
+		if (root)
+			return root;
+	}
+
+	if (m->prevsel && ISSCROLLTILED(m->prevsel))
+		root = find_scroller_stack_head(st, m->prevsel);
+
+	return root;
+}
+
 /* Creates a new node and inserts it into the tag state all list. */
 struct ScrollerStackNode *scroller_node_create(struct TagScrollerState *st,
 											   Client *c) {
@@ -381,23 +413,12 @@ void scroller(Monitor *m) {
 		return;
 	}
 
-	struct ScrollerStackNode *root_node = NULL;
-	if (m->sel && ISSCROLLTILED(m->sel)) {
-		root_node = find_scroller_node(st, m->sel);
-		if (root_node) {
-			while (root_node->prev_in_stack)
-				root_node = root_node->prev_in_stack;
-		}
+	struct ScrollerStackNode *root_node = find_scroller_focus_root(m, st);
+	if (!root_node) {
+		sync_scroller_state_to_clients(m, tag);
+		free(heads);
+		return;
 	}
-	if (!root_node && m->prevsel && ISSCROLLTILED(m->prevsel)) {
-		root_node = find_scroller_node(st, m->prevsel);
-		if (root_node) {
-			while (root_node->prev_in_stack)
-				root_node = root_node->prev_in_stack;
-		}
-	}
-	if (!root_node)
-		root_node = heads[n_heads / 2]; /* Simple fallback. */
 
 	int32_t focus_index = -1;
 	for (int i = 0; i < n_heads; i++) {
@@ -406,8 +427,11 @@ void scroller(Monitor *m) {
 			break;
 		}
 	}
-	if (focus_index < 0)
-		focus_index = n_heads / 2;
+	if (focus_index < 0) {
+		sync_scroller_state_to_clients(m, tag);
+		free(heads);
+		return;
+	}
 
 	/* Decides whether scrolling, overspread, or centering is needed. */
 	bool need_scroller = false;
@@ -625,23 +649,12 @@ void vertical_scroller(Monitor *m) {
 		return;
 	}
 
-	struct ScrollerStackNode *root_node = NULL;
-	if (m->sel && ISSCROLLTILED(m->sel)) {
-		root_node = find_scroller_node(st, m->sel);
-		if (root_node) {
-			while (root_node->prev_in_stack)
-				root_node = root_node->prev_in_stack;
-		}
+	struct ScrollerStackNode *root_node = find_scroller_focus_root(m, st);
+	if (!root_node) {
+		sync_scroller_state_to_clients(m, tag);
+		free(heads);
+		return;
 	}
-	if (!root_node && m->prevsel && ISSCROLLTILED(m->prevsel)) {
-		root_node = find_scroller_node(st, m->prevsel);
-		if (root_node) {
-			while (root_node->prev_in_stack)
-				root_node = root_node->prev_in_stack;
-		}
-	}
-	if (!root_node)
-		root_node = heads[n_heads / 2];
 
 	int32_t focus_index = -1;
 	for (int i = 0; i < n_heads; i++) {
@@ -650,8 +663,11 @@ void vertical_scroller(Monitor *m) {
 			break;
 		}
 	}
-	if (focus_index < 0)
-		focus_index = n_heads / 2;
+	if (focus_index < 0) {
+		sync_scroller_state_to_clients(m, tag);
+		free(heads);
+		return;
+	}
 
 	bool need_scroller = false;
 	bool over_overspread_to_up = false;
