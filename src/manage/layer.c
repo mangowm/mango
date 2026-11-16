@@ -360,6 +360,10 @@ bool popup_unconstrain(Popup *popup) {
 	}
 
 	wlr_xdg_popup_unconstrain_from_box(wlr_popup, &constraint_box);
+	if (type == XDGShell && wlr_popup->parent == client_surface(c)) {
+		wlr_popup->scheduled.geometry.x += c->bw;
+		wlr_popup->scheduled.geometry.y += c->bw;
+	}
 	return false;
 }
 
