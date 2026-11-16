@@ -14,6 +14,7 @@
 #include "mango/ext-protocol/ext-workspace.h"
 #include "mango/ext-protocol/foreign-toplevel.h"
 #include "mango/ext-protocol/hdr.h"
+#include "mango/ext-protocol/hotkey.h"
 #include "mango/ext-protocol/tearing.h"
 #include "mango/ext-protocol/text-input.h"
 #include "mango/ext-protocol/xdg-activation.h"
@@ -911,6 +912,7 @@ void setup(void) {
 
 	// ext-workspace protocol.
 	workspaces_init();
+	hotkey_init();
 #ifdef XWAYLAND
 	/*
 	 * Initialise the XWayland X server.

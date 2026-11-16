@@ -29,6 +29,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `drag_warp_cursor` | `1` | Warp cursor when dragging windows to tile. |
 | `axis_bind_apply_timeout` | `100` | Timeout (ms) for detecting consecutive scroll events for axis bindings. |
 | `disable_middle_paste` | `0` | Disable middle-click paste by turning off the whole primary selection. Only affects Wayland apps; X11 apps are unaffected. Restart apps after re-enabling. |
+| `experimental_hotkeys` | `0` | Expose the experimental `xx_hotkey_manager_v1` protocol so clients can bind their own global hotkeys. Triggers already used by your config are denied and nothing fires while locked. |
 
 ## Multi-Monitor & Tags
 

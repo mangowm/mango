@@ -6,6 +6,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/ext-protocol/hotkey.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
 #include "mango/input/trackpad.h"
@@ -414,6 +415,7 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 	double target_scroll_factor;
 	// IDLE_NOTIFY_ACTIVITY;
 	pointer_cursor_activity();
+	hotkey_note_activity();
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
 	if (check_trackpad_disabled(event->pointer)) {
@@ -470,12 +472,35 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 void // Mouse button event
 handle_cursor_button(struct wl_listener *listener, void *data) {
 	struct wlr_pointer_button_event *event = data;
+	int32_t handled;
 
 	ipc_notify_device_event(&event->pointer->base);
 
-	if (!pointer_process_button_press(event))
-		wlr_seat_pointer_notify_button(server.seat, event->time_msec,
-									   event->button, event->state);
+	/* Any button cancels a pending hotkey tap */
+	hotkey_note_activity();
+
+	handled = pointer_process_button_press(event);
+
+	/* A release is always offered to hotkey.c */
+	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+		handled = hotkey_handle_button(event->button, keyboard_hard_modifiers(),
+									   event->state, event->time_msec) ||
+				  handled;
+		if (!handled)
+			wlr_seat_pointer_notify_button(server.seat, event->time_msec,
+										   event->button, event->state);
+		return;
+	}
+
+	if (handled)
+		return;
+
+	if (hotkey_handle_button(event->button, keyboard_hard_modifiers(),
+							 event->state, event->time_msec))
+		return;
+
+	wlr_seat_pointer_notify_button(server.seat, event->time_msec, event->button,
+								   event->state);
 }
 
 void handle_last_cursor_surface_destroy(struct wl_listener *listener,
