@@ -5022,7 +5022,6 @@ void handle_xwayland_surface_set_geometry(struct wl_listener *listener,
 	 * coordinates. */
 	xwayland_x11_to_logical(&geo, c->xwayland_scale);
 	wlr_scene_node_set_position(&c->scene->node, geo.x, geo.y);
-	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 }
 
 #endif
