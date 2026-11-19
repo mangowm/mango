@@ -1,14 +1,13 @@
 #ifndef __ANIMATION_COMMON_H__
 #define __ANIMATION_COMMON_H__ 1
 
+#include "mango/config/parse.h"
 #include <scenefx/types/fx/clipped_region.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-server-core.h>
 #include <wlr/util/box.h>
-
-#define BAKED_POINTS_COUNT 256
 
 /* What is currently being animated / which animation phase is running. */
 enum { NONE, OPEN, MOVE, CLOSE, TAG, FOCUS, OPAFADEIN, OPAFADEOUT, OVERVIEW };
@@ -73,9 +72,12 @@ typedef struct SnapshotMetadata {
 	struct wl_listener destroy;
 } SnapshotMetadata;
 
-struct dvec2 calculate_animation_curve_at(double t, int32_t type);
+double find_animation_curve_for(double t, const AnimationCurve *curve);
+double animation_curve_ease(const AnimationCurve *curve, double progress);
+uint32_t animation_curve_duration_ms(const AnimationCurve *curve,
+									 uint32_t fallback_ms);
+uint32_t animation_duration_for_type(int32_t type, uint32_t fallback_ms);
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data);
-void init_baked_points(void);
 double find_animation_curve_at(double t, int32_t type);
 
 bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,

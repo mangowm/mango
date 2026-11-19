@@ -3,16 +3,22 @@ title: Overview
 description: Configure overview, jump mode, overcircle, and the window switcher.
 ---
 
-Mango has four related ways to inspect or switch windows: the standard overview,
-jump mode, overcircle, and the switcher. They share some appearance settings,
-but each mode has its own entry command and interaction model.
+Mango has several related ways to inspect or switch windows: the standard
+overview, workspace overview, jump mode, overcircle, and the switcher. They
+share some appearance settings, but each mode has its own entry command and
+interaction model.
 
 | Mode | Layout | Primary command |
 | :--- | :--- | :--- |
 | Overview | Packed cards in the normal overview grid | `toggleoverview` |
+| Workspace overview | Offscreen workspace previews; draggable windows | `toggleworkspaceoverview` |
 | Jump mode | Overview grid with one-key jump hints | `togglejump` |
 | Overcircle | Focused card in the center with other windows on both sides | `overcircle` |
 | Switcher | Centered thumbnail panel | `switcher` |
+
+There is also a separate workspace overview. It renders each tag to an offscreen
+workspace texture and lets windows be dragged between the visible workspace
+previews.
 
 The keybindings below are examples; replace the shortcuts with ones that are
 free in your configuration. For the complete dispatcher reference, see
@@ -79,13 +85,13 @@ Jump mode displays the standard overview grid and places a character hint on
 each visible window. Press a hint to focus that window and leave the overview.
 Press `Escape` to leave without selecting a window.
 
-The shipped default binding is `ALT+Tab`.
+Jump mode has no shipped default binding.
 
 ### Keybindings
 
 ```ini
 # Toggle the overview and its jump hints
-bind=ALT,Tab,togglejump,
+bind=SUPER+ALT,Tab,togglejump,
 ```
 
 | Interaction | Description |
@@ -113,6 +119,127 @@ Hint colors, border, padding, corner radius, and font use the
 [Overview Jump Mode](/docs/visuals/theming#overview-jump-mode) for the complete
 list.
 
+## Workspace Overview
+
+The workspace overview is independent from the standard overview. Its scope is
+selected when opening it: `all` creates one preview for every tag up to
+`tag_num`, including empty workspaces, while `occupied` shows only tags that
+contain windows. The default `all` and `occupied` modes use a fitted preview
+grid. The `scroll_all` and `scroll_occupied` modes arrange workspaces as a
+scrolling strip, similar to the scroller layout with workspaces as its items.
+The strip can scroll horizontally or vertically according to
+`workspace_overview_scroll_direction`; the selected workspace is centered when
+possible. Scrolling and workspace-selection movement use
+`animation_duration_workspace_overview_move` and
+`animation_curve_workspace_overview_move`. The same move animation is used for
+workspace layout changes; there is no separate layout animation.
+
+Each tag preview mirrors its workspace, including the background wallpaper and
+layer-shell surfaces such as the status bar. Windows use their workspace
+geometry, so partially visible windows in scrolling layouts remain partially
+visible in the preview. A window that belongs to multiple tags appears in every
+matching preview. Window and layer-surface commits refresh the affected
+previews, and mapping or closing a window rebuilds the workspace previews
+automatically.
+
+```ini
+# Shipped default binding: all workspaces
+bind=SUPER,Tab,toggleworkspaceoverview,all
+# Optional binding: occupied workspaces only
+bind=SUPER+SHIFT,Tab,toggleworkspaceoverview,occupied
+# Optional binding: all workspaces in a scrolling strip
+bind=SUPER+ALT,Tab,toggleworkspaceoverview,scroll_all
+bind=SUPER+ALT,Escape,leaveworkspaceoverview,
+```
+
+| Command | Description |
+| :--- | :--- |
+| `toggleworkspaceoverview` | Toggle the workspace overview. `all` includes empty tags, `occupied` shows occupied tags only, and `scroll_all` / `scroll_occupied` use the corresponding scrolling layout. |
+| `enterworkspaceoverview` | Enter the workspace overview with `all`, `occupied`, `scroll_all`, or `scroll_occupied`. |
+| `leaveworkspaceoverview` | Leave the workspace overview without selecting a workspace. |
+
+`toggleworkspaceoverview` and `enterworkspaceoverview` can reverse an in-progress
+exit directly from its current zoom position. Toggling during the enter
+animation similarly reverses back toward the selected workspace.
+
+Pointer interaction:
+
+| Action | Result |
+| :--- | :--- |
+| Left click a workspace | Switch to that workspace and leave the overview. |
+| Left click a window preview | Switch to its workspace, focus the window, and leave the overview. |
+| Drag a window within a workspace | Change its tiling order or floating position. |
+| Drag a window to another workspace | Move its tag membership to the drop workspace. |
+| Right click a window preview | Close the window. |
+| Mouse wheel or horizontal scroll | Move to the previous or next workspace and center it in the scrolling strip. |
+
+When a dragged window is over a tiled target, the preview shows the same
+mouse-position-based insert zone used by ordinary drag-to-tile. Dropping uses
+that zone's layout-specific insertion rule. The indicator uses `drop_color`.
+
+While dragging a window in scrolling mode, entering the edge in the configured
+scroll direction starts a slow automatic scroll. Horizontal mode uses the left
+and right edges; vertical mode uses the top and bottom edges.
+
+When a window drag starts, the source workspace immediately lays out again
+without that window, so the remaining windows fill the released space before
+the drop is committed.
+
+Keyboard interaction:
+
+| Key | Result |
+| :--- | :--- |
+| Arrow keys or `h`/`j`/`k`/`l` | Select the adjacent workspace preview. |
+| Enter | Switch to the selected workspace and leave the overview. |
+| Escape | Leave without changing the active workspace. |
+
+While dragging, holding Shift adds the destination tag without removing the
+source tag. Holding Ctrl replaces all of the window's tags with the destination
+tag. A plain drag removes only the tag represented by the preview that the drag
+started from.
+
+With `occupied` scope, the workspace overview closes automatically when every
+workspace becomes empty. With `all` scope, empty workspace previews remain
+available.
+
+### Configuration
+
+| Setting | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `workspace_overview_border_width` | integer | `2` | Width of each workspace preview border and its inset around the preview texture. Range: 0–100. |
+| `workspace_overview_gap` | integer | `5` | Gap between workspace preview cards. Range: 0–1000. |
+| `workspace_overview_drag_threshold` | integer | `5` | Pointer distance required before a click becomes a window drag. Range: 0–1000. |
+| `workspace_overview_scroll_direction` | string | `vertical` | Scrolling workspace strip direction: `horizontal` or `vertical`. |
+| `workspace_overview_scroll_ratio` | float | `0.8` | Maximum workspace preview size relative to the monitor in scrolling mode. Range: 0.1–1.0. |
+| `workspace_overview_drag_scroll_speed` | float | `1.5` | Automatic edge-scroll speed while dragging a window, in workspace strides per second. Range: 0.1–10.0. |
+| `workspace_overview_focused_dim_opacity` | float | `0.0` | Black overlay opacity on the selected workspace preview. Range: 0–1. |
+| `workspace_overview_unfocused_dim_opacity` | float | `0.2` | Black overlay opacity on unselected workspace previews. Range: 0–1. |
+| `animation_duration_workspace_overview_open` | integer | `260` | Enter animation duration in milliseconds. Range: 1–50000. |
+| `animation_duration_workspace_overview_close` | integer | `260` | Exit animation duration in milliseconds. Range: 1–50000. |
+| `animation_duration_workspace_overview_move` | integer | `382` | Workspace move animation duration in milliseconds. Range: 1–50000. |
+| `animation_curve_workspace_overview_open` | string | `0.333333,1.0,0.666667,1.0` | Enter animation. Accepts a named easing or cubic-bezier value. |
+| `animation_curve_workspace_overview_close` | string | `0.333333,1.0,0.666667,1.0` | Exit animation. Accepts a named easing or cubic-bezier value. |
+| `animation_curve_workspace_overview_move` | string | `0.26,0.99,0.26,1.0` | Workspace scrolling and layout-change curve. Accepts a named easing or cubic-bezier value. |
+
+```ini
+workspace_overview_border_width=2
+workspace_overview_gap=5
+workspace_overview_drag_threshold=5
+workspace_overview_scroll_direction=vertical
+workspace_overview_scroll_ratio=0.8
+workspace_overview_drag_scroll_speed=1.5
+
+# Keep the selected workspace clear and dim the other previews
+workspace_overview_focused_dim_opacity=0.0
+workspace_overview_unfocused_dim_opacity=0.2
+animation_duration_workspace_overview_open=260
+animation_duration_workspace_overview_close=260
+animation_duration_workspace_overview_move=382
+animation_curve_workspace_overview_open=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_close=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_move=0.26,0.99,0.26,1.0
+```
+
 ## Overcircle
 
 Overcircle keeps the focused window in a centered column and distributes the
@@ -126,6 +253,9 @@ key exits overcircle.
 ### Keybindings
 
 ```ini
+# Shipped default binding
+bind=ALT,Tab,overcircle,next
+
 # Cycle forward/backward through all tags on the current monitor
 bind=SUPER+ALT,j,overcircle,next
 bind=SUPER+ALT+SHIFT,j,overcircle,prev

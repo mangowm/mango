@@ -187,15 +187,6 @@ struct MangoServer {
 	void *exclusive_focus;
 	pid_t child_pid;
 
-	/* Pre-baked animation curves */
-	struct dvec2 *baked_points_move;
-	struct dvec2 *baked_points_open;
-	struct dvec2 *baked_points_tag;
-	struct dvec2 *baked_points_close;
-	struct dvec2 *baked_points_focus;
-	struct dvec2 *baked_points_opafadein;
-	struct dvec2 *baked_points_opafadeout;
-
 	/* Cursor hiding / input keep-alive */
 	struct wl_event_source *hide_cursor_source;
 	struct wl_event_source *keep_idle_inhibit_source;

@@ -34,6 +34,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <scenefx/types/wlr_scene.h>
 #include <unistd.h>
 #include <wlr/backend/libinput.h>
@@ -154,7 +155,6 @@ void reapply_tagrule(void) {
 }
 
 void reset_option(void) {
-	init_baked_points();
 	pointer_cursor_activity();
 	reset_keyboard_layout();
 	reset_blur_params();
@@ -541,6 +541,7 @@ int32_t reload_config(const Arg *arg) {
 	parse_config();
 	reset_tag(old_tag_num);
 	reset_option();
+	workspace_overview_reload();
 	update_seat_capabilities();
 	apply_primary_selection();
 	printstatus(IPC_WATCH_ARRANGGE);
