@@ -46,7 +46,9 @@ void handle_last_cursor_surface_destroy(struct wl_listener *listener,
 void handle_request_set_cursor_shape(struct wl_listener *listener, void *data);
 
 void pointer_set_accel(struct libinput_device *device, bool natural_scrolling,
-					   uint32_t mouse_accel_profile, double mouse_accel_speed);
+					   uint32_t mouse_accel_profile, double mouse_accel_speed,
+					   double *accel_points, uint8_t accel_npoints,
+					   double accel_step);
 void configure_pointer(struct wlr_input_device *wlr_device,
 					   struct libinput_device *device);
 void pointer_create(struct wlr_pointer *pointer);
