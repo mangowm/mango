@@ -24,6 +24,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/tab.h"
 #include "mango/manage/xwayland_primary.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <fcntl.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/wlr_scene.h>
@@ -707,6 +708,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	m->special_gappoh = config.special_gappoh;
 	m->special_gappov = config.special_gappov;
 	m->isoverview = 0;
+	m->workspace_overview_scope = ALL_WORKSPACE;
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
 	m->ov_normal_mode = 0;
@@ -906,6 +908,14 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 
 	m->iscleanuping = true;
 
+	/* Disconnect the output from the scene before restoring visibility for
+	 * workspace overview. Otherwise, revealing clients can send enter events
+	 * to an output that is already being destroyed. */
+	wlr_scene_output_destroy(m->scene_output);
+	m->scene_output = NULL;
+
+	workspace_overview_monitor_destroy(m);
+
 	Client *c, *ctmp;
 	wl_list_for_each_safe(c, ctmp, &server.fadeout_clients, fadeout_link) {
 		if (c->mon != m) {
@@ -943,7 +953,6 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		handle_session_lock_surface_destroy(&m->destroy_lock_surface, NULL);
 	m->wlr_output->data = NULL;
 
-	wlr_scene_output_destroy(m->scene_output);
 	wlr_output_layout_remove(server.output_layout, m->wlr_output);
 
 	monitor_close(m);
@@ -1244,6 +1253,11 @@ void handle_output_layout_change(struct wl_listener *listener, void *data) {
 	 * wl_pointer.motion event for the clients, it's only the image what
 	 * it's at the wrong position after all. */
 	wlr_cursor_move(server.cursor, NULL, 0, 0);
+
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->wlr_output->enabled)
+			workspace_overview_monitor_changed(m);
+	}
 
 	wlr_output_manager_v1_set_configuration(server.output_manager,
 											output_config);

@@ -542,7 +542,8 @@ void init_fadeout_layers(LayerSurface *l) {
 		return;
 	}
 
-	fadeout_layer->animation.duration = config.animation_duration_close;
+	fadeout_layer->animation.duration =
+		animation_duration_for_type(CLOSE, config.animation_duration_close);
 	fadeout_layer->geom = fadeout_layer->current =
 		fadeout_layer->animainit_geom = fadeout_layer->animation.initial =
 			l->animation.current;

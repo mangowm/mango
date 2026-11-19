@@ -73,21 +73,39 @@ animation_duration_close=300
 animation_duration_focus=0
 ```
 
-## Custom Bezier Curves
+## Animation Curves
 
-Bezier curves determine the "feel" of an animation (e.g., linear vs. bouncy). The format is `x1,y1,x2,y2`.
+Every curve accepts a named easing or a cubic Bézier `x1,y1,x2,y2`.
+
+Named easings include `linear`, `easein`, `easeout`, `easeinout`,
+`easeinsine`/`easeoutsine`/`easeinoutsine`,
+`easeinquad`/`easeoutquad`/`easeinoutquad`,
+`easeincubic`/`easeoutcubic`/`easeinoutcubic`,
+`easeinquart`/`easeoutquart`/`easeinoutquart`,
+`easeinquint`/`easeoutquint`/`easeinoutquint`,
+`easeinexpo`/`easeoutexpo`/`easeinoutexpo`,
+`easeincirc`/`easeoutcirc`/`easeinoutcirc`,
+`easeinback`/`easeoutback`/`easeinoutback`,
+`easeinelastic`/`easeoutelastic`/`easeinoutelastic`,
+`easeinbounce`/`easeoutbounce`/`easeinoutbounce`, and `snappy`.
 
 You can visualize and generate curve values using online tools like [cssportal.com](https://www.cssportal.com/css-cubic-bezier-generator/) or [easings.net](https://easings.net).
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `animation_curve_open` | string | `0.46,1.0,0.29,0.99` | Open animation bezier curve |
-| `animation_curve_move` | string | `0.46,1.0,0.29,0.99` | Move animation bezier curve |
-| `animation_curve_tag` | string | `0.46,1.0,0.29,0.99` | Tag animation bezier curve |
-| `animation_curve_close` | string | `0.46,1.0,0.29,0.99` | Close animation bezier curve |
-| `animation_curve_focus` | string | `0.46,1.0,0.29,0.99` | Focus change (opacity transition) animation bezier curve |
-| `animation_curve_opacity_fade_in` | string | `0.46,1.0,0.29,0.99` | Open opacity animation bezier curve |
-| `animation_curve_opacity_fade_out` | string | `0.5,0.5,0.5,0.5` | Close opacity animation bezier curve |
+| `animation_curve_open` | string | `0.46,1.0,0.29,0.99` | Open animation curve |
+| `animation_curve_move` | string | `0.46,1.0,0.29,0.99` | Move animation curve |
+| `animation_curve_tag` | string | `0.46,1.0,0.29,0.99` | Tag animation curve |
+| `animation_curve_close` | string | `0.46,1.0,0.29,0.99` | Close animation curve |
+| `animation_curve_focus` | string | `0.46,1.0,0.29,0.99` | Focus animation curve |
+| `animation_curve_opacity_fade_in` | string | `0.46,1.0,0.29,0.99` | Open opacity curve |
+| `animation_curve_opacity_fade_out` | string | `0.5,0.5,0.5,0.5` | Close opacity curve |
+| `animation_duration_workspace_overview_open` | integer | `260` | Workspace overview enter duration in milliseconds |
+| `animation_duration_workspace_overview_close` | integer | `260` | Workspace overview exit duration in milliseconds |
+| `animation_duration_workspace_overview_move` | integer | `382` | Workspace overview move animation duration in milliseconds |
+| `animation_curve_workspace_overview_open` | string | `0.333333,1.0,0.666667,1.0` | Workspace overview enter named easing or cubic-bezier value |
+| `animation_curve_workspace_overview_close` | string | `0.333333,1.0,0.666667,1.0` | Workspace overview exit named easing or cubic-bezier value |
+| `animation_curve_workspace_overview_move` | string | `0.26,0.99,0.26,1.0` | Workspace overview scrolling and layout-change named easing or cubic-bezier value |
 
 ```ini
 animation_curve_open=0.46,1.0,0.29,0.99
@@ -97,6 +115,12 @@ animation_curve_close=0.46,1.0,0.29,0.99
 animation_curve_focus=0.46,1.0,0.29,0.99
 animation_curve_opacity_fade_in=0.46,1.0,0.29,0.99
 animation_curve_opacity_fade_out=0.5,0.5,0.5,0.5
+animation_duration_workspace_overview_open=260
+animation_duration_workspace_overview_close=260
+animation_duration_workspace_overview_move=382
+animation_curve_workspace_overview_open=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_close=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_move=0.26,0.99,0.26,1.0
 ```
 
 ## Tag Animation Direction

@@ -30,6 +30,21 @@ typedef struct LastCursor LastCursor;
 typedef struct MangoJumpLabel MangoJumpLabel;
 typedef struct MangoBarDecoration MangoBarDecoration;
 
+typedef enum WorkspaceOverviewScope {
+	ALL_WORKSPACE,
+	OCCUPIED_WORKSPACE,
+} WorkspaceOverviewScope;
+
+typedef enum WorkspaceOverviewLayout {
+	WORKSPACE_OVERVIEW_GRID,
+	WORKSPACE_OVERVIEW_SCROLL,
+} WorkspaceOverviewLayout;
+
+typedef enum WorkspaceOverviewScrollDirection {
+	WORKSPACE_OVERVIEW_SCROLL_HORIZONTAL,
+	WORKSPACE_OVERVIEW_SCROLL_VERTICAL,
+} WorkspaceOverviewScrollDirection;
+
 /*
  * Forward declarations for libwayland / wlroots / scenefx structs referenced by
  * module headers. Translation units that need the actual definitions include
@@ -86,6 +101,7 @@ struct wlr_output_mode;
 struct wlr_output_power_manager_v1;
 struct wlr_output_state;
 struct wlr_pointer;
+struct wlr_pointer_axis_event;
 struct wlr_pointer_button_event;
 struct wlr_pointer_constraint_v1;
 struct wlr_pointer_constraints_v1;

@@ -5,122 +5,224 @@
 #include "mango/config/parse.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include <math.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_subcompositor.h>
 
-struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
+static struct dvec2 calculate_bezier_curve_for(double t,
+											   const double curve[4]) {
 	struct dvec2 point;
-	double *animation_curve;
-	if (type == MOVE) {
-		animation_curve = config.animation_curve_move;
-	} else if (type == OPEN) {
-		animation_curve = config.animation_curve_open;
-	} else if (type == TAG) {
-		animation_curve = config.animation_curve_tag;
-	} else if (type == CLOSE) {
-		animation_curve = config.animation_curve_close;
-	} else if (type == FOCUS) {
-		animation_curve = config.animation_curve_focus;
-	} else if (type == OPAFADEIN) {
-		animation_curve = config.animation_curve_opafadein;
-	} else if (type == OPAFADEOUT) {
-		animation_curve = config.animation_curve_opafadeout;
-	} else {
-		animation_curve = config.animation_curve_move;
-	}
+	point.x = 3 * t * (1 - t) * (1 - t) * curve[0] +
+			  3 * t * t * (1 - t) * curve[2] + t * t * t;
 
-	point.x = 3 * t * (1 - t) * (1 - t) * animation_curve[0] +
-			  3 * t * t * (1 - t) * animation_curve[2] + t * t * t;
-
-	point.y = 3 * t * (1 - t) * (1 - t) * animation_curve[1] +
-			  3 * t * t * (1 - t) * animation_curve[3] + t * t * t;
-
+	point.y = 3 * t * (1 - t) * (1 - t) * curve[1] +
+			  3 * t * t * (1 - t) * curve[3] + t * t * t;
 	return point;
+}
+
+static const AnimationCurve *animation_curve_for_type(int32_t type) {
+	if (type == OPEN)
+		return &config.animation_curve_open;
+	if (type == TAG)
+		return &config.animation_curve_tag;
+	if (type == CLOSE)
+		return &config.animation_curve_close;
+	if (type == FOCUS)
+		return &config.animation_curve_focus;
+	if (type == OPAFADEIN)
+		return &config.animation_curve_opafadein;
+	if (type == OPAFADEOUT)
+		return &config.animation_curve_opafadeout;
+	return &config.animation_curve_move;
+}
+
+static double apply_named_easing(enum animation_easing easing, double t);
+
+double animation_curve_ease(const AnimationCurve *curve, double progress) {
+	if (!curve)
+		return fmax(0.0, fmin(1.0, progress));
+	progress = fmax(0.0, fmin(1.0, progress));
+	if (curve->type == ANIMATION_CURVE_NAMED)
+		return apply_named_easing(curve->easing, progress);
+
+	const double *bezier = curve->bezier;
+	double low = 0.0;
+	double high = 1.0;
+	for (int i = 0; i < 24; i++) {
+		double mid = (low + high) / 2.0;
+		if (calculate_bezier_curve_for(mid, bezier).x < progress)
+			low = mid;
+		else
+			high = mid;
+	}
+	return calculate_bezier_curve_for((low + high) / 2.0, bezier).y;
+}
+
+uint32_t animation_curve_duration_ms(const AnimationCurve *curve,
+									 uint32_t fallback_ms) {
+	return fallback_ms;
+}
+
+uint32_t animation_duration_for_type(int32_t type, uint32_t fallback_ms) {
+	return animation_curve_duration_ms(animation_curve_for_type(type),
+									   fallback_ms);
+}
+
+static double ease_out_bounce(double t) {
+	const double n1 = 7.5625;
+	const double d1 = 2.75;
+	if (t < 1.0 / d1)
+		return n1 * t * t;
+	if (t < 2.0 / d1) {
+		t -= 1.5 / d1;
+		return n1 * t * t + 0.75;
+	}
+	if (t < 2.5 / d1) {
+		t -= 2.25 / d1;
+		return n1 * t * t + 0.9375;
+	}
+	t -= 2.625 / d1;
+	return n1 * t * t + 0.984375;
+}
+
+static double apply_named_easing(enum animation_easing easing, double t) {
+	const double pi = acos(-1.0);
+	switch (easing) {
+	case ANIMATION_EASING_LINEAR:
+		return t;
+	case ANIMATION_EASING_EASE_IN_SINE:
+		return 1.0 - cos(t * pi / 2.0);
+	case ANIMATION_EASING_EASE_OUT_SINE:
+		return sin(t * pi / 2.0);
+	case ANIMATION_EASING_EASE_IN_OUT_SINE:
+		return -(cos(pi * t) - 1.0) / 2.0;
+	case ANIMATION_EASING_EASE_IN_QUAD:
+		return t * t;
+	case ANIMATION_EASING_EASE_OUT_QUAD:
+		return 1.0 - (1.0 - t) * (1.0 - t);
+	case ANIMATION_EASING_EASE_IN_OUT_QUAD:
+		return t < 0.5 ? 2.0 * t * t : 1.0 - pow(-2.0 * t + 2.0, 2) / 2.0;
+	case ANIMATION_EASING_EASE_IN_CUBIC:
+		return t * t * t;
+	case ANIMATION_EASING_EASE_OUT_CUBIC:
+		return 1.0 - pow(1.0 - t, 3);
+	case ANIMATION_EASING_EASE_IN_OUT_CUBIC:
+		return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3) / 2.0;
+	case ANIMATION_EASING_EASE_IN_QUART:
+		return pow(t, 4);
+	case ANIMATION_EASING_EASE_OUT_QUART:
+		return 1.0 - pow(1.0 - t, 4);
+	case ANIMATION_EASING_EASE_IN_OUT_QUART:
+		return t < 0.5 ? 8.0 * pow(t, 4) : 1.0 - pow(-2.0 * t + 2.0, 4) / 2.0;
+	case ANIMATION_EASING_EASE_IN_QUINT:
+		return pow(t, 5);
+	case ANIMATION_EASING_EASE_OUT_QUINT:
+		return 1.0 - pow(1.0 - t, 5);
+	case ANIMATION_EASING_EASE_IN_OUT_QUINT:
+		return t < 0.5 ? 16.0 * pow(t, 5) : 1.0 - pow(-2.0 * t + 2.0, 5) / 2.0;
+	case ANIMATION_EASING_EASE_IN_EXPO:
+		return t <= 0.0 ? 0.0 : pow(2.0, 10.0 * t - 10.0);
+	case ANIMATION_EASING_EASE_OUT_EXPO:
+		return t >= 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * t);
+	case ANIMATION_EASING_EASE_IN_OUT_EXPO:
+		if (t <= 0.0)
+			return 0.0;
+		if (t >= 1.0)
+			return 1.0;
+		return t < 0.5 ? pow(2.0, 20.0 * t - 10.0) / 2.0
+					   : (2.0 - pow(2.0, -20.0 * t + 10.0)) / 2.0;
+	case ANIMATION_EASING_EASE_IN_CIRC:
+		return 1.0 - sqrt(1.0 - pow(t, 2));
+	case ANIMATION_EASING_EASE_OUT_CIRC:
+		return sqrt(1.0 - pow(t - 1.0, 2));
+	case ANIMATION_EASING_EASE_IN_OUT_CIRC:
+		return t < 0.5 ? (1.0 - sqrt(1.0 - pow(2.0 * t, 2))) / 2.0
+					   : (sqrt(1.0 - pow(-2.0 * t + 2.0, 2)) + 1.0) / 2.0;
+	case ANIMATION_EASING_EASE_IN_BACK: {
+		const double c1 = 1.70158;
+		const double c3 = c1 + 1.0;
+		return c3 * t * t * t - c1 * t * t;
+	}
+	case ANIMATION_EASING_EASE_OUT_BACK: {
+		const double c1 = 1.70158;
+		const double c3 = c1 + 1.0;
+		const double x = t - 1.0;
+		return 1.0 + c3 * x * x * x + c1 * x * x;
+	}
+	case ANIMATION_EASING_EASE_IN_OUT_BACK: {
+		const double c1 = 1.70158 * 1.525;
+		const double c2 = c1 + 1.0;
+		return t < 0.5 ? (pow(2.0 * t, 2) * ((c2 + 1.0) * 2.0 * t - c2)) / 2.0
+					   : (pow(2.0 * t - 2.0, 2) *
+							  ((c2 + 1.0) * (2.0 * t - 2.0) + c2) +
+						  2.0) /
+							 2.0;
+	}
+	case ANIMATION_EASING_EASE_IN_ELASTIC: {
+		const double c4 = 2.0 * pi / 3.0;
+		if (t <= 0.0)
+			return 0.0;
+		if (t >= 1.0)
+			return 1.0;
+		return -pow(2.0, 10.0 * t - 10.0) * sin((t * 10.0 - 10.75) * c4);
+	}
+	case ANIMATION_EASING_EASE_OUT_ELASTIC: {
+		const double c4 = 2.0 * pi / 3.0;
+		if (t <= 0.0)
+			return 0.0;
+		if (t >= 1.0)
+			return 1.0;
+		return pow(2.0, -10.0 * t) * sin((t * 10.0 - 0.75) * c4) + 1.0;
+	}
+	case ANIMATION_EASING_EASE_IN_OUT_ELASTIC: {
+		const double c5 = 2.0 * pi / 4.5;
+		if (t <= 0.0)
+			return 0.0;
+		if (t >= 1.0)
+			return 1.0;
+		return t < 0.5 ? -(pow(2.0, 20.0 * t - 10.0) *
+						   sin((20.0 * t - 11.125) * c5)) /
+							 2.0
+					   : (pow(2.0, -20.0 * t + 10.0) *
+						  sin((20.0 * t - 11.125) * c5)) /
+								 2.0 +
+							 1.0;
+	}
+	case ANIMATION_EASING_EASE_IN_BOUNCE:
+		return 1.0 - ease_out_bounce(1.0 - t);
+	case ANIMATION_EASING_EASE_OUT_BOUNCE:
+		return ease_out_bounce(t);
+	case ANIMATION_EASING_EASE_IN_OUT_BOUNCE:
+		return t < 0.5 ? (1.0 - ease_out_bounce(1.0 - 2.0 * t)) / 2.0
+					   : (1.0 + ease_out_bounce(2.0 * t - 1.0)) / 2.0;
+	case ANIMATION_EASING_SNAPPY: {
+		const double curve[4] = {0.05, 0.9, 0.1, 1.05};
+		double low = 0.0;
+		double high = 1.0;
+		for (int i = 0; i < 24; i++) {
+			double mid = (low + high) / 2.0;
+			if (calculate_bezier_curve_for(mid, curve).x < t)
+				low = mid;
+			else
+				high = mid;
+		}
+		return calculate_bezier_curve_for((low + high) / 2.0, curve).y;
+	}
+	}
+	return t;
+}
+
+double find_animation_curve_for(double t, const AnimationCurve *curve) {
+	return animation_curve_ease(curve, t);
 }
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data) {
 	SnapshotMetadata *meta = wl_container_of(listener, meta, destroy);
 	wl_list_remove(&meta->destroy.link);
 	free(meta);
 }
-void init_baked_points(void) {
-	server.baked_points_move =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_move));
-	server.baked_points_open =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_open));
-	server.baked_points_tag =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_tag));
-	server.baked_points_close =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_close));
-	server.baked_points_focus =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_focus));
-	server.baked_points_opafadein =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_opafadein));
-	server.baked_points_opafadeout =
-		calloc(BAKED_POINTS_COUNT, sizeof(*server.baked_points_opafadeout));
-
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_move[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), MOVE);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_open[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), OPEN);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_tag[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), TAG);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_close[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), CLOSE);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_focus[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), FOCUS);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_opafadein[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), OPAFADEIN);
-	}
-	for (int32_t i = 0; i < BAKED_POINTS_COUNT; i++) {
-		server.baked_points_opafadeout[i] = calculate_animation_curve_at(
-			(double)i / (BAKED_POINTS_COUNT - 1), OPAFADEOUT);
-	}
-}
 double find_animation_curve_at(double t, int32_t type) {
-	int32_t down = 0;
-	int32_t up = BAKED_POINTS_COUNT - 1;
-
-	int32_t middle = (up + down) / 2;
-	struct dvec2 *baked_points;
-	if (type == MOVE) {
-		baked_points = server.baked_points_move;
-	} else if (type == OPEN) {
-		baked_points = server.baked_points_open;
-	} else if (type == TAG) {
-		baked_points = server.baked_points_tag;
-	} else if (type == CLOSE) {
-		baked_points = server.baked_points_close;
-	} else if (type == FOCUS) {
-		baked_points = server.baked_points_focus;
-	} else if (type == OPAFADEIN) {
-		baked_points = server.baked_points_opafadein;
-	} else if (type == OPAFADEOUT) {
-		baked_points = server.baked_points_opafadeout;
-	} else {
-		baked_points = server.baked_points_move;
-	}
-
-	while (up - down != 1) {
-		if (baked_points[middle].x <= t) {
-			down = middle;
-		} else {
-			up = middle;
-		}
-		middle = (up + down) / 2;
-	}
-	return baked_points[up].y;
+	return animation_curve_ease(animation_curve_for_type(type), t);
 }
 bool scene_node_snapshot(struct wlr_scene_node *node, int32_t lx, int32_t ly,
 						 struct wlr_scene_tree *snapshot_tree) {

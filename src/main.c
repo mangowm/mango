@@ -469,7 +469,6 @@ void setup(void) {
 	if (server.cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
-	init_baked_points();
 
 	set_env_without_display();
 
