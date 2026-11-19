@@ -20,6 +20,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
@@ -1170,9 +1171,38 @@ static Client *group_bar_target_at(double x, double y, Client *ignore) {
 	return target != ignore ? target : NULL;
 }
 
+static void update_selected_monitor_from_pointer(void) {
+	if (!config.sloppyfocus)
+		return;
+	Monitor *monitor =
+		monitor_at_point(server.cursor->x, server.cursor->y);
+	if (server.selected_monitor == monitor)
+		return;
+	set_selected_monitor(monitor);
+	printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
+}
+
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,
 							double dy_unaccel) {
+	if (workspace_overview_is_active_on(
+			monitor_at_point(server.cursor->x, server.cursor->y)) ||
+		workspace_overview_has_pointer_grab()) {
+		if (time) {
+			wlr_relative_pointer_manager_v1_send_relative_motion(
+				server.relative_pointer_manager, server.seat,
+				(uint64_t)time * 1000, dx, dy, dx_unaccel, dy_unaccel);
+			wlr_cursor_move(server.cursor, device, dx, dy);
+			pointer_cursor_activity();
+			wlr_idle_notifier_v1_notify_activity(server.idle_notifier,
+												 server.seat);
+			update_selected_monitor_from_pointer();
+			workspace_overview_handle_motion(server.cursor->x,
+											 server.cursor->y);
+		}
+		return;
+	}
+
 	double sx = 0, sy = 0, sx_confined, sy_confined;
 	Client *c = NULL, *w = NULL;
 	Client *closet_drop_client = NULL;
@@ -1254,13 +1284,7 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 		wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
 		/* Update selected_monitor (even while dragging a window) */
-		if (config.sloppyfocus) {
-			Monitor *oldmon = server.selected_monitor;
-			set_selected_monitor(
-				monitor_at_point(server.cursor->x, server.cursor->y));
-			if (oldmon != server.selected_monitor)
-				printstatus(IPC_WATCH_MONITOR | IPC_WATCH_ALL_MONITORS);
-		}
+		update_selected_monitor_from_pointer();
 	}
 
 	/* Find the client under the pointer and send the event along. */
@@ -1736,6 +1760,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
 		server.cursor_mode = CurPressed;
+		if (!server.session_locked && workspace_overview_is_active() &&
+			workspace_overview_handle_button(event))
+			return true;
+
 		set_selected_monitor(
 			monitor_at_point(server.cursor->x, server.cursor->y));
 		if (server.session_locked)
@@ -1862,6 +1890,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		if (!server.session_locked && workspace_overview_is_active() &&
+			workspace_overview_handle_button(event))
+			return true;
+
 		server.group_bar_drag_pending = false;
 		server.drop_to_group = false;
 		server.group_bar_drag_client = NULL;

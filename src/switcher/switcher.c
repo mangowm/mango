@@ -418,7 +418,7 @@ void switcher_open(int scope, int dir) {
 	int n = 0;
 
 	wl_list_for_each(m, &server.monitors, link) {
-		if (m->isoverview)
+		if (m->isoverview || m->is_ws_overview)
 			return;
 	}
 

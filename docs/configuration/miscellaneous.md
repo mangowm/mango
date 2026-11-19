@@ -44,6 +44,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `single_scratchpad` | `1` | Only allow one scratchpad (named or standard) to be visible at a time. |
 | `tag_num` | `9` | Number of tags/workspaces (1–31). On config reload, clients on tags beyond this count are moved to the last tag. |
 | `tag_gather` | `0` | When `1`, occupied tags are compacted to consecutive tags starting at 1, eliminating gaps. For example, with windows on tags 1, 3 and 9, they move to 1, 2 and 3, and the current view follows. |
+| `workspace_overview_show_empty` | `1` | Show empty workspaces in the workspace overview. The preview count follows `tag_num`. |
 
 ## Window Behavior
 

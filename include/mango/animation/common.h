@@ -74,6 +74,7 @@ typedef struct SnapshotMetadata {
 } SnapshotMetadata;
 
 struct dvec2 calculate_animation_curve_at(double t, int32_t type);
+double find_animation_curve_for(double t, const double curve[4]);
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data);
 void init_baked_points(void);
 double find_animation_curve_at(double t, int32_t type);
