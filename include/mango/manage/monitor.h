@@ -97,6 +97,9 @@ struct Monitor {
 	struct wlr_color_transform
 		*icc_transform; /* ICC transform loaded from the ICC file. */
 	char icc_path[PATH_MAX];
+	/* Screen magnifier, see manage/zoom.c. Non-NULL while the magnifier may be
+	 * showing a crop on this output. */
+	struct wlr_swapchain *zoom_swapchain;
 };
 
 struct Pertag {

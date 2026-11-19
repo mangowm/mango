@@ -161,6 +161,12 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				value);
 			return false;
 		}
+	} else if (strcmp(key, "screen_zoom_max") == 0) {
+		config->screen_zoom_max = atof(value);
+	} else if (strcmp(key, "screen_zoom_step") == 0) {
+		config->screen_zoom_step = atof(value);
+	} else if (strcmp(key, "screen_zoom_duration") == 0) {
+		config->screen_zoom_duration = atoi(value);
 	} else if (strcmp(key, "scroller_structs") == 0) {
 		config->scroller_structs = atoi(value);
 	} else if (strcmp(key, "scroller_default_proportion") == 0) {
@@ -2400,6 +2406,9 @@ void set_value_default() {
 	config.animation_duration_tag = 300;
 	config.animation_duration_close = 300;
 	config.animation_duration_focus = 0;
+	config.screen_zoom_max = 4.0f;
+	config.screen_zoom_step = 0.5f;
+	config.screen_zoom_duration = 150;
 
 	config.axis_bind_apply_timeout = 100;
 	config.focus_on_activate = 1;
@@ -2757,6 +2766,10 @@ void override_config(void) {
 		CLAMP_INT(config.animation_duration_close, 0, 50000);
 	config.animation_duration_focus =
 		CLAMP_INT(config.animation_duration_focus, 0, 50000);
+	config.screen_zoom_max = CLAMP_FLOAT(config.screen_zoom_max, 1.0f, 16.0f);
+	config.screen_zoom_step = CLAMP_FLOAT(config.screen_zoom_step, 0.1f, 4.0f);
+	config.screen_zoom_duration =
+		CLAMP_INT(config.screen_zoom_duration, 0, 5000);
 	config.scroller_default_proportion =
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
 	config.scroller_default_proportion_single =

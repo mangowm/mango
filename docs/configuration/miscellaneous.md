@@ -60,6 +60,46 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `enable_border_resize` | `1` | Change the cursor when hovering a window border and start an interactive resize with a plain left click, like sway. Floating windows expose every edge; tiled windows only expose edges shared with a neighbor. |
 | `border_resize_size` | `10` | Thickness in pixels of the resize grab strip measured inward from a window's edge (`0` uses the window border width). Set it larger for an easier-to-hit grip, which also works for borderless windows. |
 
+## Screen Magnifier
+
+Magnifies the output under the pointer. Off by default: at `1x` no extra pass
+is rendered. Bind `screen_zoom_in`, `screen_zoom_out` and `screen_zoom_reset` to
+use it. While magnified, mango renders one extra pass that crops the frame
+around the cursor and scales it back up, so clients keep their normal size and
+the pixel under the pointer stays put — except near an edge, where the crop
+stops at the border and the image drifts outward from it. It scales the frame
+the output is about to show, so a fullscreen client that mango hands straight to
+the display is magnified like everything else when its buffer matches the output
+size; a buffer of any other size cannot be scaled, so the magnifier turns itself
+off and has to be turned on again. The level is shared by all outputs; the
+magnified output follows the pointer, so moving to another output magnifies that
+one at the same level. With the pointer outside every output, the selected
+output is magnified. Level changes use `animation_curve_move` and take
+`screen_zoom_duration` milliseconds; they are instant when `animations=0` or
+`screen_zoom_duration=0`. Unrelated to the `zoom` binding, which swaps the
+focused window with master.
+
+The wheel can drive the same level: `screen_zoom` takes the step as its
+argument, so holding a modifier and scrolling becomes two ordinary axis binds.
+Take this to zoom in on wheel up and out on wheel down, with nothing bound until
+you add the lines:
+
+```ini
+axis_bind_apply_timeout=0
+axisbind=SUPER,up,screen_zoom,0.25
+axisbind=SUPER,down,screen_zoom,-0.25
+```
+
+`axis_bind_apply_timeout=0` lets every notch through; with the default 100 ms at
+most one event per that window reaches the command. Scrolling without the
+modifier is not consumed and still reaches the focused client.
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `screen_zoom_max` | `4.0` | Maximum magnification (1–16). `1` keeps the magnifier off. Lowering it below the current level while magnified drops back to the new maximum. |
+| `screen_zoom_step` | `0.5` | Level change per `screen_zoom_in`/`screen_zoom_out` press (0.1–4). The level is clamped to `1`–`screen_zoom_max`. |
+| `screen_zoom_duration` | `150` | Animation time in ms for one level change (0–5000, `0` jumps instantly). |
+
 ## Config errors
 
 When the config file contains errors, mango shows a `mangonag` bar at the top of

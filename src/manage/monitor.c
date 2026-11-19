@@ -22,6 +22,7 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/xwayland_primary.h"
+#include "mango/manage/zoom.h"
 #include <fcntl.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/wlr_scene.h>
@@ -394,6 +395,7 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 	bool committed = false;
 
 	bool frame_allow_tearing = check_tearing_frame_allow(m);
+	bool held_crop = m->zoom_swapchain != NULL;
 
 	/*
 	 * Output state changes such as mode/scale/transform must be committed even
@@ -406,8 +408,17 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 		 WLR_OUTPUT_STATE_TRANSFORM | WLR_OUTPUT_STATE_ENABLED |
 		 WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED |
 		 WLR_OUTPUT_STATE_IMAGE_DESCRIPTION);
-	if (!state_changed && !wlr_scene_output_needs_frame(scene_output))
+	if (!state_changed && !wlr_scene_output_needs_frame(scene_output) &&
+		!screen_zoom_needs_frame(m))
 		return true;
+
+	/*
+	 * The frame that leaves the magnifier switches back to the scene's buffer,
+	 * so a partial update would leave the old crop around it; it needs the
+	 * whole scene. A magnified frame marks itself fully damaged instead.
+	 */
+	if (held_crop)
+		wlr_damage_ring_add_whole(&scene_output->damage_ring);
 
 	// build the state, attaching the scene's Buffer to it
 	bool has_img_desc =
@@ -424,6 +435,8 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 	} else {
 		state->tearing_page_flip = false;
 	}
+
+	screen_zoom_compose(m, state);
 
 	// test whether tearing is supported
 	if (state->tearing_page_flip == true) {
@@ -953,6 +966,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		m->special_dim_rect = NULL;
 	}
 	title_message_bar_finish(m);
+	screen_zoom_release(m);
 	if (m->skip_frame_timeout) {
 		monitor_stop_skip_frame_timer(m);
 		wl_event_source_remove(m->skip_frame_timeout);
@@ -968,9 +982,18 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 	wlr_output_state_finish(&m->pending);
 	free(m->pertag);
 	free(m);
+
+	/* The crop may have belonged to this output: draw it on the one that is
+	 * left. */
+	screen_zoom_refresh();
 }
 
-void set_selected_monitor(Monitor *m) { server.selected_monitor = m; }
+void set_selected_monitor(Monitor *m) {
+	server.selected_monitor = m;
+	/* The magnifier falls back to this monitor when the pointer rests outside
+	 * every output. */
+	screen_zoom_refresh();
+}
 
 void monitor_close(Monitor *m) {
 	/* update selected_monitor if needed and
@@ -1503,6 +1526,7 @@ static void do_renderer_recreate(void *data) {
 	wlr_compositor_set_renderer(server.compositor, server.renderer);
 
 	wl_list_for_each(m, &server.monitors, link) {
+		screen_zoom_release(m);
 		wlr_output_init_render(m->wlr_output, server.allocator,
 							   server.renderer);
 	}

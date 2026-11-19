@@ -52,6 +52,17 @@ axisbind=SUPER,UP,viewtoleft_have_client
 axisbind=SUPER,DOWN,viewtoright_have_client
 ```
 
+Zoom the screen while a modifier is held, with nothing bound by default:
+
+```ini
+axis_bind_apply_timeout=0
+axisbind=SUPER,UP,screen_zoom,0.25
+axisbind=SUPER,DOWN,screen_zoom,-0.25
+```
+
+See [Screen Magnifier](/docs/configuration/miscellaneous#screen-magnifier) for the
+level limits and animation.
+
 ---
 
 ## Gesture Bindings
