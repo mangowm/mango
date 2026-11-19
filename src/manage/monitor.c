@@ -22,6 +22,7 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/xwayland_primary.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <wlr/backend.h>
@@ -881,6 +882,8 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 	Monitor *m = wl_container_of(listener, m, destroy);
 	LayerSurface *l = NULL, *tmp = NULL;
 	uint32_t i;
+
+	workspace_overview_monitor_destroy(m);
 
 	m->iscleanuping = true;
 

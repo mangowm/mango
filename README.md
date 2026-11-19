@@ -34,6 +34,7 @@ https://github.com/user-attachments/assets/be85e13f-7798-456d-957e-f8931687392e
 - **Excellent input method support** — text-input v2/v3
 - **Powerful scratchpad** — sway-style scratchpad, special workspace and named-scratchpad support
 - **label jump overview** — see all windows at a glance with easymotion jump label.
+- **draggable workspace overview** — inspect only non-empty tags and drag windows between them.
 - **Gnome-style application switcher** — quick switching between apps
 - **IPC** — send/receive messages from external programs
 - **Hot-reload config** — no restart needed for keybinding changes

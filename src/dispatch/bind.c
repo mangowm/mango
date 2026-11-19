@@ -22,6 +22,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/overview/overview.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <wlr/backend.h>
@@ -741,6 +742,7 @@ int32_t smart_kill_client(const Arg *arg) {
 	client_reparent_group(c);
 	client_focus(client_focus_top(server.selected_monitor), 1);
 	arrange(c->mon, false, false);
+	workspace_overview_client_tags_changed(c);
 	return 0;
 }
 
@@ -938,6 +940,7 @@ int32_t restore_minimized(const Arg *arg) {
 	client_set_floating(c, isfloating_before_scratchpad, true);
 	client_update_border_color(c);
 	client_focus(c, 1);
+	workspace_overview_client_tags_changed(c);
 	pointer_warp_to_client(c);
 	return 0;
 }
@@ -954,6 +957,7 @@ int32_t set_layout(const Arg *arg) {
 				&layouts[jk];
 			clear_fullscreen_and_maximized_state(server.selected_monitor);
 			arrange(server.selected_monitor, false, false);
+			workspace_overview_layout_changed(server.selected_monitor);
 			printstatus(IPC_WATCH_ARRANGGE);
 			return 0;
 		}
@@ -1476,6 +1480,7 @@ int32_t switch_layout(const Arg *arg) {
 		}
 		clear_fullscreen_and_maximized_state(server.selected_monitor);
 		arrange(server.selected_monitor, false, false);
+		workspace_overview_layout_changed(server.selected_monitor);
 		printstatus(IPC_WATCH_ARRANGGE);
 		return 0;
 	}
@@ -1487,6 +1492,7 @@ int32_t switch_layout(const Arg *arg) {
 				jk == LENGTH(layouts) - 1 ? &layouts[0] : &layouts[jk + 1];
 			clear_fullscreen_and_maximized_state(server.selected_monitor);
 			arrange(server.selected_monitor, false, false);
+			workspace_overview_layout_changed(server.selected_monitor);
 			printstatus(IPC_WATCH_ARRANGGE);
 			return 0;
 		}
@@ -1974,6 +1980,7 @@ int32_t toggle_tag(const Arg *arg) {
 		client_reparent_group(sel);
 		client_focus(client_focus_top(server.selected_monitor), 1);
 		arrange(server.selected_monitor, false, false);
+		workspace_overview_client_tags_changed(sel);
 	}
 	printstatus(IPC_WATCH_ARRANGGE);
 	return 0;
@@ -2344,7 +2351,7 @@ void set_overview(const Arg *arg, bool enter, Monitor *m) {
 	bool only_current = false;
 	uint32_t current_tags = 0;
 
-	if (!arg || !m)
+	if (!arg || !m || m->is_ws_overview)
 		return;
 
 	only_current = arg->i == 1;
@@ -2483,6 +2490,9 @@ int32_t leave_overview(const Arg *arg) {
 
 int32_t toggle_jump(const Arg *arg) {
 	if (!server.selected_monitor)
+		return 0;
+
+	if (server.selected_monitor->is_ws_overview)
 		return 0;
 
 	if (!server.selected_monitor->isoverview) {

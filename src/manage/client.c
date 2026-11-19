@@ -23,6 +23,7 @@
 #include "mango/manage/xwayland_primary.h"
 #include "mango/overview/overview.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
@@ -2349,6 +2350,7 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	// make sure the animation is open type
 	c->is_pending_open_animation = true;
 	resize(c, c->geom, (ResizeOpts){.interact = 0});
+	workspace_overview_client_added(c);
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 
@@ -2362,6 +2364,9 @@ static bool client_xdg_size_pending(Client *c) {
 void handle_client_commit(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, commit);
 	struct wlr_box *new_geo;
+
+	if (c->mon && c->mon->is_ws_overview)
+		workspace_overview_client_commit(c);
 
 	/* Overview card nodes are independent scene_surfaces that auto-update on
 	 * commit; nothing to handle here. */
@@ -2444,9 +2449,12 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
 	Client *nextfocus = NULL;
+	/* Capture this before removing c: the generic unmap path keeps using the
+	 * now-empty active tag and can otherwise clear the overview selection. */
+	bool wsov_active_workspace_emptied =
+		c->mon && c->mon->is_ws_overview &&
+		workspace_overview_active_workspace_will_empty(c);
 	c->iskilling = 1;
-	if (c->tab_prev || c->tab_next)
-		tab_detach_client(c);
 	switcher_remove_client(c);
 	struct ScrollerStackNode *target_node =
 		c->mon ? find_scroller_node(
@@ -2475,6 +2483,13 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		scroller_remove_client(c);
 		dwindle_remove_client(c);
 	}
+
+	/* Swallow/group replacement transfers the tab position to the replacement
+	 * first. Detaching the dying client before that leaves the replacement out
+	 * of the chain and makes the whole tab strip disappear. */
+	if (c->tab_prev || c->tab_next)
+		tab_detach_client(c);
+	workspace_overview_client_removed(c);
 
 	if (c == server.grab_client) {
 		server.cursor_mode = CurNormal;
@@ -2603,6 +2618,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	init_client_properties(c);
 
 	wlr_scene_node_destroy(&c->scene->node);
+	/* This must run after client_set_monitor() and the generic focus cleanup. */
+	workspace_overview_client_unmapped(c, wsov_active_workspace_emptied);
 	printstatus(IPC_WATCH_ARRANGGE);
 	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 }
@@ -2639,6 +2656,7 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 		wl_list_remove(&c->set_decoration_mode.link);
 	}
 	switcher_remove_client(c);
+	workspace_overview_client_removed(c);
 	pointer_client_destroyed(c);
 	free(c);
 }
@@ -2701,6 +2719,7 @@ void handle_client_set_title(struct wl_listener *listener, void *data) {
 	client_update_group_bar_title(c);
 	client_update_tab_bar_title(c);
 	title_message_bar_update_title(c);
+	workspace_overview_client_title_changed(c);
 
 	struct wayland_string wayland_title;
 	const char *clamped_title = wayland_string_set(&wayland_title, title);
@@ -3079,19 +3098,15 @@ void client_switch_view(const Arg *arg, bool want_animation) {
 }
 
 void tag_client(const Arg *arg, Client *target_client) {
-	Client *fc = NULL;
+	bool tags_changed = false;
 	if (target_client && (arg->ui & (TAGMASK | TAG0_MASK))) {
 
+		uint32_t old_tags = target_client->tags;
 		target_client->tags =
 			(arg->ui & TAG0_MASK) ? TAG0_MASK : (arg->ui & TAGMASK);
+		tags_changed = old_tags != target_client->tags;
 		client_reparent_group(target_client);
-
-		wl_list_for_each(fc, &server.clients, link) {
-			if (fc && fc != target_client && target_client->tags & fc->tags &&
-				ISFULLSCREEN(fc) && !target_client->isfloating) {
-				clear_fullscreen_flag(fc);
-			}
-		}
+		clear_fullscreen_for_incoming_tiled_client(target_client);
 		if (arg->ui & TAG0_MASK) {
 			arrange(target_client->mon, false, false);
 		}
@@ -3102,6 +3117,8 @@ void tag_client(const Arg *arg, Client *target_client) {
 	}
 
 	client_focus(target_client, 1);
+	if (tags_changed)
+		workspace_overview_client_tags_changed(target_client);
 	printstatus(IPC_WATCH_ARRANGGE);
 }
 
@@ -3557,6 +3574,19 @@ void clear_fullscreen_and_maximized_state(Monitor *m) {
 	wl_list_for_each(fc, &server.clients, link) {
 		if (fc && VISIBLEON(fc, m) && ISFULLSCREEN(fc)) {
 			clear_fullscreen_flag(fc);
+		}
+	}
+}
+
+void clear_fullscreen_for_incoming_tiled_client(Client *incoming) {
+	if (!incoming || incoming->isfloating)
+		return;
+
+	Client *other;
+	wl_list_for_each(other, &server.clients, link) {
+		if (other != incoming && (incoming->tags & other->tags) &&
+			ISFULLSCREEN(other)) {
+			clear_fullscreen_flag(other);
 		}
 	}
 }
@@ -4131,6 +4161,9 @@ bool client_gesture_driven(const Client *c) {
  * Each flag below is owned by the mechanism that sets it; this only reads. */
 bool client_should_visible(Client *c) {
 	if (!c || !c->scene)
+		return false;
+
+	if (c->wsov_hidden)
 		return false;
 
 	if (c->snapshot_temp_visible)
@@ -4863,6 +4896,8 @@ void handle_xwayland_surface_commit(struct wl_listener *listener, void *data) {
 	/* After scene processing, force the root surface to display its logical
 	 * size. */
 	client_update_xwayland_dest_size(c);
+	if (c->mon && c->mon->is_ws_overview)
+		workspace_overview_client_commit(c);
 }
 
 void handle_xwayland_surface_associate(struct wl_listener *listener,
