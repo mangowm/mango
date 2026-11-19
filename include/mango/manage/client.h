@@ -164,6 +164,7 @@ struct Client {
 	int32_t no_radius;
 	int32_t no_animation;
 	int32_t isopensilent;
+	uint64_t open_silent_input; /* input_serial at map */
 	int32_t istagsilent;
 	int32_t iskilling;
 	int32_t isnamedscratchpad;

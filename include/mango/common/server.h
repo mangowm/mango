@@ -107,6 +107,7 @@ struct MangoServer {
 	KeyboardGroup *keyboard_group;
 	struct wlr_keyboard *last_active_keyboard; /* last keyboard to emit a key;
 												  used to query layout */
+	uint64_t input_serial; /* bumped by key/pointer/touch input */
 	struct wl_list input_devices;
 	struct wl_list seat_devices;
 	struct wl_list standalone_keyboards; /* standalone keyboards list */
