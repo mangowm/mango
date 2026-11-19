@@ -243,6 +243,8 @@ struct Client {
 	bool snapshot_temp_visible;
 	/* per-frame: surface clipped away by the draw path */
 	bool is_surface_hidden;
+	/* temporarily hidden while workspace overview renders offscreen previews */
+	bool wsov_hidden;
 };
 
 #define CLIENT_GROUP_PREV_OFF offsetof(Client, group_prev)
@@ -418,6 +420,7 @@ void set_minimized(Client *c);
 void unminimize(Client *c);
 void exit_scroller_stack(Client *c);
 void clear_fullscreen_and_maximized_state(Monitor *m);
+void clear_fullscreen_for_incoming_tiled_client(Client *incoming);
 
 /* Clears the fullscreen flag and restores the border zeroed at fullscreen. */
 void clear_fullscreen_flag(Client *c);
