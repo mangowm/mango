@@ -88,6 +88,12 @@ You can visualize and generate curve values using online tools like [cssportal.c
 | `animation_curve_focus` | string | `0.46,1.0,0.29,0.99` | Focus change (opacity transition) animation bezier curve |
 | `animation_curve_opacity_fade_in` | string | `0.46,1.0,0.29,0.99` | Open opacity animation bezier curve |
 | `animation_curve_opacity_fade_out` | string | `0.5,0.5,0.5,0.5` | Close opacity animation bezier curve |
+| `animation_duration_workspace_overview_open` | integer | `260` | Workspace overview enter duration in milliseconds |
+| `animation_duration_workspace_overview_close` | integer | `260` | Workspace overview exit duration in milliseconds |
+| `animation_duration_workspace_overview_layout` | integer | `320` | Workspace grid layout-change duration in milliseconds |
+| `animation_curve_workspace_overview_open` | string | `0.333333,1.0,0.666667,1.0` | Workspace overview enter cubic-bezier value |
+| `animation_curve_workspace_overview_close` | string | `0.333333,1.0,0.666667,1.0` | Workspace overview exit cubic-bezier value |
+| `animation_curve_workspace_overview_layout` | string | `0.333333,1.0,0.666667,1.0` | Workspace grid layout-change cubic-bezier value |
 
 ```ini
 animation_curve_open=0.46,1.0,0.29,0.99
@@ -97,6 +103,12 @@ animation_curve_close=0.46,1.0,0.29,0.99
 animation_curve_focus=0.46,1.0,0.29,0.99
 animation_curve_opacity_fade_in=0.46,1.0,0.29,0.99
 animation_curve_opacity_fade_out=0.5,0.5,0.5,0.5
+animation_duration_workspace_overview_open=260
+animation_duration_workspace_overview_close=260
+animation_duration_workspace_overview_layout=320
+animation_curve_workspace_overview_open=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_close=0.333333,1.0,0.666667,1.0
+animation_curve_workspace_overview_layout=0.333333,1.0,0.666667,1.0
 ```
 
 ## Tag Animation Direction
