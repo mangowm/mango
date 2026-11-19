@@ -20,6 +20,7 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
@@ -444,6 +445,9 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 	}
 
 	mods = keyboard_hard_modifiers();
+	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
+		return;
+	}
 
 	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
 		adir = event->delta > 0 ? AxisDown : AxisUp;
@@ -1196,6 +1200,21 @@ static Client *group_bar_target_at(double x, double y, Client *ignore) {
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,
 							double dy_unaccel) {
+	if (workspace_overview_is_active()) {
+		if (time) {
+			wlr_relative_pointer_manager_v1_send_relative_motion(
+				server.relative_pointer_manager, server.seat,
+				(uint64_t)time * 1000, dx, dy, dx_unaccel, dy_unaccel);
+			wlr_cursor_move(server.cursor, device, dx, dy);
+			pointer_cursor_activity();
+			wlr_idle_notifier_v1_notify_activity(server.idle_notifier,
+												 server.seat);
+			workspace_overview_handle_motion(server.cursor->x,
+											 server.cursor->y);
+		}
+		return;
+	}
+
 	double sx = 0, sy = 0, sx_confined, sy_confined;
 	Client *c = NULL, *w = NULL;
 	Client *closet_drop_client = NULL;
@@ -1673,9 +1692,7 @@ Client *find_closest_tiled_client(Client *c) {
 	return closest;
 }
 
-void pointer_place_drag_tile(Client *c) {
-	Client *closest = find_closest_tiled_client(c);
-
+void pointer_place_drag_tile_on(Client *c, Client *closest) {
 	if (closest && closest->mon) {
 		const Layout *layout =
 			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
@@ -1732,6 +1749,10 @@ void pointer_place_drag_tile(Client *c) {
 	client_set_floating(c, 0, false);
 }
 
+void pointer_place_drag_tile(Client *c) {
+	pointer_place_drag_tile_on(c, find_closest_tiled_client(c));
+}
+
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	uint32_t mods;
 	Client *c = NULL;
@@ -1759,6 +1780,9 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
 		server.cursor_mode = CurPressed;
+		if (!server.session_locked && workspace_overview_is_active())
+			return workspace_overview_handle_button(event);
+
 		set_selected_monitor(
 			monitor_at_point(server.cursor->x, server.cursor->y));
 		if (server.session_locked)
@@ -1885,6 +1909,9 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		if (!server.session_locked && workspace_overview_is_active())
+			return workspace_overview_handle_button(event);
+
 		server.group_bar_drag_pending = false;
 		server.drop_to_group = false;
 		server.group_bar_drag_client = NULL;

@@ -62,6 +62,9 @@ find_scroller_focus_root(Monitor *m, struct TagScrollerState *st) {
 /* Creates a new node and inserts it into the tag state all list. */
 struct ScrollerStackNode *scroller_node_create(struct TagScrollerState *st,
 											   Client *c) {
+	struct ScrollerStackNode *existing = find_scroller_node(st, c);
+	if (existing)
+		return existing;
 	struct ScrollerStackNode *n = calloc(1, sizeof(*n));
 	n->client = c;
 	n->scroller_proportion = c->scroller_proportion;
@@ -857,7 +860,7 @@ bool scroller_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
 
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before) {
-	if (!target_client || target_client->mon != c->mon)
+	if (!target_client || target_client == c || target_client->mon != c->mon)
 		return;
 
 	if (c->isfullscreen)

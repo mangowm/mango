@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 bool tab_layout_active(const Monitor *m);
+bool tab_client_hidden_on_tag(const Monitor *m, uint32_t tag, const Client *c);
 void tab_sync_monitor(Monitor *m);
 bool tab_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c);
 bool tab_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,

@@ -59,15 +59,19 @@ static void tab_bar_set_enabled(Client *c, bool on) {
 	wlr_scene_node_set_enabled(&c->tab_bar->scene->node, on);
 }
 
-static bool is_tab_layout(const Monitor *m) {
-	if (!m || !m->pertag)
+static bool tab_layout_enabled_for_tag(const Monitor *m, uint32_t tag) {
+	if (!m || !m->pertag || tag >= PERTAG_SLOTS)
 		return false;
-	uint32_t id = m->pertag->ltidxs[get_mon_curtag(m)]->id;
+	uint32_t id = m->pertag->ltidxs[tag]->id;
 	if (id == MONOCLE)
 		return config.monocle_tab_mode;
 	if (id == DECK || id == VERTICAL_DECK)
 		return config.deck_tab_mode;
 	return false;
+}
+
+static bool is_tab_layout(const Monitor *m) {
+	return m && tab_layout_enabled_for_tag(m, get_mon_curtag(m));
 }
 
 bool tab_layout_active(const Monitor *m) {
@@ -189,6 +193,8 @@ static void clear_tab_projection(Monitor *m) {
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon != m)
 			continue;
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		bool was_hidden = c->is_tab_hidden;
 		c->tab_prev = NULL;
 		c->tab_next = NULL;
@@ -228,7 +234,8 @@ static void update_tab_state(Monitor *m) {
 	}
 }
 
-static Client *get_tab_state_focus(Monitor *m, struct TagTabState *state) {
+static Client *get_tab_state_focus(const Monitor *m,
+								   struct TagTabState *state) {
 	Client *selected = NULL;
 	Client *remembered = NULL;
 	Client *fallback = NULL;
@@ -248,6 +255,24 @@ static Client *get_tab_state_focus(Monitor *m, struct TagTabState *state) {
 	if (!focus)
 		state->focus_id = 0;
 	return focus;
+}
+
+bool tab_client_hidden_on_tag(const Monitor *m, uint32_t tag, const Client *c) {
+	if (!m || !m->pertag || tag == 0 || tag >= PERTAG_SLOTS || !c ||
+		c->mon != m ||
+		!tab_layout_enabled_for_tag(m, tag))
+		return false;
+
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	if (!state || state->count < 2 || !state->focus_id ||
+		state->focus_id == c->id || !tab_state_ok(c) || c->isglobal)
+		return false;
+
+	uint32_t layout_id = m->pertag->ltidxs[tag]->id;
+	if ((layout_id == DECK || layout_id == VERTICAL_DECK) && c->ismaster)
+		return false;
+	uint32_t bit = 1u << (tag - 1);
+	return c->tags & bit;
 }
 
 static void tab_refresh_bars(Client *head) {
