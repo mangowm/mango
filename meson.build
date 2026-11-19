@@ -40,6 +40,7 @@ pcre2_dep = dependency('libpcre2-8')
 pixman_dep = dependency('pixman-1')
 cjson_dep = dependency('libcjson')
 pangocairo_dep = dependency('pangocairo')
+glesv2_dep = dependency('glesv2')
 
 # version info
 git = find_program('git', required : false)
@@ -126,6 +127,7 @@ executable('mango',
     pixman_dep,
     cjson_dep,
     pangocairo_dep,
+    glesv2_dep,
   ],
   install : true,
   c_args : c_args,

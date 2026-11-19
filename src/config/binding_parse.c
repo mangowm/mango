@@ -573,6 +573,16 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = enter_overview;
 	} else if (strcmp(func_name, "leaveoverview") == 0) {
 		func = leave_overview;
+	} else if (strcmp(func_name, "toggleworkspaceoverview") == 0) {
+		func = toggle_workspace_overview;
+		(*arg).i = (strcmp(arg_value, "occupied") == 0) ? OCCUPIED_WORKSPACE
+														: ALL_WORKSPACE;
+	} else if (strcmp(func_name, "enterworkspaceoverview") == 0) {
+		func = enter_workspace_overview;
+		(*arg).i = (strcmp(arg_value, "occupied") == 0) ? OCCUPIED_WORKSPACE
+														: ALL_WORKSPACE;
+	} else if (strcmp(func_name, "leaveworkspaceoverview") == 0) {
+		func = leave_workspace_overview;
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = toggle_jump;
 	} else if (strcmp(func_name, "set_proportion") == 0) {

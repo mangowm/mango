@@ -5,12 +5,23 @@
 #include "mango/config/parse.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include <math.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_subcompositor.h>
 
-struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
+static struct dvec2 calculate_animation_curve_for(double t,
+												  const double curve[4]) {
 	struct dvec2 point;
+	point.x = 3 * t * (1 - t) * (1 - t) * curve[0] +
+			  3 * t * t * (1 - t) * curve[2] + t * t * t;
+
+	point.y = 3 * t * (1 - t) * (1 - t) * curve[1] +
+			  3 * t * t * (1 - t) * curve[3] + t * t * t;
+	return point;
+}
+
+struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 	double *animation_curve;
 	if (type == MOVE) {
 		animation_curve = config.animation_curve_move;
@@ -30,13 +41,21 @@ struct dvec2 calculate_animation_curve_at(double t, int32_t type) {
 		animation_curve = config.animation_curve_move;
 	}
 
-	point.x = 3 * t * (1 - t) * (1 - t) * animation_curve[0] +
-			  3 * t * t * (1 - t) * animation_curve[2] + t * t * t;
+	return calculate_animation_curve_for(t, animation_curve);
+}
 
-	point.y = 3 * t * (1 - t) * (1 - t) * animation_curve[1] +
-			  3 * t * t * (1 - t) * animation_curve[3] + t * t * t;
-
-	return point;
+double find_animation_curve_for(double t, const double curve[4]) {
+	t = fmax(0.0, fmin(1.0, t));
+	double low = 0.0;
+	double high = 1.0;
+	for (int i = 0; i < 24; i++) {
+		double mid = (low + high) / 2.0;
+		if (calculate_animation_curve_for(mid, curve).x < t)
+			low = mid;
+		else
+			high = mid;
+	}
+	return calculate_animation_curve_for((low + high) / 2.0, curve).y;
 }
 void handle_snapshot_meta_destroy(struct wl_listener *listener, void *data) {
 	SnapshotMetadata *meta = wl_container_of(listener, meta, destroy);
