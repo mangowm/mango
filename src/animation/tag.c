@@ -6,6 +6,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/workspace_overview/workspace_overview.h"
 
 void set_tagin_animation(Monitor *m, Client *c) {
 	if (c->animation.running) {
@@ -219,8 +220,8 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 		return;
 	}
 
-	if (!c->is_tab_hidden && !c->animation.tagouted &&
-		(c->tags & (1 << (m->pertag->prevtag - 1))) &&
+	if (!workspace_overview_is_closing_on(m) && !c->is_tab_hidden &&
+		!c->animation.tagouted && (c->tags & (1 << (m->pertag->prevtag - 1))) &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
 		client_animations_enabled(c)) {
 		c->animation.tagouting = true;

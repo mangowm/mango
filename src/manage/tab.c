@@ -189,6 +189,8 @@ static void clear_tab_projection(Monitor *m) {
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon != m)
 			continue;
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		bool was_hidden = c->is_tab_hidden;
 		c->tab_prev = NULL;
 		c->tab_next = NULL;

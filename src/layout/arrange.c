@@ -1069,6 +1069,8 @@ void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
 	bool centered = m->pertag->ltidxs[tag]->id == CENTER_TILE;
 
 	wl_list_for_each(c, &server.clients, link) {
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 
@@ -1139,6 +1141,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 	}
 
 	wl_list_for_each(c, &server.clients, link) {
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		if (c->group_bar && c->group_bar->scene->node.enabled) {
 			client_check_tab_node_visible(c);
 		}
@@ -1182,6 +1186,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->iskilling)
+			continue;
+		if (m->is_ws_overview && c->wsov_hidden)
 			continue;
 
 		if (c->mon == m) {
