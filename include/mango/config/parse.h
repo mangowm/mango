@@ -331,6 +331,9 @@ typedef struct {
 	uint32_t animation_duration_tag;
 	uint32_t animation_duration_close;
 	uint32_t animation_duration_focus;
+	uint32_t animation_duration_wsov_open;
+	uint32_t animation_duration_wsov_close;
+	uint32_t animation_duration_wsov_layout;
 	double animation_curve_move[4];
 	double animation_curve_open[4];
 	double animation_curve_tag[4];
@@ -338,6 +341,9 @@ typedef struct {
 	double animation_curve_focus[4];
 	double animation_curve_opafadein[4];
 	double animation_curve_opafadeout[4];
+	double animation_curve_wsov_open[4];
+	double animation_curve_wsov_close[4];
+	double animation_curve_wsov_layout[4];
 
 	int32_t scroller_structs;
 	float scroller_default_proportion;
@@ -403,6 +409,11 @@ typedef struct {
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
+	float workspace_overview_focused_dim_opacity;
+	float workspace_overview_unfocused_dim_opacity;
+	int32_t workspace_overview_border_width;
+	int32_t workspace_overview_gap;
+	int32_t workspace_overview_drag_threshold;
 	float overcircle_center_ratio;
 	char *jump_labels;
 	uint32_t cursor_hide_timeout;

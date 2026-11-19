@@ -30,6 +30,11 @@ typedef struct LastCursor LastCursor;
 typedef struct MangoJumpLabel MangoJumpLabel;
 typedef struct MangoBarDecoration MangoBarDecoration;
 
+typedef enum WorkspaceOverviewScope {
+	ALL_WORKSPACE,
+	OCCUPIED_WORKSPACE,
+} WorkspaceOverviewScope;
+
 /*
  * Forward declarations for libwayland / wlroots / scenefx structs referenced by
  * module headers. Translation units that need the actual definitions include
