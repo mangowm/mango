@@ -2524,8 +2524,7 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	/* Swallow/group replacement transfers the tab position to the replacement
 	 * first. Detaching the dying client before that leaves the replacement out
 	 * of the chain and makes the whole tab strip disappear. */
-	if (c->tab_prev || c->tab_next)
-		tab_detach_client(c);
+	tab_remove_client(c);
 	workspace_overview_client_removed(c);
 
 	if (c == server.grab_client) {
@@ -3880,8 +3879,7 @@ static void client_unlink(Client *c) {
 }
 
 void client_park(Client *c) {
-	if (c && (c->tab_prev || c->tab_next))
-		tab_detach_client(c);
+	tab_remove_client(c);
 	client_unlink(c);
 	if (!c)
 		return;

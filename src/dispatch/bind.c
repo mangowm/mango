@@ -253,6 +253,13 @@ int32_t focus_direction(const Arg *arg) {
 	if (!config.focus_cross_monitor &&
 		is_monocle_layout(server.selected_monitor) && sel && !sel->isfloating &&
 		(arg->i == LEFT || arg->i == RIGHT)) {
+		Client *tab_target = tab_get_adjacent_member(sel, arg->i == RIGHT);
+		if (tab_target) {
+			client_focus(tab_target, 1);
+			if (config.warpcursor)
+				pointer_warp_to_client(tab_target);
+			return 0;
+		}
 		Arg a = *arg;
 		a.i = (arg->i == LEFT) ? PREV : NEXT;
 		return focus_stack(&a);
