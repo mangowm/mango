@@ -77,11 +77,16 @@ entirely untouched.
 ```ini
 scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
+scratchpad_animation_type=fade
 scratchpad_color=0x516c93ff
 
 # Uses the ratios above because no width or height is set
 window_rule=is_named_scratchpad:1,app_id:st-yazi
 ```
+
+`scratchpad_animation_type` controls how scratchpad windows appear and hide:
+`slide` (default) or `fade`. The fade uses `animation_duration_tag` and
+`animation_curve_tag`.
 
 ---
 

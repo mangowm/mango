@@ -39,6 +39,16 @@ focus_color=0xc66b25ff
 urgent_color=0xad401fff
 ```
 
+Focused and unfocused window borders can also be updated at runtime without
+reloading the configuration:
+
+```sh
+mmsg dispatch set_border_colors,0x444444ff,0xc66b25ff
+```
+
+Runtime border colors remain active across configuration reloads for the
+current Mango session.
+
 ### State-Specific Colors
 
 You can also color-code windows based on their state:

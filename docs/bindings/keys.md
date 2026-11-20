@@ -123,7 +123,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `focusdir` | `left/right/up/down` | Focus window in direction. |
 | `focus_window_or_workspace` | `left/right/up/down` | Focus window in direction; otherwise jump to the nearest adjacent tag that has clients, falling back to the next/previous tag if none. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
-| `overcircle` | `next/prev/current_next/current_prev` | Open overview when closed; while it is open, cycle focus to the next/previous window on the current monitor. `current_next`/`current_prev` only show the current tagset's windows in the overview instead of all tags. |
+| `overcircle` | `next/prev/current_next/current_prev` | Open overview when closed; while it is open, cycle focus to the next/previous window on the current monitor. Releasing a mode key or pressing Escape cancels and restores the entry tag and focus; clicking a window selects it. `current_next`/`current_prev` only show the current tagset's windows in the overview instead of all tags. |
 | `focuslast` | - | Focus the previously active window. |
 | `switcher` | `next/prev`, `all_tag_next/all_tag_prev`, `all_next/all_prev` | Open or cycle the thumbnail switcher. `next`/`prev` list the current tag's windows, `all_tag_next`/`all_tag_prev` list all tags on the current monitor, `all_next`/`all_prev` list all monitors and tags. Releasing any modifier key selects. |
 | `exchange_client` | `left/right/up/down` | Swap the focused window with its neighbor in direction. Both windows change place, and with `exchange_cross_monitor` enabled they also swap monitors. |

@@ -246,8 +246,8 @@ layer_rule=layer_name:Values,Parameter:Values,Parameter:Values
 | Parameter | Type | Values | Description |
 | :--- | :--- | :--- | :--- |
 | `layer_name` | string | layer name | Match name of layer, supports regex |
-| `animation_type_open` | string | slide, zoom, fade, none | Set open animation |
-| `animation_type_close` | string | slide, zoom, fade, none | Set close animation |
+| `animation_type_open` | string | slide, zoom, grow, fade, none | Set open animation |
+| `animation_type_close` | string | slide, zoom, grow, fade, none | Set close animation |
 | `no_blur` | integer | `0` / `1` | Disable blur |
 | `no_animation` | integer | `0` / `1` | Disable layer animation |
 | `no_shadow` | integer | `0` / `1` | Disable layer shadow |

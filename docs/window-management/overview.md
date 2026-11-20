@@ -121,7 +121,8 @@ binding cycles focus around the current monitor.
 
 `next` and `prev` show windows from all tags. `current_next` and
 `current_prev` restrict the overview to the current tagset. Releasing a modifier
-key exits overcircle.
+key or pressing Escape cancels the overview and restores the tag and focused
+window that were active when it opened. Clicking a window selects it instead.
 
 ### Keybindings
 

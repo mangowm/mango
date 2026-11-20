@@ -16,13 +16,24 @@ layer_animations=1
 
 You can define different animation styles for opening and closing windows and layer surfaces.
 
-Available types: `slide`, `zoom`, `fade`, `none`.
+Available layer animation types: `slide`, `zoom`, `grow`, `fade`, `none`.
+
+`grow` keeps the layer's full width and expands its height from a narrow
+centered strip. It can be selected independently for opening and closing in a
+`layer_rule`. Its easing curve is set by `animation_curve_grow` and its
+duration by `animation_duration_grow`.
 
 ```ini
 animation_type_open=zoom
 animation_type_close=slide
 layer_animation_type_open=slide
 layer_animation_type_close=slide
+```
+
+For a specific layer surface, set the animation types in a layer rule:
+
+```ini
+layer_rule=animation_type_open:grow,animation_type_close:grow,layer_name:^rofi$
 ```
 
 ## Fade Settings
@@ -61,6 +72,7 @@ Control the speed of animations (in milliseconds).
 | :--- | :--- | :--- | :--- |
 | `animation_duration_move` | integer | `500` | Move animation duration (ms) |
 | `animation_duration_open` | integer | `400` | Open animation duration (ms) |
+| `animation_duration_grow` | integer | `400` | Grow animation duration (ms) |
 | `animation_duration_tag` | integer | `300` | Tag animation duration (ms) |
 | `animation_duration_close` | integer | `300` | Close animation duration (ms) |
 | `animation_duration_focus` | integer | `0` | Focus change (opacity transition) animation duration (ms) |
@@ -68,6 +80,7 @@ Control the speed of animations (in milliseconds).
 ```ini
 animation_duration_move=500
 animation_duration_open=400
+animation_duration_grow=400
 animation_duration_tag=300
 animation_duration_close=300
 animation_duration_focus=0
@@ -82,6 +95,7 @@ You can visualize and generate curve values using online tools like [cssportal.c
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `animation_curve_open` | string | `0.46,1.0,0.29,0.99` | Open animation bezier curve |
+| `animation_curve_grow` | string | `0.46,1.0,0.29,0.99` | Grow animation bezier curve |
 | `animation_curve_move` | string | `0.46,1.0,0.29,0.99` | Move animation bezier curve |
 | `animation_curve_tag` | string | `0.46,1.0,0.29,0.99` | Tag animation bezier curve |
 | `animation_curve_close` | string | `0.46,1.0,0.29,0.99` | Close animation bezier curve |
@@ -91,6 +105,7 @@ You can visualize and generate curve values using online tools like [cssportal.c
 
 ```ini
 animation_curve_open=0.46,1.0,0.29,0.99
+animation_curve_grow=0.46,1.0,0.29,0.99
 animation_curve_move=0.46,1.0,0.29,0.99
 animation_curve_tag=0.46,1.0,0.29,0.99
 animation_curve_close=0.46,1.0,0.29,0.99
