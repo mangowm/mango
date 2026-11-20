@@ -268,6 +268,11 @@ overlay_color = 0x14a57cff
 "ALT+SHIFT+Z" = "incgaps,-1"
 "ALT+SHIFT+R" = "togglegaps"
 
+# opacity
+"ALT+SHIFT+Equal" = "change_opacity,0.05,0.05"
+"ALT+SHIFT+Minus" = "change_opacity,-0.05,-0.05"
+"ALT+SHIFT+0" = "set_opacity,1.0,1.0"
+
 # movewin
 "CTRL+SHIFT+Up" = "movewin,+0,-50"
 "CTRL+SHIFT+Down" = "movewin,+0,+50"
