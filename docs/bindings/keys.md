@@ -124,7 +124,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | Command | Param | Description |
 | :--- | :--- | :--- |
 | `focusid` | - | Focus window (can target any window via IPC: `mmsg dispatch focusid client,<id>`) |
-| `focusdir` | `left/right/up/down` | Focus window in direction. |
+| `focusdir` | `left/right/up/down` | Focus window in direction. In the monocle layout, left/right cycle the focus stack instead when `focus_cross_monitor` is disabled. |
 | `focus_window_or_workspace` | `left/right/up/down` | Focus window in direction; otherwise jump to the nearest adjacent tag that has clients, falling back to the next/previous tag if none. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
 | `overcircle` | `next/prev/current_next/current_prev` | Open overview when closed; while it is open, cycle focus to the next/previous window on the current monitor. `current_next`/`current_prev` only show the current tagset's windows in the overview instead of all tags. |
