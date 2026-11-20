@@ -701,6 +701,7 @@ void reapply_cursor_style(void);
 
 void reapply_rootbg(void);
 void reapply_property(void);
+void reapply_window_rule_opacity(void);
 
 void reapply_keyboard(void);
 
