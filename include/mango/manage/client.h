@@ -95,6 +95,7 @@ struct Client {
 	struct wl_listener commit;
 	struct wl_listener map;
 	struct wl_listener maximize;
+	struct wl_listener move;
 	struct wl_listener minimize;
 	struct wl_listener unmap;
 	struct wl_listener destroy;
