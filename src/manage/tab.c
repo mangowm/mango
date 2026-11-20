@@ -30,6 +30,25 @@ static Client *tab_head(Client *c) {
 	return client_chain_head(c, CLIENT_TAB_PREV_OFF);
 }
 
+Client *tab_get_adjacent_member(Client *c, bool next) {
+	if (!c || !(c->tab_prev || c->tab_next))
+		return NULL;
+
+	Client *target = next ? c->tab_next : c->tab_prev;
+	if (target)
+		return target;
+
+	target = c;
+	if (next) {
+		while (target->tab_prev)
+			target = target->tab_prev;
+	} else {
+		while (target->tab_next)
+			target = target->tab_next;
+	}
+	return target != c ? target : NULL;
+}
+
 static bool tab_is_member(const Client *c) {
 	return c && (c->tab_prev || c->tab_next);
 }
