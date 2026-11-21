@@ -221,8 +221,7 @@ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
 	}
 
 	if (!workspace_overview_is_closing_on(m) && !c->is_tab_hidden &&
-		!c->animation.tagouted &&
-		(c->tags & (1 << (m->pertag->prevtag - 1))) &&
+		!c->animation.tagouted && (c->tags & (1 << (m->pertag->prevtag - 1))) &&
 		m->pertag->prevtag != 0 && m->pertag->curtag != 0 &&
 		client_animations_enabled(c)) {
 		c->animation.tagouting = true;

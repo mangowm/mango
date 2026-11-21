@@ -235,8 +235,8 @@ void tag_ratio_state_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
 		ratio_node_remove(state, node);
 }
 
-void tag_ratio_state_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
-										   Client *new) {
+void tag_ratio_state_replace_client_in_tag(Monitor *m, uint32_t tag,
+										   Client *old, Client *new) {
 	if (!old || !new || old == new)
 		return;
 	struct TagRatioState *state = m->pertag->tag_ratio_state[tag];

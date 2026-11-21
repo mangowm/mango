@@ -336,8 +336,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 
 		bool wsov_active = workspace_overview_is_active_on(l->mon);
 		if (config.animations && config.layer_animations && !l->no_animation &&
-			!wsov_active &&
-			l->mapped &&
+			!wsov_active && l->mapped &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
 				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {

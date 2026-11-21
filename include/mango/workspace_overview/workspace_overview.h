@@ -27,8 +27,7 @@ void workspace_overview_client_tags_changed(Client *c);
 void workspace_overview_client_title_changed(Client *c);
 void workspace_overview_layout_changed(Monitor *m);
 bool workspace_overview_active_workspace_will_empty(Client *c);
-void workspace_overview_client_unmapped(Client *c,
-										bool activate_target);
+void workspace_overview_client_unmapped(Client *c, bool activate_target);
 void workspace_overview_monitor_destroy(Monitor *m);
 
 #endif

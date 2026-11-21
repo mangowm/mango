@@ -93,9 +93,11 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->animation_duration_focus = atoi(value);
 	} else if (strcmp(key, "animation_duration_workspace_overview_open") == 0) {
 		config->animation_duration_wsov_open = atoi(value);
-	} else if (strcmp(key, "animation_duration_workspace_overview_close") == 0) {
+	} else if (strcmp(key, "animation_duration_workspace_overview_close") ==
+			   0) {
 		config->animation_duration_wsov_close = atoi(value);
-	} else if (strcmp(key, "animation_duration_workspace_overview_layout") == 0) {
+	} else if (strcmp(key, "animation_duration_workspace_overview_layout") ==
+			   0) {
 		config->animation_duration_wsov_layout = atoi(value);
 	} else if (strcmp(key, "animation_curve_move") == 0) {
 		int32_t num =
@@ -2883,8 +2885,8 @@ void override_config(void) {
 		CLAMP_INT(config.workspace_overview_show_empty, 0, 1);
 	config.workspace_overview_focused_dim_opacity =
 		CLAMP_FLOAT(config.workspace_overview_focused_dim_opacity, 0.0f, 1.0f);
-	config.workspace_overview_unfocused_dim_opacity =
-		CLAMP_FLOAT(config.workspace_overview_unfocused_dim_opacity, 0.0f, 1.0f);
+	config.workspace_overview_unfocused_dim_opacity = CLAMP_FLOAT(
+		config.workspace_overview_unfocused_dim_opacity, 0.0f, 1.0f);
 	config.workspace_overview_border_width =
 		CLAMP_INT(config.workspace_overview_border_width, 0, 100);
 	config.workspace_overview_gap =

@@ -11,7 +11,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 
 static struct dvec2 calculate_animation_curve_for(double t,
-												   const double curve[4]) {
+												  const double curve[4]) {
 	struct dvec2 point;
 	point.x = 3 * t * (1 - t) * (1 - t) * curve[0] +
 			  3 * t * t * (1 - t) * curve[2] + t * t * t;

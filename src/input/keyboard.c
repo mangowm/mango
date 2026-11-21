@@ -623,11 +623,9 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 		}
 
 		k = &config.key_bindings[ji];
-		if (wsov_active &&
-			k->func != toggle_workspace_overview &&
+		if (wsov_active && k->func != toggle_workspace_overview &&
 			k->func != enter_workspace_overview &&
-			k->func != leave_workspace_overview &&
-			k->func != change_vt) {
+			k->func != leave_workspace_overview && k->func != change_vt) {
 			continue;
 		}
 		if ((k->iscommonmode ||
