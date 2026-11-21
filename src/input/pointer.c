@@ -1935,6 +1935,8 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		if (!server.session_locked && server.cursor_mode != CurNormal &&
 			server.cursor_mode != CurPressed) {
+			wlr_seat_pointer_notify_button(server.seat, event->time_msec,
+										   event->button, event->state);
 			pointer_end_grab_client(true);
 			return true;
 		} else {
