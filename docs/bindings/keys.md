@@ -204,8 +204,8 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `toggleoverview` | `[1]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. |
 | `enteroverview` | - | Enter overview mode. |
 | `leaveoverview` | - | Leave overview mode. |
-| `toggleworkspaceoverview` | - | Toggle the draggable workspace overview. Only non-empty tags are shown. |
-| `enterworkspaceoverview` | - | Enter the draggable workspace overview. |
+| `toggleworkspaceoverview` | `[all\|occupied]` | Toggle the draggable workspace overview. `all` includes empty tags; `occupied` shows only tags containing windows. |
+| `enterworkspaceoverview` | `[all\|occupied]` | Enter the draggable workspace overview with the selected workspace scope. |
 | `leaveworkspaceoverview` | - | Leave the draggable workspace overview. |
 | `togglejump` | - | Toggle overview with jump mode. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |

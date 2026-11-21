@@ -290,11 +290,17 @@ static bool wsov_tag_has_normal_client(uint32_t tag) {
 	return false;
 }
 
-static uint32_t wsov_collect_workspace_tags(int *count) {
+static uint32_t wsov_collect_workspace_tags(Monitor *m, int *count) {
 	uint32_t mask = 0;
 	int n = 0;
 
-	if (config.workspace_overview_show_empty) {
+	if (!m) {
+		if (count)
+			*count = 0;
+		return 0;
+	}
+
+	if (m->workspace_overview_scope == ALL_WORKSPACE) {
 		if (count)
 			*count = config.tag_num;
 		return ((uint32_t)1 << config.tag_num) - 1;
@@ -1868,7 +1874,7 @@ static bool wsov_create_cells(void) {
 	}
 
 	wsov_destroy_cells();
-	uint32_t occupied = wsov_collect_workspace_tags(&wsov.cell_count);
+	uint32_t occupied = wsov_collect_workspace_tags(wsov.mon, &wsov.cell_count);
 	if (wsov.cell_count <= 0) {
 		free(snapshot);
 		return false;
@@ -2413,7 +2419,7 @@ static bool wsov_open(Monitor *m) {
 	memset(&wsov, 0, sizeof(wsov));
 	wsov.mon = m;
 	int count = 0;
-	wsov_collect_workspace_tags(&count);
+	wsov_collect_workspace_tags(m, &count);
 	if (count <= 0) {
 		memset(&wsov, 0, sizeof(wsov));
 		return false;
@@ -2477,7 +2483,10 @@ int32_t toggle_workspace_overview(const Arg *arg) {
 		else
 			wsov_close(wsov.target_tag, NULL);
 	} else {
-		wsov_open(server.selected_monitor);
+		Monitor *m = server.selected_monitor;
+		m->workspace_overview_scope =
+			arg->i == OCCUPIED_WORKSPACE ? OCCUPIED_WORKSPACE : ALL_WORKSPACE;
+		wsov_open(m);
 	}
 	return 0;
 }
@@ -2489,7 +2498,10 @@ int32_t enter_workspace_overview(const Arg *arg) {
 	if (workspace_overview_is_active()) {
 		wsov_resume_open_animation();
 	} else {
-		wsov_open(server.selected_monitor);
+		Monitor *m = server.selected_monitor;
+		m->workspace_overview_scope =
+			arg->i == OCCUPIED_WORKSPACE ? OCCUPIED_WORKSPACE : ALL_WORKSPACE;
+		wsov_open(m);
 	}
 	return 0;
 }

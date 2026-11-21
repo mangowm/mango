@@ -541,8 +541,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overview_gap_outer") == 0) {
 		config->overviewgappo = atoi(value);
-	} else if (strcmp(key, "workspace_overview_show_empty") == 0) {
-		config->workspace_overview_show_empty = atoi(value);
 	} else if (strcmp(key, "workspace_overview_focused_dim_opacity") == 0) {
 		config->workspace_overview_focused_dim_opacity = atof(value);
 	} else if (strcmp(key, "workspace_overview_unfocused_dim_opacity") == 0) {
@@ -2563,7 +2561,6 @@ void set_value_default() {
 	config.group_bar_button_color[3] = 1.0f;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
-	config.workspace_overview_show_empty = 1;
 	config.workspace_overview_focused_dim_opacity = 0.0f;
 	config.workspace_overview_unfocused_dim_opacity = 0.2f;
 	config.workspace_overview_border_width = 2;
@@ -2881,8 +2878,6 @@ void override_config(void) {
 		CLAMP_INT(config.hotarea_disable_on_fullscreen, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
-	config.workspace_overview_show_empty =
-		CLAMP_INT(config.workspace_overview_show_empty, 0, 1);
 	config.workspace_overview_focused_dim_opacity =
 		CLAMP_FLOAT(config.workspace_overview_focused_dim_opacity, 0.0f, 1.0f);
 	config.workspace_overview_unfocused_dim_opacity = CLAMP_FLOAT(

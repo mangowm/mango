@@ -708,6 +708,7 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	m->special_gappoh = config.special_gappoh;
 	m->special_gappov = config.special_gappov;
 	m->isoverview = 0;
+	m->workspace_overview_scope = ALL_WORKSPACE;
 	m->sel = NULL;
 	m->is_in_hotarea = 0;
 	m->ov_normal_mode = 0;

@@ -66,6 +66,7 @@ struct Monitor {
 	Client *sel, *prevsel;
 	int32_t isoverview;
 	bool is_ws_overview;
+	WorkspaceOverviewScope workspace_overview_scope;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t ov_normal_mode; /* Uses the normal grid layout when entering via the

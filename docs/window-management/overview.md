@@ -121,11 +121,11 @@ list.
 
 ## Workspace Overview
 
-The workspace overview is independent from the standard overview. By default it
-creates one preview for every tag up to `tag_num`, including empty workspaces.
-Set `workspace_overview_show_empty=0` to show only non-empty tags; the remaining
-previews then become larger as workspaces become empty. The preview grid has no
-outer margin and uses `workspace_overview_gap` between workspaces.
+The workspace overview is independent from the standard overview. Its scope is
+selected when opening it: `all` creates one preview for every tag up to
+`tag_num`, including empty workspaces, while `occupied` shows only tags that
+contain windows. The preview grid has no outer margin and uses
+`workspace_overview_gap` between workspaces.
 
 Each tag preview mirrors its workspace, including the background wallpaper and
 layer-shell surfaces such as the status bar. Windows use their workspace
@@ -136,15 +136,17 @@ previews, and mapping or closing a window rebuilds the workspace previews
 automatically.
 
 ```ini
-# Shipped default binding
-bind=SUPER,Tab,toggleworkspaceoverview,
+# Shipped default binding: all workspaces
+bind=SUPER,Tab,toggleworkspaceoverview,all
+# Optional binding: occupied workspaces only
+bind=SUPER+SHIFT,Tab,toggleworkspaceoverview,occupied
 bind=SUPER+ALT,Escape,leaveworkspaceoverview,
 ```
 
 | Command | Description |
 | :--- | :--- |
-| `toggleworkspaceoverview` | Toggle the workspace overview. |
-| `enterworkspaceoverview` | Enter the workspace overview. |
+| `toggleworkspaceoverview` | Toggle the workspace overview. `all` includes empty tags; `occupied` shows occupied tags only. |
+| `enterworkspaceoverview` | Enter the workspace overview with `all` or `occupied` scope. |
 | `leaveworkspaceoverview` | Leave the workspace overview without selecting a workspace. |
 
 `toggleworkspaceoverview` and `enterworkspaceoverview` can reverse an in-progress
@@ -178,15 +180,14 @@ source tag. Holding Ctrl replaces all of the window's tags with the destination
 tag. A plain drag removes only the tag represented by the preview that the drag
 started from.
 
-With `workspace_overview_show_empty=0`, the workspace overview closes
-automatically when every workspace becomes empty. With the default value of
-`1`, the empty workspace previews remain available.
+With `occupied` scope, the workspace overview closes automatically when every
+workspace becomes empty. With `all` scope, empty workspace previews remain
+available.
 
 ### Configuration
 
 | Setting | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `workspace_overview_show_empty` | integer | `1` | Show all tags, including empty workspaces. The preview count follows `tag_num`. |
 | `workspace_overview_border_width` | integer | `2` | Width of each workspace preview border and its inset around the preview texture. Range: 0–100. |
 | `workspace_overview_gap` | integer | `5` | Gap between workspace preview cards. Range: 0–1000. |
 | `workspace_overview_drag_threshold` | integer | `5` | Pointer distance required before a click becomes a window drag. Range: 0–1000. |
@@ -200,8 +201,6 @@ automatically when every workspace becomes empty. With the default value of
 | `animation_curve_workspace_overview_layout` | string | `0.333333,1.0,0.666667,1.0` | Workspace grid layout-change cubic-bezier value `x1,y1,x2,y2`. |
 
 ```ini
-# Optional: hide empty workspaces
-workspace_overview_show_empty=0
 workspace_overview_border_width=2
 workspace_overview_gap=5
 workspace_overview_drag_threshold=5

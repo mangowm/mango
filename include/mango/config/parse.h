@@ -408,7 +408,6 @@ typedef struct {
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
-	int32_t workspace_overview_show_empty;
 	float workspace_overview_focused_dim_opacity;
 	float workspace_overview_unfocused_dim_opacity;
 	int32_t workspace_overview_border_width;
