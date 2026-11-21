@@ -1436,8 +1436,6 @@ int32_t switch_keyboard_layout(const Arg *arg) {
 
 		wlr_keyboard_notify_modifiers(tkb, depressed, latched, locked_mods,
 									  next);
-		wlr_seat_set_keyboard(server.seat, tkb);
-		wlr_seat_keyboard_notify_modifiers(server.seat, &tkb->modifiers);
 	}
 
 	printstatus(IPC_WATCH_KB_LAYOUT);
