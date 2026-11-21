@@ -1199,9 +1199,11 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 	const float *frame_color =
 		(c == wsov.mon->sel) ? config.focuscolor : config.bordercolor;
 	int border_x =
-		MANGO_MAX(1, (int)lround(MANGO_MAX(1, c->bw) * render_scale_x));
+		c->bw > 0 ? MANGO_MAX(1, (int)lround((double)c->bw * render_scale_x))
+				  : 0;
 	int border_y =
-		MANGO_MAX(1, (int)lround(MANGO_MAX(1, c->bw) * render_scale_y));
+		c->bw > 0 ? MANGO_MAX(1, (int)lround((double)c->bw * render_scale_y))
+				  : 0;
 	if (!c->no_shadow && config.shadows_blur > 0) {
 		for (int layer = 4; layer >= 1; layer--) {
 			int spread = MANGO_MAX(1, (int)lround(config.shadows_blur *
