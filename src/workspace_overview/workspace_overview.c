@@ -2025,11 +2025,16 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 		return false;
 
 	int width = MANGO_MIN(item->box.width, 900);
-	int window_height = MANGO_MAX(
-		1, (int)lround((double)width * item->box.height / item->box.width));
+	int workspace_width =
+		MANGO_MAX(1, item->workspace_geom.width > 0 ? item->workspace_geom.width
+													: item->box.width);
+	int workspace_height = MANGO_MAX(
+		1, item->workspace_geom.height > 0 ? item->workspace_geom.height
+										   : item->box.height);
 	double output_scale = wsov_output_scale();
-	double render_scale =
-		item->render_scale * ((double)width / MANGO_MAX(1, item->box.width));
+	double render_scale = (double)width / workspace_width;
+	int window_height =
+		MANGO_MAX(1, (int)lround(workspace_height * render_scale));
 	struct wsov_cell drag_bars = {0};
 	int bar_height = 0;
 	if (wsov_capture_drag_group_bars(item->client, &drag_bars))
