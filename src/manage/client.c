@@ -2097,6 +2097,7 @@ void init_client_properties(Client *c) {
 	c->tab_prev = NULL;
 	c->tab_next = NULL;
 	c->tag_visible = false;
+	c->wsov_hidden = false;
 	c->snapshot_temp_visible = false;
 	c->is_surface_hidden = false;
 	c->grid_col_per = 1.0f;
@@ -3959,6 +3960,7 @@ void client_unpark(Client *c, Client *anchor) {
 
 void client_replace(Client *c, Client *w, bool is_group_change_member,
 					bool is_swallow) {
+	workspace_overview_client_replaced(w, c);
 	c->bw = w->bw;
 	c->isfloating = w->isfloating;
 	c->isurgent = w->isurgent;
@@ -4303,6 +4305,10 @@ static void client_update_input_penetration(Client *c) {
 void client_update_visibility(Client *c) {
 	if (!c || !c->scene)
 		return;
+
+	if (c->wsov_hidden && c->mon && !c->mon->is_ws_overview &&
+		!workspace_overview_is_closing_on(c->mon))
+		c->wsov_hidden = false;
 
 	client_update_input_penetration(c);
 

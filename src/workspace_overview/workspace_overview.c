@@ -2798,6 +2798,15 @@ void workspace_overview_client_removed(Client *c) {
 	wsov_rebuild();
 }
 
+void workspace_overview_client_replaced(Client *old, Client *new) {
+	if (!workspace_overview_is_active() || !old || !new || old == new)
+		return;
+	if (wsov.drag_client == old)
+		wsov.drag_client = new;
+	if (wsov.close_client == old)
+		wsov.close_client = new;
+}
+
 void workspace_overview_client_tags_changed(Client *c) {
 	if (!workspace_overview_is_active() || wsov.closing || !c ||
 		c->mon != wsov.mon)

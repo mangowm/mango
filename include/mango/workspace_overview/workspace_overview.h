@@ -22,6 +22,7 @@ void workspace_overview_client_commit(Client *c);
 void workspace_overview_layers_changed(Monitor *m);
 void workspace_overview_client_added(Client *c);
 void workspace_overview_client_removed(Client *c);
+void workspace_overview_client_replaced(Client *old, Client *new);
 void workspace_overview_client_tags_changed(Client *c);
 void workspace_overview_client_title_changed(Client *c);
 void workspace_overview_layout_changed(Monitor *m);
