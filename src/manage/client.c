@@ -4009,6 +4009,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	wlr_scene_node_set_enabled(&w->jump_label_node->scene->node, false);
 
 	c->tag_visible = w->tag_visible;
+	c->wsov_hidden = w->wsov_hidden;
 	w->tag_visible = false;
 	client_update_visibility(w);
 	client_update_visibility(c);
