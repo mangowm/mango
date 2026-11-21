@@ -128,6 +128,32 @@ void reapply_property(void) {
 	}
 }
 
+/* Re-apply window-rule opacity to already open windows. */
+void reapply_window_opacity(void) {
+	Client *c = NULL;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c && !c->iskilling) {
+			const char *appid = client_get_appid(c);
+			const char *title = client_get_title(c);
+			if (!appid) appid = "broken";
+			if (!title) title = "broken";
+
+			/* Reapply default opacity. */
+			c->focused_opacity = config.focused_opacity;
+			c->unfocused_opacity = config.unfocused_opacity;
+
+			/* Reapply opacity from matching rules. */
+			for (int32_t i = 0; i < config.window_rules_count; i++) {
+				ConfigWinRule *r = &config.window_rules[i];
+				if (is_window_rule_matches(r, appid, title)) {
+					APPLY_FLOAT_PROP(c, r, focused_opacity);
+					APPLY_FLOAT_PROP(c, r, unfocused_opacity);
+				}
+			}
+		}
+	}
+}
+
 void reapply_pointer(void) {
 	InputDevice *id;
 	struct libinput_device *device;
@@ -165,6 +191,7 @@ void reset_option(void) {
 
 	reapply_cursor_style();
 	reapply_property();
+	reapply_window_opacity();
 	reapply_rootbg();
 	reapply_keyboard();
 	reapply_pointer();
