@@ -40,7 +40,9 @@ void dwindle_move_next_to(Client *c, Client *target, float ratio, int32_t dir);
 void dwindle_swap_clients(Client *c1, Client *c2);
 void dwindle_resize_client(Monitor *m, Client *c);
 void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy);
-void dwindle_remove_client(Client *c);
+void dwindle_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c);
+void dwindle_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+								   Client *new);
 void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 								Client *focused, float ratio);
 void dwindle(Monitor *m);

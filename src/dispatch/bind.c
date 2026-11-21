@@ -17,6 +17,7 @@
 #include "mango/layout/layout.h"
 #include "mango/layout/overview.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
@@ -693,7 +694,6 @@ int32_t increase_outer_vertical_gap(const Arg *arg) {
 
 int32_t set_master_factor(const Arg *arg) {
 	float f;
-	Client *c = NULL;
 
 	if (!arg || !server.selected_monitor ||
 		!server.selected_monitor->pertag
@@ -707,13 +707,8 @@ int32_t set_master_factor(const Arg *arg) {
 	if (f < 0.1 || f > 0.9)
 		return 0;
 
-	server.selected_monitor->pertag
-		->mfacts[get_mon_curtag(server.selected_monitor)] = f;
-	wl_list_for_each(c, &server.clients, link) {
-		if (VISIBLEON(c, server.selected_monitor) && ISTILED(c)) {
-			c->master_mfact_per = f;
-		}
-	}
+	tag_ratio_state_set_master_mfact(
+		server.selected_monitor, get_mon_curtag(server.selected_monitor), f);
 	arrange(server.selected_monitor, false, false);
 	return 0;
 }
@@ -1998,7 +1993,6 @@ int32_t toggle_tag(const Arg *arg) {
 void toggle_view_on_monitor(const Arg *arg, Monitor *m) {
 	uint32_t newtagset;
 	uint32_t target;
-	Client *c = NULL;
 
 	if (!m || m->isoverview)
 		return;
@@ -2008,14 +2002,13 @@ void toggle_view_on_monitor(const Arg *arg, Monitor *m) {
 	newtagset = m->tagset[m->seltags] ^ (target & TAGMASK);
 
 	if (newtagset) {
+		uint32_t oldtag = m->pertag->curtag;
 		m->tagset[m->seltags] = newtagset;
+		m->pertag->curtag = get_tags_first_tag_num(newtagset);
+		if (oldtag != m->pertag->curtag)
+			m->pertag->prevtag = oldtag;
 		client_focus(client_focus_top(m), 1);
-		wl_list_for_each(c, &server.clients, link) {
-			if (VISIBLEON(c, m) && ISTILED(c)) {
-				set_size_per(m, c, true);
-			}
-		}
-		arrange(m, false, false);
+		arrange(m, false, true);
 	}
 	printstatus(IPC_WATCH_ARRANGGE);
 }
