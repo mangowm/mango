@@ -2411,8 +2411,7 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 		if (c->mon) {
 			client_set_scale(client_surface(c), c->mon->wlr_output->scale);
 		}
-		client_set_monitor(
-			c, NULL, 0, true);
+		client_set_monitor(c, NULL, 0, true);
 
 		uint32_t serial = wlr_xdg_surface_schedule_configure(c->surface.xdg);
 		if (serial > 0) {
@@ -2539,7 +2538,6 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		c->mon ? find_scroller_node(
 					 c->mon->pertag->scroller_state[get_client_tag_idx(c)], c)
 			   : NULL;
-
 
 	Client *prev_stack_client = target_node && target_node->prev_in_stack
 									? target_node->prev_in_stack->client
