@@ -2517,13 +2517,9 @@ static void client_tag_states_update(Client *old, Client *new, bool replace) {
 			}
 		}
 	}
-	if (replace && scroller_changed && old->mon) {
-		uint32_t tag = get_mon_curtag(old->mon);
-		const Layout *layout = old->mon->pertag->ltidxs[tag];
-		if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER)
-			sync_scroller_state_to_clients(old->mon, tag);
-	}
-	if (!replace && tab_changed)
+	if (replace && scroller_changed && old->mon)
+		scroller_sync_current(old->mon);
+	if (!replace && tab_changed && old->mon)
 		tab_sync_current(old->mon);
 }
 

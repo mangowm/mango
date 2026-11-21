@@ -137,6 +137,12 @@ void sync_scroller_state_to_clients(Monitor *m, uint32_t tag) {
 	}
 }
 
+void scroller_sync_current(Monitor *m) {
+	if (!m || !m->pertag || !is_scroller_layout(m))
+		return;
+	sync_scroller_state_to_clients(m, get_mon_curtag(m));
+}
+
 void vertical_scroll_adjust_fullandmax(Client *c, struct wlr_box *target_geom) {
 	Monitor *m = c->mon;
 	int32_t cur_gappiv = server.enable_gaps ? m->gappiv : 0;
