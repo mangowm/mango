@@ -163,6 +163,10 @@ Pointer interaction:
 | Drag a window to another workspace | Move its tag membership to the drop workspace. |
 | Right click a window preview | Close the window. |
 
+When a dragged window is over a tiled target, the preview shows the same
+mouse-position-based insert zone used by ordinary drag-to-tile. Dropping uses
+that zone's layout-specific insertion rule. The indicator uses `drop_color`.
+
 When a window drag starts, the source workspace immediately lays out again
 without that window, so the remaining windows fill the released space before
 the drop is committed.

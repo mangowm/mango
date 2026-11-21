@@ -38,6 +38,7 @@ void // Mouse scroll wheel event
 handle_cursor_axis(struct wl_listener *listener, void *data);
 Client *find_closest_tiled_client(Client *c);
 void pointer_place_drag_tile(Client *c);
+void pointer_place_drag_tile_on(Client *c, Client *target);
 void // Mouse button event
 handle_cursor_button(struct wl_listener *listener, void *data);
 bool pointer_process_button_press(struct wlr_pointer_button_event *event);

@@ -186,6 +186,9 @@ static struct {
 	int drag_width;
 	int drag_height;
 	int drag_bar_height;
+	struct wlr_scene_rect *drop_fill;
+	struct wlr_scene_rect *drop_border[4];
+	bool drop_indicator_visible;
 	bool drag_floating_changed;
 	bool drag_was_floating;
 	bool drag_was_drag_to_tile;
@@ -210,6 +213,9 @@ static void wsov_update_layout_animation(void);
 static bool wsov_scene_node_layout_coords(struct wlr_scene_node *node, int *x,
 										  int *y);
 static void wsov_update_styles(void);
+static bool wsov_create_drop_indicator(void);
+static void wsov_hide_drop_indicator(void);
+static void wsov_update_drop_indicator(double x, double y);
 
 static uint32_t wsov_tag_bit(uint32_t tag) {
 	if (tag < 1 || tag > (uint32_t)config.tag_num)
@@ -330,6 +336,27 @@ static void wsov_set_rect_color(struct wlr_scene_rect *rect,
 		color[3],
 	};
 	wlr_scene_rect_set_color(rect, premultiplied);
+}
+
+static bool wsov_create_drop_indicator(void) {
+	if (!wsov.root)
+		return false;
+
+	float border[4] = {config.dropcolor[0], config.dropcolor[1],
+					   config.dropcolor[2], 1.0f};
+	wsov.drop_fill = wlr_scene_rect_create(wsov.root, 1, 1, config.dropcolor);
+	for (int i = 0; i < 4; i++) {
+		wsov.drop_border[i] = wlr_scene_rect_create(wsov.root, 1, 1, border);
+		if (!wsov.drop_border[i])
+			return false;
+	}
+	if (!wsov.drop_fill)
+		return false;
+	wsov_set_rect_color(wsov.drop_fill, config.dropcolor);
+	for (int i = 0; i < 4; i++)
+		wsov_set_rect_color(wsov.drop_border[i], border);
+	wsov_hide_drop_indicator();
+	return true;
 }
 
 static struct wsov_cell *wsov_cell_for_tag(uint32_t tag) {
@@ -585,6 +612,32 @@ static struct wsov_cell *wsov_cell_at(double x, double y) {
 			return &wsov.cells[i];
 	}
 	return NULL;
+}
+
+static struct wsov_cell *wsov_drop_cell_at(double x, double y) {
+	struct wsov_cell *cell = wsov_cell_at(x, y);
+	if (cell || !wsov.mon || x < wsov.mon->m.x ||
+		x >= wsov.mon->m.x + wsov.mon->m.width || y < wsov.mon->m.y ||
+		y >= wsov.mon->m.y + wsov.mon->m.height)
+		return cell;
+
+	double lx = x - wsov.mon->m.x;
+	double ly = y - wsov.mon->m.y;
+	struct wsov_cell *nearest = NULL;
+	double best = 1e30;
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wlr_box box = wsov_cell_layout_box(&wsov.cells[i]);
+		double cx = box.x + box.width / 2.0;
+		double cy = box.y + box.height / 2.0;
+		double dx = cx - lx;
+		double dy = cy - ly;
+		double distance = dx * dx + dy * dy;
+		if (distance < best) {
+			best = distance;
+			nearest = &wsov.cells[i];
+		}
+	}
+	return nearest;
 }
 
 static bool wsov_set_target_from_point(double x, double y) {
@@ -1558,6 +1611,18 @@ static void wsov_update_styles(void) {
 		mango_dim_node_set_enabled(cell->dim, cell->dim_enabled);
 		wlr_scene_node_raise_to_top(&cell->dim->scene_buffer->node);
 	}
+	if (wsov.drop_fill) {
+		float border[4] = {config.dropcolor[0], config.dropcolor[1],
+						   config.dropcolor[2], 1.0f};
+		wsov_set_rect_color(wsov.drop_fill, config.dropcolor);
+		for (int i = 0; i < 4; i++)
+			wsov_set_rect_color(wsov.drop_border[i], border);
+		if (wsov.drop_indicator_visible) {
+			wlr_scene_node_raise_to_top(&wsov.drop_fill->node);
+			for (int i = 0; i < 4; i++)
+				wlr_scene_node_raise_to_top(&wsov.drop_border[i]->node);
+		}
+	}
 	if (wsov.drag_buffer)
 		wlr_scene_node_raise_to_top(&wsov.drag_buffer->node);
 }
@@ -1988,7 +2053,7 @@ static void wsov_restore_drag_floating(void) {
 	if (wsov.drag_floating_changed && c) {
 		c->float_geom = wsov.drag_saved_float_geom;
 		c->drag_to_tile = wsov.drag_was_drag_to_tile;
-		if (c->mon)
+		if (c->mon && c->isfloating)
 			client_set_floating(c, 0, false);
 		else
 			c->isfloating = 0;
@@ -2028,9 +2093,9 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 	int workspace_width =
 		MANGO_MAX(1, item->workspace_geom.width > 0 ? item->workspace_geom.width
 													: item->box.width);
-	int workspace_height = MANGO_MAX(
-		1, item->workspace_geom.height > 0 ? item->workspace_geom.height
-										   : item->box.height);
+	int workspace_height = MANGO_MAX(1, item->workspace_geom.height > 0
+											? item->workspace_geom.height
+											: item->box.height);
 	double output_scale = wsov_output_scale();
 	double render_scale = (double)width / workspace_width;
 	int window_height =
@@ -2129,6 +2194,7 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 }
 
 static void wsov_cancel_drag(void) {
+	wsov_hide_drop_indicator();
 	wsov_restore_drag_floating();
 	wsov_destroy_drag_buffer();
 	wsov.pressed = false;
@@ -2443,6 +2509,10 @@ static bool wsov_open(Monitor *m) {
 	wlr_scene_node_set_position(&wsov.root->node, m->m.x, m->m.y);
 	wsov.background = wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
 											config.rootcolor);
+	if (!wsov_create_drop_indicator()) {
+		wsov_finalize_close(0);
+		return false;
+	}
 	wsov.animating = config.animations;
 	wsov.progress = config.animations ? 0.0 : 1.0;
 	wsov.animation_from = 0.0;
@@ -2571,28 +2641,43 @@ void workspace_overview_handle_motion(double x, double y) {
 									  wsov.drag_grab_y - wsov.drag_bar_height,
 								  wsov.drag_width, wsov.drag_height);
 	}
+	wsov_update_drop_indicator(x, y);
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
 
-static void wsov_reorder_near(Client *c, Client *target, bool before) {
-	if (!c || !target || c == target || wl_list_empty(&c->link) ||
-		wl_list_empty(&target->link))
-		return;
-	wl_list_remove(&c->link);
-	if (before)
-		wl_list_insert(&target->link, &c->link);
-	else
-		wl_list_insert(target->link.next, &c->link);
+static bool wsov_item_is_drop_target(const struct wsov_item *item) {
+	return item && item->client && item->client != wsov.drag_client &&
+		   ISTILED(item->client);
 }
 
-static struct wsov_item *wsov_nearest_item(struct wsov_cell *cell, double x,
+static int32_t wsov_cell_tiling_count(const struct wsov_cell *cell) {
+	int32_t count = 0;
+	if (!cell)
+		return 0;
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->client != wsov.drag_client && ISTILED(item->client))
+			count++;
+	}
+	return count;
+}
+
+static struct wsov_item *wsov_drop_item_at(struct wsov_cell *cell, double x,
 										   double y) {
+	struct wsov_item *hit = wsov_item_at(cell, x, y);
+	if (wsov_item_is_drop_target(hit))
+		return hit;
+	if (!cell || !wsov.mon)
+		return NULL;
+
 	struct wsov_item *nearest = NULL;
 	double best = 1e30;
 	double lx = x - wsov.mon->m.x;
 	double ly = y - wsov.mon->m.y;
 	for (int i = 0; i < cell->item_count; i++) {
 		struct wsov_item *item = &cell->items[i];
+		if (!wsov_item_is_drop_target(item))
+			continue;
 		struct wlr_box box = wsov_item_display_box(cell, item);
 		double cx = box.x + box.width / 2.0;
 		double cy = box.y + box.height / 2.0;
@@ -2603,6 +2688,94 @@ static struct wsov_item *wsov_nearest_item(struct wsov_cell *cell, double x,
 		}
 	}
 	return nearest;
+}
+
+static bool wsov_get_drop_target(double x, double y,
+								 struct wsov_cell **cell_out,
+								 struct wsov_item **item_out,
+								 struct wlr_box *zone_out,
+								 int32_t *direction_out) {
+	struct wsov_cell *cell = wsov_drop_cell_at(x, y);
+	if (!cell || !wsov.mon || !wsov.drag_client || wsov.drag_was_floating) {
+		return false;
+	}
+
+	struct wsov_item *item = wsov_drop_item_at(cell, x, y);
+	if (!item)
+		return false;
+
+	const Layout *layout = wsov.mon->pertag->ltidxs[cell->tag];
+	struct wlr_box item_box = wsov_item_display_box(cell, item);
+	double rel_x = x - wsov.mon->m.x - item_box.x;
+	double rel_y = y - wsov.mon->m.y - item_box.y;
+	struct wlr_box zone;
+	int32_t direction = client_drop_zone(
+		layout, item->client->ismaster, wsov_cell_tiling_count(cell), rel_x,
+		rel_y, item_box.width, item_box.height, &zone);
+	zone.x += item_box.x;
+	zone.y += item_box.y;
+	item->client->drop_direction = direction;
+
+	if (cell_out)
+		*cell_out = cell;
+	if (item_out)
+		*item_out = item;
+	if (zone_out)
+		*zone_out = zone;
+	if (direction_out)
+		*direction_out = direction;
+	return true;
+}
+
+static void wsov_hide_drop_indicator(void) {
+	wsov.drop_indicator_visible = false;
+	if (wsov.drop_fill)
+		wlr_scene_node_set_enabled(&wsov.drop_fill->node, false);
+	for (int i = 0; i < 4; i++) {
+		if (wsov.drop_border[i])
+			wlr_scene_node_set_enabled(&wsov.drop_border[i]->node, false);
+	}
+}
+
+static void wsov_update_drop_indicator(double x, double y) {
+	struct wsov_cell *cell = NULL;
+	struct wlr_box zone;
+	if (!wsov_get_drop_target(x, y, &cell, NULL, &zone, NULL) ||
+		zone.width <= 0 || zone.height <= 0) {
+		wsov_hide_drop_indicator();
+		return;
+	}
+
+	if (cell->tag != wsov.target_tag) {
+		wsov.target_tag = cell->tag;
+		wsov.camera_tag = cell->tag;
+		wsov_refresh_target_selection();
+	}
+
+	int32_t width = MANGO_MAX(1, zone.width);
+	int32_t height = MANGO_MAX(1, zone.height);
+	wsov_place_rect_clipped(wsov.drop_fill, zone.x, zone.y, width, height,
+							true);
+	if (!wsov.drop_fill)
+		return;
+
+	int32_t bw = MANGO_MIN(4, MANGO_MAX(2, MANGO_MIN(width, height) / 8));
+	bw = MANGO_MIN(bw, MANGO_MAX(1, MANGO_MIN(width, height) / 2));
+	wsov_place_rect_clipped(wsov.drop_border[0], zone.x, zone.y, width, bw,
+							true);
+	wsov_place_rect_clipped(wsov.drop_border[1], zone.x, zone.y + height - bw,
+							width, bw, true);
+	wsov_place_rect_clipped(wsov.drop_border[2], zone.x, zone.y, bw, height,
+							true);
+	wsov_place_rect_clipped(wsov.drop_border[3], zone.x + width - bw, zone.y,
+							bw, height, true);
+	wsov.drop_indicator_visible = true;
+
+	wlr_scene_node_raise_to_top(&wsov.drop_fill->node);
+	for (int i = 0; i < 4; i++)
+		wlr_scene_node_raise_to_top(&wsov.drop_border[i]->node);
+	if (wsov.drag_buffer)
+		wlr_scene_node_raise_to_top(&wsov.drag_buffer->node);
 }
 
 static void wsov_place_floating(Client *c, struct wsov_cell *cell, double x,
@@ -2640,12 +2813,16 @@ static void wsov_place_floating(Client *c, struct wsov_cell *cell, double x,
 
 static void wsov_finish_drop(double x, double y) {
 	Client *c = wsov.drag_client;
-	struct wsov_cell *target = wsov_cell_at(x, y);
+	struct wsov_cell *target = wsov_drop_cell_at(x, y);
 	if (!c || !target || !wsov_client_eligible(c)) {
 		wsov_cancel_drag();
 		wsov_rebuild();
 		return;
 	}
+
+	struct wsov_item *over = NULL;
+	wsov_get_drop_target(x, y, &target, &over, NULL, NULL);
+	bool was_floating = wsov.drag_was_floating;
 
 	uint32_t source_bit = wsov_tag_bit(wsov.source_tag);
 	uint32_t target_bit = wsov_tag_bit(target->tag);
@@ -2667,21 +2844,13 @@ static void wsov_finish_drop(double x, double y) {
 	}
 	clear_fullscreen_for_incoming_tiled_client(c);
 
-	struct wsov_item *over = wsov_item_at(target, x, y);
-	if (!over)
-		over = wsov_nearest_item(target, x, y);
-	if (over && over->client != c) {
-		double lx = x - wsov.mon->m.x;
-		struct wlr_box over_box = wsov_item_display_box(target, over);
-		bool before = lx < over_box.x + over_box.width / 2.0;
-		wsov_reorder_near(c, over->client, before);
-	}
-
-	if (wsov.drag_was_floating)
+	client_view_on_monitor(&(Arg){.ui = target_bit}, false, wsov.mon, false);
+	if (over)
+		pointer_place_drag_tile_on(c, over->client);
+	if (was_floating)
 		wsov_place_floating(c, target, x, y);
 
 	wsov_restore_drag_floating();
-	client_view_on_monitor(&(Arg){.ui = target_bit}, false, wsov.mon, false);
 	client_focus(c, 1);
 	arrange(wsov.mon, false, false);
 
@@ -2717,6 +2886,7 @@ bool workspace_overview_handle_button(
 		if (event->button != BTN_LEFT)
 			return true;
 
+		wsov_hide_drop_indicator();
 		wsov.pressed = true;
 		wsov.moved = false;
 		wsov.drag_start_x = (int)lround(server.cursor->x);

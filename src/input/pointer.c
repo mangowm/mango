@@ -1689,9 +1689,7 @@ Client *find_closest_tiled_client(Client *c) {
 	return closest;
 }
 
-void pointer_place_drag_tile(Client *c) {
-	Client *closest = find_closest_tiled_client(c);
-
+void pointer_place_drag_tile_on(Client *c, Client *closest) {
 	if (closest && closest->mon) {
 		const Layout *layout =
 			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
@@ -1746,6 +1744,10 @@ void pointer_place_drag_tile(Client *c) {
 	}
 
 	client_set_floating(c, 0, false);
+}
+
+void pointer_place_drag_tile(Client *c) {
+	pointer_place_drag_tile_on(c, find_closest_tiled_client(c));
 }
 
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
