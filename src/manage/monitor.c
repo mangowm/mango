@@ -906,9 +906,15 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 	LayerSurface *l = NULL, *tmp = NULL;
 	uint32_t i;
 
-	workspace_overview_monitor_destroy(m);
-
 	m->iscleanuping = true;
+
+	/* Disconnect the output from the scene before restoring visibility for
+	 * workspace overview. Otherwise, revealing clients can send enter events
+	 * to an output that is already being destroyed. */
+	wlr_scene_output_destroy(m->scene_output);
+	m->scene_output = NULL;
+
+	workspace_overview_monitor_destroy(m);
 
 	Client *c, *ctmp;
 	wl_list_for_each_safe(c, ctmp, &server.fadeout_clients, fadeout_link) {
@@ -947,7 +953,6 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 		handle_session_lock_surface_destroy(&m->destroy_lock_surface, NULL);
 	m->wlr_output->data = NULL;
 
-	wlr_scene_output_destroy(m->scene_output);
 	wlr_output_layout_remove(server.output_layout, m->wlr_output);
 
 	monitor_close(m);
