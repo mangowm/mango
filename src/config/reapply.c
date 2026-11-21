@@ -27,6 +27,7 @@
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
 #include "mango/layout/layout.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
@@ -471,7 +472,6 @@ void tag_rule_apply_to_slot(Monitor *m, const ConfigTagRule *tr, uint32_t tag) {
 
 void parse_tagrule(Monitor *m) {
 	int32_t i;
-	Client *c = NULL;
 	const Layout *prev_config_ltidxs[PERTAG_SLOTS];
 
 	for (i = 0; i < PERTAG_SLOTS; i++)
@@ -501,12 +501,8 @@ void parse_tagrule(Monitor *m) {
 	}
 
 	for (i = 1; i <= config.tag_num; i++) {
-		wl_list_for_each(c, &server.clients, link) {
-			if ((c->tags & (1 << (i - 1)) & TAGMASK) && ISTILED(c)) {
-				if (m->pertag->mfacts[i] > 0.0f)
-					c->master_mfact_per = m->pertag->mfacts[i];
-			}
-		}
+		if (m->pertag->mfacts[i] > 0.0f)
+			tag_ratio_state_set_master_mfact(m, i, m->pertag->mfacts[i]);
 	}
 }
 
@@ -535,6 +531,7 @@ void reset_tag(int old_tag_num) {
 			if (m->pertag->prevtag > (uint32_t)config.tag_num)
 				m->pertag->prevtag = config.tag_num;
 			sync_workspaces_to_tag_num(m);
+			tag_ratio_state_begin(m, get_mon_curtag(m), true);
 		}
 	}
 }

@@ -50,7 +50,9 @@ void scroller_arrange_stack_vertical_node(struct ScrollerStackNode *head,
 										  int32_t gappih);
 void scroller(Monitor *m);
 void vertical_scroller(Monitor *m);
-void scroller_remove_client(Client *c);
+bool scroller_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c);
+bool scroller_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+									Client *new);
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before);
 void scroller_drop_tile(Client *c, Client *closest, int vertical);

@@ -13,6 +13,7 @@
 #include <wlr/util/box.h>
 
 struct TagTabState;
+struct TagRatioState;
 
 #define INSIDEMON(A)                                                           \
 	(A->geom.x >= A->mon->m.x && A->geom.y >= A->mon->m.y &&                   \
@@ -117,6 +118,7 @@ struct Pertag {
 	const Layout *ltidxs[PERTAG_SLOTS];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
 	struct TagTabState *tab_state[PERTAG_SLOTS];
+	struct TagRatioState *tag_ratio_state[PERTAG_SLOTS];
 };
 
 bool is_special_active(const Monitor *m);

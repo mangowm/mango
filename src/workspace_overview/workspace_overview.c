@@ -9,6 +9,7 @@
 #include "mango/input/keyboard.h"
 #include "mango/input/pointer.h"
 #include "mango/layout/arrange.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
@@ -957,6 +958,7 @@ static void wsov_capture_workspace_layouts(void) {
 	bool saved_tag_gather = config.tag_gather;
 	bool root_enabled = wsov.root->node.enabled;
 
+	sync_tag_ratio_state_from_clients(m, saved_curtag);
 	config.tag_gather = false;
 	wlr_scene_node_set_enabled(&wsov.root->node, false);
 
@@ -972,7 +974,7 @@ static void wsov_capture_workspace_layouts(void) {
 		uint32_t tag = wsov.cells[i].tag;
 		m->tagset[saved_seltags] = wsov_tag_bit(tag);
 		m->pertag->curtag = tag;
-		arrange(m, false, false);
+		arrange(m, false, true);
 		wsov_settle_capture_clients(m);
 		wsov_capture_cell_items(&wsov.cells[i]);
 		wsov_capture_cell_bars(&wsov.cells[i]);
@@ -983,7 +985,7 @@ static void wsov_capture_workspace_layouts(void) {
 	m->tagset[1] = saved_tags[1];
 	m->pertag->curtag = saved_curtag;
 	m->pertag->prevtag = saved_prevtag;
-	arrange(m, false, false);
+	arrange(m, false, true);
 	wsov_settle_capture_clients(m);
 	m->sel = saved_sel;
 	m->prevsel = saved_prevsel;

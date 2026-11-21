@@ -18,6 +18,7 @@
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
@@ -241,6 +242,7 @@ void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
 	dst->scroller_ignore_proportion_single[tag] =
 		src->scroller_ignore_proportion_single[tag];
 	dst->ltidxs[tag] = src->ltidxs[tag];
+	tag_ratio_state_copy(target, tag, source, tag);
 
 	/* Layout trees, scroller nodes, and tab chains are monitor-owned and
 	 * rebuilt on the target after the clients have moved. */
@@ -967,6 +969,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);
 	cleanup_monitor_tab(m);
+	cleanup_monitor_tag_ratio_states(m);
 
 	wlr_color_transform_unref(m->icc_transform);
 	m->icc_transform = NULL;

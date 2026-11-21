@@ -16,6 +16,7 @@
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
@@ -2476,6 +2477,63 @@ void handle_client_commit(struct wl_listener *listener, void *data) {
 	c->dirty = client_xdg_size_pending(c);
 }
 
+static void client_tag_states_update(Client *old, Client *new, bool replace) {
+	if (!old)
+		return;
+	if (replace && (!new || old == new))
+		return;
+	bool tab_changed = false;
+	bool scroller_changed = false;
+	Monitor *m;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (!m->pertag)
+			continue;
+		for (uint32_t tag = 0; tag < PERTAG_SLOTS; tag++) {
+			if (m->pertag->scroller_state[tag]) {
+				if (replace)
+					scroller_changed |=
+						scroller_replace_client_in_tag(m, tag, old, new);
+				else
+					scroller_remove_client_in_tag(m, tag, old);
+			}
+			if (m->pertag->dwindle_root[tag]) {
+				if (replace)
+					dwindle_replace_client_in_tag(m, tag, old, new);
+				else
+					dwindle_remove_client_in_tag(m, tag, old);
+			}
+			if (m->pertag->tag_ratio_state[tag]) {
+				if (replace)
+					tag_ratio_state_replace_client_in_tag(m, tag, old, new);
+				else
+					tag_ratio_state_remove_client_in_tag(m, tag, old);
+			}
+			if (m->pertag->tab_state[tag]) {
+				if (replace)
+					tab_changed |= tab_replace_client_in_tag(m, tag, old, new);
+				else
+					tab_changed |= tab_remove_client_in_tag(m, tag, old);
+			}
+		}
+	}
+	if (replace && scroller_changed && old->mon) {
+		uint32_t tag = get_mon_curtag(old->mon);
+		const Layout *layout = old->mon->pertag->ltidxs[tag];
+		if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER)
+			sync_scroller_state_to_clients(old->mon, tag);
+	}
+	if (!replace && tab_changed)
+		tab_sync_current(old->mon);
+}
+
+static void client_tag_states_replace(Client *old, Client *new) {
+	client_tag_states_update(old, new, true);
+}
+
+static void client_tag_states_remove(Client *c) {
+	client_tag_states_update(c, NULL, false);
+}
+
 void handle_client_unmap(struct wl_listener *listener, void *data) {
 	/* Called when the surface is unmapped, and should no longer be shown.
 	 */
@@ -2493,10 +2551,14 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		c->mon ? find_scroller_node(
 					 c->mon->pertag->scroller_state[get_client_tag_idx(c)], c)
 			   : NULL;
-	struct ScrollerStackNode *prev_node =
-		target_node ? target_node->prev_in_stack : NULL;
-	struct ScrollerStackNode *next_node =
-		target_node ? target_node->next_in_stack : NULL;
+
+
+	Client *prev_stack_client = target_node && target_node->prev_in_stack
+									? target_node->prev_in_stack->client
+									: NULL;
+	Client *next_stack_client = target_node && target_node->next_in_stack
+									? target_node->next_in_stack->client
+									: NULL;
 
 	if (config.animations && !client_is_parked(c) && !c->is_clip_to_hide &&
 		!c->isminimized && (!c->mon || VISIBLEON(c, c->mon)))
@@ -2504,23 +2566,20 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 
 	// If the client is in a stack, remove it from the stack
 
+	bool replaced = false;
 	if (c->swallowing) {
 		c->swallowing->mon = c->mon;
 		client_replace(c->swallowing, c, false, true);
+		replaced = true;
 	} else if (client_is_group_member(c) && c->is_group_focus) {
 		Client *group_replacement =
 			c->group_next ? c->group_next : c->group_prev;
 		group_replacement->mon = c->mon;
 		client_replace(group_replacement, c, false, false);
-	} else {
-		scroller_remove_client(c);
-		dwindle_remove_client(c);
+		replaced = true;
 	}
-
-	/* Swallow/group replacement transfers the tab position to the replacement
-	 * first. Detaching the dying client before that leaves the replacement out
-	 * of the chain and makes the whole tab strip disappear. */
-	tab_remove_client(c);
+	if (!replaced)
+		client_tag_states_remove(c);
 	workspace_overview_client_removed(c);
 
 	if (c == server.grab_client) {
@@ -2550,10 +2609,11 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	}
 
 	if (c->mon && c->mon == server.selected_monitor) {
-		if (next_node && !c->swallowing) {
-			nextfocus = next_node->client;
-		} else if (prev_node && !c->swallowing) {
-			nextfocus = prev_node->client;
+		if (next_stack_client && next_stack_client != c && !c->swallowing) {
+			nextfocus = next_stack_client;
+		} else if (prev_stack_client && prev_stack_client != c &&
+				   !c->swallowing) {
+			nextfocus = prev_stack_client;
 		} else {
 			nextfocus = client_focus_top(server.selected_monitor);
 		}
@@ -2690,6 +2750,7 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	switcher_remove_client(c);
 	workspace_overview_client_removed(c);
 	pointer_client_destroyed(c);
+	client_tag_states_remove(c);
 	free(c);
 }
 
@@ -3240,6 +3301,7 @@ void client_set_monitor(Client *c, Monitor *m, uint32_t newtags, bool focus) {
 		resize(c, c->geom, (ResizeOpts){.interact = 0});
 		client_reset_mon_tags(c, m, newtags);
 		check_match_tag_floating_rule(c, m);
+		tag_ratio_state_seed_client(c);
 		client_set_floating(c, c->isfloating, false);
 		client_set_fullscreen(c, c->isfullscreen,
 							  true); /* This will call arrange(c->mon) */
@@ -3875,7 +3937,6 @@ static void client_unlink(Client *c) {
 }
 
 void client_park(Client *c) {
-	tab_remove_client(c);
 	client_unlink(c);
 	if (!c)
 		return;
@@ -3911,17 +3972,20 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->stack_size_weight = w->stack_size_weight;
 	c->master_size_weight = w->master_size_weight;
 	c->master_mfact_per = w->master_mfact_per;
+	c->grid_col_per = w->grid_col_per;
+	c->grid_row_per = w->grid_row_per;
+	c->grid_col_idx = w->grid_col_idx;
+	c->grid_row_idx = w->grid_row_idx;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;
+	client_tag_states_replace(w, c);
 
 	if (is_swallow || !is_group_change_member) {
 		client_group_replace(w, c);
 	}
-
-	tab_replace_client(w, c);
 
 	client_unpark(c, w);
 	mango_bar_decoration_set_focus(c->group_bar,
@@ -3967,47 +4031,6 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	client_pending_maximized_state(c, w->ismaximizescreen);
 	client_pending_minimized_state(c, w->isminimized);
 
-	if (!w->mon)
-		return;
-
-	const Layout *layout = w->mon->pertag->ltidxs[get_client_tag_idx(w)];
-
-	if (layout->id == DWINDLE || layout->id == SCROLLER ||
-		layout->id == VERTICAL_SCROLLER) {
-
-		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
-			/* dwindle */
-
-			if (layout->id == DWINDLE) {
-
-				DwindleNode **root = &w->mon->pertag->dwindle_root[t];
-				dwindle_remove(root, c);
-				DwindleNode *dnode = dwindle_find_leaf(*root, w);
-				if (dnode)
-					dnode->client = c;
-			}
-
-			// scroller
-			if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER) {
-				struct TagScrollerState *st = w->mon->pertag->scroller_state[t];
-				if (!st)
-					continue;
-				struct ScrollerStackNode *cn = find_scroller_node(st, c);
-				if (cn)
-					scroller_node_remove(st, cn);
-
-				struct ScrollerStackNode *wn = find_scroller_node(st, w);
-				if (wn)
-					wn->client = c;
-			}
-		}
-	}
-
-	/* Syncs the global client fields of the currently active tag. */
-	if (layout->id == SCROLLER || layout->id == VERTICAL_SCROLLER) {
-		sync_scroller_state_to_clients(w->mon, get_client_tag_idx(w));
-	}
-
 	if (w->iskilling)
 		client_unlink(w);
 	else
@@ -4046,6 +4069,7 @@ static void client_reassign_monitor(Client *c, Monitor *m) {
 	c->mon = m;
 	if (!VISIBLEON(c, m))
 		client_reset_mon_tags(c, m, 0);
+	tag_ratio_state_seed_client(c);
 	m->sel = c;
 	set_selected_monitor(m);
 }
@@ -4177,6 +4201,8 @@ void client_swap_monitors_and_tags(Client *c1, Client *c2) {
 	c1->mon = tmp_mon;
 	c2->tags = c1->tags;
 	c1->tags = tmp_tags;
+	tag_ratio_state_seed_client(c1);
+	tag_ratio_state_seed_client(c2);
 }
 
 void finish_exchange_arrange_and_focus(Client *c1, Client *c2, Monitor *m1,

@@ -8,8 +8,10 @@
 
 bool tab_layout_active(const Monitor *m);
 void tab_sync_monitor(Monitor *m);
-void tab_remove_client(Client *c);
-void tab_replace_client(Client *old, Client *new);
+bool tab_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c);
+bool tab_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+							   Client *new);
+void tab_sync_current(Monitor *m);
 Client *tab_get_adjacent_member(Client *c, bool next);
 void cleanup_monitor_tab(Monitor *m);
 void tab_focus_member(Client *c);
