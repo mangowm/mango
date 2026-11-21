@@ -482,6 +482,18 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 		wsov_refresh_layer_previews();
 	}
 
+	if (!config.animations) {
+		wsov.layout_animating = false;
+		wsov.progress = wsov.animation_to;
+		wsov.animating = false;
+		wsov_apply_camera(wsov.progress);
+		if (wsov.closing)
+			wsov_finalize_close(wsov.close_tag);
+		else
+			wsov_detach_frame_listener();
+		return;
+	}
+
 	bool layout_was_animating = wsov.layout_animating;
 	if (layout_was_animating)
 		wsov_update_layout_animation();
@@ -1904,13 +1916,14 @@ static bool wsov_create_cells(void) {
 			if (snapshot[j].tag != cell->tag)
 				continue;
 			cell->layout_from = snapshot[j].box;
-			if (!wlr_box_equal(&cell->layout_from, &cell->box))
+			if (config.animations &&
+				!wlr_box_equal(&cell->layout_from, &cell->box))
 				wsov.layout_animating = true;
 			break;
 		}
 	}
 	free(snapshot);
-	if (wsov.layout_animating) {
+	if (config.animations && wsov.layout_animating) {
 		for (int i = 0; i < wsov.cell_count; i++)
 			wsov.cells[i].layout_current = wsov.cells[i].layout_from;
 		clock_gettime(CLOCK_MONOTONIC, &wsov.layout_animation_start);
@@ -2272,6 +2285,20 @@ static void wsov_hide_clients(bool hidden) {
 }
 
 static void wsov_start_animation(bool closing, double target) {
+	if (!config.animations) {
+		wsov.closing = closing;
+		wsov.layout_animating = false;
+		wsov.animating = false;
+		wsov.animation_to = target;
+		wsov.progress = target;
+		wsov_apply_camera(target);
+		if (closing)
+			wsov_finalize_close(wsov.close_tag);
+		else
+			wsov_detach_frame_listener();
+		return;
+	}
+
 	wsov.animation_from = fmax(0.0, fmin(1.0, wsov.progress));
 	wsov.animation_to = fmax(0.0, fmin(1.0, target));
 	wsov.closing = closing;
@@ -2298,8 +2325,13 @@ static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	if (!workspace_overview_is_active() || wsov.closing)
 		return;
 	wsov_cancel_scheduled_render();
-	uint32_t previous_target = wsov.target_tag;
 	wsov_cancel_drag();
+	if (!config.animations) {
+		wsov_finalize_close(focus_tag);
+		return;
+	}
+
+	uint32_t previous_target = wsov.target_tag;
 	wsov_set_dim_enabled(false);
 	wsov_set_borders_enabled(false);
 	wsov.closing = true;
@@ -2396,11 +2428,10 @@ static bool wsov_open(Monitor *m) {
 		return false;
 	}
 	wlr_scene_node_set_position(&wsov.root->node, m->m.x, m->m.y);
-	wsov.background =
-		wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
-							  (float[4]){0.018f, 0.018f, 0.024f, 1.0f});
-	wsov.animating = true;
-	wsov.progress = 0.0;
+	wsov.background = wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
+											config.rootcolor);
+	wsov.animating = config.animations;
+	wsov.progress = config.animations ? 0.0 : 1.0;
 	wsov.animation_from = 0.0;
 	wsov.animation_to = 1.0;
 	clock_gettime(CLOCK_MONOTONIC, &wsov.animation_start);
@@ -2416,7 +2447,8 @@ static bool wsov_open(Monitor *m) {
 		wsov_finalize_close(0);
 		return false;
 	}
-	wsov_attach_frame_listener();
+	if (wsov.animating || wsov.layout_animating)
+		wsov_attach_frame_listener();
 	wlr_output_schedule_frame(m->wlr_output);
 	return true;
 }
