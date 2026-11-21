@@ -3961,6 +3961,8 @@ void client_unpark(Client *c, Client *anchor) {
 void client_replace(Client *c, Client *w, bool is_group_change_member,
 					bool is_swallow) {
 	workspace_overview_client_replaced(w, c);
+	pointer_client_replaced(w, c);
+
 	c->bw = w->bw;
 	c->isfloating = w->isfloating;
 	c->isurgent = w->isurgent;
@@ -3983,6 +3985,8 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;
+	c->drag_to_tile = w->drag_to_tile;
+	c->drag_tile_float_backup_geom = w->drag_tile_float_backup_geom;
 	client_tag_states_replace(w, c);
 
 	if (is_swallow || !is_group_change_member) {
