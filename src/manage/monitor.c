@@ -21,6 +21,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/misc.h"
+#include "mango/manage/tab.h"
 #include "mango/manage/xwayland_primary.h"
 #include <fcntl.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
@@ -240,8 +241,8 @@ void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
 		src->scroller_ignore_proportion_single[tag];
 	dst->ltidxs[tag] = src->ltidxs[tag];
 
-	/* Layout trees and scroller nodes are monitor-owned and rebuilt on the
-	 * target after the clients have moved. */
+	/* Layout trees, scroller nodes, and tab chains are monitor-owned and
+	 * rebuilt on the target after the clients have moved. */
 }
 
 // Gets the tagmask of the first tag in tags.
@@ -962,6 +963,7 @@ void handle_output_destroy(struct wl_listener *listener, void *data) {
 
 	cleanup_monitor_dwindle(m);
 	cleanup_monitor_scroller(m);
+	cleanup_monitor_tab(m);
 
 	wlr_color_transform_unref(m->icc_transform);
 	m->icc_transform = NULL;
