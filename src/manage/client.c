@@ -2139,6 +2139,7 @@ void init_client_properties(Client *c) {
 	c->overview_isfullscreenbak = 0;
 	c->overview_ismaximizescreenbak = 0;
 	c->overview_isfloatingbak = 0;
+	c->fullscreen_ismaximizescreenbak = 0;
 	c->pid = 0;
 	c->swallowdby = NULL;
 	c->swallowing = NULL;
@@ -2774,6 +2775,9 @@ void handle_client_request_fullscreen(struct wl_listener *listener,
 	if (!c || c->iskilling || client_is_parked(c))
 		return;
 
+	if (client_wants_fullscreen(c) && !c->isfullscreen)
+		client_backup_maximize_for_fullscreen(c);
+
 	client_move_to_requested_fullscreen_output(c);
 	client_set_fullscreen(c, client_wants_fullscreen(c), true);
 }
@@ -2789,6 +2793,8 @@ void handle_client_request_maximize(struct wl_listener *listener, void *data) {
 	if (!client_is_x11(c) && !c->surface.xdg->initialized) {
 		return;
 	}
+
+	client_clear_fullscreen_maximize_backup(c);
 
 	if (client_request_maximize(c, data)) {
 		client_set_maximize_screen(c, 1, true);
@@ -3508,6 +3514,7 @@ void client_set_fullscreen(
 	Client *c, int32_t fullscreen,
 	bool rearrange) // Uses the custom fullscreen proxy for its own fullscreen.
 {
+	bool was_fullscreen;
 
 	if (!c || !c->mon || !client_surface(c)->mapped || c->iskilling ||
 		c == server.grab_client)
@@ -3516,6 +3523,7 @@ void client_set_fullscreen(
 	if (c->mon->isoverview)
 		return;
 
+	was_fullscreen = c->isfullscreen;
 	c->isfullscreen = fullscreen;
 
 	client_notify_fullscreen(c, fullscreen);
@@ -3540,6 +3548,10 @@ void client_set_fullscreen(
 		c->bw = c->no_border ? 0 : config.borderpx;
 		if (c->isfloating)
 			client_set_floating(c, 1, false);
+
+		if (was_fullscreen && c->fullscreen_ismaximizescreenbak)
+			client_set_maximize_screen(c, 1, false);
+		client_clear_fullscreen_maximize_backup(c);
 	}
 
 	client_reparent_group(c);
@@ -3548,6 +3560,18 @@ void client_set_fullscreen(
 
 	if (rearrange)
 		arrange(c->mon, false, false);
+}
+
+void client_backup_maximize_for_fullscreen(Client *c) {
+	if (!c || c->isfullscreen)
+		return;
+
+	c->fullscreen_ismaximizescreenbak = c->ismaximizescreen;
+}
+
+void client_clear_fullscreen_maximize_backup(Client *c) {
+	if (c)
+		c->fullscreen_ismaximizescreenbak = 0;
 }
 
 void client_set_fake_fullscreen(Client *c, int32_t fakefullscreen) {
@@ -3581,6 +3605,8 @@ void client_set_maximize_screen(Client *c, int32_t maximizescreen,
 
 	if (c->mon->isoverview)
 		return;
+
+	client_clear_fullscreen_maximize_backup(c);
 
 	client_pending_maximized_state(c, maximizescreen);
 
@@ -3749,6 +3775,8 @@ void clear_fullscreen_flag(Client *c) {
 						   (id == MONOCLE && config.monocle_tab_mode))) {
 		return;
 	}
+
+	client_clear_fullscreen_maximize_backup(c);
 
 	if (c->isfullscreen) {
 		client_set_fullscreen(c, false, true);
