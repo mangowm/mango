@@ -8,8 +8,9 @@
 
 bool tab_layout_active(const Monitor *m);
 void tab_sync_monitor(Monitor *m);
-void tab_detach_client(Client *c);
+void tab_remove_client(Client *c);
 void tab_replace_client(Client *old, Client *new);
+void cleanup_monitor_tab(Monitor *m);
 void tab_focus_member(Client *c);
 void tab_sync_focus(Client *c);
 void tab_update_input_penetration(Client *c);
