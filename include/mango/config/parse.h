@@ -587,6 +587,7 @@ typedef struct {
 	int32_t disable_middle_paste;
 	int32_t allow_lock_transparent;
 	int32_t auto_reload_config;
+	int32_t experimental_hotkeys;
 
 	struct xkb_rule_names xkb_rules;
 	char xkb_rules_rules[128];

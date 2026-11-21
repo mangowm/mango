@@ -21,6 +21,7 @@
 #include "mango/dispatch/bind.h"
 #include "mango/draw/title-message-bar.h"
 #include "mango/ext-protocol/hdr.h"
+#include "mango/ext-protocol/hotkey.h"
 #include "mango/input/device.h"
 #include "mango/input/keyboard.h"
 #include "mango/input/pointer.h"
@@ -543,6 +544,7 @@ int32_t reload_config(const Arg *arg) {
 	reset_option();
 	update_seat_capabilities();
 	apply_primary_selection();
+	hotkey_recheck_policy();
 	printstatus(IPC_WATCH_ARRANGGE);
 	config_watcher_update();
 	return 1;

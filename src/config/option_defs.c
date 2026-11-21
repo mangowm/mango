@@ -290,6 +290,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->allow_lock_transparent = atoi(value);
 	} else if (strcmp(key, "auto_reload_config") == 0) {
 		config->auto_reload_config = atoi(value);
+	} else if (strcmp(key, "experimental_hotkeys") == 0) {
+		config->experimental_hotkeys = atoi(value);
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
@@ -2530,6 +2532,7 @@ void set_value_default() {
 	config.disable_middle_paste = 0;
 	config.allow_lock_transparent = 0;
 	config.auto_reload_config = 1;
+	config.experimental_hotkeys = 0;
 	config.no_border_when_single = 0;
 	config.no_radius_when_single = 0;
 	config.monocle_no_border = 0;
@@ -2907,6 +2910,7 @@ void override_config(void) {
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
 	config.auto_reload_config = CLAMP_INT(config.auto_reload_config, 0, 1);
+	config.experimental_hotkeys = CLAMP_INT(config.experimental_hotkeys, 0, 1);
 	config.axis_bind_apply_timeout =
 		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);

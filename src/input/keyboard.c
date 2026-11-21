@@ -4,6 +4,7 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/dispatch/bind.h"
+#include "mango/ext-protocol/hotkey.h"
 #include "mango/ext-protocol/text-input.h"
 #include "mango/input/device.h"
 #include "mango/input/pointer.h"
@@ -447,6 +448,7 @@ void handle_standalone_keyboard_destroy(struct wl_listener *listener,
 	KeyboardGroup *group = wl_container_of(listener, group, destroy);
 	if (group->keyboard == server.last_active_keyboard)
 		server.last_active_keyboard = NULL;
+	hotkey_handle_keyboard_destroy(group->keyboard);
 	invalidate_saved_seat_keyboard(group->keyboard);
 	restore_seat_keyboard(group);
 	wl_list_remove(&group->key.link);
@@ -538,6 +540,7 @@ void keyboard_group_destroy(struct wl_listener *listener, void *data) {
 	if (group->keyboard == server.last_active_keyboard)
 		server.last_active_keyboard = NULL;
 	wl_list_remove(&group->link);
+	hotkey_handle_keyboard_destroy(group->keyboard);
 	invalidate_saved_seat_keyboard(group->keyboard);
 	wl_event_source_remove(group->key_repeat_source);
 	wl_list_remove(&group->key.link);
@@ -782,6 +785,20 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 		handled = keyboard_check_keybinding(event->state, server.session_locked,
 											mods, syms[i], keycode, false) ||
 				  handled;
+
+	/* Client-owned global hotkeys (xx_hotkey_v1) come after the user binds */
+	if (!group->virtual_keyboard &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED && handled)
+		hotkey_note_activity();
+
+	if (!group->virtual_keyboard &&
+		(event->state == WL_KEYBOARD_KEY_STATE_RELEASED || !handled) &&
+		hotkey_handle_key(group->keyboard, keycode, mods, event->state,
+						  event->time_msec)) {
+		handled = 1;
+		if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+			keyboard_mark_bound_key(keycode);
+	}
 
 	/* The press was swallowed, so swallow its release too. */
 	if (event->state == WL_KEYBOARD_KEY_STATE_RELEASED &&

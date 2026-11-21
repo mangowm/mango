@@ -798,6 +798,9 @@ bool mango_global_filter(const struct wl_client *client,
 	if (interface == NULL)
 		return true;
 
+	if (strcmp(interface->name, "xx_hotkey_manager_v1") == 0)
+		return config.experimental_hotkeys;
+
 	if (strcmp(interface->name, "zwp_primary_selection_device_manager_v1") ==
 		0) {
 		struct PrimarySelectionPolicy *policy =
