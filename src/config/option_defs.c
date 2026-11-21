@@ -91,6 +91,12 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->animation_duration_close = atoi(value);
 	} else if (strcmp(key, "animation_duration_focus") == 0) {
 		config->animation_duration_focus = atoi(value);
+	} else if (strcmp(key, "animation_duration_workspace_overview_open") == 0) {
+		config->animation_duration_wsov_open = atoi(value);
+	} else if (strcmp(key, "animation_duration_workspace_overview_close") == 0) {
+		config->animation_duration_wsov_close = atoi(value);
+	} else if (strcmp(key, "animation_duration_workspace_overview_layout") == 0) {
+		config->animation_duration_wsov_layout = atoi(value);
 	} else if (strcmp(key, "animation_curve_move") == 0) {
 		int32_t num =
 			parse_double_array(value, config->animation_curve_move, 4);
@@ -158,6 +164,39 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 				false, WLR_ERROR,
 				"Failed to parse "
 				"animation_curve_opafadeout: \033[1m\033[31m%s\033[0m\n",
+				value);
+			return false;
+		}
+	} else if (strcmp(key, "animation_curve_workspace_overview_open") == 0) {
+		if (parse_double_array(value, config->animation_curve_wsov_open, 4) !=
+			4) {
+			mango_error(
+				false, WLR_ERROR,
+				"Failed to parse "
+				"animation_curve_workspace_overview_open: \033[1m\033[31m%s"
+				"\033[0m\n",
+				value);
+			return false;
+		}
+	} else if (strcmp(key, "animation_curve_workspace_overview_close") == 0) {
+		if (parse_double_array(value, config->animation_curve_wsov_close, 4) !=
+			4) {
+			mango_error(
+				false, WLR_ERROR,
+				"Failed to parse "
+				"animation_curve_workspace_overview_close: \033[1m\033[31m%s"
+				"\033[0m\n",
+				value);
+			return false;
+		}
+	} else if (strcmp(key, "animation_curve_workspace_overview_layout") == 0) {
+		if (parse_double_array(value, config->animation_curve_wsov_layout, 4) !=
+			4) {
+			mango_error(
+				false, WLR_ERROR,
+				"Failed to parse "
+				"animation_curve_workspace_overview_layout: \033[1m\033[31m%s"
+				"\033[0m\n",
 				value);
 			return false;
 		}
@@ -502,6 +541,18 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->overviewgappi = atoi(value);
 	} else if (strcmp(key, "overview_gap_outer") == 0) {
 		config->overviewgappo = atoi(value);
+	} else if (strcmp(key, "workspace_overview_show_empty") == 0) {
+		config->workspace_overview_show_empty = atoi(value);
+	} else if (strcmp(key, "workspace_overview_focused_dim_opacity") == 0) {
+		config->workspace_overview_focused_dim_opacity = atof(value);
+	} else if (strcmp(key, "workspace_overview_unfocused_dim_opacity") == 0) {
+		config->workspace_overview_unfocused_dim_opacity = atof(value);
+	} else if (strcmp(key, "workspace_overview_border_width") == 0) {
+		config->workspace_overview_border_width = atoi(value);
+	} else if (strcmp(key, "workspace_overview_gap") == 0) {
+		config->workspace_overview_gap = atoi(value);
+	} else if (strcmp(key, "workspace_overview_drag_threshold") == 0) {
+		config->workspace_overview_drag_threshold = atoi(value);
 	} else if (strcmp(key, "overcircle_center_ratio") == 0) {
 		config->overcircle_center_ratio = atof(value);
 	} else if (strcmp(key, "jump_labels") == 0) {
@@ -1933,7 +1984,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 
 		config->exec_once_count++;
 
-	} else if (regex_match("^bind[s|l|r|p|c]*$", key)) {
+	} else if (regex_match("^bind[s|l|r|p|c|n]*$", key)) {
 		config->key_bindings =
 			realloc(config->key_bindings,
 					(config->key_bindings_count + 1) * sizeof(KeyBinding));
@@ -2402,6 +2453,9 @@ void set_value_default() {
 	config.animation_duration_tag = 300;
 	config.animation_duration_close = 300;
 	config.animation_duration_focus = 0;
+	config.animation_duration_wsov_open = 260;
+	config.animation_duration_wsov_close = 260;
+	config.animation_duration_wsov_layout = 320;
 
 	config.axis_bind_apply_timeout = 100;
 	config.focus_on_activate = 1;
@@ -2510,6 +2564,12 @@ void set_value_default() {
 	config.group_bar_button_color[3] = 1.0f;
 	config.overviewgappi = 5;
 	config.overviewgappo = 30;
+	config.workspace_overview_show_empty = 1;
+	config.workspace_overview_focused_dim_opacity = 0.0f;
+	config.workspace_overview_unfocused_dim_opacity = 0.2f;
+	config.workspace_overview_border_width = 2;
+	config.workspace_overview_gap = 5;
+	config.workspace_overview_drag_threshold = 5;
 	config.overcircle_center_ratio = 0.5f;
 	config.cursor_hide_timeout = 0;
 	config.cursor_hide_on_keypress = 0;
@@ -2615,6 +2675,18 @@ void set_value_default() {
 	config.animation_curve_opafadeout[1] = 0.5;
 	config.animation_curve_opafadeout[2] = 0.5;
 	config.animation_curve_opafadeout[3] = 0.5;
+	config.animation_curve_wsov_open[0] = 1.0 / 3.0;
+	config.animation_curve_wsov_open[1] = 1.0;
+	config.animation_curve_wsov_open[2] = 2.0 / 3.0;
+	config.animation_curve_wsov_open[3] = 1.0;
+	config.animation_curve_wsov_close[0] = 1.0 / 3.0;
+	config.animation_curve_wsov_close[1] = 1.0;
+	config.animation_curve_wsov_close[2] = 2.0 / 3.0;
+	config.animation_curve_wsov_close[3] = 1.0;
+	config.animation_curve_wsov_layout[0] = 1.0 / 3.0;
+	config.animation_curve_wsov_layout[1] = 1.0;
+	config.animation_curve_wsov_layout[2] = 2.0 / 3.0;
+	config.animation_curve_wsov_layout[3] = 1.0;
 
 	config.groupbardata.fg_color[0] = 0xc0 / 255.0f;
 	config.groupbardata.fg_color[1] = 0xca / 255.0f;
@@ -2760,6 +2832,12 @@ void override_config(void) {
 		CLAMP_INT(config.animation_duration_close, 0, 50000);
 	config.animation_duration_focus =
 		CLAMP_INT(config.animation_duration_focus, 0, 50000);
+	config.animation_duration_wsov_open =
+		CLAMP_INT(config.animation_duration_wsov_open, 1, 50000);
+	config.animation_duration_wsov_close =
+		CLAMP_INT(config.animation_duration_wsov_close, 1, 50000);
+	config.animation_duration_wsov_layout =
+		CLAMP_INT(config.animation_duration_wsov_layout, 1, 50000);
 	config.scroller_default_proportion =
 		CLAMP_FLOAT(config.scroller_default_proportion, 0.1f, 1.0f);
 	config.scroller_default_proportion_single =
@@ -2804,6 +2882,18 @@ void override_config(void) {
 		CLAMP_INT(config.hotarea_disable_on_fullscreen, 0, 1);
 	config.overviewgappi = CLAMP_INT(config.overviewgappi, 0, 1000);
 	config.overviewgappo = CLAMP_INT(config.overviewgappo, 0, 1000);
+	config.workspace_overview_show_empty =
+		CLAMP_INT(config.workspace_overview_show_empty, 0, 1);
+	config.workspace_overview_focused_dim_opacity =
+		CLAMP_FLOAT(config.workspace_overview_focused_dim_opacity, 0.0f, 1.0f);
+	config.workspace_overview_unfocused_dim_opacity =
+		CLAMP_FLOAT(config.workspace_overview_unfocused_dim_opacity, 0.0f, 1.0f);
+	config.workspace_overview_border_width =
+		CLAMP_INT(config.workspace_overview_border_width, 0, 100);
+	config.workspace_overview_gap =
+		CLAMP_INT(config.workspace_overview_gap, 0, 1000);
+	config.workspace_overview_drag_threshold =
+		CLAMP_INT(config.workspace_overview_drag_threshold, 0, 1000);
 	config.overcircle_center_ratio =
 		CLAMP_FLOAT(config.overcircle_center_ratio, 0.1f, 0.9f);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);

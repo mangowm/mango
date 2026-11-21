@@ -83,6 +83,9 @@ void parse_bind_flags(const char *str, KeyBinding *kb) {
 		case 'c':
 			kb->isallowconflict = true;
 			break;
+		case 'n':
+			kb->isnorepeat = true;
+			break;
 		default:
 			mango_error(false, WLR_ERROR,
 						"Unknown bind flag: \033[1m\033[31m%c\033[0m\n",
@@ -570,6 +573,12 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = enter_overview;
 	} else if (strcmp(func_name, "leaveoverview") == 0) {
 		func = leave_overview;
+	} else if (strcmp(func_name, "toggleworkspaceoverview") == 0) {
+		func = toggle_workspace_overview;
+	} else if (strcmp(func_name, "enterworkspaceoverview") == 0) {
+		func = enter_workspace_overview;
+	} else if (strcmp(func_name, "leaveworkspaceoverview") == 0) {
+		func = leave_workspace_overview;
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = toggle_jump;
 	} else if (strcmp(func_name, "set_proportion") == 0) {

@@ -13,6 +13,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <wlr/backend/libinput.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/types/wlr_compositor.h>
@@ -192,7 +193,7 @@ int32_t keyboard_repeat(void *data) {
 	for (i = 0; i < group->nsyms; i++)
 		keyboard_check_keybinding(WL_KEYBOARD_KEY_STATE_PRESSED, false,
 								  group->mods, group->keysyms[i],
-								  group->keycode);
+								  group->keycode, true);
 
 	return 0;
 }
@@ -586,7 +587,8 @@ void keyboard_unmark_bound_key(uint32_t keycode) {
 }
 
 int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
-								  xkb_keysym_t sym, uint32_t keycode) {
+								  xkb_keysym_t sym, uint32_t keycode,
+								  bool is_repeat) {
 	/*
 	 * Here we handle compositor keybindings. This is when the compositor is
 	 * processing keys, rather than passing them on to the client for its
@@ -601,6 +603,7 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 		return false;
 	}
 
+	bool wsov_active = !is_locked && workspace_overview_is_active();
 	for (ji = 0; ji < config.key_bindings_count; ji++) {
 		if (is_locked && config.key_bindings[ji].islockapply == false)
 			continue;
@@ -623,6 +626,12 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 		}
 
 		k = &config.key_bindings[ji];
+		if (wsov_active &&
+			k->func != toggle_workspace_overview &&
+			k->func != enter_workspace_overview &&
+			k->func != leave_workspace_overview) {
+			continue;
+		}
 		if ((k->iscommonmode ||
 			 (k->isdefaultmode && server.key_mode.isdefault) ||
 			 (strcmp(server.key_mode.mode, k->mode) == 0)) &&
@@ -635,6 +644,11 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			   keycode == k->keysymcode.keycode.keycode2 ||
 			   keycode == k->keysymcode.keycode.keycode3))) &&
 			k->func) {
+
+			/* A "n" binding fires once per press: ignore key repeat events.
+			 * Stop here so a repeat never falls through to another binding. */
+			if (is_repeat && k->isnorepeat)
+				break;
 
 			if (!k->ispassapply) {
 				handled = 1;
@@ -724,6 +738,16 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
+	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED &&
+		!server.session_locked && workspace_overview_is_active() && nsyms > 0) {
+		if (workspace_overview_handle_key(syms[0])) {
+			server.last_hold_keycode = 0;
+			group->nsyms = 0;
+			wl_event_source_timer_update(group->key_repeat_source, 0);
+			return;
+		}
+	}
+
 	// In overcircle mode, releasing the mode key exits overview.
 	if (server.selected_monitor && server.selected_monitor->ov_tab_layout &&
 		!server.selected_monitor->is_jump_mode &&
@@ -760,7 +784,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	for (i = 0; i < nsyms; i++)
 		handled = keyboard_check_keybinding(event->state, server.session_locked,
-											mods, syms[i], keycode) ||
+											mods, syms[i], keycode, false) ||
 				  handled;
 
 	/* Client-owned global hotkeys (xx_hotkey_v1) come after the user binds */
@@ -782,6 +806,18 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 		keyboard_is_bound_key(keycode)) {
 		keyboard_unmark_bound_key(keycode);
 		handled = 1;
+	}
+
+	/* The workspace overview is modal. Presses which are not bindings and
+	 * are not handled by its navigation must not leak to a hidden client.
+	 * Mark the press so its matching release is swallowed without changing
+	 * the normal handling of keys which were already held before entry. */
+	if (!server.session_locked && workspace_overview_is_active() &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		server.last_hold_keycode = 0;
+		group->nsyms = 0;
+		wl_event_source_timer_update(group->key_repeat_source, 0);
+		return;
 	}
 
 	if (handled && group->keyboard->repeat_info.delay > 0 &&
@@ -827,7 +863,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 #endif
 		;
 	/* passed keys don't get repeated */
-	if (pass && syms)
+	if (!workspace_overview_is_active() && pass && syms)
 		hit_global = keyboard_process_global_keypress(
 			last_surface, group->keyboard, event, mods, syms[0], keycode);
 

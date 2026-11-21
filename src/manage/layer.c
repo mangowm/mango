@@ -10,6 +10,7 @@
 #include "mango/layout/arrange.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
@@ -257,11 +258,17 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	}
 
 	// Initializes the animation.
-	if (config.animations && config.layer_animations && !l->no_animation) {
+	bool wsov_active = workspace_overview_is_active_on(l->mon);
+	if (config.animations && config.layer_animations && !l->no_animation &&
+		!wsov_active) {
 		l->animation.duration = config.animation_duration_open;
 		l->animation.action = OPEN;
 		layer_set_pending_state(l);
 	} else {
+		if (wsov_active) {
+			l->animation.running = false;
+			l->animation.action = NONE;
+		}
 		l->animainit_geom = l->animation.current = l->current = l->pending =
 			l->geom;
 	}
@@ -270,6 +277,7 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	// exclusive surface.
 	arrange_layers(l->mon);
 	reset_exclusive_layers_focus(l->mon);
+	workspace_overview_layers_changed(l->mon);
 	printstatus(IPC_WATCH_LAST_OPEN_SURFACE);
 }
 
@@ -312,6 +320,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 	// Empty buffer: only hides; the mapped state is unchanged.
 	if (l->mapped && !layer_surface->surface->buffer) {
 		wlr_scene_node_set_enabled(&l->scene->node, false);
+		workspace_overview_layers_changed(l->mon);
 		return;
 	} else {
 		wlr_scene_node_set_enabled(&l->scene->node, true);
@@ -325,7 +334,9 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 		l->geom.width = box.width;
 		l->geom.height = box.height;
 
+		bool wsov_active = workspace_overview_is_active_on(l->mon);
 		if (config.animations && config.layer_animations && !l->no_animation &&
+			!wsov_active &&
 			l->mapped &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
@@ -335,6 +346,10 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 			l->need_output_flush = true;
 			layer_set_pending_state(l);
 		} else {
+			if (wsov_active) {
+				l->animation.running = false;
+				l->animation.action = NONE;
+			}
 			l->animainit_geom = l->animation.current = l->current = l->pending =
 				l->geom;
 			l->need_output_flush = true;
@@ -355,6 +370,8 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 	}
 
 	layer_flush_blur_background(l);
+
+	workspace_overview_layers_changed(l->mon);
 
 	if (layer_surface->current.committed == 0 && !mapped_changed)
 		return;
@@ -585,6 +602,7 @@ void handle_layer_surface_unmap(struct wl_listener *listener, void *data) {
 
 	if (l->layer_surface->output && (l->mon = l->layer_surface->output->data))
 		arrange_layers(l->mon);
+	workspace_overview_layers_changed(l->mon);
 
 	reset_exclusive_layers_focus(l->mon);
 
