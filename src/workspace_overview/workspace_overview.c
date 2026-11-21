@@ -171,6 +171,7 @@ static struct {
 	uint32_t camera_tag;
 	uint32_t close_tag;
 	Client *close_client;
+	bool close_focus_explicit;
 
 	bool pressed;
 	bool moved;
@@ -2394,6 +2395,7 @@ static void wsov_resume_open_animation(void) {
 	wsov.target_tag = wsov.camera_tag;
 	wsov.close_tag = 0;
 	wsov.close_client = NULL;
+	wsov.close_focus_explicit = false;
 	wsov.layers_dirty = true;
 	wsov_set_borders_enabled(true);
 	wsov_update_styles();
@@ -2403,8 +2405,11 @@ static void wsov_resume_open_animation(void) {
 static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	if (!workspace_overview_is_active() || wsov.closing)
 		return;
+	bool pointer_close = wsov.pressed;
 	wsov_cancel_scheduled_render();
 	wsov_cancel_drag();
+	wsov.close_client = focus_client;
+	wsov.close_focus_explicit = pointer_close;
 	if (!config.animations) {
 		wsov_finalize_close(focus_tag);
 		return;
@@ -2416,8 +2421,6 @@ static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	wsov.closing = true;
 	wsov.layers_dirty = false;
 	wsov.close_tag = focus_tag;
-	wsov.close_client =
-		focus_client ? focus_client : wsov_focus_top_for_tag(focus_tag);
 	struct wsov_cell *target = wsov_cell_for_tag(focus_tag);
 	wsov.camera_tag = target ? focus_tag : previous_target;
 	target = wsov_cell_for_tag(wsov.camera_tag);
@@ -2437,6 +2440,8 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 		return;
 
 	Monitor *m = wsov.mon;
+	Client *focus_client = wsov.close_client;
+	bool focus_explicit = wsov.close_focus_explicit;
 	wsov_cancel_drag();
 	wsov.closing = true;
 	m->is_ws_overview = false;
@@ -2468,7 +2473,9 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 	memset(&wsov, 0, sizeof(wsov));
 	pointer_cursor_activity();
 
-	client_focus(client_focus_top(m), 1);
+	if (!focus_explicit && !focus_client)
+		focus_client = client_focus_top(m);
+	client_focus(focus_client, 1);
 	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 	wlr_output_schedule_frame(m->wlr_output);
 }
@@ -2918,7 +2925,10 @@ bool workspace_overview_handle_button(
 			struct wsov_cell *cell =
 				wsov_cell_at(server.cursor->x, server.cursor->y);
 			uint32_t tag = cell ? cell->tag : wsov.source_tag;
-			Client *focus = wsov.drag_client;
+			struct wsov_item *item =
+				wsov_item_at(cell, server.cursor->x, server.cursor->y);
+			Client *focus = item ? item->client : NULL;
+			client_focus(focus, 1);
 			wsov_close(tag, focus);
 		}
 		server.cursor_mode = CurNormal;
