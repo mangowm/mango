@@ -216,6 +216,29 @@ void pointer_client_destroyed(Client *c) {
 	}
 }
 
+void pointer_client_replaced(Client *old, Client *new) {
+	if (!old || !new || old == new)
+		return;
+
+	if (server.grab_client == old)
+		server.grab_client = new;
+
+	if (server.drop_client == old) {
+		bool draw = old->enable_drop_area_draw;
+		old->enable_drop_area_draw = false;
+		new->enable_drop_area_draw = draw;
+		server.drop_client = new;
+	}
+
+	if (server.group_bar_drag_client == old)
+		server.group_bar_drag_client = new;
+
+	if (server.group_bar_hover && server.group_bar_hover == old->group_bar) {
+		mango_bar_decoration_set_close_hover(server.group_bar_hover, false);
+		server.group_bar_hover = NULL;
+	}
+}
+
 static bool pointer_constraint_surface_visible(
 	struct wlr_pointer_constraint_v1 *constraint) {
 	Client *c = NULL;
