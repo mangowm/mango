@@ -318,7 +318,7 @@ static void sync_tab_state_to_clients(Monitor *m, uint32_t tag) {
 		tab_refresh_bars(head);
 }
 
-static void sync_current_tab_state_to_clients(Monitor *m) {
+void tab_sync_current(Monitor *m) {
 	if (!m || !m->pertag)
 		return;
 	if (!tab_layout_enabled(m)) {
@@ -380,51 +380,37 @@ void tab_sync_focus(Client *c) {
 	tab_refresh_bars(head);
 }
 
-void tab_remove_client(Client *c) {
-	if (!c)
-		return;
-
-	Monitor *m;
-	wl_list_for_each(m, &server.monitors, link) {
-		if (!m->pertag)
-			continue;
-		for (uint32_t tag = 0; tag < PERTAG_SLOTS; tag++) {
-			struct TagTabState *state = m->pertag->tab_state[tag];
-			if (!state)
-				continue;
-			struct TagTabNode *node;
-			while ((node = find_tab_node(state, c)))
-				tab_node_remove(state, node);
-		}
+bool tab_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	struct TagTabNode *node;
+	bool changed = false;
+	while (state && (node = find_tab_node(state, c))) {
+		tab_node_remove(state, node);
+		changed = true;
 	}
-
-	sync_current_tab_state_to_clients(c->mon);
+	return changed;
 }
 
-void tab_replace_client(Client *old, Client *new) {
+bool tab_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+							   Client *new) {
 	if (!old || !new || old == new)
-		return;
-
-	Monitor *m;
-	wl_list_for_each(m, &server.monitors, link) {
-		if (!m->pertag)
-			continue;
-		for (uint32_t tag = 0; tag < PERTAG_SLOTS; tag++) {
-			struct TagTabState *state = m->pertag->tab_state[tag];
-			struct TagTabNode *old_node = find_tab_node(state, old);
-			if (!old_node)
-				continue;
-			struct TagTabNode *new_node = find_tab_node(state, new);
-			if (new_node && new_node != old_node)
-				tab_node_remove(state, new_node);
-			if (state->focus_id == old->id)
-				state->focus_id = new->id;
-			old_node->client = new;
-		}
-	}
-
-	/* The replacement can be mapped before it has a monitor. The caller's
-	 * arrange will project the updated tag state once that is resolved. */
+		return false;
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	if (!state)
+		return false;
+	struct TagTabNode *old_node = find_tab_node(state, old);
+	if (!old_node)
+		return false;
+	struct TagTabNode *new_node = find_tab_node(state, new);
+	if (new_node && new_node != old_node)
+		tab_node_remove(state, new_node);
+	if (state->focus_id == old->id)
+		state->focus_id = new->id;
+	old_node->client = new;
+	struct TagTabNode *node;
+	while ((node = find_tab_node(state, old)))
+		tab_node_remove(state, node);
+	return true;
 }
 
 void tab_sync_monitor(Monitor *m) {
