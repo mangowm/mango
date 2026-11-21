@@ -249,6 +249,7 @@ layer_rule=layer_name:Values,Parameter:Values,Parameter:Values
 | `animation_type_open` | string | slide, zoom, fade, none | Set open animation |
 | `animation_type_close` | string | slide, zoom, fade, none | Set close animation |
 | `no_blur` | integer | `0` / `1` | Disable blur |
+| `blur_ignore_alpha` | float | `0.0` - `1.0` | Ignore the blur where the surface alpha is at or below this threshold (higher values make more transparent pixels skip blur) |
 | `no_animation` | integer | `0` / `1` | Disable layer animation |
 | `no_shadow` | integer | `0` / `1` | Disable layer shadow |
 | `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `no_animation:1`) |
