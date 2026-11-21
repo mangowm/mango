@@ -990,10 +990,6 @@ void reset_keyboard_layout(void) {
 		wlr_keyboard_set_keymap(tkb, keyboard->keymap);
 		wlr_keyboard_notify_modifiers(tkb, depressed, latched, locked_mods, 0);
 		tkb->modifiers.group = 0;
-
-		// 7. Update the seat
-		wlr_seat_set_keyboard(server.seat, tkb);
-		wlr_seat_keyboard_notify_modifiers(server.seat, &tkb->modifiers);
 	}
 
 	// Cleanup
