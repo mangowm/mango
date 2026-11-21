@@ -59,7 +59,10 @@ static void tab_bar_set_enabled(Client *c, bool on) {
 	wlr_scene_node_set_enabled(&c->tab_bar->scene->node, on);
 }
 
-static bool tab_layout_id_supported(uint32_t id) {
+static bool is_tab_layout(const Monitor *m) {
+	if (!m || !m->pertag)
+		return false;
+	uint32_t id = m->pertag->ltidxs[get_mon_curtag(m)]->id;
 	if (id == MONOCLE)
 		return config.monocle_tab_mode;
 	if (id == DECK || id == VERTICAL_DECK)
@@ -67,14 +70,8 @@ static bool tab_layout_id_supported(uint32_t id) {
 	return false;
 }
 
-static bool tab_layout_enabled(const Monitor *m) {
-	if (!m || !m->pertag)
-		return false;
-	return tab_layout_id_supported(m->pertag->ltidxs[get_mon_curtag(m)]->id);
-}
-
 bool tab_layout_active(const Monitor *m) {
-	return m && !m->isoverview && tab_layout_enabled(m);
+	return m && !m->isoverview && is_tab_layout(m);
 }
 
 static bool tab_state_ok(const Client *c) {
@@ -321,7 +318,7 @@ static void sync_tab_state_to_clients(Monitor *m, uint32_t tag) {
 void tab_sync_current(Monitor *m) {
 	if (!m || !m->pertag)
 		return;
-	if (!tab_layout_enabled(m)) {
+	if (!is_tab_layout(m)) {
 		clear_tab_projection(m);
 		return;
 	}
@@ -420,7 +417,7 @@ void tab_sync_monitor(Monitor *m) {
 	if (m->isoverview)
 		return;
 
-	if (!tab_layout_enabled(m)) {
+	if (!is_tab_layout(m)) {
 		clear_tab_projection(m);
 		return;
 	}
