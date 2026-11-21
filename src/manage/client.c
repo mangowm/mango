@@ -68,6 +68,16 @@ struct wlr_surface *client_surface(Client *c) {
 #endif
 	return c->surface.xdg->surface;
 }
+bool client_stay_focused_blocks(Client *incoming) {
+	Client *current =
+		server.selected_monitor ? server.selected_monitor->sel : NULL;
+	if (!incoming || !current || incoming == current || !current->stayfocused ||
+		current->iskilling || !current->mon)
+		return false;
+
+	struct wlr_surface *surface = client_surface(current);
+	return surface && surface->mapped && VISIBLEON(current, current->mon);
+}
 
 int32_t toplevel_from_wlr_surface(struct wlr_surface *s, Client **pc,
 								  LayerSurface **pl) {
@@ -1504,6 +1514,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, no_fade_out);
 	APPLY_INT_PROP(c, r, no_force_center);
 	APPLY_INT_PROP(c, r, isfloating);
+	APPLY_INT_PROP(c, r, stayfocused);
 	APPLY_INT_PROP(c, r, isfullscreen);
 	APPLY_INT_PROP(c, r, isfakefullscreen);
 	APPLY_INT_PROP(c, r, no_border);
@@ -1756,10 +1767,13 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	int32_t fullscreen_state_backup =
 		c->isfullscreen || client_wants_fullscreen(c);
 
+	bool stay_focused_blocked = client_stay_focused_blocks(c);
 	bool should_init_get_focus =
 		!c->isopensilent &&
 		!(client_is_x11_popup(c) && client_should_ignore_focus(c)) && mon &&
-		(!c->istagsilent || !newtags || (newtags & mon->tagset[mon->seltags]));
+		(!c->istagsilent || !newtags ||
+		 (newtags & mon->tagset[mon->seltags])) &&
+		!stay_focused_blocked;
 
 	if (!should_init_get_focus) {
 		wl_list_safe_reinsert_prev(&server.focus_stack, &c->flink);
@@ -1776,7 +1790,7 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	if (c->mon &&
 		!(c->mon == server.selected_monitor &&
 		  c->tags & c->mon->tagset[c->mon->seltags]) &&
-		!c->isopensilent && !c->istagsilent) {
+		!c->isopensilent && !c->istagsilent && !stay_focused_blocked) {
 		c->animation.tag_from_rule = true;
 		client_view_on_monitor(&(Arg){.ui = c->tags}, true, c->mon, true);
 	}
@@ -1986,7 +2000,7 @@ bool client_init_unmanaged(Client *c) {
 		LISTEN(&c->surface.xwayland->events.set_geometry, &c->set_geometry,
 			   handle_xwayland_surface_set_geometry);
 		wlr_scene_node_reparent(&c->scene->node, server.layers[LyrOverlay]);
-		if (client_wants_focus(c)) {
+		if (client_wants_focus(c) && !client_stay_focused_blocks(c)) {
 			client_focus(c, 1);
 			server.exclusive_focus = c;
 		}
@@ -2090,6 +2104,7 @@ void init_client_properties(Client *c) {
 	c->enable_drop_area_draw = false;
 	c->isfocusing = false;
 	c->isfloating = 0;
+	c->stayfocused = 0;
 	c->isfakefullscreen = 0;
 	c->no_animation = 0;
 	c->isopensilent = 0;
@@ -2783,6 +2798,15 @@ void handle_client_activation_request(struct wl_listener *listener,
 
 	if (!c || !c->foreign_toplevel)
 		return;
+
+	if (client_stay_focused_blocks(c)) {
+		if (c != client_focus_top(server.selected_monitor)) {
+			c->isurgent = 1;
+			if (client_surface(c)->mapped)
+				client_update_border_color(c);
+		}
+		return;
+	}
 
 	if (config.focus_on_activate && !c->istagsilent &&
 		c != server.selected_monitor->sel) {
@@ -4721,6 +4745,15 @@ void handle_xwayland_surface_request_activate(struct wl_listener *listener,
 
 	if (c && c->swallowdby)
 		return;
+
+	if (client_stay_focused_blocks(c)) {
+		if (c != client_focus_top(server.selected_monitor)) {
+			c->isurgent = 1;
+			if (client_surface(c)->mapped)
+				client_update_border_color(c);
+		}
+		return;
+	}
 
 	if (c->tags & TAG0_MASK) {
 		if (is_special_active(c->mon)) {
