@@ -200,10 +200,12 @@ static void wsov_finalize_close(uint32_t focus_tag);
 static void wsov_close(uint32_t focus_tag, Client *focus_client);
 static void wsov_apply_camera(double progress);
 static void wsov_attach_frame_listener(void);
+static void wsov_capture_workspace_tags(uint32_t tags);
 static void wsov_capture_workspace_layouts(void);
 static void wsov_detach_frame_listener(void);
 static void wsov_refresh_layer_previews(void);
 static void wsov_render_all(void);
+static bool wsov_refresh_workspace_tags(uint32_t tags);
 static void wsov_flush_dirty_cells(void *data);
 static void wsov_schedule_dirty_render(void);
 static void wsov_cancel_scheduled_render(void);
@@ -214,6 +216,7 @@ static void wsov_update_layout_animation(void);
 static bool wsov_scene_node_layout_coords(struct wlr_scene_node *node, int *x,
 										  int *y);
 static void wsov_update_styles(void);
+static void wsov_update_styles_tags(uint32_t tags);
 static bool wsov_create_drop_indicator(void);
 static void wsov_hide_drop_indicator(void);
 static void wsov_update_drop_indicator(double x, double y);
@@ -1000,15 +1003,12 @@ static void wsov_position_cell_items(struct wsov_cell *cell) {
 	}
 }
 
-static void wsov_layout_items(void) {
-	for (int i = 0; i < wsov.cell_count; i++)
-		wsov_position_cell_items(&wsov.cells[i]);
-}
-
-static void wsov_settle_capture_clients(Monitor *m) {
+static void wsov_settle_capture_clients(Monitor *m, uint32_t tags) {
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon != m || client_is_unmanaged(c) || c->iskilling)
+			continue;
+		if (!c->isglobal && !(c->tags & tags))
 			continue;
 		c->animation.running = false;
 		c->animation.tagining = false;
@@ -1019,11 +1019,20 @@ static void wsov_settle_capture_clients(Monitor *m) {
 	}
 }
 
-static void wsov_capture_workspace_layouts(void) {
+static void wsov_capture_workspace_tags(uint32_t tags) {
 	if (!workspace_overview_is_active() || wsov.cell_count <= 0)
 		return;
 
 	Monitor *m = wsov.mon;
+	uint32_t selected = 0;
+	for (int i = 0; i < wsov.cell_count; i++) {
+		uint32_t bit = wsov_tag_bit(wsov.cells[i].tag);
+		if (tags & bit)
+			selected |= bit;
+	}
+	if (!selected)
+		return;
+
 	uint32_t saved_tags[2] = {m->tagset[0], m->tagset[1]};
 	uint32_t saved_seltags = m->seltags;
 	uint32_t saved_curtag = m->pertag->curtag;
@@ -1031,28 +1040,30 @@ static void wsov_capture_workspace_layouts(void) {
 	Client *saved_sel = m->sel;
 	Client *saved_prevsel = m->prevsel;
 	bool saved_tag_gather = config.tag_gather;
-	bool root_enabled = wsov.root->node.enabled;
 
 	sync_tag_ratio_state_from_clients(m, saved_curtag);
 	config.tag_gather = false;
-	wlr_scene_node_set_enabled(&wsov.root->node, false);
 
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
-		if (c->mon == m && !client_is_unmanaged(c)) {
+		if (c->mon == m && !client_is_unmanaged(c) &&
+			(c->isglobal || (c->tags & selected))) {
 			c->wsov_hidden = false;
 			client_update_visibility(c);
 		}
 	}
 
 	for (int i = 0; i < wsov.cell_count; i++) {
-		uint32_t tag = wsov.cells[i].tag;
+		struct wsov_cell *cell = &wsov.cells[i];
+		uint32_t tag = cell->tag;
+		if (!(selected & wsov_tag_bit(tag)))
+			continue;
 		m->tagset[saved_seltags] = wsov_tag_bit(tag);
 		m->pertag->curtag = tag;
 		arrange(m, false, true);
-		wsov_settle_capture_clients(m);
-		wsov_capture_cell_items(&wsov.cells[i]);
-		wsov_capture_cell_bars(&wsov.cells[i]);
+		wsov_settle_capture_clients(m, selected);
+		wsov_capture_cell_items(cell);
+		wsov_capture_cell_bars(cell);
 	}
 
 	m->seltags = saved_seltags;
@@ -1061,20 +1072,30 @@ static void wsov_capture_workspace_layouts(void) {
 	m->pertag->curtag = saved_curtag;
 	m->pertag->prevtag = saved_prevtag;
 	arrange(m, false, true);
-	wsov_settle_capture_clients(m);
+	wsov_settle_capture_clients(m, selected);
 	m->sel = saved_sel;
 	m->prevsel = saved_prevsel;
 	config.tag_gather = saved_tag_gather;
 
 	wl_list_for_each(c, &server.clients, link) {
-		if (c->mon == m && !client_is_unmanaged(c)) {
+		if (c->mon == m && !client_is_unmanaged(c) &&
+			(c->isglobal || (c->tags & selected))) {
 			c->wsov_hidden = true;
 			client_update_visibility(c);
 		}
 	}
-	if (root_enabled)
-		wlr_scene_node_set_enabled(&wsov.root->node, true);
-	wsov_layout_items();
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wsov_cell *cell = &wsov.cells[i];
+		if (selected & wsov_tag_bit(cell->tag))
+			wsov_position_cell_items(cell);
+	}
+}
+
+static void wsov_capture_workspace_layouts(void) {
+	uint32_t tags = 0;
+	for (int i = 0; i < wsov.cell_count; i++)
+		tags |= wsov_tag_bit(wsov.cells[i].tag);
+	wsov_capture_workspace_tags(tags);
 }
 
 static const struct wlr_drm_format *wsov_pick_buffer_format(void) {
@@ -1591,9 +1612,11 @@ static void wsov_render_cell_at_resolution(struct wsov_cell *cell, int width,
 	free(items);
 }
 
-static void wsov_update_styles(void) {
+static void wsov_update_styles_tags(uint32_t tags) {
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
+		if (!(tags & wsov_tag_bit(cell->tag)))
+			continue;
 		bool focused = cell->tag == wsov.target_tag;
 		float dim_opacity =
 			focused ? config.workspace_overview_focused_dim_opacity
@@ -1626,6 +1649,13 @@ static void wsov_update_styles(void) {
 	}
 	if (wsov.drag_buffer)
 		wlr_scene_node_raise_to_top(&wsov.drag_buffer->node);
+}
+
+static void wsov_update_styles(void) {
+	uint32_t tags = 0;
+	for (int i = 0; i < wsov.cell_count; i++)
+		tags |= wsov_tag_bit(wsov.cells[i].tag);
+	wsov_update_styles_tags(tags);
 }
 
 static bool wsov_cell_has_client(const struct wsov_cell *cell,
@@ -2557,6 +2587,44 @@ static void wsov_rebuild(void) {
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
 
+static bool wsov_refresh_workspace_tags(uint32_t tags) {
+	if (!workspace_overview_is_active() || wsov.closing || !wsov.mon ||
+		wsov.cell_count <= 0)
+		return false;
+
+	uint32_t current = 0;
+	for (int i = 0; i < wsov.cell_count; i++)
+		current |= wsov_tag_bit(wsov.cells[i].tag);
+
+	/* Empty workspaces keep their cells in ALL_WORKSPACE mode. Only occupied
+	 * mode can remove a cell and thereby change every preview's grid position.
+	 */
+	if (wsov.mon->workspace_overview_scope == OCCUPIED_WORKSPACE) {
+		int expected_count = 0;
+		uint32_t expected =
+			wsov_collect_workspace_tags(wsov.mon, &expected_count);
+		if (expected_count != wsov.cell_count || expected != current)
+			return false;
+	}
+
+	tags &= current;
+	if (!tags)
+		return true;
+
+	wsov_sync_monitor_selection();
+	wsov_capture_workspace_tags(tags);
+
+	double buffer_scale = wsov_output_scale();
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wsov_cell *cell = &wsov.cells[i];
+		if (tags & wsov_tag_bit(cell->tag))
+			wsov_render_cell(cell, buffer_scale);
+	}
+	wsov_update_styles_tags(tags);
+	wlr_output_schedule_frame(wsov.mon->wlr_output);
+	return true;
+}
+
 int32_t toggle_workspace_overview(const Arg *arg) {
 	if (!server.selected_monitor || server.grab_client ||
 		server.selected_monitor->isoverview)
@@ -2994,7 +3062,9 @@ void workspace_overview_client_removed(Client *c) {
 	if (c == wsov.drag_client)
 		wsov_cancel_drag();
 	c->wsov_hidden = false;
-	wsov_rebuild();
+	uint32_t tags = c->isglobal ? TAGMASK : (c->tags & TAGMASK);
+	if (!wsov_refresh_workspace_tags(tags))
+		wsov_rebuild();
 }
 
 void workspace_overview_client_replaced(Client *old, Client *new) {
@@ -3037,6 +3107,8 @@ void workspace_overview_layout_changed(Monitor *m) {
 void workspace_overview_client_unmapped(Client *c, bool activate_target) {
 	if (!workspace_overview_is_active() || wsov.closing || !c)
 		return;
+	uint32_t tags = c->isglobal ? TAGMASK : (c->tags & TAGMASK);
+	uint32_t previous_camera_tag = wsov.camera_tag;
 	wsov_select_default_target();
 	wsov.camera_tag = wsov.target_tag;
 	Client *previous = wsov.mon->sel;
@@ -3053,8 +3125,9 @@ void workspace_overview_client_unmapped(Client *c, bool activate_target) {
 	} else {
 		wsov_render_selection_clients(previous, wsov.mon->sel);
 	}
-	wsov_update_styles();
-	wsov_apply_camera(wsov.progress);
+	wsov_update_styles_tags(tags);
+	if (switch_workspace || previous_camera_tag != wsov.camera_tag)
+		wsov_apply_camera(wsov.progress);
 }
 
 void workspace_overview_monitor_destroy(Monitor *m) {
