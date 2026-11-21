@@ -1,6 +1,6 @@
 #include "mango/workspace_overview/workspace_overview.h"
-#include "mango/animation/common.h"
 #include "mango/animation/client.h"
+#include "mango/animation/common.h"
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/config/parse.h"
@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <wayland-server-core.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/drm_format_set.h>
 #include <wlr/render/pass.h>
@@ -39,7 +40,6 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/transform.h>
-#include <wayland-server-core.h>
 
 struct wsov_item {
 	Client *client;
@@ -219,10 +219,9 @@ static uint32_t wsov_tag_bit(uint32_t tag) {
 
 static bool wsov_client_eligible(Client *c) {
 	if (!c || !c->mon || c->mon != wsov.mon || c->iskilling || c->isminimized ||
-		c->is_tab_hidden ||
-		c->isunglobal || !client_surface(c) || !client_surface(c)->mapped ||
-		client_is_unmanaged(c) || client_is_x11_popup(c) ||
-		(c->tags & TAG0_MASK))
+		c->is_tab_hidden || c->isunglobal || !client_surface(c) ||
+		!client_surface(c)->mapped || client_is_unmanaged(c) ||
+		client_is_x11_popup(c) || (c->tags & TAG0_MASK))
 		return false;
 	return true;
 }
@@ -348,25 +347,31 @@ static struct wlr_box wsov_item_display_box(const struct wsov_cell *cell,
 
 	struct wlr_box cell_box = wsov_cell_layout_box(cell);
 	double scale_x =
-		(double)MANGO_MAX(1, cell_box.width - 2 * config.workspace_overview_border_width) /
+		(double)MANGO_MAX(1, cell_box.width -
+								 2 * config.workspace_overview_border_width) /
 		MANGO_MAX(1, cell->buffer_w);
 	double scale_y =
-		(double)MANGO_MAX(1, cell_box.height - 2 * config.workspace_overview_border_width) /
+		(double)MANGO_MAX(1, cell_box.height -
+								 2 * config.workspace_overview_border_width) /
 		MANGO_MAX(1, cell->buffer_h);
-	double local_x = item->box.x - cell->box.x - config.workspace_overview_border_width;
-	double local_y = item->box.y - cell->box.y - config.workspace_overview_border_width;
+	double local_x =
+		item->box.x - cell->box.x - config.workspace_overview_border_width;
+	double local_y =
+		item->box.y - cell->box.y - config.workspace_overview_border_width;
 	return (struct wlr_box){
-		.x = cell_box.x + config.workspace_overview_border_width + (int)lround(local_x * scale_x),
-		.y = cell_box.y + config.workspace_overview_border_width + (int)lround(local_y * scale_y),
+		.x = cell_box.x + config.workspace_overview_border_width +
+			 (int)lround(local_x * scale_x),
+		.y = cell_box.y + config.workspace_overview_border_width +
+			 (int)lround(local_y * scale_y),
 		.width = MANGO_MAX(1, (int)lround(item->box.width * scale_x)),
 		.height = MANGO_MAX(1, (int)lround(item->box.height * scale_y)),
 	};
 }
 
 static struct wlr_box wsov_monitor_clip(void) {
-	return wsov.mon ? (struct wlr_box){0, 0, wsov.mon->m.width,
-									  wsov.mon->m.height}
-					: (struct wlr_box){0};
+	return wsov.mon
+			   ? (struct wlr_box){0, 0, wsov.mon->m.width, wsov.mon->m.height}
+			   : (struct wlr_box){0};
 }
 
 static bool wsov_intersect_monitor(int x, int y, int width, int height,
@@ -406,11 +411,13 @@ static void wsov_place_buffer_clipped(struct wlr_scene_buffer *node,
 		return;
 	}
 
-	struct wlr_fbox src = base_src ? *base_src
-								  : (struct wlr_fbox){0, 0, node->buffer->width,
-													 node->buffer->height};
+	struct wlr_fbox src = base_src
+							  ? *base_src
+							  : (struct wlr_fbox){0, 0, node->buffer->width,
+												  node->buffer->height};
 	if (src.width <= 0 || src.height <= 0)
-		src = (struct wlr_fbox){0, 0, node->buffer->width, node->buffer->height};
+		src =
+			(struct wlr_fbox){0, 0, node->buffer->width, node->buffer->height};
 
 	if (node->transform == WL_OUTPUT_TRANSFORM_NORMAL) {
 		src.x += src.width * (visible.x - x) / width;
@@ -421,7 +428,8 @@ static void wsov_place_buffer_clipped(struct wlr_scene_buffer *node,
 		int buffer_w = node->buffer->width;
 		int buffer_h = node->buffer->height;
 		struct wlr_fbox oriented;
-		wlr_fbox_transform(&oriented, &src, node->transform, buffer_w, buffer_h);
+		wlr_fbox_transform(&oriented, &src, node->transform, buffer_w,
+						   buffer_h);
 		oriented.x += oriented.width * (visible.x - x) / width;
 		oriented.y += oriented.height * (visible.y - y) / height;
 		oriented.width *= (double)visible.width / width;
@@ -494,13 +502,11 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	double t = wsov_elapsed_ms(&wsov.animation_start) /
 			   MANGO_MAX(1.0, (double)duration);
 	t = fmax(0.0, fmin(1.0, t));
-	double eased =
-		find_animation_curve_for(
-			t, wsov.closing ? config.animation_curve_wsov_close
-							: config.animation_curve_wsov_open);
+	double eased = find_animation_curve_for(
+		t, wsov.closing ? config.animation_curve_wsov_close
+						: config.animation_curve_wsov_open);
 	wsov.progress =
-		wsov.animation_from +
-		(wsov.animation_to - wsov.animation_from) * eased;
+		wsov.animation_from + (wsov.animation_to - wsov.animation_from) * eased;
 	wsov_apply_camera(wsov.progress);
 
 	if (t >= 1.0) {
@@ -761,10 +767,8 @@ static void wsov_capture_bar_buffer(struct wsov_bar_item *item,
 	struct wlr_buffer *buffer = wlr_buffer_lock(node->buffer);
 	if (!buffer)
 		return;
-	int width =
-		node->dst_width > 0 ? node->dst_width : node->buffer->width;
-	int height =
-		node->dst_height > 0 ? node->dst_height : node->buffer->height;
+	int width = node->dst_width > 0 ? node->dst_width : node->buffer->width;
+	int height = node->dst_height > 0 ? node->dst_height : node->buffer->height;
 	item->buffers[item->buffer_count++] = (struct wsov_bar_buffer){
 		.box = {lx, ly, width, height},
 		.buffer = buffer,
@@ -776,12 +780,12 @@ static void wsov_capture_bar_buffer(struct wsov_bar_item *item,
 	};
 }
 
-static void wsov_capture_bar(struct wsov_cell *cell,
-							MangoBarDecoration *bar) {
+static void wsov_capture_bar(struct wsov_cell *cell, MangoBarDecoration *bar) {
 	if (!bar)
 		return;
 	if (cell->bar_item_count == cell->bar_item_capacity) {
-		int capacity = cell->bar_item_capacity ? cell->bar_item_capacity * 2 : 8;
+		int capacity =
+			cell->bar_item_capacity ? cell->bar_item_capacity * 2 : 8;
 		struct wsov_bar_item *items =
 			realloc(cell->bar_items, capacity * sizeof(*items));
 		if (!items)
@@ -857,8 +861,8 @@ static void wsov_capture_cell_bars(struct wsov_cell *cell) {
 				!group_focus->is_tab_hidden &&
 				(group_focus->isglobal ||
 				 (group_focus->tags & wsov_tag_bit(cell->tag))) &&
-				client_wants_group_bar(group_focus) &&
-				ISNORMAL(group_focus) && !group_focus->isfullscreen) {
+				client_wants_group_bar(group_focus) && ISNORMAL(group_focus) &&
+				!group_focus->isfullscreen) {
 				group_anchor = group_focus;
 			} else {
 				for (Client *cur = group_head; cur; cur = cur->group_next) {
@@ -891,8 +895,7 @@ static void wsov_capture_cell_bars(struct wsov_cell *cell) {
 			for (Client *cur = tab_head; cur; cur = cur->tab_next) {
 				if (cur->mon == wsov.mon && cur->is_tab_focus &&
 					!cur->is_tab_hidden &&
-					(cur->isglobal ||
-					 (cur->tags & wsov_tag_bit(cell->tag)))) {
+					(cur->isglobal || (cur->tags & wsov_tag_bit(cell->tag)))) {
 					tab_anchor = cur;
 					break;
 				}
@@ -1082,16 +1085,12 @@ static void wsov_render_scene_buffer(struct wlr_scene_buffer *scene_buffer,
 							 ? scene_buffer->dst_height
 							 : scene_buffer->buffer->height;
 
-	int cell_x =
-		render->cell->box.x + config.workspace_overview_border_width;
-	int cell_y =
-		render->cell->box.y + config.workspace_overview_border_width;
-	int dx = (int)lround(
-		(render->item->box.x - cell_x) * render->cell_scale +
-		sx * render->scale_x);
-	int dy = (int)lround(
-		(render->item->box.y - cell_y) * render->cell_scale +
-		sy * render->scale_y);
+	int cell_x = render->cell->box.x + config.workspace_overview_border_width;
+	int cell_y = render->cell->box.y + config.workspace_overview_border_width;
+	int dx = (int)lround((render->item->box.x - cell_x) * render->cell_scale +
+						 sx * render->scale_x);
+	int dy = (int)lround((render->item->box.y - cell_y) * render->cell_scale +
+						 sy * render->scale_y);
 	int dw = MANGO_MAX(1, (int)lround(surface_width * render->scale_x));
 	int dh = MANGO_MAX(1, (int)lround(surface_height * render->scale_y));
 
@@ -1106,27 +1105,27 @@ static void wsov_render_scene_buffer(struct wlr_scene_buffer *scene_buffer,
 	struct wlr_linux_drm_syncobj_surface_v1_state *syncobj =
 		wlr_linux_drm_syncobj_v1_get_surface_state(scene_surface->surface);
 	wlr_render_pass_add_texture(
-		render->pass, &(struct wlr_render_texture_options){
-						  .texture = texture,
-						  .src_box = source_box,
-						  .dst_box = {dx, dy, dw, dh},
-						  .alpha = &alpha,
-						  .clip = &render->clip,
-						  .transform = scene_buffer->transform,
-						  .filter_mode = WLR_SCALE_FILTER_BILINEAR,
-						  .blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED,
-						  .transfer_function = scene_buffer->transfer_function,
-						  .primaries = &primaries,
-						  .color_encoding = scene_buffer->color_encoding,
-						  .color_range = scene_buffer->color_range,
-						  .wait_timeline =
-							  syncobj ? syncobj->acquire_timeline : NULL,
-						  .wait_point = syncobj ? syncobj->acquire_point : 0,
-					  });
+		render->pass,
+		&(struct wlr_render_texture_options){
+			.texture = texture,
+			.src_box = source_box,
+			.dst_box = {dx, dy, dw, dh},
+			.alpha = &alpha,
+			.clip = &render->clip,
+			.transform = scene_buffer->transform,
+			.filter_mode = WLR_SCALE_FILTER_BILINEAR,
+			.blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED,
+			.transfer_function = scene_buffer->transfer_function,
+			.primaries = &primaries,
+			.color_encoding = scene_buffer->color_encoding,
+			.color_range = scene_buffer->color_range,
+			.wait_timeline = syncobj ? syncobj->acquire_timeline : NULL,
+			.wait_point = syncobj ? syncobj->acquire_point : 0,
+		});
 }
 
-static void wsov_render_scene_surfaces(struct wlr_scene_tree *tree, int origin_x,
-									   int origin_y, void *data) {
+static void wsov_render_scene_surfaces(struct wlr_scene_tree *tree,
+									   int origin_x, int origin_y, void *data) {
 	struct wlr_scene_node *node;
 	wl_list_for_each(node, &tree->children, link) {
 		if (!node->enabled)
@@ -1138,7 +1137,7 @@ static void wsov_render_scene_surfaces(struct wlr_scene_tree *tree, int origin_x
 			wsov_render_scene_buffer(buffer, x, y, data);
 		} else if (node->type == WLR_SCENE_NODE_TREE) {
 			wsov_render_scene_surfaces(wlr_scene_tree_from_node(node), x, y,
-										data);
+									   data);
 		}
 	}
 }
@@ -1187,9 +1186,8 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 		MANGO_MAX(1, (int)lround(MANGO_MAX(1, c->bw) * render_scale_y));
 	if (!c->no_shadow && config.shadows_blur > 0) {
 		for (int layer = 4; layer >= 1; layer--) {
-			int spread =
-				MANGO_MAX(1, (int)lround(config.shadows_blur *
-											 render_scale * layer / 4.0f));
+			int spread = MANGO_MAX(1, (int)lround(config.shadows_blur *
+												  render_scale * layer / 4.0f));
 			float shadow_color[4] = {
 				config.shadowscolor[0],
 				config.shadowscolor[1],
@@ -1204,19 +1202,19 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 						  shadow_color, WLR_RENDER_BLEND_MODE_PREMULTIPLIED);
 		}
 	}
-	wsov_add_rect(
-		pass,
-		(struct wlr_box){window_box.x, window_box.y, window_box.width, border_y},
-		frame_color, WLR_RENDER_BLEND_MODE_NONE);
+	wsov_add_rect(pass,
+				  (struct wlr_box){window_box.x, window_box.y, window_box.width,
+								   border_y},
+				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
 	wsov_add_rect(pass,
 				  (struct wlr_box){window_box.x,
 								   window_box.y + window_box.height - border_y,
 								   window_box.width, border_y},
 				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
-	wsov_add_rect(
-		pass,
-		(struct wlr_box){window_box.x, window_box.y, border_x, window_box.height},
-		frame_color, WLR_RENDER_BLEND_MODE_NONE);
+	wsov_add_rect(pass,
+				  (struct wlr_box){window_box.x, window_box.y, border_x,
+								   window_box.height},
+				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
 	wsov_add_rect(pass,
 				  (struct wlr_box){window_box.x + window_box.width - border_x,
 								   window_box.y, border_x, window_box.height},
@@ -1229,10 +1227,8 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 		return;
 
 	pixman_region32_t clip;
-	int clip_w =
-		MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
-	int clip_h =
-		MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
+	int clip_w = MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
+	int clip_h = MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
 	pixman_region32_init_rect(&clip, 0, 0, clip_w, clip_h);
 	struct wsov_surface_render_data data = {
 		.pass = pass,
@@ -1296,8 +1292,7 @@ static void wsov_render_bar_item_at(struct wlr_render_pass *pass,
 		if (src.width <= 0 || src.height <= 0)
 			src = (struct wlr_fbox){0, 0, buffer_w, buffer_h};
 		int dst_w = snapshot->dst_width > 0 ? snapshot->dst_width : buffer_w;
-		int dst_h =
-			snapshot->dst_height > 0 ? snapshot->dst_height : buffer_h;
+		int dst_h = snapshot->dst_height > 0 ? snapshot->dst_height : buffer_h;
 		float alpha = snapshot->opacity;
 		struct wlr_box dst = {
 			.x = (int)lround((snapshot->box.x - origin_x) * scale_x),
@@ -1315,8 +1310,7 @@ static void wsov_render_bar_item_at(struct wlr_render_pass *pass,
 					  .transform = snapshot->transform,
 					  .filter_mode = WLR_SCALE_FILTER_BILINEAR,
 					  .blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED,
-					  .transfer_function =
-						  WLR_COLOR_TRANSFER_FUNCTION_GAMMA22,
+					  .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_GAMMA22,
 					  .color_encoding = WLR_COLOR_ENCODING_NONE,
 					  .color_range = WLR_COLOR_RANGE_NONE,
 				  });
@@ -1327,15 +1321,13 @@ static void wsov_render_cell_layer_range(
 	struct wlr_render_pass *pass, struct wsov_cell *cell,
 	struct wsov_render_resources *resources, uint32_t first_layer,
 	uint32_t end_layer, double buffer_scale) {
-	double scale_x = (double)cell->buffer_w / MANGO_MAX(1, wsov.mon->m.width) *
-					 buffer_scale;
+	double scale_x =
+		(double)cell->buffer_w / MANGO_MAX(1, wsov.mon->m.width) * buffer_scale;
 	double scale_y = (double)cell->buffer_h / MANGO_MAX(1, wsov.mon->m.height) *
 					 buffer_scale;
 	pixman_region32_t clip;
-	int clip_w =
-		MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
-	int clip_h =
-		MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
+	int clip_w = MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
+	int clip_h = MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
 	pixman_region32_init_rect(&clip, 0, 0, clip_w, clip_h);
 
 	for (uint32_t layer = first_layer; layer < end_layer; layer++) {
@@ -1400,8 +1392,8 @@ static void wsov_render_cell_part(struct wsov_cell *cell,
 	float background[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 	struct wsov_render_resources resources = {0};
 	resources.target = buffer;
-	wsov_add_rect(pass, (struct wlr_box){0, 0, buffer_w, buffer_h},
-				  background, WLR_RENDER_BLEND_MODE_NONE);
+	wsov_add_rect(pass, (struct wlr_box){0, 0, buffer_w, buffer_h}, background,
+				  WLR_RENDER_BLEND_MODE_NONE);
 	wsov_render_cell_layer_range(pass, cell, &resources, first_layer, end_layer,
 								 buffer_scale);
 
@@ -1419,8 +1411,8 @@ static void wsov_render_cell_part(struct wsov_cell *cell,
 }
 
 static void wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
-	if (!cell || !cell->contents || !cell->foreground ||
-		cell->buffer_w <= 0 || cell->buffer_h <= 0)
+	if (!cell || !cell->contents || !cell->foreground || cell->buffer_w <= 0 ||
+		cell->buffer_h <= 0)
 		return;
 
 	wsov_render_cell_part(cell, cell->contents, 0, LyrTop, buffer_scale);
@@ -1538,9 +1530,10 @@ static void wsov_update_styles(void) {
 														 : config.bordercolor);
 		}
 		mango_dim_node_set_color(cell->dim, dim_color);
-		mango_dim_node_set_box(cell->dim, cell->box.x + config.workspace_overview_border_width,
-							   cell->box.y + config.workspace_overview_border_width, cell->buffer_w,
-							   cell->buffer_h);
+		mango_dim_node_set_box(
+			cell->dim, cell->box.x + config.workspace_overview_border_width,
+			cell->box.y + config.workspace_overview_border_width,
+			cell->buffer_w, cell->buffer_h);
 		cell->dim_enabled = dim_opacity > 0.0f;
 		mango_dim_node_set_enabled(cell->dim, cell->dim_enabled);
 		wlr_scene_node_raise_to_top(&cell->dim->scene_buffer->node);
@@ -1650,21 +1643,25 @@ static void wsov_layout_cells(void) {
 			.width = cell_w,
 			.height = cell_h,
 		};
-		cell->buffer_w = cell->box.width - 2 * config.workspace_overview_border_width;
-		cell->buffer_h = cell->box.height - 2 * config.workspace_overview_border_width;
+		cell->buffer_w =
+			cell->box.width - 2 * config.workspace_overview_border_width;
+		cell->buffer_h =
+			cell->box.height - 2 * config.workspace_overview_border_width;
 		cell->layout_current = cell->box;
 
 		wlr_scene_node_set_position(&cell->frame->node, cell->box.x,
 									cell->box.y);
 		wlr_scene_rect_set_size(cell->frame, cell->box.width, cell->box.height);
-		wlr_scene_node_set_position(&cell->contents->node,
-									cell->box.x + config.workspace_overview_border_width,
-									cell->box.y + config.workspace_overview_border_width);
+		wlr_scene_node_set_position(
+			&cell->contents->node,
+			cell->box.x + config.workspace_overview_border_width,
+			cell->box.y + config.workspace_overview_border_width);
 		wlr_scene_buffer_set_dest_size(cell->contents, cell->buffer_w,
 									   cell->buffer_h);
-		wlr_scene_node_set_position(&cell->foreground->node,
-									cell->box.x + config.workspace_overview_border_width,
-									cell->box.y + config.workspace_overview_border_width);
+		wlr_scene_node_set_position(
+			&cell->foreground->node,
+			cell->box.x + config.workspace_overview_border_width,
+			cell->box.y + config.workspace_overview_border_width);
 		wlr_scene_buffer_set_dest_size(cell->foreground, cell->buffer_w,
 									   cell->buffer_h);
 	}
@@ -1693,14 +1690,14 @@ static void wsov_update_layout_animation(void) {
 							 (cell->box.x - cell->layout_from.x) * eased),
 			.y = (int)lround(cell->layout_from.y +
 							 (cell->box.y - cell->layout_from.y) * eased),
-			.width = MANGO_MAX(1, (int)lround(
-									  cell->layout_from.width +
-									  (cell->box.width - cell->layout_from.width) *
-										  eased)),
-			.height = MANGO_MAX(1, (int)lround(
-									   cell->layout_from.height +
-									   (cell->box.height - cell->layout_from.height) *
-										   eased)),
+			.width = MANGO_MAX(
+				1, (int)lround(cell->layout_from.width +
+							   (cell->box.width - cell->layout_from.width) *
+								   eased)),
+			.height = MANGO_MAX(
+				1, (int)lround(cell->layout_from.height +
+							   (cell->box.height - cell->layout_from.height) *
+								   eased)),
 		};
 	}
 	if (t >= 1.0)
@@ -1723,20 +1720,16 @@ static void wsov_apply_camera(double progress) {
 	 * previews move and grow in lockstep. */
 	double target_x = target_box.x + config.workspace_overview_border_width;
 	double target_y = target_box.y + config.workspace_overview_border_width;
-	double target_w =
-		MANGO_MAX(1, target_box.width - 2 * config.workspace_overview_border_width);
-	double target_h =
-		MANGO_MAX(1, target_box.height - 2 * config.workspace_overview_border_width);
+	double target_w = MANGO_MAX(
+		1, target_box.width - 2 * config.workspace_overview_border_width);
+	double target_h = MANGO_MAX(
+		1, target_box.height - 2 * config.workspace_overview_border_width);
 	double viewport_x = target_x * (1.0 - progress);
 	double viewport_y = target_y * (1.0 - progress);
-	double viewport_w =
-		target_w + (wsov.mon->m.width - target_w) * progress;
-	double viewport_h =
-		target_h + (wsov.mon->m.height - target_h) * progress;
-	double scale_x =
-		(double)wsov.mon->m.width / MANGO_MAX(1.0, viewport_w);
-	double scale_y =
-		(double)wsov.mon->m.height / MANGO_MAX(1.0, viewport_h);
+	double viewport_w = target_w + (wsov.mon->m.width - target_w) * progress;
+	double viewport_h = target_h + (wsov.mon->m.height - target_h) * progress;
+	double scale_x = (double)wsov.mon->m.width / MANGO_MAX(1.0, viewport_w);
+	double scale_y = (double)wsov.mon->m.height / MANGO_MAX(1.0, viewport_h);
 
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
@@ -1749,18 +1742,24 @@ static void wsov_apply_camera(double progress) {
 		wsov_place_rect_clipped(cell->frame, (int)lround(x), (int)lround(y),
 								MANGO_MAX(1, (int)lround(width)),
 								MANGO_MAX(1, (int)lround(height)), true);
-		int content_x =
-			(int)lround((cell_box.x + config.workspace_overview_border_width - viewport_x) * scale_x);
-		int content_y =
-			(int)lround((cell_box.y + config.workspace_overview_border_width - viewport_y) * scale_y);
-		int content_w =
-			MANGO_MAX(1, (int)lround(
-							  MANGO_MAX(1, cell_box.width - 2 * config.workspace_overview_border_width) *
-							  scale_x));
-		int content_h =
-			MANGO_MAX(1, (int)lround(
-							  MANGO_MAX(1, cell_box.height - 2 * config.workspace_overview_border_width) *
-							  scale_y));
+		int content_x = (int)lround(
+			(cell_box.x + config.workspace_overview_border_width - viewport_x) *
+			scale_x);
+		int content_y = (int)lround(
+			(cell_box.y + config.workspace_overview_border_width - viewport_y) *
+			scale_y);
+		int content_w = MANGO_MAX(
+			1,
+			(int)lround(
+				MANGO_MAX(1, cell_box.width -
+								 2 * config.workspace_overview_border_width) *
+				scale_x));
+		int content_h = MANGO_MAX(
+			1,
+			(int)lround(
+				MANGO_MAX(1, cell_box.height -
+								 2 * config.workspace_overview_border_width) *
+				scale_y));
 		wsov_place_buffer_clipped(cell->contents, NULL, content_x, content_y,
 								  content_w, content_h);
 		wsov_place_buffer_clipped(cell->foreground, NULL, content_x, content_y,
@@ -1778,7 +1777,8 @@ static void wsov_apply_camera(double progress) {
 		int frame_w = MANGO_MAX(1, (int)lround(width));
 		int frame_h = MANGO_MAX(1, (int)lround(height));
 		int border_w =
-			MANGO_MAX(1, (int)lround(config.workspace_overview_border_width * fmin(scale_x, scale_y)));
+			MANGO_MAX(1, (int)lround(config.workspace_overview_border_width *
+									 fmin(scale_x, scale_y)));
 		int frame_x = (int)lround(x);
 		int frame_y = (int)lround(y);
 		wsov_place_rect_clipped(cell->border[0], frame_x, frame_y, frame_w,
@@ -1788,25 +1788,23 @@ static void wsov_apply_camera(double progress) {
 								cell->borders_enabled);
 		wsov_place_rect_clipped(cell->border[2], frame_x, frame_y, border_w,
 								frame_h, cell->borders_enabled);
-		wsov_place_rect_clipped(cell->border[3],
-								frame_x + frame_w - border_w, frame_y, border_w,
-								frame_h, cell->borders_enabled);
+		wsov_place_rect_clipped(cell->border[3], frame_x + frame_w - border_w,
+								frame_y, border_w, frame_h,
+								cell->borders_enabled);
 		for (int j = 0; j < cell->layer_count; j++) {
 			struct wsov_layer_preview *preview = &cell->layers[j];
 			double local_scale_x =
 				(double)content_w / MANGO_MAX(1, wsov.mon->m.width);
 			double local_scale_y =
 				(double)content_h / MANGO_MAX(1, wsov.mon->m.height);
-			int px = (int)lround(content_x +
-								preview->workspace_x * local_scale_x);
-			int py = (int)lround(content_y +
-								preview->workspace_y * local_scale_y);
+			int px =
+				(int)lround(content_x + preview->workspace_x * local_scale_x);
+			int py =
+				(int)lround(content_y + preview->workspace_y * local_scale_y);
 			wsov_place_buffer_clipped(
 				preview->node, &preview->src_box, px, py,
-				MANGO_MAX(
-					1, (int)lround(preview->width * local_scale_x)),
-				MANGO_MAX(
-					1, (int)lround(preview->height * local_scale_y)));
+				MANGO_MAX(1, (int)lround(preview->width * local_scale_x)),
+				MANGO_MAX(1, (int)lround(preview->height * local_scale_y)));
 		}
 	}
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
@@ -2009,19 +2007,18 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 	int window_height = MANGO_MAX(
 		1, (int)lround((double)width * item->box.height / item->box.width));
 	double output_scale = wsov_output_scale();
-	double render_scale = item->render_scale *
-						  ((double)width / MANGO_MAX(1, item->box.width));
+	double render_scale =
+		item->render_scale * ((double)width / MANGO_MAX(1, item->box.width));
 	struct wsov_cell drag_bars = {0};
 	int bar_height = 0;
 	if (wsov_capture_drag_group_bars(item->client, &drag_bars))
-		bar_height = MANGO_MAX(
-			1, (int)lround(config.group_bar_height * render_scale));
+		bar_height =
+			MANGO_MAX(1, (int)lround(config.group_bar_height * render_scale));
 	int height = bar_height + window_height;
 	int buffer_width = MANGO_MAX(1, (int)lround(width * output_scale));
 	int buffer_height = MANGO_MAX(1, (int)lround(height * output_scale));
 
-	struct wlr_buffer *buffer =
-		wsov_create_buffer(buffer_width, buffer_height);
+	struct wlr_buffer *buffer = wsov_create_buffer(buffer_width, buffer_height);
 	if (!buffer) {
 		wsov_clear_cell_bars(&drag_bars);
 		free(drag_bars.bar_items);
@@ -2039,14 +2036,14 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 	float background[4] = {config.rootcolor[0], config.rootcolor[1],
 						   config.rootcolor[2], 1.0f};
 	wsov_add_rect(pass, (struct wlr_box){0, 0, buffer_width, buffer_height},
-				  background,
-				  WLR_RENDER_BLEND_MODE_NONE);
+				  background, WLR_RENDER_BLEND_MODE_NONE);
 
 	struct wsov_cell drag_cell = {
 		.box = {.x = -config.workspace_overview_border_width,
 				.y = -config.workspace_overview_border_width,
 				.width = width + 2 * config.workspace_overview_border_width,
-				.height = window_height + 2 * config.workspace_overview_border_width},
+				.height =
+					window_height + 2 * config.workspace_overview_border_width},
 		.buffer_w = buffer_width,
 		.buffer_h = buffer_height,
 	};
@@ -2066,13 +2063,11 @@ static bool wsov_create_drag_buffer(struct wsov_item *item) {
 	if (bar_height > 0) {
 		pixman_region32_t clip;
 		int scaled_bar_height = (int)lround(bar_height * output_scale);
-		pixman_region32_init_rect(&clip, 0, 0, buffer_width,
-								  scaled_bar_height);
+		pixman_region32_init_rect(&clip, 0, 0, buffer_width, scaled_bar_height);
 		double scale_x =
 			(double)buffer_width / MANGO_MAX(1, item->client->geom.width);
 		double scale_y =
-			(double)scaled_bar_height /
-			MANGO_MAX(1, config.group_bar_height);
+			(double)scaled_bar_height / MANGO_MAX(1, config.group_bar_height);
 		int origin_y = item->client->geom.y - config.group_bar_height;
 		for (int i = 0; i < drag_bars.bar_item_count; i++) {
 			wsov_render_bar_item_at(pass, &drag_bars.bar_items[i], &resources,
@@ -2196,9 +2191,8 @@ static void wsov_select_direction(int dir_x, int dir_y) {
 		if (!match_direction)
 			continue;
 
-		bool orth_overlap =
-			dir_x ? (bottom >= current_t && top <= current_b)
-				  : (right >= current_l && left <= current_r);
+		bool orth_overlap = dir_x ? (bottom >= current_t && top <= current_b)
+								  : (right >= current_l && left <= current_r);
 		if (config.focusdir_only_zone_overlap && !orth_overlap)
 			continue;
 
@@ -2207,14 +2201,13 @@ static void wsov_select_direction(int dir_x, int dir_y) {
 			penalty = 10000000000LL;
 			main_distance = -main_distance;
 		}
-		int64_t distance =
-			penalty + main_distance * main_distance +
-			orth_distance * orth_distance;
-		int64_t center_distance =
-			dir_y ? llabs((int64_t)center_x - current_cx)
-				  : llabs((int64_t)center_y - current_cy);
+		int64_t distance = penalty + main_distance * main_distance +
+						   orth_distance * orth_distance;
+		int64_t center_distance = dir_y ? llabs((int64_t)center_x - current_cx)
+										: llabs((int64_t)center_y - current_cy);
 		if (distance < best_distance ||
-			(distance == best_distance && center_distance < best_center_distance)) {
+			(distance == best_distance &&
+			 center_distance < best_center_distance)) {
 			best_distance = distance;
 			best_center_distance = center_distance;
 			target = cell;
@@ -2318,12 +2311,11 @@ static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	wsov.camera_tag = target ? focus_tag : previous_target;
 	target = wsov_cell_for_tag(wsov.camera_tag);
 	if (target) {
-		double scale = wsov.mon->wlr_output
-						   ? fmax(1.0, wsov.mon->wlr_output->scale)
-						   : 1.0;
-		wsov_render_cell_at_resolution(
-			target, (int)lround(wsov.mon->m.width * scale),
-			(int)lround(wsov.mon->m.height * scale));
+		double scale =
+			wsov.mon->wlr_output ? fmax(1.0, wsov.mon->wlr_output->scale) : 1.0;
+		wsov_render_cell_at_resolution(target,
+									   (int)lround(wsov.mon->m.width * scale),
+									   (int)lround(wsov.mon->m.height * scale));
 	}
 	wsov_apply_camera(wsov.progress);
 	wsov_start_animation(true, 0.0);
@@ -2490,8 +2482,7 @@ void workspace_overview_handle_motion(double x, double y) {
 	double dx = x - wsov.drag_start_x;
 	double dy = y - wsov.drag_start_y;
 	int32_t drag_threshold = config.workspace_overview_drag_threshold;
-	if (!wsov.moved &&
-		dx * dx + dy * dy >= drag_threshold * drag_threshold) {
+	if (!wsov.moved && dx * dx + dy * dy >= drag_threshold * drag_threshold) {
 		wsov.moved = true;
 		if (!server.cursor_hidden)
 			wlr_cursor_set_xcursor(server.cursor, server.cursor_manager,
@@ -2522,12 +2513,12 @@ void workspace_overview_handle_motion(double x, double y) {
 		return;
 
 	if (wsov.drag_buffer) {
-		wsov_place_buffer_clipped(
-			wsov.drag_buffer, NULL,
-			(int)lround(x - wsov.mon->m.x) - wsov.drag_grab_x,
-			(int)lround(y - wsov.mon->m.y) - wsov.drag_grab_y -
-				wsov.drag_bar_height,
-			wsov.drag_width, wsov.drag_height);
+		wsov_place_buffer_clipped(wsov.drag_buffer, NULL,
+								  (int)lround(x - wsov.mon->m.x) -
+									  wsov.drag_grab_x,
+								  (int)lround(y - wsov.mon->m.y) -
+									  wsov.drag_grab_y - wsov.drag_bar_height,
+								  wsov.drag_width, wsov.drag_height);
 	}
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
@@ -2574,12 +2565,16 @@ static void wsov_place_floating(Client *c, struct wsov_cell *cell, double x,
 	struct wlr_box cell_box = wsov_cell_layout_box(cell);
 	double scale_x =
 		(double)wsov.mon->m.width /
-		MANGO_MAX(1, cell_box.width - 2 * config.workspace_overview_border_width);
+		MANGO_MAX(1,
+				  cell_box.width - 2 * config.workspace_overview_border_width);
 	double scale_y =
 		(double)wsov.mon->m.height /
-		MANGO_MAX(1, cell_box.height - 2 * config.workspace_overview_border_width);
-	double content_x = x - wsov.mon->m.x - cell_box.x - config.workspace_overview_border_width;
-	double content_y = y - wsov.mon->m.y - cell_box.y - config.workspace_overview_border_width;
+		MANGO_MAX(1,
+				  cell_box.height - 2 * config.workspace_overview_border_width);
+	double content_x =
+		x - wsov.mon->m.x - cell_box.x - config.workspace_overview_border_width;
+	double content_y =
+		y - wsov.mon->m.y - cell_box.y - config.workspace_overview_border_width;
 	int nx = wsov.mon->w.x +
 			 (int)lround(content_x * scale_x - wsov.drag_grab_x * scale_x);
 	int ny = wsov.mon->w.y +
@@ -2806,9 +2801,8 @@ void workspace_overview_client_unmapped(Client *c, bool activate_target) {
 	wsov.camera_tag = wsov.target_tag;
 	Client *previous = wsov.mon->sel;
 	uint32_t target_bit = wsov_tag_bit(wsov.target_tag);
-	bool switch_workspace =
-		activate_target && target_bit &&
-		!(wsov.mon->tagset[wsov.mon->seltags] & target_bit);
+	bool switch_workspace = activate_target && target_bit &&
+							!(wsov.mon->tagset[wsov.mon->seltags] & target_bit);
 	if (switch_workspace) {
 		client_view_on_monitor(&(Arg){.ui = target_bit}, false, wsov.mon, true);
 		wsov_capture_workspace_layouts();
