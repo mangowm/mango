@@ -693,6 +693,30 @@ int32_t increase_outer_vertical_gap(const Arg *arg) {
 	return 0;
 }
 
+int32_t change_opacity(const Arg *arg) {
+	if (!server.selected_monitor)
+		return 0;
+	Client *sel = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
+	if (sel) {
+		sel->focused_opacity = CLAMP_FLOAT(sel->focused_opacity + arg->f, 0.0f, 1.0f);
+		sel->unfocused_opacity = CLAMP_FLOAT(sel->unfocused_opacity + arg->f2, 0.0f, 1.0f);
+		client_set_opacity(sel, sel->focused_opacity);
+	}
+	return 0;
+}
+
+int32_t set_opacity(const Arg *arg) {
+	if (!server.selected_monitor)
+		return 0;
+	Client *sel = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
+	if (sel) {
+		sel->focused_opacity = CLAMP_FLOAT(arg->f, 0.0f, 1.0f);
+		sel->unfocused_opacity = CLAMP_FLOAT(arg->f2, 0.0f, 1.0f);
+		client_set_opacity(sel, sel->focused_opacity);
+	}
+	return 0;
+}
+
 int32_t set_master_factor(const Arg *arg) {
 	float f;
 

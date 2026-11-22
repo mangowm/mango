@@ -134,6 +134,8 @@ int32_t dwindle_split_horizontal(const Arg *arg);
 int32_t dwindle_split_vertical(const Arg *arg);
 int32_t dwindle_toggle_current_split(const Arg *arg);
 int32_t focus_by_id(const Arg *arg);
+int32_t change_opacity(const Arg *arg);
+int32_t set_opacity(const Arg *arg);
 
 int32_t toggle_special_tag(const Arg *arg);
 int32_t tag_special_tag(const Arg *arg);

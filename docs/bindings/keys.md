@@ -118,6 +118,8 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `toggle_special_tag` | - | Toggle special workspace overlay (tiling scratchpad). |
 | `tag_special_tag` | - | Move focused window to/from the special workspace overlay. |
 | `tag_special_silent` | - | Silently move focused window to/from the special workspace overlay. |
+| `change_opacity` | `+0.05/-0.05,+0.05/-0.05` | Increase/Decrease the focused window's opacity. Takes two floats: first for focused opacity, second for unfocused opacity. |
+| `set_opacity` | `0.8,0.2` | Set the focused window's opacity. Takes two floats: first for focused opacity, second for unfocused opacity. |
 
 ### Focus & Movement
 
