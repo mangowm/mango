@@ -52,6 +52,7 @@ void tag_gather_apply(Monitor *m);
 void tag_gather_move_pertag(Monitor *m, uint32_t dst, uint32_t src);
 
 void arrange(Monitor *m, bool want_animation, bool from_view);
+void arrange_defer_focus(Monitor *m, bool want_animation, bool from_view);
 #endif
 
 // empty special view: keep it when entered via a view switch, exit otherwise.

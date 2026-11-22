@@ -50,6 +50,7 @@
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/util/box.h>
 #include <wlr/util/transform.h>
 #ifdef XWAYLAND
 #include <X11/Xlib.h>
@@ -1276,6 +1277,78 @@ Client *client_focus_top(Monitor *m) {
 			return c;
 	}
 	return NULL;
+}
+
+static bool client_should_focus_under_cursor_on_leave(Monitor *m,
+													  bool was_focused,
+													  bool was_tab,
+													  bool has_replacement) {
+	if (!m || m != server.selected_monitor || !was_focused ||
+		!config.sloppyfocus || has_replacement)
+		return false;
+
+	/*
+	 * Viewport-anchored layouts (scroller, overcircle) and workspace overview
+	 * depend on m->sel during arrange(), and stacked tab modes (monocle / deck
+	 * tab mode) place sibling tabs on the same box where MRU is expected. Keep
+	 * focus-before-arrange behavior for those modes.
+	 */
+	if (is_scroller_layout(m) || is_overcircle_mode(m) || m->is_ws_overview ||
+		workspace_overview_is_active_on(m) ||
+		workspace_overview_is_closing_on(m))
+		return false;
+	if (was_tab && tab_layout_active(m))
+		return false;
+
+	if (!server.cursor || server.session_locked || server.exclusive_focus ||
+		server.start_drag_window || server.seat->drag)
+		return false;
+
+	return monitor_at_point(server.cursor->x, server.cursor->y) == m;
+}
+
+/*
+ * Return the topmost visible client on monitor m whose target layout geometry
+ * (c->geom) contains the current pointer position. Using c->geom rather than
+ * scene hit-testing matches the post-arrange layout immediately even while
+ * move/resize animations are still interpolating scene nodes.
+ * Layer order matches client_target_layer(), and iterating server.focus_stack
+ * preserves Z-order within the same layer.
+ */
+static Client *client_under_cursor_on_monitor(Monitor *m) {
+	if (!m || !config.sloppyfocus || !server.cursor || server.session_locked ||
+		server.start_drag_window || server.seat->drag ||
+		is_overcircle_mode(m) || m->is_ws_overview ||
+		workspace_overview_is_active_on(m) ||
+		workspace_overview_is_closing_on(m))
+		return NULL;
+
+	if (monitor_at_point(server.cursor->x, server.cursor->y) != m)
+		return NULL;
+
+	Client *c = NULL;
+	Client *best = NULL;
+	int32_t best_layer = -1;
+
+	wl_list_for_each(c, &server.focus_stack, flink) {
+		if (c->iskilling || c->isunglobal || c->no_focus || c->is_tab_hidden ||
+			c->is_clip_to_hide || client_is_parked(c))
+			continue;
+		if (client_is_unmanaged(c) || !VISIBLEON(c, m) ||
+			!client_surface(c)->mapped)
+			continue;
+		if (!wlr_box_contains_point(&c->geom, server.cursor->x,
+									server.cursor->y))
+			continue;
+
+		int32_t layer = (int32_t)client_target_layer(c);
+		if (layer > best_layer) {
+			best = c;
+			best_layer = layer;
+		}
+	}
+
+	return best;
 }
 
 Client *get_next_stack_client(Client *c, bool reverse) {
@@ -2556,7 +2629,13 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	 */
 	Client *c = wl_container_of(listener, c, unmap);
 	Monitor *m = NULL;
+	Monitor *oldmon = c->mon;
 	Client *nextfocus = NULL;
+	bool was_tab = (c->tab_prev || c->tab_next);
+	bool was_focused =
+		(oldmon && oldmon == server.selected_monitor &&
+		 (c == oldmon->sel ||
+		  client_surface(c) == server.seat->keyboard_state.focused_surface));
 	/* Capture this before removing c: the generic unmap path keeps using the
 	 * now-empty active tag and can otherwise clear the overview selection. */
 	bool wsov_active_workspace_emptied =
@@ -2624,7 +2703,13 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 		}
 	}
 
-	if (c->mon && c->mon == server.selected_monitor) {
+	bool defer_focus = !client_is_unmanaged(c) &&
+					   !(next_stack_client && next_stack_client != c) &&
+					   !(prev_stack_client && prev_stack_client != c) &&
+					   client_should_focus_under_cursor_on_leave(
+						   oldmon, was_focused, was_tab, replaced);
+
+	if (!defer_focus && c->mon && c->mon == server.selected_monitor) {
 		if (next_stack_client && next_stack_client != c && !c->swallowing) {
 			nextfocus = next_stack_client;
 		} else if (prev_stack_client && prev_stack_client != c &&
@@ -2672,6 +2757,35 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 			server.exclusive_focus = NULL;
 		if (client_surface(c) == server.seat->keyboard_state.focused_surface)
 			client_focus(client_focus_top(server.selected_monitor), 1);
+	} else if (defer_focus) {
+		client_group_detach(c);
+
+		if (!wl_list_empty(&c->link))
+			wl_list_remove(&c->link);
+		if (!wl_list_empty(&c->flink))
+			wl_list_remove(&c->flink);
+
+		/*
+		 * Arrange without speculatively selecting the MRU client so no
+		 * unrelated window receives focus colors or IPC status before we pick
+		 * the client now occupying the space under the pointer.
+		 */
+		c->mon = NULL;
+		arrange_defer_focus(oldmon, false, false);
+
+		nextfocus = client_under_cursor_on_monitor(oldmon);
+		if (!nextfocus || !VISIBLEON(nextfocus, oldmon)) {
+			nextfocus = client_focus_top(oldmon);
+		}
+
+		if (nextfocus || !client_is_x11_popup(c)) {
+			client_focus(nextfocus, 1);
+		}
+
+		if (!nextfocus && oldmon->isoverview) {
+			Arg arg = {0};
+			toggle_overview(&arg);
+		}
 	} else {
 
 		client_group_detach(c);
@@ -3656,19 +3770,43 @@ void set_minimized(Client *c) {
 	if (!c || !c->mon || c == server.grab_client)
 		return;
 
+	Monitor *m = c->mon;
+	bool was_tab = (c->tab_prev || c->tab_next);
+	bool was_focused =
+		(m == server.selected_monitor &&
+		 (c == m->sel ||
+		  client_surface(c) == server.seat->keyboard_state.focused_surface));
+	bool defer_focus = client_should_focus_under_cursor_on_leave(
+		m, was_focused, was_tab, false);
+
 	if (!c->is_in_scratchpad)
 		c->isfloating_before_scratchpad = c->isfloating;
 
 	c->isglobal = 0;
 
-	c->oldtags = c->mon->tagset[c->mon->seltags];
+	c->oldtags = m->tagset[m->seltags];
 	c->tags = 0;
 	client_pending_minimized_state(c, 1);
 	c->is_in_scratchpad = 1;
 	client_reparent_group(c);
 
-	client_focus(client_focus_top(server.selected_monitor), 1);
-	arrange(c->mon, false, false);
+	if (defer_focus) {
+		if (c == m->sel) {
+			c->isfocusing = false;
+			m->sel = NULL;
+		}
+		arrange_defer_focus(m, false, false);
+
+		Client *nextfocus = client_under_cursor_on_monitor(m);
+		if (!nextfocus || !VISIBLEON(nextfocus, m))
+			nextfocus = client_focus_top(server.selected_monitor);
+		client_focus(nextfocus, 1);
+		if (!nextfocus && !server.start_drag_window)
+			pointer_process_motion(0, NULL, 0, 0, 0, 0);
+	} else {
+		client_focus(client_focus_top(server.selected_monitor), 1);
+		arrange(m, false, false);
+	}
 
 	if (c->foreign_toplevel)
 		wlr_foreign_toplevel_handle_v1_set_activated(c->foreign_toplevel,

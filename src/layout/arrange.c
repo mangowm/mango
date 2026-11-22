@@ -1415,7 +1415,8 @@ bool special_handle_empty_view(Monitor *m, bool from_view) {
 	}
 	return false;
 }
-void arrange(Monitor *m, bool want_animation, bool from_view) {
+static void arrange_internal(Monitor *m, bool want_animation, bool from_view,
+							 bool defer_focus) {
 
 	if (!m || m->iscleanuping)
 		return;
@@ -1423,7 +1424,7 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	if (!m->wlr_output->enabled)
 		return;
 
-	if (!m->sel) {
+	if (!defer_focus && !m->sel) {
 		m->sel = client_focus_top(m);
 	}
 
@@ -1470,10 +1471,20 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	}
 
 	if (!server.start_drag_window) {
-		pointer_process_motion(0, NULL, 0, 0, 0, 0);
+		if (!defer_focus)
+			pointer_process_motion(0, NULL, 0, 0, 0, 0);
 		check_idle_inhibitor(NULL);
 	}
 
-	printstatus(IPC_WATCH_ARRANGGE);
+	if (!defer_focus)
+		printstatus(IPC_WATCH_ARRANGGE);
 	workspace_overview_layout_changed(m);
+}
+
+void arrange(Monitor *m, bool want_animation, bool from_view) {
+	arrange_internal(m, want_animation, from_view, false);
+}
+
+void arrange_defer_focus(Monitor *m, bool want_animation, bool from_view) {
+	arrange_internal(m, want_animation, from_view, true);
 }
