@@ -4010,6 +4010,9 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->grid_row_idx = w->grid_row_idx;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
+	/* keep overlay when swallowing a terminal; skip when restoring it */
+	if (is_swallow && c->swallowing == w && w->isoverlay)
+		c->isoverlay = 1;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;
