@@ -34,7 +34,7 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `focus_cross_monitor` | `0` | Allow directional focus to cross monitor boundaries. |
+| `focus_cross_monitor` | `0` | Allow directional focus to cross monitor boundaries. When disabled, left/right directional focus cycles the focus stack in the monocle layout; when enabled, it performs regular directional focus across monitors. |
 | `focus_direction_only_zone_overlap` | `1` | When enabled, directional focus only selects windows that overlap the current window on the perpendicular axis (y for left/right, x for up/down); returns nothing if none qualify. |
 | `exchange_cross_monitor` | `0` | Allow the `exchange_client` and `move_client` dispatchers to reach across monitor boundaries. With `exchange_client` the two windows swap monitors; with `move_client` the window moves onto the monitor holding the neighbor (or lying in the move direction when there is none) and is inserted in front of or behind that neighbor instead of swapping with it. While disabled, both dispatchers keep the windows on the current monitor. |
 | `focus_cross_tag` | `0` | Allow directional focus to cross into other tags. |
@@ -44,7 +44,6 @@ description: Advanced settings for XWayland, focus behavior, and system integrat
 | `single_scratchpad` | `1` | Only allow one scratchpad (named or standard) to be visible at a time. |
 | `tag_num` | `9` | Number of tags/workspaces (1–31). On config reload, clients on tags beyond this count are moved to the last tag. |
 | `tag_gather` | `0` | When `1`, occupied tags are compacted to consecutive tags starting at 1, eliminating gaps. For example, with windows on tags 1, 3 and 9, they move to 1, 2 and 3, and the current view follows. |
-
 ## Window Behavior
 
 | Setting | Default | Description |

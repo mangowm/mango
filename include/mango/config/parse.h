@@ -73,6 +73,52 @@ enum render_bit_depth {
 	MANGO_RENDER_BIT_DEPTH_10,
 };
 
+enum animation_curve_type {
+	ANIMATION_CURVE_BEZIER,
+	ANIMATION_CURVE_NAMED,
+};
+
+enum animation_easing {
+	ANIMATION_EASING_LINEAR,
+	ANIMATION_EASING_EASE_IN_SINE,
+	ANIMATION_EASING_EASE_OUT_SINE,
+	ANIMATION_EASING_EASE_IN_OUT_SINE,
+	ANIMATION_EASING_EASE_IN_QUAD,
+	ANIMATION_EASING_EASE_OUT_QUAD,
+	ANIMATION_EASING_EASE_IN_OUT_QUAD,
+	ANIMATION_EASING_EASE_IN_CUBIC,
+	ANIMATION_EASING_EASE_OUT_CUBIC,
+	ANIMATION_EASING_EASE_IN_OUT_CUBIC,
+	ANIMATION_EASING_EASE_IN_QUART,
+	ANIMATION_EASING_EASE_OUT_QUART,
+	ANIMATION_EASING_EASE_IN_OUT_QUART,
+	ANIMATION_EASING_EASE_IN_QUINT,
+	ANIMATION_EASING_EASE_OUT_QUINT,
+	ANIMATION_EASING_EASE_IN_OUT_QUINT,
+	ANIMATION_EASING_EASE_IN_EXPO,
+	ANIMATION_EASING_EASE_OUT_EXPO,
+	ANIMATION_EASING_EASE_IN_OUT_EXPO,
+	ANIMATION_EASING_EASE_IN_CIRC,
+	ANIMATION_EASING_EASE_OUT_CIRC,
+	ANIMATION_EASING_EASE_IN_OUT_CIRC,
+	ANIMATION_EASING_EASE_IN_BACK,
+	ANIMATION_EASING_EASE_OUT_BACK,
+	ANIMATION_EASING_EASE_IN_OUT_BACK,
+	ANIMATION_EASING_EASE_IN_ELASTIC,
+	ANIMATION_EASING_EASE_OUT_ELASTIC,
+	ANIMATION_EASING_EASE_IN_OUT_ELASTIC,
+	ANIMATION_EASING_EASE_IN_BOUNCE,
+	ANIMATION_EASING_EASE_OUT_BOUNCE,
+	ANIMATION_EASING_EASE_IN_OUT_BOUNCE,
+	ANIMATION_EASING_SNAPPY,
+};
+
+typedef struct AnimationCurve {
+	enum animation_curve_type type;
+	enum animation_easing easing;
+	double bezier[4];
+} AnimationCurve;
+
 /* Functions */
 typedef int32_t (*FuncType)(const Arg *);
 
@@ -113,6 +159,7 @@ typedef struct {
 	int32_t is_once_applied;
 	uint32_t tags;
 	int32_t isfloating;
+	int32_t stayfocused;
 	int32_t isfullscreen;
 	int32_t isfakefullscreen;
 	float scroller_proportion;
@@ -330,13 +377,19 @@ typedef struct {
 	uint32_t animation_duration_tag;
 	uint32_t animation_duration_close;
 	uint32_t animation_duration_focus;
-	double animation_curve_move[4];
-	double animation_curve_open[4];
-	double animation_curve_tag[4];
-	double animation_curve_close[4];
-	double animation_curve_focus[4];
-	double animation_curve_opafadein[4];
-	double animation_curve_opafadeout[4];
+	uint32_t animation_duration_wsov_open;
+	uint32_t animation_duration_wsov_close;
+	uint32_t animation_duration_wsov_move;
+	AnimationCurve animation_curve_move;
+	AnimationCurve animation_curve_open;
+	AnimationCurve animation_curve_tag;
+	AnimationCurve animation_curve_close;
+	AnimationCurve animation_curve_focus;
+	AnimationCurve animation_curve_opafadein;
+	AnimationCurve animation_curve_opafadeout;
+	AnimationCurve animation_curve_wsov_open;
+	AnimationCurve animation_curve_wsov_close;
+	AnimationCurve animation_curve_wsov_move;
 
 	int32_t scroller_structs;
 	float scroller_default_proportion;
@@ -402,6 +455,14 @@ typedef struct {
 
 	int32_t overviewgappi;
 	int32_t overviewgappo;
+	float workspace_overview_focused_dim_opacity;
+	float workspace_overview_unfocused_dim_opacity;
+	int32_t workspace_overview_border_width;
+	int32_t workspace_overview_gap;
+	int32_t workspace_overview_drag_threshold;
+	float workspace_overview_scroll_ratio;
+	WorkspaceOverviewScrollDirection workspace_overview_scroll_direction;
+	float workspace_overview_drag_scroll_speed;
 	float overcircle_center_ratio;
 	char *jump_labels;
 	uint32_t cursor_hide_timeout;
@@ -678,7 +739,6 @@ bool check_gesture_binding_conflicts(Config *config);
 
 void free_circle_layout(Config *config);
 
-void free_baked_points(void);
 void free_config(void);
 
 void update_global_var(void);

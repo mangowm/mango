@@ -38,6 +38,7 @@ void clear_scroller_state(struct TagScrollerState *st);
 void cleanup_monitor_scroller(Monitor *m);
 /* Syncs a tag state back to the global fields of all clients. */
 void sync_scroller_state_to_clients(Monitor *m, uint32_t tag);
+void scroller_sync_current(Monitor *m);
 void vertical_scroll_adjust_fullandmax(Client *c, struct wlr_box *target_geom);
 void vertical_check_scroller_root_inside_mon(Client *c,
 											 struct wlr_box *geometry);
@@ -50,7 +51,9 @@ void scroller_arrange_stack_vertical_node(struct ScrollerStackNode *head,
 										  int32_t gappih);
 void scroller(Monitor *m);
 void vertical_scroller(Monitor *m);
-void scroller_remove_client(Client *c);
+bool scroller_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c);
+bool scroller_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+									Client *new);
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before);
 void scroller_drop_tile(Client *c, Client *closest, int vertical);

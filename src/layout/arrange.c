@@ -7,11 +7,13 @@
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/layout/vertical.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <assert.h>
 #include <wlr/types/wlr_cursor.h>
 
@@ -312,11 +314,8 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 		gc->master_inner_per = new_master_inner_per;
 		gc->stack_inner_per = new_stack_inner_per;
 
-		/* Broadcasts master_mfact_per to all tiled windows. */
-		wl_list_for_each(tc, &server.clients, link) {
-			if (VISIBLEON(tc, gc->mon) && ISTILED(tc))
-				tc->master_mfact_per = new_master_mfact_per;
-		}
+		tag_ratio_state_set_master_mfact(gc->mon, get_mon_curtag(gc->mon),
+										 new_master_mfact_per);
 
 		persist_tile_size_weights(gc->mon);
 
@@ -485,11 +484,8 @@ void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
 		gc->master_inner_per = new_master_inner_per;
 		gc->stack_inner_per = new_stack_inner_per;
 
-		/* Broadcasts master_mfact_per. */
-		wl_list_for_each(tc, &server.clients, link) {
-			if (VISIBLEON(tc, gc->mon) && ISTILED(tc))
-				tc->master_mfact_per = new_master_mfact_per;
-		}
+		tag_ratio_state_set_master_mfact(gc->mon, get_mon_curtag(gc->mon),
+										 new_master_mfact_per);
 
 		persist_tile_size_weights(gc->mon);
 
@@ -1074,6 +1070,8 @@ void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
 	bool centered = m->pertag->ltidxs[tag]->id == CENTER_TILE;
 
 	wl_list_for_each(c, &server.clients, link) {
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 
@@ -1134,18 +1132,18 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 	m->hide_clients = 0;
 
 	uint32_t tag = get_mon_curtag(m);
-	struct TagScrollerState *st = m->pertag->scroller_state[tag];
-
 	const Layout *cur_layout = m->pertag->ltidxs[tag];
+	if (layout_uses_tag_ratios(cur_layout))
+		tag_ratio_state_begin(m, tag, from_view);
+
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
 	if (cur_layout->id == SCROLLER || cur_layout->id == VERTICAL_SCROLLER) {
 		update_scroller_state(m);
 	}
 
 	wl_list_for_each(c, &server.clients, link) {
-		if (from_view && (c->isglobal || c->isunglobal)) {
-			set_size_per(m, c, true);
-		}
-
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
 		if (c->group_bar && c->group_bar->scene->node.enabled) {
 			client_check_tab_node_visible(c);
 		}
@@ -1163,10 +1161,6 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		}
 
 		if (VISIBLEON(c, m)) {
-			if (from_view && !client_only_in_one_tag(c)) {
-				set_size_per(m, c, true);
-			}
-
 			if (!c->isunglobal)
 				m->visible_clients++;
 
@@ -1193,6 +1187,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->iskilling)
+			continue;
+		if (m->is_ws_overview && c->wsov_hidden)
 			continue;
 
 		if (c->mon == m) {
@@ -1274,6 +1270,8 @@ void tag_gather_reset_slot(Monitor *m, uint32_t tag) {
 	m->pertag->open_as_floating[tag] = 0;
 	m->pertag->dwindle_root[tag] = NULL;
 	m->pertag->scroller_state[tag] = NULL;
+	m->pertag->tab_state[tag] = NULL;
+	tag_ratio_state_reset(m, tag);
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 		const ConfigTagRule *tr = &config.tag_rules[i];
@@ -1302,6 +1300,8 @@ void tag_gather_move_pertag(Monitor *m, uint32_t dst, uint32_t src) {
 	m->pertag->config_ltidxs[dst] = m->pertag->config_ltidxs[src];
 	m->pertag->ltidxs[dst] = m->pertag->ltidxs[src];
 	m->pertag->scroller_state[dst] = m->pertag->scroller_state[src];
+	m->pertag->tab_state[dst] = m->pertag->tab_state[src];
+	tag_ratio_state_move(m, dst, src);
 	tag_gather_reset_slot(m, src);
 }
 
@@ -1450,7 +1450,11 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
 	} else {
-		m->pertag->ltidxs[get_mon_curtag(m)]->arrange(m);
+		uint32_t tag = get_mon_curtag(m);
+		const Layout *layout = m->pertag->ltidxs[tag];
+		layout->arrange(m);
+		if (layout_uses_tag_ratios(layout))
+			sync_tag_ratio_state_from_clients(m, tag);
 	}
 
 	if (is_tag0) {
@@ -1471,4 +1475,5 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	}
 
 	printstatus(IPC_WATCH_ARRANGGE);
+	workspace_overview_layout_changed(m);
 }

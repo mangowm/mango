@@ -36,6 +36,10 @@ void client_draw_split_border(Client *c, bool hit_no_border,
 void client_draw_border(Client *c, struct ivec2 offsets);
 struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box,
 						  struct ivec2 offsets);
+int32_t client_drop_zone(const Layout *layout, bool ismaster,
+						 int32_t visible_tiling_clients, double rel_x,
+						 double rel_y, int32_t width, int32_t height,
+						 struct wlr_box *zone);
 void client_set_drop_area(Client *c);
 
 /* ---------- central rendering entry point ---------- */
@@ -57,6 +61,7 @@ typedef struct ResizeOpts {
 	bool interact; // Interactive resize (window resized by mouse drag).
 	bool skip_ov_enter_anim; // Pre-arrangement stage: skip the overview enter
 							 // zoom.
+	bool skip_animation;  // Commit the final geometry without a move animation.
 	bool force_configure; // Must be sent even if the box did not change (client
 						  // ConfigureRequest).
 	uint32_t drag_edge;

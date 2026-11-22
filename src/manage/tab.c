@@ -8,12 +8,45 @@
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <stddef.h>
+#include <stdlib.h>
 #include <wlr/types/wlr_scene.h>
 
-static int32_t tab_member_count = 0;
+struct TagTabNode {
+	struct TagTabNode *prev;
+	struct TagTabNode *next;
+	struct TagTabNode *all_next;
+	Client *client;
+};
+
+struct TagTabState {
+	struct TagTabNode *head;
+	struct TagTabNode *tail;
+	struct TagTabNode *all_first;
+	uint32_t focus_id;
+	int32_t count;
+};
 
 static Client *tab_head(Client *c) {
 	return client_chain_head(c, CLIENT_TAB_PREV_OFF);
+}
+
+Client *tab_get_adjacent_member(Client *c, bool next) {
+	if (!c || !(c->tab_prev || c->tab_next))
+		return NULL;
+
+	Client *target = next ? c->tab_next : c->tab_prev;
+	if (target)
+		return target;
+
+	target = c;
+	if (next) {
+		while (target->tab_prev)
+			target = target->tab_prev;
+	} else {
+		while (target->tab_next)
+			target = target->tab_next;
+	}
+	return target != c ? target : NULL;
 }
 
 static bool tab_is_member(const Client *c) {
@@ -26,32 +59,10 @@ static void tab_bar_set_enabled(Client *c, bool on) {
 	wlr_scene_node_set_enabled(&c->tab_bar->scene->node, on);
 }
 
-static void tab_chain_focus(Client *head) {
-	Client *sel = NULL;
-	Client *focus = NULL;
-
-	for (Client *it = head; it; it = it->tab_next) {
-		if (it->mon && it == it->mon->sel)
-			sel = it;
-		if (!focus && it->is_tab_focus)
-			focus = it;
-	}
-
-	focus = sel ? sel : (focus ? focus : head);
-
-	for (Client *it = head; it; it = it->tab_next)
-		it->is_tab_focus = (it == focus);
-}
-
-static void tab_leave(Client *c) {
-	client_chain_unlink(c, CLIENT_TAB_PREV_OFF, CLIENT_TAB_NEXT_OFF);
-	c->is_tab_focus = false;
-	tab_bar_set_enabled(c, false);
-	tab_member_count--;
-	client_update_visibility(c);
-}
-
-static bool tab_layout_id_supported(uint32_t id) {
+static bool tab_layout_enabled_for_tag(const Monitor *m, uint32_t tag) {
+	if (!m || !m->pertag || tag >= PERTAG_SLOTS)
+		return false;
+	uint32_t id = m->pertag->ltidxs[tag]->id;
 	if (id == MONOCLE)
 		return config.monocle_tab_mode;
 	if (id == DECK || id == VERTICAL_DECK)
@@ -59,14 +70,12 @@ static bool tab_layout_id_supported(uint32_t id) {
 	return false;
 }
 
-static bool tab_layout_enabled(const Monitor *m) {
-	if (!m || !m->pertag)
-		return false;
-	return tab_layout_id_supported(m->pertag->ltidxs[get_mon_curtag(m)]->id);
+static bool is_tab_layout(const Monitor *m) {
+	return m && tab_layout_enabled_for_tag(m, get_mon_curtag(m));
 }
 
 bool tab_layout_active(const Monitor *m) {
-	return m && !m->isoverview && tab_layout_enabled(m);
+	return m && !m->isoverview && is_tab_layout(m);
 }
 
 static bool tab_state_ok(const Client *c) {
@@ -86,20 +95,190 @@ static bool tab_is_stack_candidate(Monitor *m, Client *target) {
 	return !target->ismaster;
 }
 
-static bool tab_member_kept(Monitor *m, uint32_t cur, Client *c) {
-	return tab_layout_enabled(m) && (c->tags & cur) && tab_state_ok(c) &&
+static bool tab_client_in_state(Monitor *m, Client *c) {
+	return c && VISIBLEON(c, m) && tab_state_ok(c) &&
 		   tab_is_stack_candidate(m, c);
 }
 
 static bool tab_member_in_view(Client *c, Monitor *m) {
-	return c && c->mon == m && !m->isoverview && VISIBLEON(c, m);
+	return c && m && c->mon == m && !m->isoverview && VISIBLEON(c, m);
 }
 
 static bool tab_focus_can_render(const Client *c) {
 	return c && !c->isfullscreen && !c->ismaximizescreen;
 }
 
+static struct TagTabState *ensure_tab_state(Monitor *m, uint32_t tag) {
+	if (!m || !m->pertag || tag >= PERTAG_SLOTS)
+		return NULL;
+	if (!m->pertag->tab_state[tag])
+		m->pertag->tab_state[tag] = calloc(1, sizeof(struct TagTabState));
+	return m->pertag->tab_state[tag];
+}
+
+static void clear_tab_state(struct TagTabState *state) {
+	if (!state)
+		return;
+	struct TagTabNode *node = state->all_first;
+	while (node) {
+		struct TagTabNode *next = node->all_next;
+		free(node);
+		node = next;
+	}
+	free(state);
+}
+
+static struct TagTabNode *find_tab_node(struct TagTabState *state,
+										const Client *client) {
+	if (!state || !client)
+		return NULL;
+	for (struct TagTabNode *node = state->all_first; node;
+		 node = node->all_next)
+		if (node->client == client)
+			return node;
+	return NULL;
+}
+
+static struct TagTabNode *tab_node_create(struct TagTabState *state,
+										  Client *client) {
+	struct TagTabNode *node = calloc(1, sizeof(*node));
+	if (!node)
+		return NULL;
+	node->client = client;
+	node->all_next = state->all_first;
+	state->all_first = node;
+	state->count++;
+	return node;
+}
+
+static void tab_node_append(struct TagTabState *state,
+							struct TagTabNode *node) {
+	node->prev = state->tail;
+	node->next = NULL;
+	if (state->tail)
+		state->tail->next = node;
+	else
+		state->head = node;
+	state->tail = node;
+}
+
+static void tab_node_remove(struct TagTabState *state,
+							struct TagTabNode *node) {
+	if (!state || !node)
+		return;
+
+	if (node->prev)
+		node->prev->next = node->next;
+	else if (state->head == node)
+		state->head = node->next;
+	if (node->next)
+		node->next->prev = node->prev;
+	else if (state->tail == node)
+		state->tail = node->prev;
+	if (state->count > 0)
+		state->count--;
+	if (node->client && state->focus_id == node->client->id)
+		state->focus_id = 0;
+
+	struct TagTabNode **link = &state->all_first;
+	while (*link && *link != node)
+		link = &(*link)->all_next;
+	if (*link == node)
+		*link = node->all_next;
+	free(node);
+}
+
+static void clear_tab_projection(Monitor *m) {
+	Client *c;
+	wl_list_for_each(c, &server.clients, link) {
+		if (c->mon != m)
+			continue;
+		if (m->is_ws_overview && c->wsov_hidden)
+			continue;
+		bool was_hidden = c->is_tab_hidden;
+		c->tab_prev = NULL;
+		c->tab_next = NULL;
+		c->is_tab_focus = false;
+		c->is_tab_hidden = false;
+		tab_bar_set_enabled(c, false);
+		if (was_hidden)
+			client_update_visibility(c);
+	}
+}
+
+static void update_tab_state(Monitor *m) {
+	uint32_t tag = get_mon_curtag(m);
+	struct TagTabState *state = ensure_tab_state(m, tag);
+	if (!state)
+		return;
+
+	struct TagTabNode *node = state->all_first;
+	while (node) {
+		struct TagTabNode *next = node->all_next;
+		if (!tab_client_in_state(m, node->client))
+			tab_node_remove(state, node);
+		node = next;
+	}
+
+	Client *c;
+	wl_list_for_each(c, &server.clients, link) {
+		if (!tab_client_in_state(m, c))
+			continue;
+		node = find_tab_node(state, c);
+		if (!node) {
+			node = tab_node_create(state, c);
+			if (!node)
+				continue;
+			tab_node_append(state, node);
+		}
+	}
+}
+
+static Client *get_tab_state_focus(const Monitor *m,
+								   struct TagTabState *state) {
+	Client *selected = NULL;
+	Client *remembered = NULL;
+	Client *fallback = NULL;
+
+	for (struct TagTabNode *node = state->head; node; node = node->next) {
+		if (node->client->mon != m)
+			continue;
+		if (!fallback)
+			fallback = node->client;
+		if (node->client == m->sel && node->client->isfocusing)
+			selected = node->client;
+		if (state->focus_id && node->client->id == state->focus_id)
+			remembered = node->client;
+	}
+
+	Client *focus = selected ? selected : (remembered ? remembered : fallback);
+	if (!focus)
+		state->focus_id = 0;
+	return focus;
+}
+
+bool tab_client_hidden_on_tag(const Monitor *m, uint32_t tag, const Client *c) {
+	if (!m || !m->pertag || tag == 0 || tag >= PERTAG_SLOTS || !c ||
+		c->mon != m ||
+		!tab_layout_enabled_for_tag(m, tag))
+		return false;
+
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	if (!state || state->count < 2 || !state->focus_id ||
+		state->focus_id == c->id || !tab_state_ok(c) || c->isglobal)
+		return false;
+
+	uint32_t layout_id = m->pertag->ltidxs[tag]->id;
+	if ((layout_id == DECK || layout_id == VERTICAL_DECK) && c->ismaster)
+		return false;
+	uint32_t bit = 1u << (tag - 1);
+	return c->tags & bit;
+}
+
 static void tab_refresh_bars(Client *head) {
+	if (!head || !head->mon)
+		return;
+
 	int32_t members = 0;
 	Client *focus = head;
 
@@ -126,6 +305,50 @@ static void tab_refresh_bars(Client *head) {
 		tab_bar_set_enabled(it, strip && in_view);
 		client_update_visibility(it);
 	}
+}
+
+static void sync_tab_state_to_clients(Monitor *m, uint32_t tag) {
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	clear_tab_projection(m);
+	if (!state)
+		return;
+
+	Client *focus = get_tab_state_focus(m, state);
+	if (focus)
+		state->focus_id = focus->id;
+
+	Client *head = NULL;
+	Client *tail = NULL;
+	int32_t count = 0;
+	for (struct TagTabNode *node = state->head; node; node = node->next) {
+		Client *c = node->client;
+		if (c->mon != m)
+			continue;
+		if (!head)
+			head = c;
+		c->tab_prev = tail;
+		c->tab_next = NULL;
+		if (tail)
+			tail->tab_next = c;
+		c->is_tab_focus = (c == focus);
+		c->is_tab_hidden = false;
+		tail = c;
+		count++;
+	}
+
+	if (count >= 2)
+		tab_refresh_bars(head);
+}
+
+void tab_sync_current(Monitor *m) {
+	if (!m || !m->pertag)
+		return;
+	if (!is_tab_layout(m)) {
+		clear_tab_projection(m);
+		return;
+	}
+	uint32_t tag = get_mon_curtag(m);
+	sync_tab_state_to_clients(m, tag);
 }
 
 /*
@@ -162,7 +385,14 @@ void tab_update_input_penetration(Client *c) {
 }
 
 void tab_sync_focus(Client *c) {
-	if (!c || !tab_is_member(c) || c->is_tab_focus)
+	if (!c || !c->mon)
+		return;
+	uint32_t tag = get_mon_curtag(c->mon);
+	struct TagTabState *state = ensure_tab_state(c->mon, tag);
+	if (!state || !find_tab_node(state, c))
+		return;
+	state->focus_id = c->id;
+	if (!tab_is_member(c) || c->is_tab_focus)
 		return;
 
 	Client *head = tab_head(c);
@@ -172,60 +402,37 @@ void tab_sync_focus(Client *c) {
 	tab_refresh_bars(head);
 }
 
-void tab_detach_client(Client *c) {
-	if (!tab_is_member(c))
-		return;
-
-	Client *head = tab_head(c);
-	Client *next = c->tab_next;
-
-	tab_leave(c);
-
-	Client *rest = (head == c) ? next : head;
-	if (!rest)
-		return;
-
-	if (!rest->tab_next) {
-		tab_leave(rest);
-		return;
+bool tab_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	struct TagTabNode *node;
+	bool changed = false;
+	while (state && (node = find_tab_node(state, c))) {
+		tab_node_remove(state, node);
+		changed = true;
 	}
-
-	tab_chain_focus(rest);
-	tab_refresh_bars(rest);
+	return changed;
 }
 
-void tab_replace_client(Client *old, Client *new) {
-	if (!old || !new || !tab_is_member(old))
-		return;
-
-	bool was_focus = old->is_tab_focus;
-	bool was_hidden = old->is_tab_hidden;
-
-	if (tab_is_member(new)) {
-		if (tab_head(new) == tab_head(old)) {
-			tab_detach_client(old);
-			if (was_focus)
-				tab_sync_focus(new);
-			return;
-		}
-		tab_leave(new);
-	}
-
-	new->tab_prev = old->tab_prev;
-	new->tab_next = old->tab_next;
-	if (old->tab_prev)
-		old->tab_prev->tab_next = new;
-	if (old->tab_next)
-		old->tab_next->tab_prev = new;
-
-	old->tab_prev = NULL;
-	old->tab_next = NULL;
-	old->is_tab_focus = false;
-	old->is_tab_hidden = false;
-	tab_bar_set_enabled(old, false);
-
-	new->is_tab_focus = was_focus;
-	new->is_tab_hidden = was_hidden;
+bool tab_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+							   Client *new) {
+	if (!old || !new || old == new)
+		return false;
+	struct TagTabState *state = m->pertag->tab_state[tag];
+	if (!state)
+		return false;
+	struct TagTabNode *old_node = find_tab_node(state, old);
+	if (!old_node)
+		return false;
+	struct TagTabNode *new_node = find_tab_node(state, new);
+	if (new_node && new_node != old_node)
+		tab_node_remove(state, new_node);
+	if (state->focus_id == old->id)
+		state->focus_id = new->id;
+	old_node->client = new;
+	struct TagTabNode *node;
+	while ((node = find_tab_node(state, old)))
+		tab_node_remove(state, node);
+	return true;
 }
 
 void tab_sync_monitor(Monitor *m) {
@@ -235,57 +442,25 @@ void tab_sync_monitor(Monitor *m) {
 	if (m->isoverview)
 		return;
 
-	if (!tab_layout_enabled(m) && tab_member_count == 0)
+	if (!is_tab_layout(m)) {
+		clear_tab_projection(m);
 		return;
-
-	uint32_t cur = m->tagset[m->seltags];
-	bool can_merge = tab_layout_enabled(m);
-	Client *c;
-
-	wl_list_for_each(c, &server.clients, link) {
-		if (!tab_is_member(c) || c->mon != m)
-			continue;
-		if (tab_member_kept(m, cur, c))
-			continue;
-		tab_detach_client(c);
 	}
 
-	Client *head = NULL, *tail = NULL;
-	wl_list_for_each(c, &server.clients, link) {
-		if (c->mon != m || !(c->tags & cur))
-			continue;
-		if (!tab_is_member(c)) {
-			if (c->is_tab_hidden) {
-				c->is_tab_hidden = false;
-				client_update_visibility(c);
-			}
-			if (!can_merge)
-				continue;
-			if (!tab_state_ok(c) || !tab_is_stack_candidate(m, c))
-				continue;
-			tab_member_count++;
+	uint32_t tag = get_mon_curtag(m);
+	update_tab_state(m);
+	sync_tab_state_to_clients(m, tag);
+}
+
+void cleanup_monitor_tab(Monitor *m) {
+	if (!m || !m->pertag)
+		return;
+	for (int tag = 0; tag < PERTAG_SLOTS; tag++) {
+		if (m->pertag->tab_state[tag]) {
+			clear_tab_state(m->pertag->tab_state[tag]);
+			m->pertag->tab_state[tag] = NULL;
 		}
-
-		if (tab_is_member(c))
-			client_chain_unlink(c, CLIENT_TAB_PREV_OFF, CLIENT_TAB_NEXT_OFF);
-
-		c->tab_prev = tail;
-		c->tab_next = NULL;
-		if (tail)
-			tail->tab_next = c;
-		else
-			head = c;
-		tail = c;
 	}
-
-	if (!head || !head->tab_next) {
-		if (head)
-			tab_member_count--;
-		return;
-	}
-
-	tab_chain_focus(head);
-	tab_refresh_bars(head);
 }
 
 void tab_focus_member(Client *c) {

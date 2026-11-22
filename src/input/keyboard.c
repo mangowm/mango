@@ -12,6 +12,7 @@
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/switcher/switcher.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <wlr/backend/libinput.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/types/wlr_compositor.h>
@@ -724,6 +725,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	int32_t handled = 0;
 	uint32_t mods = wlr_keyboard_get_modifiers(group->keyboard);
+	bool wsov_active = !server.session_locked && workspace_overview_is_active();
 
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
@@ -773,6 +775,29 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 		handled = 1;
 	}
 
+	/* Configured shortcuts keep priority while the workspace overview is open.
+	 * Only unmodified keys which did not match a binding act as navigation. */
+	if (wsov_active && !handled &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED && CLEANMASK(mods) == 0) {
+		for (i = 0; i < nsyms; i++) {
+			if (workspace_overview_handle_key(syms[i])) {
+				handled = 1;
+				break;
+			}
+		}
+	}
+
+	/* The workspace overview is modal. Presses which are not bindings and
+	 * are not handled by its navigation must not leak to a hidden client.
+	 * Mark the press so its matching release is swallowed without changing
+	 * the normal handling of keys which were already held before entry. */
+	if (wsov_active && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		server.last_hold_keycode = 0;
+		group->nsyms = 0;
+		wl_event_source_timer_update(group->key_repeat_source, 0);
+		return;
+	}
+
 	if (handled && group->keyboard->repeat_info.delay > 0 &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		group->mods = mods;
@@ -816,7 +841,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 #endif
 		;
 	/* passed keys don't get repeated */
-	if (pass && syms)
+	if (!workspace_overview_is_active() && pass && syms)
 		hit_global = keyboard_process_global_keypress(
 			last_surface, group->keyboard, event, mods, syms[0], keycode);
 
@@ -959,10 +984,6 @@ void reset_keyboard_layout(void) {
 		wlr_keyboard_set_keymap(tkb, keyboard->keymap);
 		wlr_keyboard_notify_modifiers(tkb, depressed, latched, locked_mods, 0);
 		tkb->modifiers.group = 0;
-
-		// 7. Update the seat
-		wlr_seat_set_keyboard(server.seat, tkb);
-		wlr_seat_keyboard_notify_modifiers(server.seat, &tkb->modifiers);
 	}
 
 	// Cleanup

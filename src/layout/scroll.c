@@ -62,6 +62,9 @@ find_scroller_focus_root(Monitor *m, struct TagScrollerState *st) {
 /* Creates a new node and inserts it into the tag state all list. */
 struct ScrollerStackNode *scroller_node_create(struct TagScrollerState *st,
 											   Client *c) {
+	struct ScrollerStackNode *existing = find_scroller_node(st, c);
+	if (existing)
+		return existing;
 	struct ScrollerStackNode *n = calloc(1, sizeof(*n));
 	n->client = c;
 	n->scroller_proportion = c->scroller_proportion;
@@ -135,6 +138,12 @@ void sync_scroller_state_to_clients(Monitor *m, uint32_t tag) {
 		c->scroller_stack_proportion = n->scroller_stack_weight;
 		c->scroller_proportion_single = n->scroller_proportion_single;
 	}
+}
+
+void scroller_sync_current(Monitor *m) {
+	if (!m || !m->pertag || !is_scroller_layout(m))
+		return;
+	sync_scroller_state_to_clients(m, get_mon_curtag(m));
 }
 
 void vertical_scroll_adjust_fullandmax(Client *c, struct wlr_box *target_geom) {
@@ -815,24 +824,43 @@ void vertical_scroller(Monitor *m) {
 	free(heads);
 }
 
-void scroller_remove_client(Client *c) {
-	Monitor *m;
-	wl_list_for_each(m, &server.monitors, link) {
-		for (uint32_t t = 0; t < PERTAG_SLOTS; t++) {
-			struct TagScrollerState *st = m->pertag->scroller_state[t];
-			if (!st)
-				continue;
-			struct ScrollerStackNode *node = find_scroller_node(st, c);
-			if (node) {
-				scroller_node_remove(st, node);
-			}
-		}
+bool scroller_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
+	struct ScrollerStackNode *node;
+	bool changed = false;
+	while (st && (node = find_scroller_node(st, c))) {
+		scroller_node_remove(st, node);
+		changed = true;
 	}
+	return changed;
+}
+
+bool scroller_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+									Client *new) {
+	if (!old || !new || old == new)
+		return false;
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
+	if (!st)
+		return false;
+	struct ScrollerStackNode *node = find_scroller_node(st, old);
+	if (!node)
+		return false;
+	bool changed = false;
+	struct ScrollerStackNode *new_node;
+	while ((new_node = find_scroller_node(st, new))) {
+		scroller_node_remove(st, new_node);
+		changed = true;
+	}
+	node->client = new;
+	changed = true;
+	while ((node = find_scroller_node(st, old)))
+		scroller_node_remove(st, node);
+	return changed;
 }
 
 void scroller_insert_stack(Client *c, Client *target_client,
 						   bool insert_before) {
-	if (!target_client || target_client->mon != c->mon)
+	if (!target_client || target_client == c || target_client->mon != c->mon)
 		return;
 
 	if (c->isfullscreen)

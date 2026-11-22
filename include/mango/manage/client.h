@@ -125,7 +125,7 @@ struct Client {
 	int32_t xdg_geo_x, xdg_geo_y;
 	uint32_t configure_serial;
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
-	int32_t isfloating, isurgent, isfullscreen, isfakefullscreen,
+	int32_t isfloating, stayfocused, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, no_size_hint,
 		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
 		vrr_only_fullscreen, force_render, activation_bypass;
@@ -243,6 +243,8 @@ struct Client {
 	bool snapshot_temp_visible;
 	/* per-frame: surface clipped away by the draw path */
 	bool is_surface_hidden;
+	/* temporarily hidden while workspace overview renders offscreen previews */
+	bool wsov_hidden;
 };
 
 #define CLIENT_GROUP_PREV_OFF offsetof(Client, group_prev)
@@ -395,6 +397,7 @@ void iter_xdg_scene_buffers(struct wlr_scene_buffer *buffer, int32_t sx,
 void scene_buffer_apply_opacity(struct wlr_scene_buffer *buffer, int32_t sx,
 								int32_t sy, void *data);
 void client_set_opacity(Client *c, double opacity);
+bool client_stay_focused_blocks(Client *incoming);
 void client_focus(Client *c, int32_t lift);
 void client_ensure_constraint(Client *c);
 void client_active(Client *c);
@@ -418,6 +421,7 @@ void set_minimized(Client *c);
 void unminimize(Client *c);
 void exit_scroller_stack(Client *c);
 void clear_fullscreen_and_maximized_state(Monitor *m);
+void clear_fullscreen_for_incoming_tiled_client(Client *incoming);
 
 /* Clears the fullscreen flag and restores the border zeroed at fullscreen. */
 void clear_fullscreen_flag(Client *c);

@@ -536,12 +536,20 @@ void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
 				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
 }
 
-void dwindle_remove_client(Client *c) {
-	Monitor *m;
-	wl_list_for_each(m, &server.monitors, link) {
-		for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
-			dwindle_remove(&m->pertag->dwindle_root[t], c);
-	}
+void dwindle_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
+	dwindle_remove(&m->pertag->dwindle_root[tag], c);
+}
+
+void dwindle_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+								   Client *new) {
+	if (!old || !new || old == new)
+		return;
+	DwindleNode **root = &m->pertag->dwindle_root[tag];
+	DwindleNode *node = dwindle_find_leaf(*root, old);
+	if (!node)
+		return;
+	dwindle_remove(root, new);
+	node->client = new;
 }
 
 /* Insert a new client respecting dwindle_vsplit, dwindle_hsplit, and

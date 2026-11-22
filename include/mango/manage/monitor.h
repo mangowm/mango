@@ -12,6 +12,9 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/util/box.h>
 
+struct TagTabState;
+struct TagRatioState;
+
 #define INSIDEMON(A)                                                           \
 	(A->geom.x >= A->mon->m.x && A->geom.y >= A->mon->m.y &&                   \
 	 A->geom.x + A->geom.width <= A->mon->m.x + A->mon->m.width &&             \
@@ -62,6 +65,8 @@ struct Monitor {
 	uint32_t ovbk_prev_tagset;
 	Client *sel, *prevsel;
 	int32_t isoverview;
+	bool is_ws_overview;
+	WorkspaceOverviewScope workspace_overview_scope;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t ov_normal_mode; /* Uses the normal grid layout when entering via the
@@ -113,6 +118,8 @@ struct Pertag {
 	const Layout *config_ltidxs[PERTAG_SLOTS];
 	const Layout *ltidxs[PERTAG_SLOTS];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
+	struct TagTabState *tab_state[PERTAG_SLOTS];
+	struct TagRatioState *tag_ratio_state[PERTAG_SLOTS];
 };
 
 bool is_special_active(const Monitor *m);
