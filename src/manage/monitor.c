@@ -34,6 +34,7 @@
 #include <wlr/backend/session.h>
 #include <wlr/backend/wayland.h>
 #include <wlr/render/allocator.h>
+#include <wlr/render/pass.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
@@ -646,6 +647,23 @@ bool apply_rule_to_state(Monitor *m, const ConfigMonitorRule *rule,
 	return mode_set;
 }
 
+/* render the first frame of a new output as a plain root_color fill */
+static bool output_state_fill_root_color(struct wlr_output *wlr_output,
+										 struct wlr_output_state *state) {
+	struct wlr_render_pass *pass =
+		wlr_output_begin_render_pass(wlr_output, state, NULL);
+	if (!pass)
+		return false;
+	float a = config.rootcolor[3];
+	wlr_render_pass_add_rect(
+		pass, &(struct wlr_render_rect_options){
+				  .box = {0, 0, state->buffer->width, state->buffer->height},
+				  .color = {config.rootcolor[0] * a, config.rootcolor[1] * a,
+							config.rootcolor[2] * a, a},
+			  });
+	return wlr_render_pass_submit(pass);
+}
+
 void handle_new_output(struct wl_listener *listener, void *data) {
 	struct wlr_output *wlr_output = data;
 	const ConfigMonitorRule *r;
@@ -816,7 +834,11 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	if (m->icc_transform && !has_img_desc)
 		opts.color_transform = m->icc_transform;
 
-	wlr_scene_output_build_state(m->scene_output, &state, &opts);
+	// A colour transform or an HDR image description would need the scene to
+	// get the fill colour right, so those keep the old path
+	if (opts.color_transform || has_img_desc ||
+		!output_state_fill_root_color(wlr_output, &state))
+		wlr_scene_output_build_state(m->scene_output, &state, &opts);
 
 	wlr_output_commit_state(wlr_output, &state);
 
