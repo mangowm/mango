@@ -1185,7 +1185,12 @@ static void wsov_snapshot_item_add(struct wsov_cell *cell, Client *snapshot) {
 	cell->items[cell->item_count++] = (struct wsov_item){
 		.client = snapshot,
 		.scene = snapshot->scene,
-		.layer = LyrTile,
+		/*
+		 * Close snapshots are rendered from the off-screen cell buffer in
+		 * wsov. Keep them on the dedicated fadeout layer so a closing tile
+		 * remains visible above the workspace preview it was captured from.
+		 */
+		.layer = LyrFadeOut,
 		.border_width = snapshot->bw,
 		.is_snapshot = true,
 		.workspace_geom = snapshot->animation.current,
