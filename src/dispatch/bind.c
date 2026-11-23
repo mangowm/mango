@@ -818,6 +818,21 @@ int32_t quit(const Arg *arg) {
 	return 0;
 }
 
+/* Keep aspect in keyboard resizes */
+static void keyboard_resize_keep_ratio(Client *c, int32_t begin_w,
+									   int32_t begin_h, int32_t *content_w,
+									   int32_t *content_h) {
+	float scale;
+
+	if (!c->keep_aspect_ratio || begin_w <= 0 || begin_h <= 0)
+		return;
+	scale = *content_w != begin_w ? (float)*content_w / (float)begin_w
+								  : (float)*content_h / (float)begin_h;
+	scale = client_clamp_aspect_scale(c, begin_w, begin_h, scale);
+	*content_w = (int32_t)((float)begin_w * scale + 0.5f);
+	*content_h = (int32_t)((float)begin_h * scale + 0.5f);
+}
+
 int32_t resize_window(const Arg *arg) {
 	Client *c =
 		arg->tc
@@ -861,6 +876,11 @@ int32_t resize_window(const Arg *arg) {
 		return 0;
 	}
 
+	int32_t bw = (int32_t)c->bw;
+	int32_t begin_w = c->geom.width - 2 * bw;
+	int32_t begin_h = c->geom.height - 2 * bw;
+	int32_t content_w, content_h;
+
 	switch (arg->ui) {
 	case NUM_TYPE_MINUS:
 		c->geom.width -= arg->i;
@@ -884,6 +904,12 @@ int32_t resize_window(const Arg *arg) {
 		c->geom.height = arg->i2;
 		break;
 	}
+
+	content_w = c->geom.width - 2 * bw;
+	content_h = c->geom.height - 2 * bw;
+	keyboard_resize_keep_ratio(c, begin_w, begin_h, &content_w, &content_h);
+	c->geom.width = content_w + 2 * bw;
+	c->geom.height = content_h + 2 * bw;
 
 	c->iscustomsize = 1;
 	c->float_geom = c->geom;
@@ -1209,6 +1235,9 @@ int32_t smart_resize_window(const Arg *arg) {
 		return 0;
 	if (!c->isfloating)
 		client_set_floating(c, true, false);
+	int32_t bw = (int32_t)c->bw;
+	int32_t begin_w = c->geom.width - 2 * bw;
+	int32_t begin_h = c->geom.height - 2 * bw;
 	nw = c->geom.width;
 	nh = c->geom.height;
 
@@ -1268,6 +1297,13 @@ int32_t smart_resize_window(const Arg *arg) {
 				 server.selected_monitor->w.width - c->geom.x - config.gappoh;
 		break;
 	}
+
+	int32_t content_w = nw - 2 * bw;
+	int32_t content_h = nh - 2 * bw;
+
+	keyboard_resize_keep_ratio(c, begin_w, begin_h, &content_w, &content_h);
+	nw = content_w + 2 * bw;
+	nh = content_h + 2 * bw;
 
 	c->float_geom = (struct wlr_box){
 		.x = c->geom.x, .y = c->geom.y, .width = nw, .height = nh};

@@ -873,56 +873,83 @@ bool client_request_maximize(Client *c, void *data) {
 	return c->surface.xdg->toplevel->requested.maximized;
 }
 
-void client_set_size_bound(Client *c) {
-	struct wlr_xdg_toplevel *toplevel;
-	struct wlr_xdg_toplevel_state state;
+void client_get_content_size_limits(Client *c, int32_t *min_w, int32_t *min_h,
+									int32_t *max_w, int32_t *max_h) {
+	*min_w = 0;
+	*min_h = 0;
+	*max_w = 0;
+	*max_h = 0;
 
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
-		struct wlr_xwayland_surface *surface = c->surface.xwayland;
-		xcb_size_hints_t *size_hints = surface->size_hints;
+		xcb_size_hints_t *size_hints = c->surface.xwayland->size_hints;
 
 		if (!size_hints)
 			return;
 
-		/* size_hints are X11 physical sizes; convert back to logical before
-		 * comparing. */
+		/* size_hints are X11 physical sizes; convert back to logical. */
 		float scale = c->xwayland_scale > 0.f ? c->xwayland_scale : 1.f;
-		int32_t min_w = (int32_t)roundf(size_hints->min_width / scale);
-		int32_t min_h = (int32_t)roundf(size_hints->min_height / scale);
-		int32_t max_w = (int32_t)roundf(size_hints->max_width / scale);
-		int32_t max_h = (int32_t)roundf(size_hints->max_height / scale);
-
-		if ((uint32_t)c->geom.width - 2 * c->bw < (uint32_t)min_w && min_w > 0)
-			c->geom.width = min_w + 2 * c->bw;
-		if ((uint32_t)c->geom.height - 2 * c->bw < (uint32_t)min_h && min_h > 0)
-			c->geom.height = min_h + 2 * c->bw;
-		if ((uint32_t)c->geom.width - 2 * c->bw > (uint32_t)max_w && max_w > 0)
-			c->geom.width = max_w + 2 * c->bw;
-		if ((uint32_t)c->geom.height - 2 * c->bw > (uint32_t)max_h && max_h > 0)
-			c->geom.height = max_h + 2 * c->bw;
+		*min_w = (int32_t)roundf(size_hints->min_width / scale);
+		*min_h = (int32_t)roundf(size_hints->min_height / scale);
+		*max_w = (int32_t)roundf(size_hints->max_width / scale);
+		*max_h = (int32_t)roundf(size_hints->max_height / scale);
 		return;
 	}
 #endif
 
-	toplevel = c->surface.xdg->toplevel;
-	state = toplevel->current;
-	if ((uint32_t)c->geom.width - 2 * c->bw < state.min_width &&
-		state.min_width > 0) {
-		c->geom.width = state.min_width + 2 * c->bw;
+	struct wlr_xdg_toplevel_state state = c->surface.xdg->toplevel->current;
+	*min_w = (int32_t)state.min_width;
+	*min_h = (int32_t)state.min_height;
+	*max_w = (int32_t)state.max_width;
+	*max_h = (int32_t)state.max_height;
+}
+
+float client_clamp_aspect_scale(Client *c, int32_t begin_w, int32_t begin_h,
+								float scale) {
+	float scale_min, scale_max = 0.f;
+
+	if (begin_w <= 0 || begin_h <= 0)
+		return scale;
+
+	scale_min = MANGO_MAX(1.f / (float)begin_w, 1.f / (float)begin_h);
+	if (!c->no_size_hint) {
+		int32_t min_w, min_h, max_w, max_h;
+
+		client_get_content_size_limits(c, &min_w, &min_h, &max_w, &max_h);
+		if (min_w > 0)
+			scale_min = MANGO_MAX(scale_min, (float)min_w / (float)begin_w);
+		if (min_h > 0)
+			scale_min = MANGO_MAX(scale_min, (float)min_h / (float)begin_h);
+		if (max_w > 0)
+			scale_max = (float)max_w / (float)begin_w;
+		if (max_h > 0) {
+			float max_h_scale = (float)max_h / (float)begin_h;
+
+			scale_max = scale_max > 0.f ? MANGO_MIN(scale_max, max_h_scale)
+										: max_h_scale;
+		}
 	}
-	if ((uint32_t)c->geom.height - 2 * c->bw < state.min_height &&
-		state.min_height > 0) {
-		c->geom.height = state.min_height + 2 * c->bw;
-	}
-	if ((uint32_t)c->geom.width - 2 * c->bw > state.max_width &&
-		state.max_width > 0) {
-		c->geom.width = state.max_width + 2 * c->bw;
-	}
-	if ((uint32_t)c->geom.height - 2 * c->bw > state.max_height &&
-		state.max_height > 0) {
-		c->geom.height = state.max_height + 2 * c->bw;
-	}
+
+	if (scale < scale_min)
+		scale = scale_min;
+	if (scale_max > 0.f && scale > scale_max)
+		scale = scale_max;
+	return scale;
+}
+
+void client_set_size_bound(Client *c) {
+	int32_t min_w, min_h, max_w, max_h;
+
+	client_get_content_size_limits(c, &min_w, &min_h, &max_w, &max_h);
+
+	if ((uint32_t)c->geom.width - 2 * c->bw < (uint32_t)min_w && min_w > 0)
+		c->geom.width = min_w + 2 * c->bw;
+	if ((uint32_t)c->geom.height - 2 * c->bw < (uint32_t)min_h && min_h > 0)
+		c->geom.height = min_h + 2 * c->bw;
+	if ((uint32_t)c->geom.width - 2 * c->bw > (uint32_t)max_w && max_w > 0)
+		c->geom.width = max_w + 2 * c->bw;
+	if ((uint32_t)c->geom.height - 2 * c->bw > (uint32_t)max_h && max_h > 0)
+		c->geom.height = max_h + 2 * c->bw;
 }
 
 bool check_hit_no_border(Client *c) {
@@ -1552,6 +1579,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
 	APPLY_INT_PROP(c, r, no_size_hint);
+	APPLY_INT_PROP(c, r, keep_aspect_ratio);
 	APPLY_INT_PROP(c, r, idleinhibit_when_focus);
 	APPLY_INT_PROP(c, r, vrr_only_fullscreen);
 	APPLY_INT_PROP(c, r, force_render);
@@ -1958,8 +1986,25 @@ void apply_window_snap(Client *c) {
 		c->geom.y = c->geom.y + snap_down;
 	}
 
+	int32_t bw = (int32_t)c->bw;
+	int32_t snapped_w = c->geom.width - 2 * bw;
+	int32_t snapped_h = c->geom.height - 2 * bw;
+
 	c->float_geom = c->geom;
 	resize(c, c->geom, (ResizeOpts){.interact = 0});
+
+	if (c->keep_aspect_ratio && snapped_w > 0 && snapped_h > 0 &&
+		(c->geom.width - 2 * bw != snapped_w ||
+		 c->geom.height - 2 * bw != snapped_h)) {
+		float scale = client_clamp_aspect_scale(
+			c, snapped_w, snapped_h,
+			(float)(c->geom.width - 2 * bw) / (float)snapped_w);
+
+		c->geom.width = (int32_t)((float)snapped_w * scale + 0.5f) + 2 * bw;
+		c->geom.height = (int32_t)((float)snapped_h * scale + 0.5f) + 2 * bw;
+		c->float_geom = c->geom;
+		resize(c, c->geom, (ResizeOpts){.interact = 0});
+	}
 }
 /*
  * Client management: window lifecycle, rules, focus, tiled/floating/fullscreen
@@ -2183,6 +2228,7 @@ void init_client_properties(Client *c) {
 	c->no_force_center = 0;
 	c->no_border = 0;
 	c->no_size_hint = 0;
+	c->keep_aspect_ratio = 0;
 	c->no_radius = 0;
 	c->no_shadow = 0;
 	c->ignore_maximize = 1;
@@ -2605,6 +2651,8 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	if (c == server.grab_client) {
 		server.cursor_mode = CurNormal;
 		server.grab_client = NULL;
+		server.resize_edge = 0;
+		server.resize_aspect_ratio = 0.f;
 		if (server.drop_client) {
 			server.drop_client->enable_drop_area_draw = false;
 			client_set_drop_area(server.drop_client);
