@@ -15,6 +15,8 @@
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/workspace_overview/live_effects.h"
+#include "mango/workspace_overview/live_projection.h"
 #include <drm_fourcc.h>
 #include <limits.h>
 #include <linux/input-event-codes.h>
@@ -65,6 +67,7 @@ struct wsov_item {
 struct wsov_live_surface {
 	Client *client;
 	struct wsov_cell *cell;
+	struct wsov_live_effects *effects;
 	struct wlr_surface *surface;
 	struct wlr_scene_surface *scene_surface;
 	int sx;
@@ -77,6 +80,13 @@ struct wsov_live_surface_data {
 	Client *client;
 	struct wsov_cell *cell;
 	struct wlr_scene_tree *tree;
+	struct wsov_live_effects *effects;
+};
+
+struct wsov_live_client {
+	Client *client;
+	struct wlr_scene_tree *tree;
+	struct wsov_live_effects *effects;
 };
 
 struct wsov_bar_rect {
@@ -168,6 +178,9 @@ struct wsov_cell {
 	struct wsov_live_surface **live_surfaces;
 	int live_surface_count;
 	int live_surface_capacity;
+	struct wsov_live_client *live_clients;
+	int live_client_count;
+	int live_client_capacity;
 	MangoDimNode *dim;
 	struct wsov_item *items;
 	int item_count;
@@ -205,6 +218,7 @@ static struct {
 	WorkspaceOverviewLayout layout;
 	struct wlr_scene_tree *root;
 	struct wlr_scene_rect *background;
+	struct wsov_background_effects *background_effects;
 	/* Actual TOP/OVERLAY layer-shell scenes live above root while wsov is open.
 	 */
 	struct wlr_scene_tree *direct_layer_tree;
@@ -393,8 +407,8 @@ static uint32_t wsov_layout_affected_tags(Monitor *m) {
 
 static bool wsov_client_base_eligible(Client *c) {
 	if (!c || !c->mon || c->mon != wsov.mon || c->iskilling || c->isminimized ||
-		c->isunglobal || client_is_unmanaged(c) ||
-		client_is_x11_popup(c) || (c->tags & TAG0_MASK))
+		c->isunglobal || client_is_unmanaged(c) || client_is_x11_popup(c) ||
+		(c->tags & TAG0_MASK))
 		return false;
 	struct wlr_surface *surface = NULL;
 #ifdef XWAYLAND
@@ -1220,6 +1234,19 @@ static bool wsov_item_is_live(const struct wsov_cell *cell,
 	return false;
 }
 
+static bool wsov_item_has_effect_border(const struct wsov_cell *cell,
+										const struct wsov_item *item) {
+	if (!cell || !item || !item->client)
+		return false;
+	for (int i = 0; i < cell->live_client_count; i++) {
+		struct wsov_live_client *live = &cell->live_clients[i];
+		if (live->client == item->client &&
+			wsov_live_effects_has_border(live->effects))
+			return true;
+	}
+	return false;
+}
+
 static bool wsov_item_is_live_on_layer(const struct wsov_cell *cell,
 									   const struct wsov_item *item) {
 	if (!cell || !item || item->layer >= NUM_LAYERS)
@@ -1232,8 +1259,9 @@ static bool wsov_item_is_live_on_layer(const struct wsov_cell *cell,
 			continue;
 		found = true;
 		if (!entry->scene_surface ||
-			entry->scene_surface->buffer->node.parent !=
-				cell->live_layer_trees[item->layer])
+			!wsov_live_projection_layer_matches(
+				&entry->scene_surface->buffer->node, cell->live_layer_trees,
+				item->layer, NUM_LAYERS))
 			return false;
 	}
 	return found;
@@ -1311,6 +1339,38 @@ static void wsov_live_surface_destroy(struct wl_listener *listener,
 	wsov_remove_live_surface(entry->cell, entry, false);
 }
 
+static struct wsov_live_client *
+wsov_live_client_add(struct wsov_cell *cell, Client *client,
+					 struct wlr_scene_tree *layer_tree) {
+	if (!cell || !client || !layer_tree)
+		return NULL;
+
+	if (cell->live_client_count == cell->live_client_capacity) {
+		int capacity =
+			cell->live_client_capacity ? cell->live_client_capacity * 2 : 8;
+		struct wsov_live_client *clients =
+			realloc(cell->live_clients, capacity * sizeof(*clients));
+		if (!clients)
+			return NULL;
+		cell->live_clients = clients;
+		cell->live_client_capacity = capacity;
+	}
+
+	struct wlr_scene_tree *tree = wlr_scene_tree_create(layer_tree);
+	if (!tree)
+		return NULL;
+	struct wsov_live_effects *effects = wsov_live_effects_create(tree, client);
+
+	struct wsov_live_client *live =
+		&cell->live_clients[cell->live_client_count++];
+	*live = (struct wsov_live_client){
+		.client = client,
+		.tree = tree,
+		.effects = effects,
+	};
+	return live;
+}
+
 static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 								  void *data) {
 	struct wsov_live_surface_data *live = data;
@@ -1342,6 +1402,7 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	*entry = (struct wsov_live_surface){
 		.client = live->client,
 		.cell = cell,
+		.effects = live->effects,
 		.surface = surface,
 		.scene_surface = scene_surface,
 		.sx = sx,
@@ -1350,6 +1411,7 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	cell->live_surfaces[cell->live_surface_count++] = entry;
 	wlr_scene_buffer_set_filter_mode(scene_surface->buffer,
 									 WLR_SCALE_FILTER_BILINEAR);
+	wsov_live_effects_apply_surface(live->effects, scene_surface->buffer, 1.0);
 	entry->commit.notify = wsov_live_surface_commit;
 	wl_signal_add(&surface->events.commit, &entry->commit);
 	entry->destroy.notify = wsov_live_surface_destroy;
@@ -1370,6 +1432,17 @@ static void wsov_clear_cell_live_surfaces(struct wsov_cell *cell,
 	free(cell->live_surfaces);
 	cell->live_surfaces = NULL;
 	cell->live_surface_capacity = 0;
+
+	for (int i = 0; i < cell->live_client_count; i++) {
+		struct wsov_live_client *live = &cell->live_clients[i];
+		wsov_live_effects_destroy(live->effects);
+		if (live->tree)
+			wlr_scene_node_destroy(&live->tree->node);
+	}
+	free(cell->live_clients);
+	cell->live_clients = NULL;
+	cell->live_client_count = 0;
+	cell->live_client_capacity = 0;
 }
 
 static void wsov_clear_live_projection(bool mark_dirty) {
@@ -1493,10 +1566,15 @@ static void wsov_build_cell_live_projection(struct wsov_cell *cell) {
 		struct wlr_surface *surface = client_surface(item->client);
 		if (!surface || !surface->mapped || item->layer >= NUM_LAYERS)
 			continue;
+		struct wsov_live_client *live = wsov_live_client_add(
+			cell, item->client, cell->live_layer_trees[item->layer]);
+		if (!live)
+			continue;
 		struct wsov_live_surface_data data = {
 			.client = item->client,
 			.cell = cell,
-			.tree = cell->live_layer_trees[item->layer],
+			.tree = live->tree,
+			.effects = live->effects,
 		};
 		wlr_surface_for_each_surface(surface, wsov_live_surface_add, &data);
 	}
@@ -2059,10 +2137,13 @@ static void wsov_layout_live_projection(void) {
 			cell->live_surface_count <= 0)
 			continue;
 		if (!wsov_cell_live_content_visible_in_view(cell, &view)) {
-			for (int i = 0; i < cell->live_surface_count; i++)
+			for (int i = 0; i < cell->live_surface_count; i++) {
 				wlr_scene_node_set_enabled(
 					&cell->live_surfaces[i]->scene_surface->buffer->node,
 					false);
+				wsov_live_effects_update(cell->live_surfaces[i]->effects, NULL,
+										 NULL, 1.0);
+			}
 			continue;
 		}
 
@@ -2081,6 +2162,9 @@ static void wsov_layout_live_projection(void) {
 			.height = MANGO_MAX(
 				1, (int)lround(cell_content_preview.height * view.scale_y)),
 		};
+		struct wlr_box effect_clip;
+		if (!wlr_box_intersection(&effect_clip, &workspace_clip, &monitor_clip))
+			effect_clip = (struct wlr_box){0};
 		/*
 		 * An inner scroller may overflow across the wsov strip only when its
 		 * axis is orthogonal to the strip. On the same axis it must stay
@@ -2097,9 +2181,14 @@ static void wsov_layout_live_projection(void) {
 			struct wlr_surface *surface = entry->surface;
 			if (!buffer)
 				continue;
+			double render_scale = fmin(view.scale_x, view.scale_y);
+			wsov_live_effects_apply_surface(entry->effects, buffer,
+											render_scale);
 			if (!item || wsov_drag_hides_item(cell, entry->client) ||
 				!surface || surface->current.width <= 0 ||
 				surface->current.height <= 0) {
+				wsov_live_effects_update(entry->effects, NULL, NULL,
+										 render_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2109,6 +2198,8 @@ static void wsov_layout_live_projection(void) {
 				geo = entry->client->geom;
 			if (geo.width <= 2 * item->border_width ||
 				geo.height <= 2 * item->border_width) {
+				wsov_live_effects_update(entry->effects, NULL, NULL,
+										 render_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2123,6 +2214,8 @@ static void wsov_layout_live_projection(void) {
 #endif
 			{
 				if (!entry->client->surface.xdg) {
+					wsov_live_effects_update(entry->effects, NULL, NULL,
+											 render_scale);
 					wlr_scene_node_set_enabled(&buffer->node, false);
 					continue;
 				}
@@ -2130,6 +2223,8 @@ static void wsov_layout_live_projection(void) {
 				content_h = entry->client->surface.xdg->geometry.height;
 			}
 			if (content_w <= 0 || content_h <= 0) {
+				wsov_live_effects_update(entry->effects, NULL, NULL,
+										 render_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2157,6 +2252,17 @@ static void wsov_layout_live_projection(void) {
 			double surface_scale_x = content_preview_w / content_w;
 			double surface_scale_y = content_preview_h / content_h;
 
+			struct wlr_box window_box = {
+				.x = (int)lround((item->box.x - view.x) * view.scale_x),
+				.y = (int)lround((item->box.y - view.y) * view.scale_y),
+				.width =
+					MANGO_MAX(1, (int)lround(item->box.width * view.scale_x)),
+				.height =
+					MANGO_MAX(1, (int)lround(item->box.height * view.scale_y)),
+			};
+			wsov_live_effects_update(entry->effects, &window_box, &effect_clip,
+									 render_scale);
+
 			struct wlr_box clip;
 			client_get_clip(entry->client, &clip);
 			double preview_x =
@@ -2183,6 +2289,8 @@ static void wsov_layout_live_projection(void) {
 			struct wlr_box visible_in_cell;
 			struct wlr_box visible;
 			if (!wlr_box_intersection(&visible_in_cell, &dst, &content_clip)) {
+				wsov_live_effects_update(entry->effects, NULL, NULL,
+										 render_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2190,6 +2298,8 @@ static void wsov_layout_live_projection(void) {
 				struct wlr_box visible_in_workspace;
 				if (!wlr_box_intersection(&visible_in_workspace,
 										  &visible_in_cell, &workspace_clip)) {
+					wsov_live_effects_update(entry->effects, NULL, NULL,
+											 render_scale);
 					wlr_scene_node_set_enabled(&buffer->node, false);
 					continue;
 				}
@@ -2198,6 +2308,8 @@ static void wsov_layout_live_projection(void) {
 			if (!wlr_box_intersection(&visible, &visible_in_cell,
 									  &monitor_clip) ||
 				visible.width <= 0 || visible.height <= 0) {
+				wsov_live_effects_update(entry->effects, NULL, NULL,
+										 render_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2609,23 +2721,28 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 					   ? MANGO_MAX(1, (int)lround((double)item->border_width *
 												  render_scale_y))
 					   : 0;
-	wsov_add_rect(pass,
-				  (struct wlr_box){window_box.x, window_box.y, window_box.width,
-								   border_y},
-				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
-	wsov_add_rect(pass,
-				  (struct wlr_box){window_box.x,
-								   window_box.y + window_box.height - border_y,
-								   window_box.width, border_y},
-				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
-	wsov_add_rect(pass,
-				  (struct wlr_box){window_box.x, window_box.y, border_x,
-								   window_box.height},
-				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
-	wsov_add_rect(pass,
-				  (struct wlr_box){window_box.x + window_box.width - border_x,
-								   window_box.y, border_x, window_box.height},
-				  frame_color, WLR_RENDER_BLEND_MODE_NONE);
+	bool live = wsov_item_is_live(cell, item);
+	if (!wsov_item_has_effect_border(cell, item)) {
+		wsov_add_rect(pass,
+					  (struct wlr_box){window_box.x, window_box.y,
+									   window_box.width, border_y},
+					  frame_color, WLR_RENDER_BLEND_MODE_NONE);
+		wsov_add_rect(
+			pass,
+			(struct wlr_box){window_box.x,
+							 window_box.y + window_box.height - border_y,
+							 window_box.width, border_y},
+			frame_color, WLR_RENDER_BLEND_MODE_NONE);
+		wsov_add_rect(pass,
+					  (struct wlr_box){window_box.x, window_box.y, border_x,
+									   window_box.height},
+					  frame_color, WLR_RENDER_BLEND_MODE_NONE);
+		wsov_add_rect(
+			pass,
+			(struct wlr_box){window_box.x + window_box.width - border_x,
+							 window_box.y, border_x, window_box.height},
+			frame_color, WLR_RENDER_BLEND_MODE_NONE);
+	}
 
 	if (!item->is_snapshot && (window_box.width <= 2 || window_box.height <= 2))
 		return;
@@ -2634,7 +2751,7 @@ static void wsov_render_client(struct wlr_render_pass *pass,
 		return;
 	/* The current workspace uses direct scene_surface projection. Only its
 	 * frame and shadow belong in the offscreen cell buffer. */
-	if (wsov_item_is_live(cell, item))
+	if (live)
 		return;
 
 	pixman_region32_t clip;
@@ -3418,8 +3535,7 @@ static void wsov_scroll_to_target(void) {
 		return;
 	if (!wsov_cell_for_tag(wsov.scroll_center_tag))
 		wsov.scroll_center_tag = wsov.target_tag;
-	struct wsov_cell *target =
-		wsov_cell_for_tag(wsov.scroll_center_tag);
+	struct wsov_cell *target = wsov_cell_for_tag(wsov.scroll_center_tag);
 	if (!target || !wsov.mon)
 		return;
 	struct wlr_box box = wsov_cell_layout_box(target);
@@ -3436,8 +3552,7 @@ static void wsov_animate_scroll_to_final_target(void) {
 		return;
 	if (!wsov_cell_for_tag(wsov.scroll_center_tag))
 		wsov.scroll_center_tag = wsov.target_tag;
-	struct wsov_cell *target =
-		wsov_cell_for_tag(wsov.scroll_center_tag);
+	struct wsov_cell *target = wsov_cell_for_tag(wsov.scroll_center_tag);
 	if (!target || !wsov.mon)
 		return;
 	struct wlr_box box = target->box;
@@ -4329,10 +4444,12 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 	wsov_destroy_layer_fadeouts();
 	if (wsov.direct_layer_tree)
 		wlr_scene_node_destroy(&wsov.direct_layer_tree->node);
+	wsov_background_effects_destroy(wsov.background_effects);
 	if (wsov.root)
 		wlr_scene_node_destroy(&wsov.root->node);
 	wsov.root = NULL;
 	wsov.background = NULL;
+	wsov.background_effects = NULL;
 	wsov.direct_layer_tree = NULL;
 	wsov.direct_top_tree = NULL;
 	wsov.direct_overlay_tree = NULL;
@@ -4389,9 +4506,14 @@ static void wsov_update_root_geometry(Monitor *m) {
 	if (!wsov.root || !m)
 		return;
 	wlr_scene_node_set_position(&wsov.root->node, m->m.x, m->m.y);
+	wsov_background_effects_update(wsov.background_effects, m->m.width,
+								   m->m.height);
 	if (wsov.background) {
 		wlr_scene_rect_set_size(wsov.background, m->m.width, m->m.height);
-		wlr_scene_rect_set_color(wsov.background, config.rootcolor);
+		const float *color = wsov.background_effects
+								 ? (float[4]){0.0f, 0.0f, 0.0f, 0.0f}
+								 : config.rootcolor;
+		wlr_scene_rect_set_color(wsov.background, color);
 	}
 }
 
@@ -4432,6 +4554,8 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 		return false;
 	}
 	wsov_sync_direct_layers();
+	wsov.background_effects =
+		wsov_background_effects_create(wsov.root, m->m.width, m->m.height);
 	wsov.background = wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
 											config.rootcolor);
 	wsov_update_root_geometry(m);
@@ -4678,8 +4802,7 @@ void workspace_overview_handle_motion(double x, double y) {
 
 static bool wsov_item_is_drop_target(const struct wsov_item *item) {
 	return item && !item->is_snapshot && item->client &&
-		   item->client != wsov.drag_client &&
-		   ISTILED(item->client);
+		   item->client != wsov.drag_client && ISTILED(item->client);
 }
 
 static int32_t wsov_cell_tiling_count(const struct wsov_cell *cell) {
