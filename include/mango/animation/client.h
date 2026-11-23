@@ -48,6 +48,7 @@ void client_animation_set_progress(Client *c, double p);
 void client_animation_resume(Client *c, double remaining);
 void fadeout_client_animation_next_tick(Client *c);
 void client_animation_next_tick(Client *c);
+struct wlr_box client_get_animation_geometry(Client *c);
 void init_fadeout_client(Client *c);
 bool client_animations_enabled(const Client *c);
 
