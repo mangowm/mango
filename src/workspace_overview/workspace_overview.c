@@ -2214,17 +2214,27 @@ static void wsov_layout_live_projection(void) {
 			struct wlr_surface *surface = entry->surface;
 			if (!buffer)
 				continue;
-			double render_scale = fmin(view.scale_x, view.scale_y);
-			wsov_live_effects_apply_surface(entry->effects, buffer,
-											render_scale);
+			double effect_scale = fmin(view.scale_x, view.scale_y);
 			if (!item || wsov_drag_hides_item(cell, entry->client) ||
 				!surface || surface->current.width <= 0 ||
 				surface->current.height <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
-										 render_scale);
+										 effect_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
+
+			double item_scale_x =
+				(double)MANGO_MAX(1, cell_box.width - 2 * border) /
+				MANGO_MAX(1, cell->buffer_w);
+			double item_scale_y =
+				(double)MANGO_MAX(1, cell_box.height - 2 * border) /
+				MANGO_MAX(1, cell->buffer_h);
+			effect_scale =
+				fmin(item->render_scale_x * item_scale_x * view.scale_x,
+					 item->render_scale_y * item_scale_y * view.scale_y);
+			wsov_live_effects_apply_surface(entry->effects, buffer,
+											effect_scale);
 
 			struct wlr_box geo = item->workspace_geom;
 			if (geo.width <= 0 || geo.height <= 0)
@@ -2232,7 +2242,7 @@ static void wsov_layout_live_projection(void) {
 			if (geo.width <= 2 * item->border_width ||
 				geo.height <= 2 * item->border_width) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
-										 render_scale);
+										 effect_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2248,7 +2258,7 @@ static void wsov_layout_live_projection(void) {
 			{
 				if (!entry->client->surface.xdg) {
 					wsov_live_effects_update(entry->effects, NULL, NULL,
-											 render_scale);
+											 effect_scale);
 					wlr_scene_node_set_enabled(&buffer->node, false);
 					continue;
 				}
@@ -2257,44 +2267,42 @@ static void wsov_layout_live_projection(void) {
 			}
 			if (content_w <= 0 || content_h <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
-										 render_scale);
+										 effect_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
 
-			double item_scale_x =
-				(double)MANGO_MAX(1, cell_box.width - 2 * border) /
-				MANGO_MAX(1, cell->buffer_w);
-			double item_scale_y =
-				(double)MANGO_MAX(1, cell_box.height - 2 * border) /
-				MANGO_MAX(1, cell->buffer_h);
 			double item_offset_x = (double)item->box.x - cell->box.x - border;
 			double item_offset_y = (double)item->box.y - cell->box.y - border;
-			double content_preview_x = cell_box.x + border +
-									   item_offset_x * item_scale_x +
-									   item->border_width * item_scale_x;
-			double content_preview_y = cell_box.y + border +
-									   item_offset_y * item_scale_y +
-									   item->border_width * item_scale_y;
+			double window_preview_x =
+				cell_box.x + border + item_offset_x * item_scale_x;
+			double window_preview_y =
+				cell_box.y + border + item_offset_y * item_scale_y;
+			double window_preview_w = item->box.width * item_scale_x;
+			double window_preview_h = item->box.height * item_scale_y;
+			double border_inset_x =
+				item->border_width * item->render_scale_x * item_scale_x;
+			double border_inset_y =
+				item->border_width * item->render_scale_y * item_scale_y;
+			double content_preview_x = window_preview_x + border_inset_x;
+			double content_preview_y = window_preview_y + border_inset_y;
 			double content_preview_w =
-				MANGO_MAX(1.0, item->box.width * item_scale_x -
-								   2 * item->border_width * item_scale_x);
+				MANGO_MAX(1.0, window_preview_w - 2 * border_inset_x);
 			double content_preview_h =
-				MANGO_MAX(1.0, item->box.height * item_scale_y -
-								   2 * item->border_width * item_scale_y);
+				MANGO_MAX(1.0, window_preview_h - 2 * border_inset_y);
 			double surface_scale_x = content_preview_w / content_w;
 			double surface_scale_y = content_preview_h / content_h;
 
 			struct wlr_box window_box = {
-				.x = (int)lround((item->box.x - view.x) * view.scale_x),
-				.y = (int)lround((item->box.y - view.y) * view.scale_y),
+				.x = (int)lround((window_preview_x - view.x) * view.scale_x),
+				.y = (int)lround((window_preview_y - view.y) * view.scale_y),
 				.width =
-					MANGO_MAX(1, (int)lround(item->box.width * view.scale_x)),
+					MANGO_MAX(1, (int)lround(window_preview_w * view.scale_x)),
 				.height =
-					MANGO_MAX(1, (int)lround(item->box.height * view.scale_y)),
+					MANGO_MAX(1, (int)lround(window_preview_h * view.scale_y)),
 			};
 			wsov_live_effects_update(entry->effects, &window_box,
-									 &overflow_clip, render_scale);
+									 &overflow_clip, effect_scale);
 
 			struct wlr_box clip;
 			client_get_clip(entry->client, &clip);
@@ -2323,7 +2331,7 @@ static void wsov_layout_live_projection(void) {
 			struct wlr_box visible;
 			if (!wlr_box_intersection(&visible_in_cell, &dst, &content_clip)) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
-										 render_scale);
+										 effect_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
@@ -2331,11 +2339,10 @@ static void wsov_layout_live_projection(void) {
 									  &overflow_clip) ||
 				visible.width <= 0 || visible.height <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
-										 render_scale);
+										 effect_scale);
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
-
 			struct wlr_fbox surface_box = {
 				.x = 0,
 				.y = 0,
