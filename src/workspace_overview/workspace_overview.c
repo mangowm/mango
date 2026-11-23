@@ -1243,6 +1243,17 @@ static bool wsov_item_is_live(const struct wsov_cell *cell,
 	return false;
 }
 
+static struct wsov_live_client *
+wsov_cell_live_client_for(const struct wsov_cell *cell, const Client *client) {
+	if (!cell || !client)
+		return NULL;
+	for (int i = 0; i < cell->live_client_count; i++) {
+		if (cell->live_clients[i].client == client)
+			return &cell->live_clients[i];
+	}
+	return NULL;
+}
+
 static bool wsov_item_has_effect_border(const struct wsov_cell *cell,
 										const struct wsov_item *item) {
 	if (!cell || !item || !item->client)
@@ -1518,6 +1529,19 @@ static bool wsov_cell_live_projection_matches(const struct wsov_cell *cell) {
 		bool expected = wsov_live_owner_for_client(item->client) == cell;
 		if (expected != wsov_item_is_live(cell, item))
 			return false;
+		if (expected) {
+			struct wsov_live_client *live =
+				wsov_cell_live_client_for(cell, item->client);
+			/*
+			 * A floating transition changes the client's scene layer without
+			 * changing its workspace membership. Treat a stale projected layer
+			 * as a cache miss so the live tree moves from LyrTile to LyrFloat
+			 * (or back) instead of remaining below tiled siblings.
+			 */
+			if (!live || !live->tree ||
+				live->tree->node.parent != cell->live_layer_trees[item->layer])
+				return false;
+		}
 	}
 	for (int i = 0; i < cell->live_surface_count; i++) {
 		Client *client = cell->live_surfaces[i]->client;
