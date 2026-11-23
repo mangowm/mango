@@ -140,7 +140,11 @@ bool is_horizontal_right_stack_layout(Monitor *m) {
 int32_t is_special_animation_rule(Client *c) {
 	if (is_scroller_layout(c->mon) && !c->isfloating) {
 		return DOWN;
-	} else if (c->mon->visible_tiling_clients == 1 && !c->isfloating) {
+	/* A newly mapped client is not counted until monitor state is refreshed.
+	 * When no other tiled client is visible, zero still means this opening
+	 * client will be the sole tiled window. Requiring exactly one selects the
+	 * generic direction and causes the first frame to start from the side. */
+	} else if (c->mon->visible_tiling_clients <= 1 && !c->isfloating) {
 		return DOWN;
 	} else if (c->mon->visible_tiling_clients == 2 && !c->isfloating &&
 			   !config.new_is_master && is_horizontal_stack_layout(c->mon)) {
@@ -1506,6 +1510,10 @@ void client_commit(Client *c) {
 	c->current = c->pending;
 
 	if (c->animation.should_animate) {
+		/* For an in-flight animation, resize() has already copied
+		 * animation.current into animainit_geom. Only seed the current frame
+		 * for a new animation; otherwise initial must continue from the
+		 * current rendered position. */
 		if (!c->animation.running)
 			c->animation.current = c->animainit_geom;
 
