@@ -184,6 +184,13 @@ struct wsov_cell {
 	bool foreground_dirty;
 };
 
+typedef struct {
+	double accum;
+	uint32_t last_time_msec;
+	int32_t direction;
+	bool tracking;
+} WsovScrollWheelState;
+
 static struct {
 	Monitor *mon;
 	WorkspaceOverviewLayout layout;
@@ -255,10 +262,7 @@ static struct {
 	double scroll_animation_to;
 	double scroll_animation_duration_ms;
 	struct timespec scroll_animation_start;
-	double scroll_wheel_accum;
-	uint32_t scroll_step_time;
-	int32_t scroll_step_direction;
-	bool scroll_step_time_valid;
+	WsovScrollWheelState scroll_wheel;
 	int32_t drag_scroll_direction;
 	struct timespec drag_scroll_last_frame;
 	bool drag_scroll_frame_valid;
@@ -315,7 +319,7 @@ static void wsov_scroll_to_target(void);
 static void wsov_animate_scroll_to_target(void);
 static void wsov_animate_scroll_to_final_target(void);
 static void wsov_update_scroll_animation(void);
-static bool wsov_step_scroll_workspace(int32_t direction);
+static bool wsov_step_scroll_workspaces(int32_t direction, uint32_t count);
 static void wsov_update_drag_scroll(double x, double y);
 static bool wsov_advance_drag_scroll(void);
 
@@ -2917,8 +2921,9 @@ static double wsov_scroll_stride(void) {
 	return extent + config.workspace_overview_gap;
 }
 
-static bool wsov_step_scroll_workspace(int32_t direction) {
-	if (direction == 0 || wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
+static bool wsov_step_scroll_workspaces(int32_t direction, uint32_t count) {
+	if (direction == 0 || count == 0 ||
+		wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
 		return false;
 	int current = -1;
 	uint32_t center_tag = wsov_cell_for_tag(wsov.scroll_center_tag)
@@ -2932,8 +2937,10 @@ static bool wsov_step_scroll_workspace(int32_t direction) {
 	}
 	if (current < 0)
 		return false;
-	int next = MANGO_MAX(
-		0, MANGO_MIN(wsov.cell_count - 1, current + (direction > 0 ? 1 : -1)));
+	uint32_t offset = MANGO_MIN(count, (uint32_t)wsov.cell_count);
+	int next = direction > 0
+				   ? MANGO_MIN(wsov.cell_count - 1, current + (int)offset)
+				   : MANGO_MAX(0, current - (int)offset);
 	if (next == current)
 		return false;
 
@@ -2944,6 +2951,47 @@ static bool wsov_step_scroll_workspace(int32_t direction) {
 	wsov_animate_scroll_to_target();
 	wsov_refresh_target_selection();
 	return true;
+}
+
+static void wsov_apply_scroll_wheel(double notches, uint32_t time_msec) {
+	int32_t direction = notches > 0 ? 1 : -1;
+	bool continuing =
+		wsov.scroll_wheel.tracking && direction == wsov.scroll_wheel.direction;
+	if (!continuing) {
+		wsov.scroll_wheel.accum = 0.0;
+		wsov.scroll_wheel.direction = direction;
+		wsov.scroll_wheel.tracking = true;
+	}
+
+	double velocity = 0.0;
+	if (continuing) {
+		double dt = (double)(time_msec - wsov.scroll_wheel.last_time_msec);
+		velocity = fabs(notches) * 1000.0 / fmax(1.0, dt);
+	}
+	wsov.scroll_wheel.last_time_msec = time_msec;
+
+	double factor = 1.0;
+	double threshold_interval =
+		fmax(1.0, config.workspace_overview_scroll_decel_start_interval);
+	double threshold_velocity = 1000.0 / threshold_interval;
+	double gain =
+		fmax(0.0, fmin(1.0, config.workspace_overview_scroll_decel_gain));
+	if (velocity > threshold_velocity) {
+		double output_velocity =
+			threshold_velocity + (velocity - threshold_velocity) * gain;
+		factor = output_velocity / velocity;
+	}
+
+	double credit = fmin(1024.0, fabs(notches) * factor);
+	wsov.scroll_wheel.accum += direction * credit;
+	double whole = trunc(wsov.scroll_wheel.accum);
+	if (whole == 0.0)
+		return;
+	wsov.scroll_wheel.accum -= whole;
+
+	direction = whole > 0.0 ? 1 : -1;
+	uint32_t count = (uint32_t)fmin(fabs(whole), (double)UINT32_MAX);
+	wsov_step_scroll_workspaces(direction, count);
 }
 
 static void wsov_update_drag_scroll(double x, double y) {
@@ -4616,14 +4664,6 @@ bool workspace_overview_handle_axis(
 												: event->delta / 15.0;
 	if (!isfinite(notches) || fabs(notches) < 0.001)
 		return true;
-	wsov.scroll_wheel_accum += notches;
-	int32_t direction = 0;
-	while (fabs(wsov.scroll_wheel_accum) >= 1.0) {
-		direction = wsov.scroll_wheel_accum > 0 ? 1 : -1;
-		wsov.scroll_wheel_accum -= direction;
-	}
-	if (direction == 0)
-		return true;
 
 	uint32_t now = event->time_msec;
 	if (!now) {
@@ -4631,15 +4671,8 @@ bool workspace_overview_handle_axis(
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		now = (uint32_t)(ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000ULL);
 	}
-	if (wsov.scroll_step_time_valid &&
-		direction == wsov.scroll_step_direction &&
-		now - wsov.scroll_step_time < 50) {
-		return true;
-	}
-	wsov.scroll_step_time = now;
-	wsov.scroll_step_direction = direction;
-	wsov.scroll_step_time_valid = true;
-	wsov_step_scroll_workspace(direction);
+
+	wsov_apply_scroll_wheel(notches, now);
 	return true;
 }
 

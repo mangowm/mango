@@ -600,6 +600,11 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->workspace_overview_scroll_ratio = atof(value);
 	} else if (strcmp(key, "workspace_overview_drag_scroll_speed") == 0) {
 		config->workspace_overview_drag_scroll_speed = atof(value);
+	} else if (strcmp(
+				   key, "workspace_overview_scroll_decel_start_interval") == 0) {
+		config->workspace_overview_scroll_decel_start_interval = atoi(value);
+	} else if (strcmp(key, "workspace_overview_scroll_decel_gain") == 0) {
+		config->workspace_overview_scroll_decel_gain = atof(value);
 	} else if (strcmp(key, "overcircle_center_ratio") == 0) {
 		config->overcircle_center_ratio = atof(value);
 	} else if (strcmp(key, "jump_labels") == 0) {
@@ -2480,7 +2485,6 @@ void set_value_default() {
 	config.animation_duration_wsov_close = 260;
 	config.animation_duration_wsov_move = 382;
 
-	config.axis_bind_apply_timeout = 100;
 	config.focus_on_activate = 1;
 	config.new_is_master = 1;
 	config.default_mfact = 0.55f;
@@ -2593,9 +2597,12 @@ void set_value_default() {
 		WORKSPACE_OVERVIEW_SCROLL_VERTICAL;
 	config.workspace_overview_scroll_ratio = 0.8f;
 	config.workspace_overview_drag_scroll_speed = 1.5f;
+	config.workspace_overview_scroll_decel_start_interval = 50;
+	config.workspace_overview_scroll_decel_gain = 0.5f;
 	config.overcircle_center_ratio = 0.5f;
 	config.cursor_hide_timeout = 0;
 	config.cursor_hide_on_keypress = 0;
+	config.axis_bind_apply_timeout = 100;
 
 	config.warpcursor = 1;
 	config.drag_corner = 3;
@@ -2869,6 +2876,10 @@ void override_config(void) {
 		CLAMP_FLOAT(config.workspace_overview_scroll_ratio, 0.1f, 1.0f);
 	config.workspace_overview_drag_scroll_speed =
 		CLAMP_FLOAT(config.workspace_overview_drag_scroll_speed, 0.1f, 10.0f);
+	config.workspace_overview_scroll_decel_start_interval = CLAMP_INT(
+		config.workspace_overview_scroll_decel_start_interval, 1, 1000);
+	config.workspace_overview_scroll_decel_gain = CLAMP_FLOAT(
+		config.workspace_overview_scroll_decel_gain, 0.0f, 1.0f);
 	config.overcircle_center_ratio =
 		CLAMP_FLOAT(config.overcircle_center_ratio, 0.1f, 0.9f);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
@@ -2885,8 +2896,6 @@ void override_config(void) {
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
 	config.auto_reload_config = CLAMP_INT(config.auto_reload_config, 0, 1);
-	config.axis_bind_apply_timeout =
-		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
 	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
@@ -2923,6 +2932,8 @@ void override_config(void) {
 		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
 	config.cursor_hide_on_keypress =
 		CLAMP_INT(config.cursor_hide_on_keypress, 0, 1);
+	config.axis_bind_apply_timeout =
+		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
 	config.repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
 	config.repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);

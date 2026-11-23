@@ -491,20 +491,18 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 			a->func) { // Wheel direction matches and a handler exists
 
 			keyboard_cancel_pending_release_bind();
-
 			if (event->time_msec - server.axis_apply_time >
 					config.axis_bind_apply_timeout ||
 				server.axis_apply_dir * event->delta < 0) {
 				a->func(&a->arg);
 				server.axis_apply_time = event->time_msec;
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
-				return; // If matched, do not forward this scroll event to the
-						// client.
 			} else {
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
 				server.axis_apply_time = event->time_msec;
-				return;
 			}
+			return; // If matched, do not forward this scroll event to the
+					// client.
 		}
 	}
 
