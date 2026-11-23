@@ -261,11 +261,12 @@ void cleanup(void) {
 
 	keyboard_group_destroy(&server.keyboard_group->destroy, NULL);
 
-	mango_im_relay_finish(server.input_method_relay);
-
 	/* If it's not destroyed manually it will cause a use-after-free of
 	 * wlr_seat. Destroy it until it's fixed in the wlroots side */
 	wlr_backend_destroy(server.backend);
+	/* Backend teardown destroys outputs and may still focus a client. Keep the
+	 * relay alive until all output destroy callbacks have completed. */
+	mango_im_relay_finish(server.input_method_relay);
 
 	wl_display_destroy(server.display);
 	/* Destroy after the wayland display (when the monitors are already

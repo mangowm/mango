@@ -378,13 +378,17 @@ void client_notify_enter(struct wlr_surface *s, struct wlr_keyboard *kb) {
 }
 
 void client_send_close(Client *c) {
+	if (!c)
+		return;
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
-		wlr_xwayland_surface_close(c->surface.xwayland);
+		if (c->surface.xwayland)
+			wlr_xwayland_surface_close(c->surface.xwayland);
 		return;
 	}
 #endif
-	wlr_xdg_toplevel_send_close(c->surface.xdg->toplevel);
+	if (c->surface.xdg && c->surface.xdg->toplevel)
+		wlr_xdg_toplevel_send_close(c->surface.xdg->toplevel);
 }
 void client_set_border_color(Client *c, const float color[4]) {
 	wlr_scene_rect_set_color(c->border, color);
