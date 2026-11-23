@@ -870,6 +870,11 @@ void handle_new_output(struct wl_listener *listener, void *data) {
 	parse_tagrule(m);
 
 	if (config.blur) {
+		/*
+		 * LyrBlur is above root_bg and LyrBg, so the optimized cache contains
+		 * the complete output background: root color, wallpaper side bars, and
+		 * the background layer surfaces.
+		 */
 		m->blur = wlr_scene_optimized_blur_create(&server.scene->tree, 0, 0);
 		wlr_scene_node_set_position(&m->blur->node, m->m.x, m->m.y);
 		wlr_scene_node_reparent(&m->blur->node, server.layers[LyrBlur]);

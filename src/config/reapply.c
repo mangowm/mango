@@ -111,6 +111,12 @@ void set_xcursor_env() {
 
 void reapply_rootbg(void) {
 	wlr_scene_rect_set_color(server.root_bg, config.rootcolor);
+	Monitor *m = NULL;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m->blur) {
+			wlr_scene_optimized_blur_mark_dirty(m->blur);
+		}
+	}
 }
 
 void reapply_property(void) {
