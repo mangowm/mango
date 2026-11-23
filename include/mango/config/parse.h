@@ -463,6 +463,8 @@ typedef struct {
 	float workspace_overview_scroll_ratio;
 	WorkspaceOverviewScrollDirection workspace_overview_scroll_direction;
 	float workspace_overview_drag_scroll_speed;
+	uint32_t workspace_overview_scroll_decel_start_interval;
+	float workspace_overview_scroll_decel_gain;
 	float overcircle_center_ratio;
 	char *jump_labels;
 	uint32_t cursor_hide_timeout;

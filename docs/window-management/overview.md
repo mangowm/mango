@@ -134,6 +134,9 @@ possible. Scrolling and workspace-selection movement use
 `animation_curve_workspace_overview_move`. The same move animation is used for
 workspace layout changes; there is no separate layout animation.
 
+Wheel scrolling uses the
+[workspace overview scroll deceleration options](/docs/configuration/input#workspace-overview-scroll-deceleration).
+
 Each tag preview mirrors its workspace, including the background wallpaper and
 layer-shell surfaces on the `background` and `bottom` layers, such as status
 panels. Layer-shell surfaces on the `top` and `overlay` layers stay at their
