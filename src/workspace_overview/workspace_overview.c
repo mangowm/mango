@@ -1220,6 +1220,25 @@ static bool wsov_item_is_live(const struct wsov_cell *cell,
 	return false;
 }
 
+static bool wsov_item_is_live_on_layer(const struct wsov_cell *cell,
+									   const struct wsov_item *item) {
+	if (!cell || !item || item->layer >= NUM_LAYERS)
+		return false;
+
+	bool found = false;
+	for (int i = 0; i < cell->live_surface_count; i++) {
+		struct wsov_live_surface *entry = cell->live_surfaces[i];
+		if (entry->client != item->client)
+			continue;
+		found = true;
+		if (!entry->scene_surface ||
+			entry->scene_surface->buffer->node.parent !=
+				cell->live_layer_trees[item->layer])
+			return false;
+	}
+	return found;
+}
+
 static bool wsov_cell_contains_live_client(const struct wsov_cell *cell,
 										   const Client *client) {
 	if (!cell || !client)
@@ -1436,6 +1455,8 @@ static bool wsov_cell_live_projection_matches(const struct wsov_cell *cell) {
 			continue;
 		bool expected = wsov_live_owner_for_client(item->client) == cell;
 		if (expected != wsov_item_is_live(cell, item))
+			return false;
+		if (expected && !wsov_item_is_live_on_layer(cell, item))
 			return false;
 	}
 	for (int i = 0; i < cell->live_surface_count; i++) {
