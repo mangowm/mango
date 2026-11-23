@@ -194,6 +194,7 @@ static struct {
 	struct wlr_scene_tree *direct_layer_tree;
 	struct wlr_scene_tree *direct_top_tree;
 	struct wlr_scene_tree *direct_overlay_tree;
+	struct wlr_scene_tree *direct_fadeout_tree;
 	struct wsov_cell *cells;
 	int cell_count;
 	struct wl_listener frame;
@@ -276,6 +277,7 @@ static void wsov_detach_frame_listener(void);
 static void wsov_refresh_layer_previews(void);
 static void wsov_refresh_layer_preview(LayerSurface *layer);
 static void wsov_restore_direct_layers(void);
+static void wsov_destroy_layer_fadeouts(void);
 static void wsov_render_all(void);
 static void wsov_render_tags(uint32_t tags);
 static void wsov_rebuild(void);
@@ -1298,6 +1300,21 @@ static void wsov_restore_direct_layers(void) {
 			struct wlr_scene_tree *target = wsov_layer_normal_parent(layer);
 			if (target && layer->popups->node.parent != target)
 				wlr_scene_node_reparent(&layer->popups->node, target);
+		}
+	}
+}
+
+static void wsov_destroy_layer_fadeouts(void) {
+	if (!wsov.direct_fadeout_tree)
+		return;
+
+	LayerSurface *layer, *tmp;
+	wl_list_for_each_safe(layer, tmp, &server.fadeout_layers, fadeout_link) {
+		if (layer->scene &&
+			layer->scene->node.parent == wsov.direct_fadeout_tree) {
+			wl_list_remove(&layer->fadeout_link);
+			wlr_scene_node_destroy(&layer->scene->node);
+			free(layer);
 		}
 	}
 }
@@ -3900,6 +3917,7 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 		wlr_seat_keyboard_notify_clear_focus(server.seat);
 	wsov_destroy_cells();
 	wsov_restore_direct_layers();
+	wsov_destroy_layer_fadeouts();
 	if (wsov.direct_layer_tree)
 		wlr_scene_node_destroy(&wsov.direct_layer_tree->node);
 	if (wsov.root)
@@ -3909,6 +3927,7 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 	wsov.direct_layer_tree = NULL;
 	wsov.direct_top_tree = NULL;
 	wsov.direct_overlay_tree = NULL;
+	wsov.direct_fadeout_tree = NULL;
 
 	if (focus_tag) {
 		client_view_on_monitor(&(Arg){.ui = wsov_tag_bit(focus_tag)}, false, m,
@@ -3995,9 +4014,11 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 		wsov.direct_top_tree = wlr_scene_tree_create(wsov.direct_layer_tree);
 		wsov.direct_overlay_tree =
 			wlr_scene_tree_create(wsov.direct_layer_tree);
+		wsov.direct_fadeout_tree =
+			wlr_scene_tree_create(wsov.direct_layer_tree);
 	}
 	if (!wsov.direct_layer_tree || !wsov.direct_top_tree ||
-		!wsov.direct_overlay_tree) {
+		!wsov.direct_overlay_tree || !wsov.direct_fadeout_tree) {
 		wsov_finalize_close(0);
 		return false;
 	}
@@ -4650,6 +4671,20 @@ void workspace_overview_layers_changed(LayerSurface *layer) {
 		return;
 	wsov_sync_direct_layers();
 	wsov_refresh_layer_preview(layer);
+}
+
+struct wlr_scene_tree *
+workspace_overview_layer_fadeout_parent(LayerSurface *layer) {
+	if (!layer || !layer->layer_surface ||
+		!workspace_overview_is_active_on(layer->mon) ||
+		!wsov.direct_fadeout_tree)
+		return NULL;
+
+	int32_t layer_index = layer->layer_surface->current.layer;
+	if (layer_index != ZWLR_LAYER_SHELL_V1_LAYER_TOP &&
+		layer_index != ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)
+		return NULL;
+	return wsov.direct_fadeout_tree;
 }
 
 void workspace_overview_client_added(Client *c) {

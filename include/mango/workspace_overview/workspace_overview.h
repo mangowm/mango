@@ -22,6 +22,8 @@ bool workspace_overview_handle_key(uint32_t sym);
 
 void workspace_overview_client_commit(Client *c);
 void workspace_overview_layers_changed(LayerSurface *layer);
+struct wlr_scene_tree *
+workspace_overview_layer_fadeout_parent(LayerSurface *layer);
 void workspace_overview_client_added(Client *c);
 void workspace_overview_client_removed(Client *c);
 void workspace_overview_client_replaced(Client *old, Client *new);

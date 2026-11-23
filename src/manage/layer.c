@@ -202,18 +202,12 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	wlr_scene_node_set_enabled(&l->shield->node, false);
 
 	// Initializes the animation.
-	bool wsov_active = workspace_overview_is_active_on(l->mon);
-	if (config.animations && config.layer_animations && !l->no_animation &&
-		!wsov_active) {
+	if (config.animations && config.layer_animations && !l->no_animation) {
 		l->animation.duration =
 			animation_duration_for_type(OPEN, config.animation_duration_open);
 		l->animation.action = OPEN;
 		layer_set_pending_state(l);
 	} else {
-		if (wsov_active) {
-			l->animation.running = false;
-			l->animation.action = NONE;
-		}
 		l->animainit_geom = l->animation.current = l->current = l->pending =
 			l->geom;
 	}
@@ -279,9 +273,8 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 		l->geom.width = box.width;
 		l->geom.height = box.height;
 
-		bool wsov_active = workspace_overview_is_active_on(l->mon);
 		if (config.animations && config.layer_animations && !l->no_animation &&
-			!wsov_active && l->mapped &&
+			l->mapped &&
 			layer_surface->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM &&
 			layer_surface->current.layer !=
 				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
@@ -291,10 +284,6 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 			l->need_output_flush = true;
 			layer_set_pending_state(l);
 		} else {
-			if (wsov_active) {
-				l->animation.running = false;
-				l->animation.action = NONE;
-			}
 			l->animainit_geom = l->animation.current = l->current = l->pending =
 				l->geom;
 			l->need_output_flush = true;
