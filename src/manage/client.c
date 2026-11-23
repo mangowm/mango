@@ -4010,6 +4010,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->grid_row_idx = w->grid_row_idx;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
+	c->isoverlay = w->isoverlay;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;
