@@ -2267,14 +2267,16 @@ static void wsov_layout_live_projection(void) {
 				cell_box.y + border + item_offset_y * item_scale_y;
 			double window_preview_w = item->box.width * item_scale_x;
 			double window_preview_h = item->box.height * item_scale_y;
-			double content_preview_x =
-				window_preview_x + item->border_width * item_scale_x;
-			double content_preview_y =
-				window_preview_y + item->border_width * item_scale_y;
-			double content_preview_w = MANGO_MAX(
-				1.0, window_preview_w - 2 * item->border_width * item_scale_x);
-			double content_preview_h = MANGO_MAX(
-				1.0, window_preview_h - 2 * item->border_width * item_scale_y);
+			double border_inset_x =
+				item->border_width * item->render_scale_x * item_scale_x;
+			double border_inset_y =
+				item->border_width * item->render_scale_y * item_scale_y;
+			double content_preview_x = window_preview_x + border_inset_x;
+			double content_preview_y = window_preview_y + border_inset_y;
+			double content_preview_w =
+				MANGO_MAX(1.0, window_preview_w - 2 * border_inset_x);
+			double content_preview_h =
+				MANGO_MAX(1.0, window_preview_h - 2 * border_inset_y);
 			double surface_scale_x = content_preview_w / content_w;
 			double surface_scale_y = content_preview_h / content_h;
 
