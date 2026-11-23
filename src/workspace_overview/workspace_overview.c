@@ -188,6 +188,7 @@ struct wsov_cell {
 	bool dim_enabled;
 	bool contents_dirty;
 	bool foreground_dirty;
+	bool capture_pending;
 };
 
 typedef struct {
@@ -658,6 +659,129 @@ static bool wsov_intersect_monitor(int x, int y, int width, int height,
 	return !wlr_box_empty(visible);
 }
 
+struct wsov_camera_view {
+	double x;
+	double y;
+	double scale_x;
+	double scale_y;
+};
+
+static bool wsov_get_camera_view(double progress,
+								 struct wsov_camera_view *view) {
+	if (!wsov.mon || wsov.cell_count <= 0 || !view)
+		return false;
+
+	struct wsov_cell *target = wsov_cell_for_tag(wsov.camera_tag);
+	if (!target)
+		target = &wsov.cells[0];
+	struct wlr_box target_box = wsov_cell_layout_box(target);
+	int border = wsov_border_width();
+	double target_x = target_box.x + border;
+	double target_y = target_box.y + border;
+	double target_w = MANGO_MAX(1, target_box.width - 2 * border);
+	double target_h = MANGO_MAX(1, target_box.height - 2 * border);
+	double final_viewport_x =
+		wsov_scrolls_horizontally() ? wsov.scroll_offset : 0.0;
+	double final_viewport_y =
+		wsov_scrolls_vertically() ? wsov.scroll_offset : 0.0;
+	progress = fmax(0.0, fmin(1.0, progress));
+	double viewport_w = target_w + (wsov.mon->m.width - target_w) * progress;
+	double viewport_h = target_h + (wsov.mon->m.height - target_h) * progress;
+	view->x = target_x + (final_viewport_x - target_x) * progress;
+	view->y = target_y + (final_viewport_y - target_y) * progress;
+	view->scale_x = (double)wsov.mon->m.width / MANGO_MAX(1.0, viewport_w);
+	view->scale_y = (double)wsov.mon->m.height / MANGO_MAX(1.0, viewport_h);
+	return true;
+}
+
+static struct wlr_box
+wsov_cell_screen_box(const struct wsov_cell *cell,
+					 const struct wsov_camera_view *view) {
+	if (!cell || !view)
+		return (struct wlr_box){0};
+	struct wlr_box box = wsov_cell_layout_box(cell);
+	return (struct wlr_box){
+		.x = (int)lround((box.x - view->x) * view->scale_x),
+		.y = (int)lround((box.y - view->y) * view->scale_y),
+		.width = MANGO_MAX(1, (int)lround(box.width * view->scale_x)),
+		.height = MANGO_MAX(1, (int)lround(box.height * view->scale_y)),
+	};
+}
+
+static bool wsov_cell_box_visible(const struct wlr_box *box) {
+	struct wlr_box visible;
+	return box && wsov_intersect_monitor(box->x, box->y, box->width,
+										 box->height, &visible);
+}
+
+static bool wsov_cell_preview_visible(const struct wsov_cell *cell,
+									  double progress) {
+	struct wsov_camera_view view;
+	if (!wsov_get_camera_view(progress, &view))
+		return false;
+	struct wlr_box box = wsov_cell_screen_box(cell, &view);
+	return wsov_cell_box_visible(&box);
+}
+
+/*
+ * A workspace frame can be off-screen while a live scroller child overflows
+ * back into the output. Treat that child as visible work; same-axis clipping
+ * cannot escape the frame, so it can be culled using the frame alone.
+ */
+static bool wsov_cell_live_content_visible(const struct wsov_cell *cell,
+										   double progress) {
+	struct wsov_camera_view view;
+	if (!cell || !wsov_get_camera_view(progress, &view))
+		return false;
+	struct wlr_box cell_box = wsov_cell_screen_box(cell, &view);
+	if (wsov_cell_box_visible(&cell_box))
+		return true;
+	if (wsov_live_clips_to_workspace(cell))
+		return false;
+
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot)
+			continue;
+		struct wlr_box box = {
+			.x = (int)lround((item->box.x - view.x) * view.scale_x),
+			.y = (int)lround((item->box.y - view.y) * view.scale_y),
+			.width = MANGO_MAX(1, (int)lround(item->box.width * view.scale_x)),
+			.height =
+				MANGO_MAX(1, (int)lround(item->box.height * view.scale_y)),
+		};
+		if (wsov_cell_box_visible(&box))
+			return true;
+	}
+	return false;
+}
+
+static bool
+wsov_cell_live_content_visible_in_view(const struct wsov_cell *cell,
+									   const struct wsov_camera_view *view) {
+	struct wlr_box cell_box = wsov_cell_screen_box(cell, view);
+	if (wsov_cell_box_visible(&cell_box))
+		return true;
+	if (wsov_live_clips_to_workspace(cell))
+		return false;
+
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot)
+			continue;
+		struct wlr_box box = {
+			.x = (int)lround((item->box.x - view->x) * view->scale_x),
+			.y = (int)lround((item->box.y - view->y) * view->scale_y),
+			.width = MANGO_MAX(1, (int)lround(item->box.width * view->scale_x)),
+			.height =
+				MANGO_MAX(1, (int)lround(item->box.height * view->scale_y)),
+		};
+		if (wsov_cell_box_visible(&box))
+			return true;
+	}
+	return false;
+}
+
 static void wsov_place_rect_clipped(struct wlr_scene_rect *rect, int x, int y,
 									int width, int height, bool enabled) {
 	struct wlr_box visible;
@@ -763,8 +887,15 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	if (client_animation_finished) {
 		for (int i = 0; i < wsov.cell_count; i++) {
 			struct wsov_cell *cell = &wsov.cells[i];
+			if (!wsov_cell_live_content_visible(cell, wsov.progress)) {
+				cell->capture_pending = true;
+				cell->contents_dirty = true;
+				cell->foreground_dirty = true;
+				continue;
+			}
 			wsov_capture_cell_items(cell);
 			wsov_position_cell_items(cell);
+			cell->capture_pending = false;
 			cell->contents_dirty = true;
 			cell->foreground_dirty = true;
 		}
@@ -1846,28 +1977,10 @@ static void wsov_layout_live_projection(void) {
 	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
 
-	struct wsov_cell *camera_cell = wsov_cell_for_tag(wsov.camera_tag);
-	if (!camera_cell)
-		camera_cell = &wsov.cells[0];
-	struct wlr_box camera_box = wsov_cell_layout_box(camera_cell);
+	struct wsov_camera_view view;
+	if (!wsov_get_camera_view(wsov.progress, &view))
+		return;
 	int border = wsov_border_width();
-	double target_x = camera_box.x + border;
-	double target_y = camera_box.y + border;
-	double target_w = MANGO_MAX(1, camera_box.width - 2 * border);
-	double target_h = MANGO_MAX(1, camera_box.height - 2 * border);
-	double final_viewport_x =
-		wsov_scrolls_horizontally() ? wsov.scroll_offset : 0.0;
-	double final_viewport_y =
-		wsov_scrolls_vertically() ? wsov.scroll_offset : 0.0;
-	double progress = fmax(0.0, fmin(1.0, wsov.progress));
-	double viewport_x = target_x + (final_viewport_x - target_x) * progress;
-	double viewport_y = target_y + (final_viewport_y - target_y) * progress;
-	double viewport_w = target_w + (wsov.mon->m.width - target_w) * progress;
-	double viewport_h = target_h + (wsov.mon->m.height - target_h) * progress;
-	double camera_scale_x =
-		(double)wsov.mon->m.width / MANGO_MAX(1.0, viewport_w);
-	double camera_scale_y =
-		(double)wsov.mon->m.height / MANGO_MAX(1.0, viewport_h);
 
 	struct wlr_box monitor_clip = {
 		.x = 0,
@@ -1880,6 +1993,13 @@ static void wsov_layout_live_projection(void) {
 		if (!cell->live_lower_tree || !cell->live_upper_tree ||
 			cell->live_surface_count <= 0)
 			continue;
+		if (!wsov_cell_live_content_visible_in_view(cell, &view)) {
+			for (int i = 0; i < cell->live_surface_count; i++)
+				wlr_scene_node_set_enabled(
+					&cell->live_surfaces[i]->scene_surface->buffer->node,
+					false);
+			continue;
+		}
 
 		struct wlr_box cell_box = wsov_cell_layout_box(cell);
 		struct wlr_box cell_content_preview = {
@@ -1889,14 +2009,12 @@ static void wsov_layout_live_projection(void) {
 			.height = MANGO_MAX(1, cell_box.height - 2 * border),
 		};
 		struct wlr_box workspace_clip = {
-			.x = (int)lround((cell_content_preview.x - viewport_x) *
-							 camera_scale_x),
-			.y = (int)lround((cell_content_preview.y - viewport_y) *
-							 camera_scale_y),
+			.x = (int)lround((cell_content_preview.x - view.x) * view.scale_x),
+			.y = (int)lround((cell_content_preview.y - view.y) * view.scale_y),
 			.width = MANGO_MAX(
-				1, (int)lround(cell_content_preview.width * camera_scale_x)),
+				1, (int)lround(cell_content_preview.width * view.scale_x)),
 			.height = MANGO_MAX(
-				1, (int)lround(cell_content_preview.height * camera_scale_y)),
+				1, (int)lround(cell_content_preview.height * view.scale_y)),
 		};
 		/*
 		 * An inner scroller may overflow across the wsov strip only when its
@@ -1984,20 +2102,18 @@ static void wsov_layout_live_projection(void) {
 			double preview_h = surface->current.height * surface_scale_y;
 
 			struct wlr_box dst = {
-				.x = (int)lround((preview_x - viewport_x) * camera_scale_x),
-				.y = (int)lround((preview_y - viewport_y) * camera_scale_y),
-				.width = MANGO_MAX(1, (int)lround(preview_w * camera_scale_x)),
-				.height = MANGO_MAX(1, (int)lround(preview_h * camera_scale_y)),
+				.x = (int)lround((preview_x - view.x) * view.scale_x),
+				.y = (int)lround((preview_y - view.y) * view.scale_y),
+				.width = MANGO_MAX(1, (int)lround(preview_w * view.scale_x)),
+				.height = MANGO_MAX(1, (int)lround(preview_h * view.scale_y)),
 			};
 			struct wlr_box content_clip = {
-				.x = (int)lround((content_preview_x - viewport_x) *
-								 camera_scale_x),
-				.y = (int)lround((content_preview_y - viewport_y) *
-								 camera_scale_y),
-				.width = MANGO_MAX(
-					1, (int)lround(content_preview_w * camera_scale_x)),
-				.height = MANGO_MAX(
-					1, (int)lround(content_preview_h * camera_scale_y)),
+				.x = (int)lround((content_preview_x - view.x) * view.scale_x),
+				.y = (int)lround((content_preview_y - view.y) * view.scale_y),
+				.width =
+					MANGO_MAX(1, (int)lround(content_preview_w * view.scale_x)),
+				.height =
+					MANGO_MAX(1, (int)lround(content_preview_h * view.scale_y)),
 			};
 			struct wlr_box visible_in_cell;
 			struct wlr_box visible;
@@ -2674,7 +2790,21 @@ static void wsov_render_cell_part(struct wsov_cell *cell,
 	wlr_scene_buffer_set_filter_mode(target, WLR_SCALE_FILTER_BILINEAR);
 }
 
-static void wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
+static void wsov_prepare_cell_for_render(struct wsov_cell *cell) {
+	if (!cell || !cell->capture_pending)
+		return;
+	wsov_capture_cell_items(cell);
+	/* Only the active view owns the global tab projection. Other workspaces
+	 * retain their last complete strip snapshot. */
+	if (cell->tag == get_mon_curtag(wsov.mon))
+		wsov_capture_cell_bars(cell);
+	wsov_position_cell_items(cell);
+	cell->capture_pending = false;
+	cell->contents_dirty = true;
+	cell->foreground_dirty = true;
+}
+
+static void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
 	if (!cell || !cell->contents || !cell->foreground || cell->buffer_w <= 0 ||
 		cell->buffer_h <= 0)
 		return;
@@ -2694,6 +2824,19 @@ static void wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
 	}
 }
 
+static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
+	if (!cell)
+		return false;
+	if (!wsov_cell_preview_visible(cell, wsov.progress)) {
+		cell->contents_dirty = true;
+		cell->foreground_dirty = true;
+		return false;
+	}
+	wsov_prepare_cell_for_render(cell);
+	wsov_render_cell_raw(cell, buffer_scale);
+	return true;
+}
+
 static bool wsov_refresh_animated_cells(void) {
 	if (!workspace_overview_is_active() || wsov.closing)
 		return false;
@@ -2701,6 +2844,14 @@ static bool wsov_refresh_animated_cells(void) {
 	bool any_animated = false;
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
+		if (!wsov_cell_live_content_visible(cell, wsov.progress)) {
+			if (!cell->capture_pending) {
+				cell->capture_pending = true;
+				cell->contents_dirty = true;
+				cell->foreground_dirty = true;
+			}
+			continue;
+		}
 		bool animated = false;
 
 		Client *c;
@@ -2727,18 +2878,8 @@ static bool wsov_refresh_animated_cells(void) {
 		if (!animated)
 			continue;
 
-		wsov_capture_cell_items(cell);
-		/*
-		 * Only the active view owns the global tab projection. Re-capturing
-		 * bars for other workspaces here would apply the active tag's strip to
-		 * their previews. Their last complete strip snapshot remains valid
-		 * while their own clients are not animating.
-		 */
-		if (cell->tag == get_mon_curtag(wsov.mon))
-			wsov_capture_cell_bars(cell);
-		wsov_position_cell_items(cell);
-		cell->contents_dirty = true;
-		cell->foreground_dirty = true;
+		cell->capture_pending = true;
+		wsov_prepare_cell_for_render(cell);
 		any_animated = true;
 	}
 	return any_animated;
@@ -2752,6 +2893,9 @@ static bool wsov_render_dirty_cells(bool apply_camera) {
 		struct wsov_cell *cell = &wsov.cells[i];
 		if (!cell->contents_dirty && !cell->foreground_dirty)
 			continue;
+		if (!wsov_cell_preview_visible(cell, wsov.progress))
+			continue;
+		wsov_prepare_cell_for_render(cell);
 
 		if (cell->contents_dirty)
 			wsov_render_cell_part(cell, cell->contents, 0, LyrTop,
@@ -2867,7 +3011,7 @@ static void wsov_render_cell_at_resolution(struct wsov_cell *cell, int width,
 	cell->buffer_w = width;
 	cell->buffer_h = height;
 	wsov_position_cell_items(cell);
-	wsov_render_cell(cell, 1.0);
+	wsov_render_cell_raw(cell, 1.0);
 
 	cell->items = saved_items;
 	cell->box = saved_box;
@@ -3421,53 +3565,33 @@ static void wsov_apply_camera(double progress) {
 	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
 
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.camera_tag);
-	if (!target)
-		target = &wsov.cells[0];
-
-	progress = fmax(0.0, fmin(1.0, progress));
-	struct wlr_box target_box = wsov_cell_layout_box(target);
-
-	/* Zoom from the selected workspace into the scrolling workspace strip.
-	 * Every workspace uses the same viewport so the strip moves as one. */
-	double target_x = target_box.x + wsov_border_width();
-	double target_y = target_box.y + wsov_border_width();
-	double target_w = MANGO_MAX(1, target_box.width - 2 * wsov_border_width());
-	double target_h = MANGO_MAX(1, target_box.height - 2 * wsov_border_width());
-	double final_viewport_x =
-		wsov_scrolls_horizontally() ? wsov.scroll_offset : 0.0;
-	double final_viewport_y =
-		wsov_scrolls_vertically() ? wsov.scroll_offset : 0.0;
-	double viewport_x = target_x + (final_viewport_x - target_x) * progress;
-	double viewport_y = target_y + (final_viewport_y - target_y) * progress;
-	double viewport_w = target_w + (wsov.mon->m.width - target_w) * progress;
-	double viewport_h = target_h + (wsov.mon->m.height - target_h) * progress;
-	double scale_x = (double)wsov.mon->m.width / MANGO_MAX(1.0, viewport_w);
-	double scale_y = (double)wsov.mon->m.height / MANGO_MAX(1.0, viewport_h);
+	struct wsov_camera_view view;
+	if (!wsov_get_camera_view(progress, &view))
+		return;
 
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
 		struct wlr_box cell_box = wsov_cell_layout_box(cell);
-		double width = cell_box.width * scale_x;
-		double height = cell_box.height * scale_y;
-		double x = (cell_box.x - viewport_x) * scale_x;
-		double y = (cell_box.y - viewport_y) * scale_y;
+		double width = cell_box.width * view.scale_x;
+		double height = cell_box.height * view.scale_y;
+		double x = (cell_box.x - view.x) * view.scale_x;
+		double y = (cell_box.y - view.y) * view.scale_y;
 
 		wsov_place_rect_clipped(cell->frame, (int)lround(x), (int)lround(y),
 								MANGO_MAX(1, (int)lround(width)),
 								MANGO_MAX(1, (int)lround(height)), true);
 		int content_x = (int)lround(
-			(cell_box.x + wsov_border_width() - viewport_x) * scale_x);
+			(cell_box.x + wsov_border_width() - view.x) * view.scale_x);
 		int content_y = (int)lround(
-			(cell_box.y + wsov_border_width() - viewport_y) * scale_y);
+			(cell_box.y + wsov_border_width() - view.y) * view.scale_y);
 		int content_w = MANGO_MAX(
 			1,
 			(int)lround(MANGO_MAX(1, cell_box.width - 2 * wsov_border_width()) *
-						scale_x));
+						view.scale_x));
 		int content_h =
 			MANGO_MAX(1, (int)lround(MANGO_MAX(1, cell_box.height -
 													  2 * wsov_border_width()) *
-									 scale_y));
+									 view.scale_y));
 		wsov_place_buffer_clipped(cell->contents, NULL, content_x, content_y,
 								  content_w, content_h);
 		wsov_place_buffer_clipped(cell->foreground, NULL, content_x, content_y,
@@ -3484,8 +3608,9 @@ static void wsov_apply_camera(double progress) {
 		}
 		int frame_w = MANGO_MAX(1, (int)lround(width));
 		int frame_h = MANGO_MAX(1, (int)lround(height));
-		int border_w = MANGO_MAX(
-			1, (int)lround(wsov_border_width() * fmin(scale_x, scale_y)));
+		int border_w =
+			MANGO_MAX(1, (int)lround(wsov_border_width() *
+									 fmin(view.scale_x, view.scale_y)));
 		int frame_x = (int)lround(x);
 		int frame_y = (int)lround(y);
 		wsov_place_rect_clipped(cell->border[0], frame_x, frame_y, frame_w,
@@ -3514,6 +3639,8 @@ static void wsov_apply_camera(double progress) {
 				MANGO_MAX(1, (int)lround(preview->height * local_scale_y)));
 		}
 	}
+	if (!wsov.closing)
+		wsov_render_dirty_cells(false);
 	wsov_layout_live_projection();
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
@@ -3657,6 +3784,10 @@ static bool wsov_create_cells(void) {
 	}
 	wsov_sync_monitor_selection();
 	wsov_capture_workspace_layouts();
+	for (int i = 0; i < wsov.cell_count; i++) {
+		wsov.cells[i].contents_dirty = true;
+		wsov.cells[i].foreground_dirty = true;
+	}
 	wsov_rebuild_live_projection();
 	wsov_render_all();
 	wsov_update_styles();
