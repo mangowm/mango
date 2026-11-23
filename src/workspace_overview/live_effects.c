@@ -277,6 +277,12 @@ void wsov_live_effects_destroy(struct wsov_live_effects *effects) {
 
 #else
 
+#include "mango/common/util.h"
+#include "mango/manage/client.h"
+#include <math.h>
+#include <stdlib.h>
+#include <wlr/types/wlr_scene.h>
+
 struct wsov_background_effects *
 wsov_background_effects_create(struct wlr_scene_tree *parent, int width,
 							   int height) {
@@ -297,16 +303,34 @@ void wsov_background_effects_destroy(struct wsov_background_effects *effects) {
 	(void)effects;
 }
 
+struct wsov_live_effects {
+	Client *client;
+	struct wlr_scene_rect *border[4];
+};
+
 struct wsov_live_effects *
 wsov_live_effects_create(struct wlr_scene_tree *parent, struct Client *client) {
-	(void)parent;
-	(void)client;
-	return NULL;
+	if (!parent || !client)
+		return NULL;
+
+	struct wsov_live_effects *effects = calloc(1, sizeof(*effects));
+	if (!effects)
+		return NULL;
+	effects->client = client;
+	for (int i = 0; i < 4; i++) {
+		effects->border[i] =
+			wlr_scene_rect_create(parent, 0, 0, get_border_color(client));
+		if (!effects->border[i]) {
+			wsov_live_effects_destroy(effects);
+			return NULL;
+		}
+		wlr_scene_node_set_enabled(&effects->border[i]->node, false);
+	}
+	return effects;
 }
 
 bool wsov_live_effects_has_border(struct wsov_live_effects *effects) {
-	(void)effects;
-	return false;
+	return effects != NULL;
 }
 
 void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
@@ -321,14 +345,53 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
 							  const struct wlr_box *monitor_clip,
 							  double scale) {
-	(void)effects;
-	(void)window_box;
-	(void)monitor_clip;
-	(void)scale;
+	if (!effects)
+		return;
+	for (int i = 0; i < 4; i++)
+		wlr_scene_node_set_enabled(&effects->border[i]->node, false);
+	if (!window_box || !monitor_clip || window_box->width <= 0 ||
+		window_box->height <= 0 || monitor_clip->width <= 0 ||
+		monitor_clip->height <= 0 || !isfinite(scale) || scale <= 0.0)
+		return;
+
+	struct wlr_box box;
+	if (!wlr_box_intersection(&box, window_box, monitor_clip) ||
+		box.width <= 0 || box.height <= 0)
+		return;
+
+	int border = MANGO_MAX(1, (int)lround(effects->client->bw * scale));
+	if (border > box.width / 2)
+		border = box.width / 2;
+	if (border > box.height / 2)
+		border = box.height / 2;
+	if (border <= 0)
+		return;
+
+	const float *color = get_border_color(effects->client);
+	struct wlr_box rects[4] = {
+		{box.x, box.y, box.width, border},
+		{box.x, box.y + box.height - border, box.width, border},
+		{box.x, box.y, border, box.height},
+		{box.x + box.width - border, box.y, border, box.height},
+	};
+	for (int i = 0; i < 4; i++) {
+		wlr_scene_node_set_position(&effects->border[i]->node, rects[i].x,
+									rects[i].y);
+		wlr_scene_rect_set_size(effects->border[i], rects[i].width,
+								rects[i].height);
+		wlr_scene_rect_set_color(effects->border[i], color);
+		wlr_scene_node_set_enabled(&effects->border[i]->node, true);
+	}
 }
 
 void wsov_live_effects_destroy(struct wsov_live_effects *effects) {
-	(void)effects;
+	if (!effects)
+		return;
+	for (int i = 0; i < 4; i++) {
+		if (effects->border[i])
+			wlr_scene_node_destroy(&effects->border[i]->node);
+	}
+	free(effects);
 }
 
 #endif
