@@ -617,7 +617,8 @@ static struct wlr_box wsov_live_overflow_clip(const struct wlr_box *workspace,
 		clip.x = workspace->x;
 		clip.width = workspace->width;
 	} else {
-		return *monitor;
+		/* Grid workspace overview keeps every preview inside its frame. */
+		return *workspace;
 	}
 
 	struct wlr_box visible;
