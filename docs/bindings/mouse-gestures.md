@@ -45,6 +45,9 @@ axisbind=MODIFIERS,DIRECTION,COMMAND,PARAMETERS
 
 - **Direction**: `UP`, `DOWN`, `LEFT`, `RIGHT`
 
+Matched wheel actions use `axis_bind_apply_timeout`. Lower values apply the
+binding more often; higher values apply it less often.
+
 ### Examples
 
 ```ini

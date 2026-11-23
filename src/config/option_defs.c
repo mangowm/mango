@@ -2545,7 +2545,6 @@ void set_value_default() {
 	config.animation_duration_wsov_close = 260;
 	config.animation_duration_wsov_move = 382;
 
-	config.axis_bind_apply_timeout = 100;
 	config.focus_on_activate = 1;
 	config.new_is_master = 1;
 	config.default_mfact = 0.55f;
@@ -2663,6 +2662,7 @@ void set_value_default() {
 	config.overcircle_center_ratio = 0.5f;
 	config.cursor_hide_timeout = 0;
 	config.cursor_hide_on_keypress = 0;
+	config.axis_bind_apply_timeout = 100;
 
 	config.warpcursor = 1;
 	config.drag_corner = 3;
@@ -2974,8 +2974,6 @@ void override_config(void) {
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
 	config.auto_reload_config = CLAMP_INT(config.auto_reload_config, 0, 1);
-	config.axis_bind_apply_timeout =
-		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
 	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
@@ -3015,6 +3013,8 @@ void override_config(void) {
 		CLAMP_INT(config.cursor_hide_timeout, 0, 36000);
 	config.cursor_hide_on_keypress =
 		CLAMP_INT(config.cursor_hide_on_keypress, 0, 1);
+	config.axis_bind_apply_timeout =
+		CLAMP_INT(config.axis_bind_apply_timeout, 0, 1000);
 	config.single_scratchpad = CLAMP_INT(config.single_scratchpad, 0, 1);
 	config.repeat_rate = CLAMP_INT(config.repeat_rate, 1, 1000);
 	config.repeat_delay = CLAMP_INT(config.repeat_delay, 1, 20000);

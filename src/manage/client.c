@@ -3179,6 +3179,9 @@ void client_view_on_monitor(const Arg *arg, bool want_animation, Monitor *m,
 	if (!m || (arg->ui != (~0 & TAGMASK) && m->isoverview)) {
 		return;
 	}
+	if (m->is_ws_overview && arg->ui != UINT32_MAX &&
+		(arg->ui & TAG0_MASK))
+		return;
 
 	if (arg->ui == 0) {
 		return;
@@ -4010,6 +4013,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->grid_row_idx = w->grid_row_idx;
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
+	c->isoverlay = w->isoverlay;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;

@@ -41,6 +41,33 @@
 #include <wlr/xcursor.h>
 
 static struct LastCursor last_cursor;
+static bool wsov_direct_layer_pointer_pressed;
+
+static bool pointer_wsov_direct_layer_at(double x, double y,
+										 struct wlr_surface **surface,
+										 double *sx, double *sy) {
+	LayerSurface *layer = NULL;
+	struct wlr_surface *hit_surface = NULL;
+	double hit_x = 0, hit_y = 0;
+
+	if (!workspace_overview_is_active())
+		return false;
+
+	node_at_point(x, y, &hit_surface, NULL, &layer, NULL, &hit_x, &hit_y);
+	if (!layer || !hit_surface ||
+		!workspace_overview_is_active_on(layer->mon) ||
+		layer->layer_surface->current.layer < ZWLR_LAYER_SHELL_V1_LAYER_TOP) {
+		return false;
+	}
+
+	if (surface)
+		*surface = hit_surface;
+	if (sx)
+		*sx = hit_x;
+	if (sy)
+		*sy = hit_y;
+	return true;
+}
 
 static double pointer_surface_scale(Client *c) {
 #ifdef XWAYLAND
@@ -464,20 +491,18 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 			a->func) { // Wheel direction matches and a handler exists
 
 			keyboard_cancel_pending_release_bind();
-
 			if (event->time_msec - server.axis_apply_time >
 					config.axis_bind_apply_timeout ||
 				server.axis_apply_dir * event->delta < 0) {
 				a->func(&a->arg);
 				server.axis_apply_time = event->time_msec;
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
-				return; // If matched, do not forward this scroll event to the
-						// client.
 			} else {
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
 				server.axis_apply_time = event->time_msec;
-				return;
 			}
+			return; // If matched, do not forward this scroll event to the
+					// client.
 		}
 	}
 
@@ -1759,6 +1784,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	LayerSurface *l = NULL;
 	MangoBarDecoration *bar = NULL;
 	struct wlr_surface *surface;
+	struct wlr_surface *wsov_layer_surface = NULL;
+	double wsov_layer_sx = 0, wsov_layer_sy = 0;
+	bool wsov_layer_hit;
+	bool route_to_wsov_layer;
 	int32_t ji;
 	const MouseBinding *m;
 	struct wlr_surface *old_pointer_focus_surface =

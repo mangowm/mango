@@ -84,6 +84,22 @@ Specific settings for laptop trackpads. Some settings may require a relogin to t
 | `trackpad_scroll_factor` | `1.0` | Scroll factor for trackpad scroll speed (0.1–10.0). |
 ---
 
+### Workspace Overview Scroll Deceleration
+
+| Setting | Default | Description |
+| :--- | :--- | :--- |
+| `workspace_overview_scroll_decel_start_interval` | `50` | Scroll events faster than this interval are decelerated. Range: 1–1000 ms. |
+| `workspace_overview_scroll_decel_gain` | `0.5` | Deceleration strength. Lower values are slower; `1.0` disables deceleration. Range: 0.0–1.0. |
+
+```ini
+workspace_overview_scroll_decel_start_interval=50
+workspace_overview_scroll_decel_gain=0.5
+```
+
+Lower `workspace_overview_scroll_decel_gain` for stronger deceleration.
+Increase `workspace_overview_scroll_decel_start_interval` to start decelerating
+at a slower scroll speed.
+
 ### Touchscreen Settings
 
 Settings for touchscreen devices. Touch input is forwarded to clients
