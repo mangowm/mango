@@ -189,6 +189,10 @@ struct wsov_cell {
 	bool contents_dirty;
 	bool foreground_dirty;
 	bool capture_pending;
+	bool live_enabled;
+	bool live_desired;
+	bool live_rebuild_pending;
+	uint8_t live_priority;
 };
 
 typedef struct {
@@ -1237,24 +1241,19 @@ static bool wsov_cell_contains_live_client(const struct wsov_cell *cell,
 	return false;
 }
 
-/*
- * A client scene can only have one live owner in the workspace strip. Prefer
- * the selected workspace when it contains the client; all other copies on
- * additional tags stay in the off-screen fallback.
- */
 static struct wsov_cell *wsov_live_owner_for_client(Client *client) {
-	struct wsov_cell *first = NULL;
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
+	struct wsov_cell *owner = NULL;
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
-		if (!wsov_cell_contains_live_client(cell, client))
+		if (!cell->live_desired ||
+			!wsov_cell_contains_live_client(cell, client))
 			continue;
-		if (!first)
-			first = cell;
-		if (cell == target)
-			return target;
+		if (!owner || cell->live_priority > owner->live_priority ||
+			(cell->live_priority == owner->live_priority &&
+			 cell->tag == wsov.target_tag))
+			owner = cell;
 	}
-	return first;
+	return owner;
 }
 
 static void wsov_remove_live_surface(struct wsov_cell *cell,
@@ -1365,8 +1364,14 @@ static void wsov_clear_cell_live_surfaces(struct wsov_cell *cell,
 }
 
 static void wsov_clear_live_projection(bool mark_dirty) {
-	for (int i = 0; i < wsov.cell_count; i++)
-		wsov_clear_cell_live_surfaces(&wsov.cells[i], mark_dirty);
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wsov_cell *cell = &wsov.cells[i];
+		wsov_clear_cell_live_surfaces(cell, mark_dirty);
+		cell->live_enabled = false;
+		cell->live_desired = false;
+		cell->live_rebuild_pending = false;
+		cell->live_priority = 0;
+	}
 	wsov.live_cell = NULL;
 }
 
@@ -1428,88 +1433,135 @@ static void wsov_order_live_projections(void) {
 		wsov_order_live_projection(&wsov.cells[i]);
 }
 
-static bool wsov_live_projection_is_current(void) {
-	for (int i = 0; i < wsov.cell_count; i++) {
-		struct wsov_cell *cell = &wsov.cells[i];
-		for (int j = 0; j < cell->item_count; j++) {
-			struct wsov_item *item = &cell->items[j];
-			if (item->is_snapshot || !item->client ||
-				!wsov_client_eligible(item->client))
-				continue;
-			bool expected = wsov_live_owner_for_client(item->client) == cell;
-			if (expected && !cell->live_lower_tree)
-				return false;
-			if (expected != wsov_item_is_live(cell, item))
-				return false;
-		}
-		for (int j = 0; j < cell->live_surface_count; j++) {
-			Client *client = cell->live_surfaces[j]->client;
-			if (!client || wsov_live_owner_for_client(client) != cell)
-				return false;
-		}
+static bool wsov_cell_live_projection_matches(const struct wsov_cell *cell) {
+	if (cell->live_enabled != cell->live_desired)
+		return false;
+	if (!cell->live_desired)
+		return cell->live_surface_count == 0;
+
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot || !item->client ||
+			!wsov_client_eligible(item->client))
+			continue;
+		bool expected = wsov_live_owner_for_client(item->client) == cell;
+		if (expected != wsov_item_is_live(cell, item))
+			return false;
+	}
+	for (int i = 0; i < cell->live_surface_count; i++) {
+		Client *client = cell->live_surfaces[i]->client;
+		if (!client || wsov_live_owner_for_client(client) != cell)
+			return false;
 	}
 	return true;
 }
 
-static void wsov_rebuild_live_projection(void) {
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
-	if (!target || !wsov.root)
+static void wsov_build_cell_live_projection(struct wsov_cell *cell) {
+	if (!cell->live_enabled || cell->item_count <= 0 ||
+		!wsov_create_cell_live_trees(cell))
 		return;
-	wsov.live_cell = target;
-	if (wsov_live_projection_is_current()) {
-		wsov_layout_live_projection();
-		return;
+
+	for (int i = 0; i < cell->item_count; i++) {
+		struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot || !item->client ||
+			!wsov_client_eligible(item->client) ||
+			wsov_live_owner_for_client(item->client) != cell)
+			continue;
+
+		bool already_added = false;
+		for (int j = 0; j < i; j++) {
+			if (!cell->items[j].is_snapshot &&
+				cell->items[j].client == item->client) {
+				already_added = true;
+				break;
+			}
+		}
+		if (already_added)
+			continue;
+
+		struct wlr_surface *surface = client_surface(item->client);
+		if (!surface || !surface->mapped || item->layer >= NUM_LAYERS)
+			continue;
+		struct wsov_live_surface_data data = {
+			.client = item->client,
+			.cell = cell,
+			.tree = cell->live_layer_trees[item->layer],
+		};
+		wlr_surface_for_each_surface(surface, wsov_live_surface_add, &data);
 	}
 
-	/*
-	 * Project every workspace live. A client tagged on multiple workspaces
-	 * can only have one live scene owner, so its additional copies remain in
-	 * the off-screen fallback. This keeps normal windows overflow-capable in
-	 * every workspace while preserving multi-tag semantics.
-	 */
-	wsov_clear_live_projection(true);
+	if (cell->live_surface_count > 0) {
+		cell->contents_dirty = true;
+		cell->foreground_dirty = true;
+	}
+	wsov_order_live_projection(cell);
+}
+
+static void wsov_update_live_desires(const struct wsov_camera_view *view) {
+	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
+	int target_index = -1;
+	for (int i = 0; i < wsov.cell_count; i++) {
+		if (&wsov.cells[i] == target) {
+			target_index = i;
+			break;
+		}
+	}
+
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
-		if (!wsov_create_cell_live_trees(cell))
-			continue;
-		for (int j = 0; j < cell->item_count; j++) {
-			struct wsov_item *item = &cell->items[j];
-			if (item->is_snapshot || !item->client ||
-				!wsov_client_eligible(item->client) ||
-				wsov_live_owner_for_client(item->client) != cell)
-				continue;
-
-			bool already_added = false;
-			for (int k = 0; k < j; k++) {
-				if (!cell->items[k].is_snapshot &&
-					cell->items[k].client == item->client) {
-					already_added = true;
-					break;
-				}
-			}
-			if (already_added)
-				continue;
-
-			struct wlr_surface *surface = client_surface(item->client);
-			if (!surface || !surface->mapped)
-				continue;
-			uint32_t layer = item->layer;
-			if (layer >= NUM_LAYERS)
-				continue;
-			struct wsov_live_surface_data data = {
-				.client = item->client,
-				.cell = cell,
-				.tree = cell->live_layer_trees[layer],
-			};
-			wlr_surface_for_each_surface(surface, wsov_live_surface_add, &data);
-		}
-		if (cell->live_surface_count > 0) {
-			cell->contents_dirty = true;
-			cell->foreground_dirty = true;
-		}
+		uint8_t priority = 0;
+		if (cell->item_count > 0 &&
+			wsov_cell_live_content_visible_in_view(cell, view))
+			priority = 2;
+		if (cell == target)
+			priority = MANGO_MAX(priority, 1);
+		if (wsov.layout == WORKSPACE_OVERVIEW_SCROLL && target_index >= 0 &&
+			cell->item_count > 0 && abs(i - target_index) <= 1)
+			priority = MANGO_MAX(priority, 1);
+		cell->live_priority = priority;
+		cell->live_desired = priority > 0;
 	}
+}
 
-	wsov_order_live_projections();
+static bool wsov_sync_live_projection(const struct wsov_camera_view *view) {
+	if (wsov.closing)
+		return false;
+	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
+	if (!target || !wsov.root)
+		return false;
+	wsov.live_cell = target;
+	wsov_update_live_desires(view);
+
+	bool changed = false;
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wsov_cell *cell = &wsov.cells[i];
+		if (wsov_cell_live_projection_matches(cell))
+			continue;
+		/*
+		 * Remove every obsolete owner before creating new owners. Otherwise a
+		 * multi-tag client could briefly have two live scene copies when its
+		 * owner moves to a cell earlier in the strip.
+		 */
+		wsov_clear_cell_live_surfaces(cell, true);
+		cell->live_enabled = cell->live_desired;
+		cell->live_rebuild_pending = true;
+		changed = true;
+	}
+	for (int i = 0; i < wsov.cell_count; i++) {
+		struct wsov_cell *cell = &wsov.cells[i];
+		if (!cell->live_rebuild_pending)
+			continue;
+		cell->live_rebuild_pending = false;
+		wsov_build_cell_live_projection(cell);
+	}
+	if (changed)
+		wsov_order_live_projections();
+	return changed;
+}
+
+static void wsov_rebuild_live_projection(void) {
+	if (wsov.closing || !wsov.root)
+		return;
 	wsov_layout_live_projection();
 	wsov_render_dirty_cells(false);
 }
@@ -1974,12 +2026,13 @@ static void wsov_position_cell_items(struct wsov_cell *cell) {
 }
 
 static void wsov_layout_live_projection(void) {
-	if (!wsov.mon || wsov.cell_count <= 0)
+	if (wsov.closing || !wsov.mon || wsov.cell_count <= 0)
 		return;
 
 	struct wsov_camera_view view;
 	if (!wsov_get_camera_view(wsov.progress, &view))
 		return;
+	wsov_sync_live_projection(&view);
 	int border = wsov_border_width();
 
 	struct wlr_box monitor_clip = {
@@ -3639,9 +3692,9 @@ static void wsov_apply_camera(double progress) {
 				MANGO_MAX(1, (int)lround(preview->height * local_scale_y)));
 		}
 	}
+	wsov_layout_live_projection();
 	if (!wsov.closing)
 		wsov_render_dirty_cells(false);
-	wsov_layout_live_projection();
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
 
@@ -3726,8 +3779,7 @@ static bool wsov_create_cells(void) {
 		cell->dim = mango_dim_node_create(wsov.root, (float[4]){0, 0, 0, 0});
 		if (!cell->frame || !cell->contents || !cell->border[0] ||
 			!cell->border[1] || !cell->border[2] || !cell->border[3] ||
-			!cell->foreground || !cell->dim ||
-			!wsov_create_cell_live_trees(cell)) {
+			!cell->foreground || !cell->dim) {
 			free(snapshot);
 			return false;
 		}
