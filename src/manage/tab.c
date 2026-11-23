@@ -259,8 +259,7 @@ static Client *get_tab_state_focus(const Monitor *m,
 
 bool tab_client_hidden_on_tag(const Monitor *m, uint32_t tag, const Client *c) {
 	if (!m || !m->pertag || tag == 0 || tag >= PERTAG_SLOTS || !c ||
-		c->mon != m ||
-		!tab_layout_enabled_for_tag(m, tag))
+		c->mon != m || !tab_layout_enabled_for_tag(m, tag))
 		return false;
 
 	struct TagTabState *state = m->pertag->tab_state[tag];

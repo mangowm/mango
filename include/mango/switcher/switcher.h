@@ -54,6 +54,8 @@ struct switcher_state {
 	int panel_y;
 	int panel_w;
 	int panel_h;
+	bool visible;
+	struct wl_event_source *show_timer;
 };
 
 /* Function Definitions */
