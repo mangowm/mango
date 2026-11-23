@@ -2143,13 +2143,14 @@ static void wsov_position_cell_items(struct wsov_cell *cell) {
 }
 
 static void wsov_layout_live_projection(void) {
-	if (wsov.closing || !wsov.mon || wsov.cell_count <= 0)
+	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
 
 	struct wsov_camera_view view;
 	if (!wsov_get_camera_view(wsov.progress, &view))
 		return;
-	wsov_sync_live_projection(&view);
+	if (!wsov.closing)
+		wsov_sync_live_projection(&view);
 	int border = wsov_border_width();
 
 	struct wlr_box monitor_clip = {
@@ -3153,42 +3154,6 @@ static void wsov_render_tags(uint32_t tags) {
 		if (tags & wsov_tag_bit(cell->tag))
 			wsov_render_cell(cell, buffer_scale);
 	}
-}
-
-static void wsov_render_cell_at_resolution(struct wsov_cell *cell, int width,
-										   int height) {
-	if (!cell || width <= 0 || height <= 0 || cell->item_count <= 0 ||
-		(cell->buffer_w >= width && cell->buffer_h >= height))
-		return;
-
-	/* The close animation expands the selected preview to the monitor size.
-	 * Replacing its small preview texture once with an output-sized texture
-	 * keeps content sharp while it expands, without changing layout state. */
-	struct wsov_item *items = malloc(cell->item_count * sizeof(*items));
-	if (!items)
-		return;
-	memcpy(items, cell->items, cell->item_count * sizeof(*items));
-
-	struct wsov_item *saved_items = cell->items;
-	struct wlr_box saved_box = cell->box;
-	int saved_buffer_w = cell->buffer_w;
-	int saved_buffer_h = cell->buffer_h;
-
-	cell->items = items;
-	cell->box = (struct wlr_box){
-		.width = width + 2 * wsov_border_width(),
-		.height = height + 2 * wsov_border_width(),
-	};
-	cell->buffer_w = width;
-	cell->buffer_h = height;
-	wsov_position_cell_items(cell);
-	wsov_render_cell_raw(cell, 1.0);
-
-	cell->items = saved_items;
-	cell->box = saved_box;
-	cell->buffer_w = saved_buffer_w;
-	cell->buffer_h = saved_buffer_h;
-	free(items);
 }
 
 static void wsov_update_styles_tags(uint32_t tags) {
@@ -4411,22 +4376,14 @@ static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	wsov_set_borders_enabled(false);
 	wsov.closing = true;
 	wsov.layers_dirty = false;
-	/* The close animation expands a single cached workspace image. Switch the
-	 * selected workspace back to its full offscreen representation first. */
-	wsov_clear_live_projection(true);
+	/* Keep the live projection through the close animation so surface effects
+	 * continue to scale with the workspace. wsov_destroy_cells() removes them
+	 * only after the animation reaches its final frame. */
 	wsov.close_tag = focus_tag;
 	uint32_t camera_tag = focus_tag ? focus_tag : wsov_active_camera_tag();
 	if (!camera_tag || !wsov_cell_for_tag(camera_tag))
 		camera_tag = previous_target;
 	wsov.camera_tag = camera_tag;
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.camera_tag);
-	if (target) {
-		double scale =
-			wsov.mon->wlr_output ? fmax(1.0, wsov.mon->wlr_output->scale) : 1.0;
-		wsov_render_cell_at_resolution(target,
-									   (int)lround(wsov.mon->m.width * scale),
-									   (int)lround(wsov.mon->m.height * scale));
-	}
 	wsov_apply_camera(wsov.progress);
 	wsov_start_animation(true, 0.0);
 }
