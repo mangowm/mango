@@ -39,8 +39,7 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 									 double scale);
 void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
-							  const struct wlr_box *workspace_clip,
-							  double scale);
+							  const struct wlr_box *monitor_clip, double scale);
 void wsov_live_effects_destroy(struct wsov_live_effects *effects);
 
 #endif

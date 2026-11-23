@@ -602,6 +602,28 @@ static bool wsov_live_clips_to_workspace(const struct wsov_cell *cell) {
 	return true;
 }
 
+static struct wlr_box wsov_live_overflow_clip(const struct wlr_box *workspace,
+											  const struct wlr_box *monitor) {
+	if (!workspace || !monitor)
+		return (struct wlr_box){0};
+
+	struct wlr_box clip = *monitor;
+	if (wsov_scrolls_vertically()) {
+		clip.y = workspace->y;
+		clip.height = workspace->height;
+	} else if (wsov_scrolls_horizontally()) {
+		clip.x = workspace->x;
+		clip.width = workspace->width;
+	} else {
+		return *monitor;
+	}
+
+	struct wlr_box visible;
+	if (!wlr_box_intersection(&visible, &clip, monitor))
+		return (struct wlr_box){0};
+	return visible;
+}
+
 static struct wlr_box wsov_item_display_box(const struct wsov_cell *cell,
 											const struct wsov_item *item) {
 	if (!cell || !item)
@@ -2167,16 +2189,8 @@ static void wsov_layout_live_projection(void) {
 			.height = MANGO_MAX(
 				1, (int)lround(cell_content_preview.height * view.scale_y)),
 		};
-		struct wlr_box effect_clip;
-		if (!wlr_box_intersection(&effect_clip, &workspace_clip, &monitor_clip))
-			effect_clip = (struct wlr_box){0};
-		/*
-		 * An inner scroller may overflow across the wsov strip only when its
-		 * axis is orthogonal to the strip. On the same axis it must stay
-		 * clipped to the workspace so it cannot paint over the adjacent
-		 * workspace preview.
-		 */
-		bool clip_to_workspace = wsov_live_clips_to_workspace(cell);
+		struct wlr_box overflow_clip =
+			wsov_live_overflow_clip(&workspace_clip, &monitor_clip);
 
 		for (int i = 0; i < cell->live_surface_count; i++) {
 			struct wsov_live_surface *entry = cell->live_surfaces[i];
@@ -2265,8 +2279,8 @@ static void wsov_layout_live_projection(void) {
 				.height =
 					MANGO_MAX(1, (int)lround(item->box.height * view.scale_y)),
 			};
-			wsov_live_effects_update(entry->effects, &window_box, &effect_clip,
-									 render_scale);
+			wsov_live_effects_update(entry->effects, &window_box,
+									 &overflow_clip, render_scale);
 
 			struct wlr_box clip;
 			client_get_clip(entry->client, &clip);
@@ -2299,19 +2313,8 @@ static void wsov_layout_live_projection(void) {
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
-			if (clip_to_workspace) {
-				struct wlr_box visible_in_workspace;
-				if (!wlr_box_intersection(&visible_in_workspace,
-										  &visible_in_cell, &workspace_clip)) {
-					wsov_live_effects_update(entry->effects, NULL, NULL,
-											 render_scale);
-					wlr_scene_node_set_enabled(&buffer->node, false);
-					continue;
-				}
-				visible_in_cell = visible_in_workspace;
-			}
 			if (!wlr_box_intersection(&visible, &visible_in_cell,
-									  &monitor_clip) ||
+									  &overflow_clip) ||
 				visible.width <= 0 || visible.height <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
 										 render_scale);

@@ -129,7 +129,7 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 
 void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
-							  const struct wlr_box *workspace_clip,
+							  const struct wlr_box *monitor_clip,
 							  double scale) {
 	if (!effects)
 		return;
@@ -139,9 +139,9 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 		wlr_scene_node_set_enabled(&effects->blur->node, false);
 	if (effects->border)
 		wlr_scene_node_set_enabled(&effects->border->node, false);
-	if (!window_box || !workspace_clip || window_box->width <= 0 ||
-		window_box->height <= 0 || workspace_clip->width <= 0 ||
-		workspace_clip->height <= 0 || !isfinite(scale) || scale <= 0.0)
+	if (!window_box || !monitor_clip || window_box->width <= 0 ||
+		window_box->height <= 0 || monitor_clip->width <= 0 ||
+		monitor_clip->height <= 0 || !isfinite(scale) || scale <= 0.0)
 		return;
 
 	Client *client = effects->client;
@@ -162,8 +162,7 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 				.height = window_box->height + 2 * spread,
 			};
 			struct wlr_box window_clip = {0};
-			if (wlr_box_intersection(&shadow_node, &shadow_box,
-									 workspace_clip) &&
+			if (wlr_box_intersection(&shadow_node, &shadow_box, monitor_clip) &&
 				wlr_box_intersection(&window_clip, window_box, &shadow_node)) {
 				clipped.area = (struct wlr_box){
 					.x = window_clip.x - shadow_node.x,
@@ -193,6 +192,7 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 
 	if (effects->blur) {
 		bool enabled = config.blur && !client->no_blur;
+		bool optimized = client_blur_uses_wallpaper(client);
 		struct wlr_box blur_box = {
 			.x = window_box->x + (int)lround(client->bw * scale),
 			.y = window_box->y + (int)lround(client->bw * scale),
@@ -201,7 +201,7 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 		};
 		struct wlr_box visible = {0};
 		if (blur_box.width <= 0 || blur_box.height <= 0 ||
-			!wlr_box_intersection(&visible, &blur_box, workspace_clip)) {
+			!wlr_box_intersection(&visible, &blur_box, monitor_clip)) {
 			enabled = false;
 		}
 
@@ -211,8 +211,8 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 			wlr_scene_blur_set_size(effects->blur, visible.width,
 									visible.height);
 			wlr_scene_blur_set_corner_radii(effects->blur, corners);
-			wlr_scene_blur_set_should_only_blur_bottom_layer(
-				effects->blur, client_blur_uses_wallpaper(client));
+			wlr_scene_blur_set_should_only_blur_bottom_layer(effects->blur,
+															 optimized);
 			wlr_scene_blur_set_strength(effects->blur, 1.0f);
 			wlr_scene_blur_set_alpha(effects->blur, 1.0f);
 		}
@@ -224,7 +224,7 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 		struct wlr_box border_box = {0};
 		struct wlr_box inner = {0};
 		if (enabled &&
-			wlr_box_intersection(&border_box, window_box, workspace_clip)) {
+			wlr_box_intersection(&border_box, window_box, monitor_clip)) {
 			int border_width = MANGO_MAX(1, (int)lround(client->bw * scale));
 			struct wlr_box window_inner = {
 				.x = window_box->x + border_width,
@@ -319,11 +319,11 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 
 void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
-							  const struct wlr_box *workspace_clip,
+							  const struct wlr_box *monitor_clip,
 							  double scale) {
 	(void)effects;
 	(void)window_box;
-	(void)workspace_clip;
+	(void)monitor_clip;
 	(void)scale;
 }
 
