@@ -1762,7 +1762,7 @@ static void special_tag_prepare_target(Monitor *target) {
 
 // toggle the special workspace view on a given monitor
 void toggle_special_tag_mon(Monitor *m) {
-	if (!m || m->isoverview)
+	if (!m || m->isoverview || workspace_overview_is_active())
 		return;
 
 	set_selected_monitor(m);
@@ -1785,7 +1785,7 @@ int32_t toggle_special_tag(const Arg *arg) {
 }
 
 static void tag_special_tag_internal(const Arg *arg, bool silent) {
-	if (!server.selected_monitor)
+	if (!server.selected_monitor || workspace_overview_is_active())
 		return;
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!c)

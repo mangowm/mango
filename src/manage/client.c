@@ -3106,6 +3106,9 @@ void client_view_on_monitor(const Arg *arg, bool want_animation, Monitor *m,
 	if (!m || (arg->ui != (~0 & TAGMASK) && m->isoverview)) {
 		return;
 	}
+	if (m->is_ws_overview && arg->ui != UINT32_MAX &&
+		(arg->ui & TAG0_MASK))
+		return;
 
 	if (arg->ui == 0) {
 		return;
