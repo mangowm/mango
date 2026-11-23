@@ -114,7 +114,6 @@ struct wsov_render_resources {
 struct wsov_layer_preview {
 	struct wlr_scene_buffer *node;
 	LayerSurface *layer;
-	int layer_index;
 	int workspace_x;
 	int workspace_y;
 	int width;
@@ -177,7 +176,6 @@ struct wsov_cell {
 	struct wsov_layer_preview *layers;
 	int layer_count;
 	int layer_capacity;
-	struct wlr_scene_node *overlay_top;
 	int buffer_w;
 	int buffer_h;
 	struct wlr_box layout_from;
@@ -193,6 +191,11 @@ static struct {
 	WorkspaceOverviewLayout layout;
 	struct wlr_scene_tree *root;
 	struct wlr_scene_rect *background;
+	/* Actual TOP/OVERLAY layer-shell scenes live above root while wsov is open.
+	 */
+	struct wlr_scene_tree *direct_layer_tree;
+	struct wlr_scene_tree *direct_top_tree;
+	struct wlr_scene_tree *direct_overlay_tree;
 	struct wsov_cell *cells;
 	int cell_count;
 	struct wl_listener frame;
@@ -274,6 +277,7 @@ static void wsov_position_cell_items(struct wsov_cell *cell);
 static void wsov_detach_frame_listener(void);
 static void wsov_refresh_layer_previews(void);
 static void wsov_refresh_layer_preview(LayerSurface *layer);
+static void wsov_restore_direct_layers(void);
 static void wsov_render_all(void);
 static void wsov_render_tags(uint32_t tags);
 static void wsov_rebuild(void);
@@ -441,15 +445,6 @@ static bool wsov_tag_has_normal_client(uint32_t tag) {
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
 		if (wsov_client_eligible(c) && !c->isglobal && (c->tags & bit))
-			return true;
-	}
-	return false;
-}
-
-static bool wsov_tag_has_fullscreen_client(uint32_t tag) {
-	Client *c;
-	wl_list_for_each(c, &server.clients, link) {
-		if (wsov_client_on_tag(c, tag) && c->isfullscreen)
 			return true;
 	}
 	return false;
@@ -732,6 +727,8 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	if (wsov.layers_dirty) {
 		wsov.layers_dirty = false;
 		wlr_scene_node_raise_to_top(&wsov.root->node);
+		if (wsov.direct_layer_tree)
+			wlr_scene_node_raise_to_top(&wsov.direct_layer_tree->node);
 		wsov_refresh_layer_previews();
 	}
 
@@ -1246,14 +1243,80 @@ static void wsov_rebuild_live_projection(void) {
 	wsov_layout_live_projection();
 }
 
+static bool wsov_layer_has_preview(int layer_index) {
+	return layer_index == ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND ||
+		   layer_index == ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM;
+}
+
+static struct wlr_scene_tree *wsov_layer_normal_parent(LayerSurface *layer) {
+	if (!layer || !layer->layer_surface)
+		return NULL;
+
+	switch (layer->layer_surface->current.layer) {
+	case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
+		return server.layers[LyrBg];
+	case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
+		return server.layers[LyrBottom];
+	case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
+		return server.layers[LyrTop];
+	case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
+		return server.layers[LyrSpecialOverlay];
+	default:
+		return NULL;
+	}
+}
+
+static void wsov_sync_direct_layers(void) {
+	if (!wsov.mon || !wsov.direct_top_tree || !wsov.direct_overlay_tree)
+		return;
+
+	for (int layer_index = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
+		 layer_index <= ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY; layer_index++) {
+		struct wlr_scene_tree *target =
+			layer_index == ZWLR_LAYER_SHELL_V1_LAYER_TOP ? wsov.direct_top_tree
+			: layer_index == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY
+				? wsov.direct_overlay_tree
+				: NULL;
+		if (!target)
+			continue;
+
+		LayerSurface *layer;
+		wl_list_for_each_reverse(layer, &wsov.mon->layers[layer_index], link) {
+			if (layer->scene->node.parent != target)
+				wlr_scene_node_reparent(&layer->scene->node, target);
+		}
+		wl_list_for_each_reverse(layer, &wsov.mon->layers[layer_index], link) {
+			if (layer->popups->node.parent != target)
+				wlr_scene_node_reparent(&layer->popups->node, target);
+		}
+	}
+}
+
+static void wsov_restore_direct_layers(void) {
+	if (!wsov.mon)
+		return;
+
+	for (int layer_index = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
+		 layer_index <= ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY; layer_index++) {
+		LayerSurface *layer;
+		wl_list_for_each_reverse(layer, &wsov.mon->layers[layer_index], link) {
+			struct wlr_scene_tree *target = wsov_layer_normal_parent(layer);
+			if (target && layer->scene->node.parent != target)
+				wlr_scene_node_reparent(&layer->scene->node, target);
+		}
+		wl_list_for_each_reverse(layer, &wsov.mon->layers[layer_index], link) {
+			struct wlr_scene_tree *target = wsov_layer_normal_parent(layer);
+			if (target && layer->popups->node.parent != target)
+				wlr_scene_node_reparent(&layer->popups->node, target);
+		}
+	}
+}
+
 static void wsov_layer_preview_add(struct wsov_cell *cell,
 								   struct wlr_scene_buffer *source,
 								   LayerSurface *layer, int layer_index, int sx,
 								   int sy) {
-	if (!source || !source->buffer)
-		return;
-	if (layer_index == ZWLR_LAYER_SHELL_V1_LAYER_TOP &&
-		wsov_tag_has_fullscreen_client(cell->tag))
+	if (!wsov_layer_has_preview(layer_index) || !source || !source->buffer)
 		return;
 
 	if (cell->layer_count == cell->layer_capacity) {
@@ -1278,16 +1341,7 @@ static void wsov_layer_preview_add(struct wsov_cell *cell,
 	wlr_scene_buffer_set_primaries(node, source->primaries);
 	wlr_scene_buffer_set_color_encoding(node, source->color_encoding);
 	wlr_scene_buffer_set_color_range(node, source->color_range);
-	if (layer_index == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
-		struct wlr_scene_node *anchor =
-			cell->overlay_top ? cell->overlay_top : &cell->foreground->node;
-		wlr_scene_node_place_above(&node->node, anchor);
-		cell->overlay_top = &node->node;
-	} else if (layer_index == ZWLR_LAYER_SHELL_V1_LAYER_TOP) {
-		wlr_scene_node_place_below(&node->node, &cell->foreground->node);
-	} else {
-		wlr_scene_node_place_below(&node->node, &cell->contents->node);
-	}
+	wlr_scene_node_place_below(&node->node, &cell->contents->node);
 
 	struct wlr_fbox src_box = source->src_box;
 	if (src_box.width <= 0 || src_box.height <= 0)
@@ -1296,7 +1350,6 @@ static void wsov_layer_preview_add(struct wsov_cell *cell,
 	cell->layers[cell->layer_count++] = (struct wsov_layer_preview){
 		.node = node,
 		.layer = layer,
-		.layer_index = layer_index,
 		.workspace_x = sx - wsov.mon->m.x,
 		.workspace_y = sy - wsov.mon->m.y,
 		.width =
@@ -1323,7 +1376,8 @@ static void wsov_collect_layer_buffer(struct wlr_scene_buffer *buffer, int sx,
 static void wsov_create_layer_previews_for_layer(struct wsov_cell *cell,
 												 LayerSurface *layer,
 												 int layer_index) {
-	if (!cell || !layer || !layer->scene || !layer->scene->node.enabled)
+	if (!wsov_layer_has_preview(layer_index) || !cell || !layer ||
+		!layer->scene || !layer->scene->node.enabled)
 		return;
 	wsov_layer_iter_data iter = {
 		.cell = cell,
@@ -1338,7 +1392,7 @@ static void wsov_create_layer_previews(void) {
 	for (int cell_index = 0; cell_index < wsov.cell_count; cell_index++) {
 		struct wsov_cell *cell = &wsov.cells[cell_index];
 		for (int layer_index = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
-			 layer_index <= ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY; layer_index++) {
+			 layer_index <= ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM; layer_index++) {
 			LayerSurface *layer;
 			wl_list_for_each_reverse(layer, &wsov.mon->layers[layer_index],
 									 link)
@@ -1363,11 +1417,6 @@ static void wsov_remove_layer_previews(struct wsov_cell *cell,
 		write++;
 	}
 	cell->layer_count = write;
-	cell->overlay_top = NULL;
-	for (int i = 0; i < cell->layer_count; i++) {
-		if (cell->layers[i].layer_index == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)
-			cell->overlay_top = &cell->layers[i].node->node;
-	}
 }
 
 static void wsov_destroy_layer_previews(struct wsov_cell *cell) {
@@ -1377,7 +1426,6 @@ static void wsov_destroy_layer_previews(struct wsov_cell *cell) {
 	cell->layers = NULL;
 	cell->layer_count = 0;
 	cell->layer_capacity = 0;
-	cell->overlay_top = NULL;
 }
 
 static void wsov_refresh_layer_previews(void) {
@@ -1410,6 +1458,8 @@ static void wsov_refresh_layer_preview(LayerSurface *layer) {
 	}
 	wsov_order_live_projection(wsov.live_cell);
 	wlr_scene_node_raise_to_top(&wsov.root->node);
+	if (wsov.direct_layer_tree)
+		wlr_scene_node_raise_to_top(&wsov.direct_layer_tree->node);
 	wsov_apply_camera(wsov.progress);
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
@@ -3874,12 +3924,19 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 
 	wsov_detach_frame_listener();
 	wlr_seat_pointer_clear_focus(server.seat);
-	wlr_seat_keyboard_notify_clear_focus(server.seat);
+	if (!server.exclusive_focus)
+		wlr_seat_keyboard_notify_clear_focus(server.seat);
 	wsov_destroy_cells();
+	wsov_restore_direct_layers();
+	if (wsov.direct_layer_tree)
+		wlr_scene_node_destroy(&wsov.direct_layer_tree->node);
 	if (wsov.root)
 		wlr_scene_node_destroy(&wsov.root->node);
 	wsov.root = NULL;
 	wsov.background = NULL;
+	wsov.direct_layer_tree = NULL;
+	wsov.direct_top_tree = NULL;
+	wsov.direct_overlay_tree = NULL;
 
 	if (focus_tag) {
 		client_view_on_monitor(&(Arg){.ui = wsov_tag_bit(focus_tag)}, false, m,
@@ -3924,6 +3981,10 @@ bool workspace_overview_is_closing_on(const Monitor *m) {
 	return m && wsov.mon == m && wsov.closing;
 }
 
+bool workspace_overview_pointer_is_pressed(void) {
+	return workspace_overview_is_active() && wsov.pressed;
+}
+
 static void wsov_update_root_geometry(Monitor *m) {
 	if (!wsov.root || !m)
 		return;
@@ -3956,6 +4017,19 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 		memset(&wsov, 0, sizeof(wsov));
 		return false;
 	}
+	wsov.direct_layer_tree =
+		wlr_scene_tree_create(server.layers[LyrSpecialOverlay]);
+	if (wsov.direct_layer_tree) {
+		wsov.direct_top_tree = wlr_scene_tree_create(wsov.direct_layer_tree);
+		wsov.direct_overlay_tree =
+			wlr_scene_tree_create(wsov.direct_layer_tree);
+	}
+	if (!wsov.direct_layer_tree || !wsov.direct_top_tree ||
+		!wsov.direct_overlay_tree) {
+		wsov_finalize_close(0);
+		return false;
+	}
+	wsov_sync_direct_layers();
 	wsov.background = wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
 											config.rootcolor);
 	wsov_update_root_geometry(m);
@@ -3971,7 +4045,8 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 
 	wsov_hide_clients(true);
 	wlr_seat_pointer_clear_focus(server.seat);
-	wlr_seat_keyboard_notify_clear_focus(server.seat);
+	if (!server.exclusive_focus)
+		wlr_seat_keyboard_notify_clear_focus(server.seat);
 	pointer_cursor_activity();
 	if (!server.cursor_hidden)
 		wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "default");
@@ -4599,6 +4674,9 @@ void workspace_overview_client_commit(Client *c) {
 }
 
 void workspace_overview_layers_changed(LayerSurface *layer) {
+	if (!workspace_overview_is_active_on(layer ? layer->mon : NULL))
+		return;
+	wsov_sync_direct_layers();
 	wsov_refresh_layer_preview(layer);
 }
 

@@ -135,12 +135,14 @@ possible. Scrolling and workspace-selection movement use
 workspace layout changes; there is no separate layout animation.
 
 Each tag preview mirrors its workspace, including the background wallpaper and
-layer-shell surfaces such as the status bar. Windows use their workspace
-geometry, so partially visible windows in scrolling layouts remain partially
-visible in the preview. A window that belongs to multiple tags appears in every
-matching preview. Window and layer-surface commits refresh the affected
-previews, and mapping or closing a window rebuilds the workspace previews
-automatically.
+layer-shell surfaces on the `background` and `bottom` layers, such as status
+panels. Layer-shell surfaces on the `top` and `overlay` layers stay at their
+normal on-screen position, render directly above the workspace overview, and
+continue to receive pointer input. Windows use their workspace geometry, so
+partially visible windows in scrolling layouts remain partially visible in the
+preview. A window that belongs to multiple tags appears in every matching
+preview. Window and layer-surface commits refresh the affected previews, and
+mapping or closing a window rebuilds the workspace previews automatically.
 
 ```ini
 # Shipped default binding: all workspaces

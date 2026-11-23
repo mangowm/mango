@@ -726,6 +726,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	int32_t handled = 0;
 	uint32_t mods = wlr_keyboard_get_modifiers(group->keyboard);
 	bool wsov_active = !server.session_locked && workspace_overview_is_active();
+	bool wsov_intercepts_keyboard = wsov_active && !server.exclusive_focus;
 
 	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 
@@ -777,7 +778,7 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 
 	/* Configured shortcuts keep priority while the workspace overview is open.
 	 * Only unmodified keys which did not match a binding act as navigation. */
-	if (wsov_active && !handled &&
+	if (wsov_intercepts_keyboard && !handled &&
 		event->state == WL_KEYBOARD_KEY_STATE_PRESSED && CLEANMASK(mods) == 0) {
 		for (i = 0; i < nsyms; i++) {
 			if (workspace_overview_handle_key(syms[i])) {
@@ -791,7 +792,8 @@ void handle_keyboard_key(struct wl_listener *listener, void *data) {
 	 * are not handled by its navigation must not leak to a hidden client.
 	 * Mark the press so its matching release is swallowed without changing
 	 * the normal handling of keys which were already held before entry. */
-	if (wsov_active && event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+	if (wsov_intercepts_keyboard &&
+		event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		server.last_hold_keycode = 0;
 		group->nsyms = 0;
 		wl_event_source_timer_update(group->key_repeat_source, 0);

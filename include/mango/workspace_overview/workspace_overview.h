@@ -8,6 +8,7 @@
 bool workspace_overview_is_active(void);
 bool workspace_overview_is_active_on(const Monitor *m);
 bool workspace_overview_is_closing_on(const Monitor *m);
+bool workspace_overview_pointer_is_pressed(void);
 
 int32_t toggle_workspace_overview(const Arg *arg);
 int32_t enter_workspace_overview(const Arg *arg);
