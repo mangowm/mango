@@ -225,7 +225,7 @@ static struct {
 	bool has_drag_client;
 	uint32_t source_tag;
 	uint32_t target_tag;
-	uint32_t scroll_focus_tag;
+	uint32_t scroll_center_tag;
 	uint32_t drag_return_tag;
 	Client *drag_client;
 	int drag_start_x;
@@ -2949,11 +2949,11 @@ static bool wsov_step_scroll_workspace(int32_t direction) {
 	if (direction == 0 || wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
 		return false;
 	int current = -1;
-	uint32_t focus_tag = wsov_cell_for_tag(wsov.scroll_focus_tag)
-							 ? wsov.scroll_focus_tag
-							 : wsov.target_tag;
+	uint32_t center_tag = wsov_cell_for_tag(wsov.scroll_center_tag)
+							  ? wsov.scroll_center_tag
+							  : wsov.target_tag;
 	for (int i = 0; i < wsov.cell_count; i++) {
-		if (wsov.cells[i].tag == focus_tag) {
+		if (wsov.cells[i].tag == center_tag) {
 			current = i;
 			break;
 		}
@@ -2967,7 +2967,7 @@ static bool wsov_step_scroll_workspace(int32_t direction) {
 
 	struct wsov_cell *target = &wsov.cells[next];
 	wsov.target_tag = target->tag;
-	wsov.scroll_focus_tag = target->tag;
+	wsov.scroll_center_tag = target->tag;
 	wsov.camera_tag = target->tag;
 	wsov_animate_scroll_to_target();
 	wsov_refresh_target_selection();
@@ -3032,11 +3032,12 @@ static bool wsov_advance_drag_scroll(void) {
 static void wsov_scroll_to_target(void) {
 	if (wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
 		return;
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
+	if (!wsov_cell_for_tag(wsov.scroll_center_tag))
+		wsov.scroll_center_tag = wsov.target_tag;
+	struct wsov_cell *target =
+		wsov_cell_for_tag(wsov.scroll_center_tag);
 	if (!target || !wsov.mon)
 		return;
-	if (!wsov_cell_for_tag(wsov.scroll_focus_tag))
-		wsov.scroll_focus_tag = target->tag;
 	struct wlr_box box = wsov_cell_layout_box(target);
 	double center = wsov_scrolls_horizontally() ? box.x + box.width / 2.0
 												: box.y + box.height / 2.0;
@@ -3049,11 +3050,12 @@ static void wsov_scroll_to_target(void) {
 static void wsov_animate_scroll_to_final_target(void) {
 	if (wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
 		return;
-	struct wsov_cell *target = wsov_cell_for_tag(wsov.target_tag);
+	if (!wsov_cell_for_tag(wsov.scroll_center_tag))
+		wsov.scroll_center_tag = wsov.target_tag;
+	struct wsov_cell *target =
+		wsov_cell_for_tag(wsov.scroll_center_tag);
 	if (!target || !wsov.mon)
 		return;
-	if (!wsov_cell_for_tag(wsov.scroll_focus_tag))
-		wsov.scroll_focus_tag = target->tag;
 	struct wlr_box box = target->box;
 	double center = wsov_scrolls_horizontally() ? box.x + box.width / 2.0
 												: box.y + box.height / 2.0;
@@ -3437,6 +3439,13 @@ static bool wsov_create_cells(void) {
 	}
 	wsov_create_layer_previews();
 	wsov_select_default_target();
+	/*
+	 * Keep the scroll anchor independent from target_tag. Pointer hover may
+	 * change the selected target without moving the viewport, while the wheel
+	 * must continue from the workspace that is currently centered.
+	 */
+	if (!wsov_cell_for_tag(wsov.scroll_center_tag))
+		wsov.scroll_center_tag = wsov.target_tag;
 	wsov.camera_tag = wsov.target_tag;
 	if (old_cell_count > 0 && config.animations) {
 		/*
@@ -3793,7 +3802,7 @@ static void wsov_select_direction(int dir_x, int dir_y) {
 		return;
 
 	wsov.target_tag = target->tag;
-	wsov.scroll_focus_tag = target->tag;
+	wsov.scroll_center_tag = target->tag;
 	wsov.camera_tag = wsov.target_tag;
 	wsov_animate_scroll_to_target();
 	wsov_refresh_target_selection();
@@ -4534,7 +4543,7 @@ static void wsov_finish_drop(double x, double y) {
 	wsov.drag_client = NULL;
 	wsov.source_tag = 0;
 	wsov.target_tag = target->tag;
-	wsov.scroll_focus_tag = target->tag;
+	wsov.scroll_center_tag = target->tag;
 	wsov.camera_tag = target->tag;
 	wsov_animate_scroll_to_target();
 	wsov.drag_return_tag = 0;
@@ -4808,8 +4817,14 @@ void workspace_overview_layout_changed(Monitor *m) {
 		view_tag && view_tag != previous_target && wsov_cell_for_tag(view_tag);
 	if (view_tag && wsov_cell_for_tag(view_tag)) {
 		wsov.target_tag = view_tag;
-		wsov.scroll_focus_tag = view_tag;
 		wsov.camera_tag = view_tag;
+		/*
+		 * Pointer hover changes target_tag before activating the view. That
+		 * internal view change must not overwrite the independent scroll
+		 * anchor; only a dispatcher-driven view change should recenter it.
+		 */
+		if (target_changed)
+			wsov.scroll_center_tag = view_tag;
 	}
 	/* A dispatcher-driven view switch must not play tag-in/tag-out animations
 	 * inside the overview. Other layout arrangements retain the original
