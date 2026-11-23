@@ -10,12 +10,55 @@
 #include <scenefx/types/wlr_scene.h>
 #include <stdlib.h>
 
+struct wsov_background_effects {
+	struct wlr_scene_blur *blur;
+};
+
 struct wsov_live_effects {
 	Client *client;
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_blur *blur;
 	struct wlr_scene_rect *border;
 };
+
+struct wsov_background_effects *
+wsov_background_effects_create(struct wlr_scene_tree *parent, int width,
+							   int height) {
+	if (!parent || !config.blur)
+		return NULL;
+
+	struct wsov_background_effects *effects = calloc(1, sizeof(*effects));
+	if (!effects)
+		return NULL;
+	effects->blur = wlr_scene_blur_create(parent, width, height);
+	if (!effects->blur) {
+		free(effects);
+		return NULL;
+	}
+
+	/*
+	 * The wsov background is always directly above the wallpaper backdrop, so
+	 * it can always use the optimized blur cache.
+	 */
+	wlr_scene_blur_set_should_only_blur_bottom_layer(effects->blur, true);
+	wlr_scene_blur_set_strength(effects->blur, 1.0f);
+	wlr_scene_blur_set_alpha(effects->blur, 1.0f);
+	return effects;
+}
+
+void wsov_background_effects_update(struct wsov_background_effects *effects,
+									int width, int height) {
+	if (effects && effects->blur)
+		wlr_scene_blur_set_size(effects->blur, width, height);
+}
+
+void wsov_background_effects_destroy(struct wsov_background_effects *effects) {
+	if (!effects)
+		return;
+	if (effects->blur)
+		wlr_scene_node_destroy(&effects->blur->node);
+	free(effects);
+}
 
 static struct fx_corner_radii wsov_scale_corners(struct fx_corner_radii corners,
 												 double scale) {
@@ -233,6 +276,26 @@ void wsov_live_effects_destroy(struct wsov_live_effects *effects) {
 }
 
 #else
+
+struct wsov_background_effects *
+wsov_background_effects_create(struct wlr_scene_tree *parent, int width,
+							   int height) {
+	(void)parent;
+	(void)width;
+	(void)height;
+	return NULL;
+}
+
+void wsov_background_effects_update(struct wsov_background_effects *effects,
+									int width, int height) {
+	(void)effects;
+	(void)width;
+	(void)height;
+}
+
+void wsov_background_effects_destroy(struct wsov_background_effects *effects) {
+	(void)effects;
+}
 
 struct wsov_live_effects *
 wsov_live_effects_create(struct wlr_scene_tree *parent, struct Client *client) {

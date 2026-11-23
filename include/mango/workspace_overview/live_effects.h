@@ -4,16 +4,27 @@
 #include <stdbool.h>
 #include <wlr/util/box.h>
 
-#if defined(__has_include)
-#if __has_include(<scenefx/types/wlr_scene.h>)
+#if defined(MANGO_SCENEFX)
 #define MANGO_WORKSPACE_OVERVIEW_SCENEFX 1
-#endif
 #endif
 
 struct Client;
 struct wlr_scene_buffer;
 struct wlr_scene_tree;
+struct wsov_background_effects;
 struct wsov_live_effects;
+
+/*
+ * Scenefx-specific effects for the workspace overview backdrop. A NULL object
+ * means that the build has no effects backend; callers can keep the normal
+ * opaque backdrop color in that case.
+ */
+struct wsov_background_effects *
+wsov_background_effects_create(struct wlr_scene_tree *parent, int width,
+							   int height);
+void wsov_background_effects_update(struct wsov_background_effects *effects,
+									int width, int height);
+void wsov_background_effects_destroy(struct wsov_background_effects *effects);
 
 /*
  * Scenefx-specific effects for workspace-overview live client projections.

@@ -80,6 +80,10 @@ c_args = [
   '-DSYSCONFDIR="@0@"'.format('/etc'),
 ]
 
+if libscenefx_dep.found()
+  c_args += '-DMANGO_SCENEFX'
+endif
+
 # add debug args only when debug option is enabled
 if get_option('asan')
   c_args += [
