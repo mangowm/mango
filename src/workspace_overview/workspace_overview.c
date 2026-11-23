@@ -219,6 +219,7 @@ static struct {
 	WorkspaceOverviewLayout layout;
 	struct wlr_scene_tree *root;
 	struct wlr_scene_rect *background;
+	struct wlr_scene_blur *background_blur;
 	/* Actual TOP/OVERLAY layer-shell scenes live above root while wsov is open.
 	 */
 	struct wlr_scene_tree *direct_layer_tree;
@@ -4391,6 +4392,7 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 		wlr_scene_node_destroy(&wsov.root->node);
 	wsov.root = NULL;
 	wsov.background = NULL;
+	wsov.background_blur = NULL;
 	wsov.direct_layer_tree = NULL;
 	wsov.direct_top_tree = NULL;
 	wsov.direct_overlay_tree = NULL;
@@ -4411,6 +4413,12 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 			client_set_finish_geometry(c);
 	}
 	wsov_hide_clients(false);
+	Client *fadeout;
+	wl_list_for_each(fadeout, &server.fadeout_clients, fadeout_link) {
+		if (fadeout->mon == m && fadeout->scene) {
+			wlr_scene_node_set_enabled(&fadeout->scene->node, true);
+		}
+	}
 	memset(&wsov, 0, sizeof(wsov));
 	pointer_cursor_activity();
 
@@ -4447,9 +4455,15 @@ static void wsov_update_root_geometry(Monitor *m) {
 	if (!wsov.root || !m)
 		return;
 	wlr_scene_node_set_position(&wsov.root->node, m->m.x, m->m.y);
+	if (wsov.background_blur) {
+		wlr_scene_blur_set_size(wsov.background_blur, m->m.width, m->m.height);
+	}
 	if (wsov.background) {
 		wlr_scene_rect_set_size(wsov.background, m->m.width, m->m.height);
-		wlr_scene_rect_set_color(wsov.background, config.rootcolor);
+		const float *color = wsov.background_blur
+								 ? (float[4]){0.0f, 0.0f, 0.0f, 0.0f}
+								 : config.rootcolor;
+		wlr_scene_rect_set_color(wsov.background, color);
 	}
 }
 
@@ -4490,6 +4504,20 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 		return false;
 	}
 	wsov_sync_direct_layers();
+	if (config.blur) {
+		wsov.background_blur =
+			wlr_scene_blur_create(wsov.root, m->m.width, m->m.height);
+		if (wsov.background_blur) {
+			/*
+			 * The wsov background is always directly above the wallpaper
+			 * backdrop, so it can always use the optimized blur cache.
+			 */
+			wlr_scene_blur_set_should_only_blur_bottom_layer(
+				wsov.background_blur, true);
+			wlr_scene_blur_set_strength(wsov.background_blur, 1.0f);
+			wlr_scene_blur_set_alpha(wsov.background_blur, 1.0f);
+		}
+	}
 	wsov.background = wlr_scene_rect_create(wsov.root, m->m.width, m->m.height,
 											config.rootcolor);
 	wsov_update_root_geometry(m);

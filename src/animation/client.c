@@ -1422,7 +1422,13 @@ void init_fadeout_client(Client *c) {
 	}
 
 	fadeout_client->animation.time_started = get_now_in_ms();
-	wlr_scene_node_set_enabled(&fadeout_client->scene->node, true);
+	/*
+	 * The workspace overview composes its own copy of the fadeout snapshot.
+	 * Keep the original LyrFadeOut node disabled while wsov is active so it
+	 * cannot show through wsov's transparent background.
+	 */
+	wlr_scene_node_set_enabled(&fadeout_client->scene->node,
+							   !workspace_overview_is_active_on(c->mon));
 	wl_list_insert(&server.fadeout_clients, &fadeout_client->fadeout_link);
 
 	request_fresh_all_monitors();
