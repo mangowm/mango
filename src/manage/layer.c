@@ -403,7 +403,14 @@ void handle_popup_commit(struct wl_listener *listener, void *data) {
 	if (!wlr_popup->base->initial_commit)
 		return;
 
-	if (!wlr_popup->parent || !wlr_popup->parent->data) {
+	/*
+	 * Popups may commit before their parent surface is mapped. In that case
+	 * the parent has no scene tree yet, and its data pointer may still hold a
+	 * tree from an earlier scene lifetime. Touching it here trips wlroots'
+	 * scene-node assertions, so reject the popup instead.
+	 */
+	if (!wlr_popup->parent || !wlr_popup->parent->mapped ||
+		!wlr_popup->parent->data) {
 		should_destroy = true;
 		goto cleanup_popup_commit;
 	}
