@@ -239,7 +239,6 @@ struct Client {
 	bool is_surface_hidden;
 	/* temporarily hidden while workspace overview renders offscreen previews */
 	bool wsov_hidden;
-	bool wsov_use_scene_clip;
 };
 
 #define CLIENT_GROUP_PREV_OFF offsetof(Client, group_prev)
