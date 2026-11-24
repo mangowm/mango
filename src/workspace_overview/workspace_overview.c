@@ -75,6 +75,7 @@ struct wsov_live_surface {
 	int sy;
 	struct wl_listener commit;
 	struct wl_listener destroy;
+	struct wl_listener frame_done;
 };
 
 struct wsov_scene_buffer_match {
@@ -1361,6 +1362,8 @@ static void wsov_remove_live_surface(struct wsov_cell *cell,
 		wl_list_remove(&entry->commit.link);
 	if (entry->destroy.link.prev && entry->destroy.link.next)
 		wl_list_remove(&entry->destroy.link);
+	if (entry->frame_done.link.prev && entry->frame_done.link.next)
+		wl_list_remove(&entry->frame_done.link);
 	if (destroy_node && entry->scene_surface)
 		wlr_scene_node_destroy(&entry->scene_surface->buffer->node);
 
@@ -1385,6 +1388,15 @@ static void wsov_live_surface_destroy(struct wl_listener *listener,
 	struct wsov_live_surface *entry = wl_container_of(listener, entry, destroy);
 	/* The scene surface helper owns and is already tearing down its buffer. */
 	wsov_remove_live_surface(entry->cell, entry, false);
+}
+
+static void wsov_live_surface_frame_done(struct wl_listener *listener,
+										 void *data) {
+	struct wsov_live_surface *entry =
+		wl_container_of(listener, entry, frame_done);
+	struct wlr_scene_frame_done_event *event = data;
+	if (entry->scene_surface->buffer->primary_output == event->output)
+		wlr_surface_send_frame_done(entry->surface, &event->when);
 }
 
 static struct wsov_live_client *
@@ -1439,39 +1451,46 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 		cell->live_surface_capacity = capacity;
 	}
 
+	struct wsov_live_surface *entry = calloc(1, sizeof(*entry));
+	if (!entry)
+		return;
+	entry->client = live->client;
+	entry->cell = cell;
+	entry->effects = live->effects;
+	entry->surface = surface;
+	entry->sx = sx;
+	entry->sy = sy;
+	entry->destroy.notify = wsov_live_surface_destroy;
+	/*
+	 * Remove our buffer listener before the scene surface's own destroy
+	 * listener tears the buffer down.
+	 */
+	wl_signal_add(&surface->events.destroy, &entry->destroy);
+
 	struct wlr_scene_surface *scene_surface =
 		wlr_scene_surface_create(live->tree, surface);
-	if (!scene_surface)
-		return;
-
-	struct wsov_live_surface *entry = calloc(1, sizeof(*entry));
-	if (!entry) {
-		wlr_scene_node_destroy(&scene_surface->buffer->node);
+	if (!scene_surface) {
+		wl_list_remove(&entry->destroy.link);
+		free(entry);
 		return;
 	}
+	entry->scene_surface = scene_surface;
+
 	struct wsov_scene_buffer_match match = {
 		.surface = surface,
 	};
 	wlr_scene_node_for_each_buffer(&live->client->scene_surface->node,
 								   wsov_match_scene_buffer, &match);
-	*entry = (struct wsov_live_surface){
-		.client = live->client,
-		.cell = cell,
-		.effects = live->effects,
-		.surface = surface,
-		.scene_surface = scene_surface,
-		.source_buffer = match.buffer,
-		.sx = sx,
-		.sy = sy,
-	};
+	entry->source_buffer = match.buffer;
 	cell->live_surfaces[cell->live_surface_count++] = entry;
 	wlr_scene_buffer_set_filter_mode(scene_surface->buffer,
 									 WLR_SCALE_FILTER_BILINEAR);
 	wsov_live_effects_apply_surface(live->effects, scene_surface->buffer, 1.0);
 	entry->commit.notify = wsov_live_surface_commit;
 	wl_signal_add(&surface->events.commit, &entry->commit);
-	entry->destroy.notify = wsov_live_surface_destroy;
-	wl_signal_add(&surface->events.destroy, &entry->destroy);
+	entry->frame_done.notify = wsov_live_surface_frame_done;
+	wl_signal_add(&scene_surface->buffer->events.frame_done,
+				  &entry->frame_done);
 }
 
 static void wsov_clear_cell_live_surfaces(struct wsov_cell *cell,
@@ -3075,13 +3094,6 @@ static void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
 						  buffer_scale);
 	cell->contents_dirty = false;
 	cell->foreground_dirty = false;
-
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	for (int i = 0; i < cell->item_count; i++) {
-		if (!cell->items[i].is_snapshot)
-			client_send_frame_done(cell->items[i].client, &now);
-	}
 }
 
 static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
@@ -3147,8 +3159,6 @@ static bool wsov_refresh_animated_cells(void) {
 
 static bool wsov_render_dirty_cells(bool apply_camera) {
 	bool rendered = false;
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
 		if (!cell->contents_dirty && !cell->foreground_dirty)
@@ -3166,11 +3176,6 @@ static bool wsov_render_dirty_cells(bool apply_camera) {
 		cell->contents_dirty = false;
 		cell->foreground_dirty = false;
 		rendered = true;
-
-		for (int j = 0; j < cell->item_count; j++) {
-			if (!cell->items[j].is_snapshot)
-				client_send_frame_done(cell->items[j].client, &now);
-		}
 	}
 
 	if (rendered && apply_camera)
