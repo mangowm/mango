@@ -72,11 +72,29 @@ struct wsov_live_surface {
 	struct wsov_live_effects *effects;
 	struct wlr_surface *surface;
 	struct wlr_scene_surface *scene_surface;
+	struct wlr_scene_buffer *source_buffer;
 	int sx;
 	int sy;
 	struct wl_listener commit;
 	struct wl_listener destroy;
 };
+
+struct wsov_scene_buffer_match {
+	struct wlr_surface *surface;
+	struct wlr_scene_buffer *buffer;
+};
+
+static void wsov_match_scene_buffer(struct wlr_scene_buffer *buffer, int sx,
+									int sy, void *data) {
+	struct wsov_scene_buffer_match *match = data;
+	if (match->buffer)
+		return;
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+	if (scene_surface && scene_surface->surface == match->surface) {
+		match->buffer = buffer;
+	}
+}
 
 struct wsov_live_surface_data {
 	Client *client;
@@ -313,6 +331,7 @@ static void wsov_rebuild(void);
 static void wsov_activate_target_tag(void);
 static bool wsov_refresh_workspace_tags(uint32_t tags);
 static void wsov_refresh_workspace_or_rebuild(uint32_t tags);
+static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale);
 static bool wsov_render_dirty_cells(bool apply_camera);
 static bool wsov_refresh_animated_cells(void);
 static void wsov_flush_dirty_cells(void *data);
@@ -925,6 +944,7 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	bool client_animating = wsov_refresh_animated_cells();
 	bool client_animation_finished = wsov.client_animating && !client_animating;
 	wsov.client_animating = client_animating;
+	wsov_layout_live_projection();
 	if (client_animation_finished) {
 		for (int i = 0; i < wsov.cell_count; i++) {
 			struct wsov_cell *cell = &wsov.cells[i];
@@ -1406,6 +1426,8 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	struct wsov_cell *cell = live->cell;
 	if (!surface || !cell || !live->tree)
 		return;
+	if (surface->current.viewport.has_src)
+		live->client->wsov_use_scene_clip = true;
 
 	if (cell->live_surface_count == cell->live_surface_capacity) {
 		int capacity =
@@ -1428,12 +1450,18 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 		wlr_scene_node_destroy(&scene_surface->buffer->node);
 		return;
 	}
+	struct wsov_scene_buffer_match match = {
+		.surface = surface,
+	};
+	wlr_scene_node_for_each_buffer(&live->client->scene_surface->node,
+								   wsov_match_scene_buffer, &match);
 	*entry = (struct wsov_live_surface){
 		.client = live->client,
 		.cell = cell,
 		.effects = live->effects,
 		.surface = surface,
 		.scene_surface = scene_surface,
+		.source_buffer = match.buffer,
 		.sx = sx,
 		.sy = sy,
 	};
@@ -1626,6 +1654,14 @@ static void wsov_build_cell_live_projection(struct wsov_cell *cell) {
 		cell->foreground_dirty = true;
 	}
 	wsov_order_live_projection(cell);
+	/*
+	 * Rebuild the off-screen cell immediately after mounting live surfaces.
+	 * Otherwise the previous cell buffer can retain its own copy of the same
+	 * client and composite it underneath the live copy for one or more frames,
+	 * producing a vertically shifted duplicate of the window content.
+	 */
+	if (cell->live_surface_count > 0)
+		wsov_render_cell(cell, wsov_output_scale());
 }
 
 static void wsov_update_live_desires(const struct wsov_camera_view *view) {
@@ -2248,6 +2284,14 @@ static void wsov_layout_live_projection(void) {
 				continue;
 			}
 
+			bool use_scene_clip =
+				entry->client->wsov_use_scene_clip &&
+				entry->source_buffer && entry->source_buffer->buffer &&
+				entry->source_buffer->dst_width > 0 &&
+				entry->source_buffer->dst_height > 0 &&
+				entry->source_buffer->src_box.width > 0 &&
+				entry->source_buffer->src_box.height > 0;
+
 			float content_w = 0.0f;
 			float content_h = 0.0f;
 #ifdef XWAYLAND
@@ -2263,8 +2307,12 @@ static void wsov_layout_live_projection(void) {
 					wlr_scene_node_set_enabled(&buffer->node, false);
 					continue;
 				}
-				content_w = entry->client->surface.xdg->geometry.width;
-				content_h = entry->client->surface.xdg->geometry.height;
+				content_w = use_scene_clip
+								? entry->source_buffer->dst_width
+								: entry->client->surface.xdg->geometry.width;
+				content_h = use_scene_clip
+								? entry->source_buffer->dst_height
+								: entry->client->surface.xdg->geometry.height;
 			}
 			if (content_w <= 0 || content_h <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
@@ -2307,12 +2355,41 @@ static void wsov_layout_live_projection(void) {
 
 			struct wlr_box clip;
 			client_get_clip(entry->client, &clip);
-			double preview_x =
-				content_preview_x + (entry->sx - clip.x) * surface_scale_x;
-			double preview_y =
-				content_preview_y + (entry->sy - clip.y) * surface_scale_y;
-			double preview_w = surface->current.width * surface_scale_x;
-			double preview_h = surface->current.height * surface_scale_y;
+			double preview_x;
+			double preview_y;
+			double preview_w;
+			double preview_h;
+			if (use_scene_clip) {
+				int normal_x = 0;
+				int normal_y = 0;
+				for (struct wlr_scene_node *node =
+						 &entry->source_buffer->node;
+					 node; node = node->parent ? &node->parent->node : NULL) {
+					normal_x += node->x;
+					normal_y += node->y;
+				}
+				int content_x =
+					entry->client->geom.x + entry->client->bw;
+				int content_y =
+					entry->client->geom.y + entry->client->bw;
+				preview_x =
+					content_preview_x +
+					(normal_x - content_x) * surface_scale_x;
+				preview_y =
+					content_preview_y +
+					(normal_y - content_y) * surface_scale_y;
+				preview_w =
+					entry->source_buffer->dst_width * surface_scale_x;
+				preview_h =
+					entry->source_buffer->dst_height * surface_scale_y;
+			} else {
+				preview_x =
+					content_preview_x + (entry->sx - clip.x) * surface_scale_x;
+				preview_y =
+					content_preview_y + (entry->sy - clip.y) * surface_scale_y;
+				preview_w = surface->current.width * surface_scale_x;
+				preview_h = surface->current.height * surface_scale_y;
+			}
 
 			struct wlr_box dst = {
 				.x = (int)lround((preview_x - view.x) * view.scale_x),
@@ -2344,14 +2421,18 @@ static void wsov_layout_live_projection(void) {
 				wlr_scene_node_set_enabled(&buffer->node, false);
 				continue;
 			}
-			struct wlr_fbox surface_box = {
-				.x = 0,
-				.y = 0,
-				.width = surface->current.width,
-				.height = surface->current.height,
-			};
 			struct wlr_fbox src;
-			client_surface_get_source_box(surface, &surface_box, &src);
+			if (use_scene_clip) {
+				src = entry->source_buffer->src_box;
+			} else {
+				struct wlr_fbox surface_box = {
+					.x = 0,
+					.y = 0,
+					.width = surface->current.width,
+					.height = surface->current.height,
+				};
+				client_surface_get_source_box(surface, &surface_box, &src);
+			}
 			src.x += src.width * (visible.x - dst.x) / dst.width;
 			src.y += src.height * (visible.y - dst.y) / dst.height;
 			src.width *= (double)visible.width / dst.width;
@@ -3012,8 +3093,7 @@ static void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
 	struct timespec now;
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	for (int i = 0; i < cell->item_count; i++) {
-		if (!cell->items[i].is_snapshot &&
-			!wsov_item_is_live(cell, &cell->items[i]))
+		if (!cell->items[i].is_snapshot)
 			client_send_frame_done(cell->items[i].client, &now);
 	}
 }
@@ -3102,8 +3182,7 @@ static bool wsov_render_dirty_cells(bool apply_camera) {
 		rendered = true;
 
 		for (int j = 0; j < cell->item_count; j++) {
-			if (!cell->items[j].is_snapshot &&
-				!wsov_item_is_live(cell, &cell->items[j]))
+			if (!cell->items[j].is_snapshot)
 				client_send_frame_done(cell->items[j].client, &now);
 		}
 	}
@@ -5150,6 +5229,9 @@ bool workspace_overview_handle_axis(
 void workspace_overview_client_commit(Client *c) {
 	if (!workspace_overview_is_active() || wsov.closing || c->mon != wsov.mon)
 		return;
+	struct wlr_surface *surface = client_surface(c);
+	if (surface && surface->current.viewport.has_src)
+		c->wsov_use_scene_clip = true;
 	uint32_t current_layer = client_target_layer(c);
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
@@ -5177,6 +5259,18 @@ void workspace_overview_client_commit(Client *c) {
 	}
 	wsov_layout_live_projection();
 	wsov_schedule_dirty_render();
+	if (c->is_pending_open_animation || c->need_output_flush ||
+		c->animation.running || c->opacity_animation.running) {
+		wsov.client_animating = true;
+		wsov_attach_frame_listener();
+	}
+}
+
+void workspace_overview_client_frame(Client *c) {
+	if (!workspace_overview_is_active() || wsov.closing || !c ||
+		c->mon != wsov.mon)
+		return;
+	wsov_layout_live_projection();
 }
 
 void workspace_overview_layers_changed(LayerSurface *layer) {
@@ -5213,6 +5307,12 @@ void workspace_overview_client_added(Client *c) {
 	if (!wsov.closing && workspace_overview_is_active()) {
 		wsov_rebuild_live_projection();
 		wsov_render_tags(wsov_tag_bit(wsov.target_tag));
+	}
+	if (!wsov.closing && workspace_overview_is_active() &&
+		(c->is_pending_open_animation || c->need_output_flush ||
+		 c->animation.running || c->opacity_animation.running)) {
+		wsov.client_animating = true;
+		wsov_attach_frame_listener();
 	}
 }
 

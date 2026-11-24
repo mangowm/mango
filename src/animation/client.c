@@ -1045,6 +1045,7 @@ static void client_set_surface_clip(Client *c, const struct wlr_box *clip) {
 void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
+	workspace_overview_client_frame(c);
 
 	/*
 	 * Overview card mode: content is shown by the independent card tree; update

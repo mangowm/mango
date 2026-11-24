@@ -2122,6 +2122,7 @@ void init_client_properties(Client *c) {
 	c->tab_next = NULL;
 	c->tag_visible = false;
 	c->wsov_hidden = false;
+	c->wsov_use_scene_clip = false;
 	c->snapshot_temp_visible = false;
 	c->is_surface_hidden = false;
 	c->grid_col_per = 1.0f;
