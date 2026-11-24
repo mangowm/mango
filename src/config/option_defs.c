@@ -1591,6 +1591,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->isunglobal = -1;
 		rule->isglobal = -1;
 		rule->isoverlay = -1;
+		rule->isprioverlay = -1;
 		rule->shield_when_capture = -1;
 		rule->allow_shortcuts_inhibit = -1;
 		rule->ignore_maximize = -1;
@@ -1706,6 +1707,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->focused_opacity = atof(val);
 				} else if (strcmp(key, "is_overlay") == 0) {
 					rule->isoverlay = atoi(val);
+				} else if (strcmp(key, "is_priority_overlay") == 0) {
+					rule->isprioverlay = atoi(val);
 				} else if (strcmp(key, "shield_when_capture") == 0) {
 					rule->shield_when_capture = atoi(val);
 				} else if (strcmp(key, "allow_shortcuts_inhibit") == 0) {

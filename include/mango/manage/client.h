@@ -126,8 +126,8 @@ struct Client {
 	uint32_t configure_serial;
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, stayfocused, isurgent, isfullscreen, isfakefullscreen,
-		need_float_size_reduce, isminimized, isoverlay, no_size_hint,
-		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
+		need_float_size_reduce, isminimized, isoverlay, isprioverlay,
+		no_size_hint, ignore_maximize, ignore_minimize, idleinhibit_when_focus,
 		vrr_only_fullscreen, force_render, activation_bypass;
 	int32_t ismaximizescreen;
 	int32_t overview_backup_bw;

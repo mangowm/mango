@@ -31,6 +31,7 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 | `is_fake_fullscreen` | integer | `0` / `1` | Force fake-fullscreen state (window stays constrained) |
 | `is_global` | integer | `0` / `1` | Open as global window (sticky across tags) |
 | `is_overlay` | integer | `0` / `1` | Make it always in top layer |
+| `is_priority_overlay` | integer | `0` / `1` | Draw above all other overlays (including layer-shell overlays). Implies `is_global` |
 | `is_open_silent` | integer | `0` / `1` | Open without focus |
 | `is_tag_silent` | integer | `0` / `1` | Don't focus if client is not in current view tag |
 | `force_fake_maximize` | integer | `0` / `1` (default 1) | The state of client set to fake maximized |

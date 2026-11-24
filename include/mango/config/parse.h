@@ -175,6 +175,7 @@ typedef struct {
 	int32_t isunglobal;
 	int32_t isglobal;
 	int32_t isoverlay;
+	int32_t isprioverlay;
 	int32_t shield_when_capture;
 	int32_t allow_shortcuts_inhibit;
 	int32_t ignore_maximize;

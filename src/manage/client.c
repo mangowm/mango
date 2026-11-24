@@ -1548,6 +1548,7 @@ void apply_rule_properties(Client *c, const ConfigWinRule *r) {
 	APPLY_INT_PROP(c, r, isnamedscratchpad);
 	APPLY_INT_PROP(c, r, isglobal);
 	APPLY_INT_PROP(c, r, isoverlay);
+	APPLY_INT_PROP(c, r, isprioverlay);
 	APPLY_INT_PROP(c, r, shield_when_capture);
 	APPLY_INT_PROP(c, r, ignore_maximize);
 	APPLY_INT_PROP(c, r, ignore_minimize);
@@ -1849,7 +1850,10 @@ void client_set_rules(Client *c, Monitor **rule_mon, uint32_t *rule_tags) {
 	}
 
 	// apply overlay rule
-	if (c->isoverlay && c->scene) {
+	if (c->isprioverlay) {
+		c->isglobal = 1;
+	}
+	if ((c->isoverlay || c->isprioverlay) && c->scene) {
 		wlr_scene_node_reparent(&c->scene->node,
 								server.layers[client_target_layer(c)]);
 	}
@@ -2160,6 +2164,7 @@ void init_client_properties(Client *c) {
 	c->isglobal = 0;
 	c->isminimized = 0;
 	c->isoverlay = 0;
+	c->isprioverlay = 0;
 	c->isunglobal = 0;
 	c->is_in_scratchpad = 0;
 	c->isfloating_before_scratchpad = 0;
@@ -4018,6 +4023,7 @@ void client_replace(Client *c, Client *w, bool is_group_change_member,
 	c->scroller_proportion = w->scroller_proportion;
 	c->isglobal = w->isglobal;
 	c->isoverlay = w->isoverlay;
+	c->isprioverlay = w->isprioverlay;
 	c->overview_backup_geom = w->overview_backup_geom;
 	c->animation.current = w->animation.current;
 	c->scroller_stack_proportion = w->scroller_stack_proportion;
@@ -4387,6 +4393,10 @@ void client_add_jump_label_node(Client *c) {
 // belong to the special layers
 uint32_t client_target_layer(Client *c) {
 	bool special_overlay = (c->tags & TAG0_MASK);
+
+	// priority overlay renders above all other overlays
+	if (c->isprioverlay)
+		return LyrPriorityOverlay;
 
 	if (c->isoverlay)
 		return special_overlay ? LyrSpecialOverlay : LyrOverlay;
