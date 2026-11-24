@@ -30,6 +30,7 @@ enum {
 	LyrSpecialFullscreen,
 	LyrFadeOut,
 	LyrSpecialOverlay,
+	LyrPriorityOverlay,
 	LyrIMPopup,
 	LyrBlock,
 	NUM_LAYERS
