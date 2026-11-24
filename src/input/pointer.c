@@ -998,6 +998,48 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 	int32_t cdx = 0, cdy = 0;
 	struct wlr_box box = gc->geom;
 
+	/*
+	 * keep aspect ration in resizes
+	 */
+	if (server.resize_aspect_ratio > 0.f) {
+		const struct wlr_box *begin = &server.resize_begin_geom;
+		int32_t begin_w = begin->width - 2 * bw;
+		int32_t begin_h = begin->height - 2 * bw;
+		if (begin_w > 0 && begin_h > 0) {
+			int32_t dx = (int32_t)round(x) - server.grab_offset_x;
+			int32_t dy = (int32_t)round(y) - server.grab_offset_y;
+			int32_t content_w = begin_w + ((edge & WLR_EDGE_RIGHT) ? dx : -dx);
+			int32_t content_h = begin_h + ((edge & WLR_EDGE_BOTTOM) ? dy : -dy);
+			float sx = (float)content_w / (float)begin_w;
+			float sy = (float)content_h / (float)begin_h;
+			if (!(edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)))
+				sx = 1.f;
+			if (!(edge & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)))
+				sy = 1.f;
+			float ddx = sx - 1.f, ddy = sy - 1.f;
+			float scale =
+				(ddx < 0 ? -ddx : ddx) >= (ddy < 0 ? -ddy : ddy) ? sx : sy;
+			scale = client_clamp_aspect_scale(gc, begin_w, begin_h, scale);
+
+			int32_t new_w = (int32_t)((float)begin_w * scale + 0.5f);
+			int32_t new_h = (int32_t)((float)begin_h * scale + 0.5f);
+			if (new_w < 1)
+				new_w = 1;
+			if (new_h < 1)
+				new_h = 1;
+			box.width = new_w + 2 * bw;
+			box.height = new_h + 2 * bw;
+			box.x = (edge & WLR_EDGE_LEFT) ? begin->x + begin->width - box.width
+										   : begin->x;
+			box.y = (edge & WLR_EDGE_TOP)
+						? begin->y + begin->height - box.height
+						: begin->y;
+			gc->float_geom = box;
+			resize(gc, box, (ResizeOpts){.interact = 1, .drag_edge = edge});
+			return;
+		}
+	}
+
 	if (edge & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) {
 		cdx = (int32_t)round(x) - server.grab_offset_x;
 		if (edge & WLR_EDGE_RIGHT) {
@@ -1090,6 +1132,15 @@ bool pointer_begin_move_resize(Client *gc, uint32_t mode, double x, double y,
 				resize_edge |= (corner & 2) ? WLR_EDGE_BOTTOM : WLR_EDGE_TOP;
 			}
 			server.resize_edge = resize_edge;
+			server.resize_begin_geom = gc->geom;
+			server.resize_aspect_ratio = 0.f;
+			if (gc->keep_aspect_ratio) {
+				int32_t inner_w = gc->geom.width - 2 * (int32_t)gc->bw;
+				int32_t inner_h = gc->geom.height - 2 * (int32_t)gc->bw;
+				if (inner_w > 0 && inner_h > 0)
+					server.resize_aspect_ratio =
+						(float)inner_w / (float)inner_h;
+			}
 
 			int32_t grab_x = (int32_t)round(x);
 			int32_t grab_y = (int32_t)round(y);
@@ -1146,6 +1197,8 @@ void pointer_end_grab_client(bool follow_pointer) {
 	 * grab keeps snapping as before, even when the pointer never moved. */
 	border_resize = server.grab_is_border_resize;
 	server.grab_is_border_resize = false;
+	server.resize_edge = 0;
+	server.resize_aspect_ratio = 0.f;
 
 	server.cursor_mode = CurNormal;
 	/* Clear the pointer focus, this way if the cursor is over a surface

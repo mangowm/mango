@@ -1596,6 +1596,7 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		rule->ignore_maximize = -1;
 		rule->ignore_minimize = -1;
 		rule->no_size_hint = -1;
+		rule->keep_aspect_ratio = -1;
 		rule->idleinhibit_when_focus = -1;
 		rule->vrr_only_fullscreen = -1;
 		rule->force_render = -1;
@@ -1716,6 +1717,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 					rule->ignore_minimize = atoi(val);
 				} else if (strcmp(key, "no_size_hint") == 0) {
 					rule->no_size_hint = atoi(val);
+				} else if (strcmp(key, "keep_aspect_ratio") == 0) {
+					rule->keep_aspect_ratio = atoi(val);
 				} else if (strcmp(key, "idle_inhibit_when_focus") == 0) {
 					rule->idleinhibit_when_focus = atoi(val);
 				} else if (strcmp(key, "vrr_only_fullscreen") == 0) {

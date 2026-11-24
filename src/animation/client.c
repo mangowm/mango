@@ -1336,6 +1336,34 @@ void client_animation_next_tick(Client *c) {
 		c->need_output_flush = false;
 	}
 }
+
+struct wlr_box client_get_animation_geometry(Client *c) {
+	if (!c)
+		return (struct wlr_box){0};
+	if (!config.animations || !c->animation.running)
+		return c->animation.current;
+
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	int32_t passed_time = timespec_to_ms(&now) - c->animation.time_started;
+	double animation_passed =
+		c->animation.duration
+			? (double)passed_time / (double)c->animation.duration
+			: 1.0;
+	int32_t type = c->animation.action == NONE ? MOVE : c->animation.action;
+	double factor = find_animation_curve_at(animation_passed, type);
+
+	return (struct wlr_box){
+		.x = c->animation.initial.x +
+			 (c->current.x - c->animation.initial.x) * factor,
+		.y = c->animation.initial.y +
+			 (c->current.y - c->animation.initial.y) * factor,
+		.width = c->animation.initial.width +
+				 (c->current.width - c->animation.initial.width) * factor,
+		.height = c->animation.initial.height +
+				  (c->current.height - c->animation.initial.height) * factor,
+	};
+}
 void init_fadeout_client(Client *c) {
 	if (!c->mon || c->mon->iscleanuping || client_is_unmanaged(c))
 		return;

@@ -132,6 +132,8 @@ struct MangoServer {
 	/* Drag / resize */
 	Client *grab_client, *drop_client;
 	uint32_t resize_edge;
+	struct wlr_box resize_begin_geom;
+	float resize_aspect_ratio;
 	uint32_t hover_resize_edge;
 	bool hover_resize_floating;
 	bool grab_is_border_resize;			   /* grab started by a border click */

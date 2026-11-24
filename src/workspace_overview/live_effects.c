@@ -129,8 +129,8 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 
 void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
-							  const struct wlr_box *monitor_clip,
-							  double scale) {
+							  const struct wlr_box *monitor_clip, double scale,
+							  bool draw_border) {
 	if (!effects)
 		return;
 	if (effects->shadow)
@@ -219,7 +219,7 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 		wlr_scene_node_set_enabled(&effects->blur->node, enabled);
 	}
 
-	if (effects->border) {
+	if (effects->border && draw_border) {
 		bool enabled = client->bw > 0;
 		struct wlr_box border_box = {0};
 		struct wlr_box inner = {0};
@@ -320,11 +320,12 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 void wsov_live_effects_update(struct wsov_live_effects *effects,
 							  const struct wlr_box *window_box,
 							  const struct wlr_box *monitor_clip,
-							  double scale) {
+							  double scale, bool draw_border) {
 	(void)effects;
 	(void)window_box;
 	(void)monitor_clip;
 	(void)scale;
+	(void)draw_border;
 }
 
 void wsov_live_effects_destroy(struct wsov_live_effects *effects) {

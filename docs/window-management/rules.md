@@ -58,6 +58,7 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 | `tags` | mask | `0-9` / `1\|3\|5` | Assign to specific one tag (use `0` for special workspace overlay) or multiple tags (use `\|` to split multiple tags) |
 | `no_force_center` | integer | `0` / `1` | Window does not force center |
 | `no_size_hint` | integer | `0` / `1` | Don't use min size and max size for size hints |
+| `keep_aspect_ratio` | integer | `0` / `1` | Keep the window's aspect ratio when resizing it, floating windows only, so combine it with `is_floating` |
 
 ### Visuals & Decoration
 
@@ -123,6 +124,9 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 ```ini
 # Set specific window size and position
 window_rule=width:1000,height:900,app_id:yesplaymusic,title:Demons
+
+# Preserve the aspect ratio while resizing a floating video player
+window_rule=is_floating:1,keep_aspect_ratio:1,app_id:mpv
 
 # Global keybindings for OBS Studio
 window_rule=global_key_binding:ctrl+alt-o,app_id:com.obsproject.Studio

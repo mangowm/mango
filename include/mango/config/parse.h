@@ -180,6 +180,7 @@ typedef struct {
 	int32_t ignore_maximize;
 	int32_t ignore_minimize;
 	int32_t no_size_hint;
+	int32_t keep_aspect_ratio;
 	int32_t idleinhibit_when_focus;
 	int32_t vrr_only_fullscreen;
 	int32_t force_render;

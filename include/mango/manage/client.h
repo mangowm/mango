@@ -127,8 +127,9 @@ struct Client {
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	int32_t isfloating, stayfocused, isurgent, isfullscreen, isfakefullscreen,
 		need_float_size_reduce, isminimized, isoverlay, no_size_hint,
-		ignore_maximize, ignore_minimize, idleinhibit_when_focus,
-		vrr_only_fullscreen, force_render, activation_bypass;
+		keep_aspect_ratio, ignore_maximize, ignore_minimize,
+		idleinhibit_when_focus, vrr_only_fullscreen, force_render,
+		activation_bypass;
 	int32_t ismaximizescreen;
 	int32_t overview_backup_bw;
 	int32_t fullscreen_backup_x, fullscreen_backup_y, fullscreen_backup_w,
@@ -336,6 +337,10 @@ int32_t client_wants_focus(Client *c);
 int32_t client_wants_fullscreen(Client *c);
 bool client_request_minimize(Client *c, void *data);
 bool client_request_maximize(Client *c, void *data);
+void client_get_content_size_limits(Client *c, int32_t *min_w, int32_t *min_h,
+									int32_t *max_w, int32_t *max_h);
+float client_clamp_aspect_scale(Client *c, int32_t begin_w, int32_t begin_h,
+								float scale);
 void client_set_size_bound(Client *c);
 bool check_hit_no_border(Client *c);
 Client *client_find_terminal(Client *w);
