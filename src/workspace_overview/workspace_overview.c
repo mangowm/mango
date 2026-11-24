@@ -72,30 +72,12 @@ struct wsov_live_surface {
 	struct wsov_live_effects *effects;
 	struct wlr_surface *surface;
 	struct wlr_scene_surface *scene_surface;
-	struct wlr_scene_buffer *source_buffer;
 	int sx;
 	int sy;
 	struct wl_listener commit;
 	struct wl_listener destroy;
 	struct wl_listener frame_done;
 };
-
-struct wsov_scene_buffer_match {
-	struct wlr_surface *surface;
-	struct wlr_scene_buffer *buffer;
-};
-
-static void wsov_match_scene_buffer(struct wlr_scene_buffer *buffer, int sx,
-									int sy, void *data) {
-	struct wsov_scene_buffer_match *match = data;
-	if (match->buffer)
-		return;
-	struct wlr_scene_surface *scene_surface =
-		wlr_scene_surface_try_from_buffer(buffer);
-	if (scene_surface && scene_surface->surface == match->surface) {
-		match->buffer = buffer;
-	}
-}
 
 struct wsov_live_surface_data {
 	Client *client;
@@ -1438,8 +1420,6 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	struct wsov_cell *cell = live->cell;
 	if (!surface || !cell || !live->tree)
 		return;
-	if (surface->current.viewport.has_src)
-		live->client->wsov_use_scene_clip = true;
 
 	if (cell->live_surface_count == cell->live_surface_capacity) {
 		int capacity =
@@ -1477,12 +1457,6 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	}
 	entry->scene_surface = scene_surface;
 
-	struct wsov_scene_buffer_match match = {
-		.surface = surface,
-	};
-	wlr_scene_node_for_each_buffer(&live->client->scene_surface->node,
-								   wsov_match_scene_buffer, &match);
-	entry->source_buffer = match.buffer;
 	cell->live_surfaces[cell->live_surface_count++] = entry;
 	wlr_scene_buffer_set_filter_mode(scene_surface->buffer,
 									 WLR_SCALE_FILTER_BILINEAR);
@@ -2303,13 +2277,10 @@ static void wsov_layout_live_projection(void) {
 				continue;
 			}
 
-			bool use_scene_clip =
-				entry->client->wsov_use_scene_clip &&
-				entry->source_buffer && entry->source_buffer->buffer &&
-				entry->source_buffer->dst_width > 0 &&
-				entry->source_buffer->dst_height > 0 &&
-				entry->source_buffer->src_box.width > 0 &&
-				entry->source_buffer->src_box.height > 0;
+			struct wlr_box clip;
+			client_get_clip(entry->client, &clip);
+			bool use_clip_source = false;
+			struct wlr_fbox clip_src = {0};
 
 			float content_w = 0.0f;
 			float content_h = 0.0f;
@@ -2326,12 +2297,8 @@ static void wsov_layout_live_projection(void) {
 					wlr_scene_node_set_enabled(&buffer->node, false);
 					continue;
 				}
-				content_w = use_scene_clip
-								? entry->source_buffer->dst_width
-								: entry->client->surface.xdg->geometry.width;
-				content_h = use_scene_clip
-								? entry->source_buffer->dst_height
-								: entry->client->surface.xdg->geometry.height;
+				content_w = clip.width;
+				content_h = clip.height;
 			}
 			if (content_w <= 0 || content_h <= 0) {
 				wsov_live_effects_update(entry->effects, NULL, NULL,
@@ -2372,42 +2339,49 @@ static void wsov_layout_live_projection(void) {
 			wsov_live_effects_update(entry->effects, &window_box,
 									 &overflow_clip, effect_scale);
 
-			struct wlr_box clip;
-			client_get_clip(entry->client, &clip);
 			double preview_x;
 			double preview_y;
 			double preview_w;
 			double preview_h;
-			if (use_scene_clip) {
-				int normal_x = 0;
-				int normal_y = 0;
-				for (struct wlr_scene_node *node =
-						 &entry->source_buffer->node;
-					 node; node = node->parent ? &node->parent->node : NULL) {
-					normal_x += node->x;
-					normal_y += node->y;
-				}
-				int content_x =
-					entry->client->geom.x + entry->client->bw;
-				int content_y =
-					entry->client->geom.y + entry->client->bw;
-				preview_x =
-					content_preview_x +
-					(normal_x - content_x) * surface_scale_x;
-				preview_y =
-					content_preview_y +
-					(normal_y - content_y) * surface_scale_y;
-				preview_w =
-					entry->source_buffer->dst_width * surface_scale_x;
-				preview_h =
-					entry->source_buffer->dst_height * surface_scale_y;
-			} else {
+#ifdef XWAYLAND
+			if (client_is_x11(entry->client)) {
 				preview_x =
 					content_preview_x + (entry->sx - clip.x) * surface_scale_x;
 				preview_y =
 					content_preview_y + (entry->sy - clip.y) * surface_scale_y;
 				preview_w = surface->current.width * surface_scale_x;
 				preview_h = surface->current.height * surface_scale_y;
+			} else
+#endif
+			{
+				struct wlr_box surface_bounds = {
+					.x = entry->sx,
+					.y = entry->sy,
+					.width = surface->current.width,
+					.height = surface->current.height,
+				};
+				struct wlr_box surface_visible;
+				if (!wlr_box_intersection(&surface_visible, &surface_bounds,
+										  &clip)) {
+					wsov_live_effects_update(entry->effects, NULL, NULL,
+											 effect_scale);
+					wlr_scene_node_set_enabled(&buffer->node, false);
+					continue;
+				}
+				struct wlr_fbox surface_box = {
+					.x = surface_visible.x - entry->sx,
+					.y = surface_visible.y - entry->sy,
+					.width = surface_visible.width,
+					.height = surface_visible.height,
+				};
+				client_surface_get_source_box(surface, &surface_box, &clip_src);
+				use_clip_source = true;
+				preview_x = content_preview_x +
+							(surface_visible.x - clip.x) * surface_scale_x;
+				preview_y = content_preview_y +
+							(surface_visible.y - clip.y) * surface_scale_y;
+				preview_w = surface_visible.width * surface_scale_x;
+				preview_h = surface_visible.height * surface_scale_y;
 			}
 
 			struct wlr_box dst = {
@@ -2441,8 +2415,8 @@ static void wsov_layout_live_projection(void) {
 				continue;
 			}
 			struct wlr_fbox src;
-			if (use_scene_clip) {
-				src = entry->source_buffer->src_box;
+			if (use_clip_source) {
+				src = clip_src;
 			} else {
 				struct wlr_fbox surface_box = {
 					.x = 0,
@@ -5234,9 +5208,6 @@ bool workspace_overview_handle_axis(
 void workspace_overview_client_commit(Client *c) {
 	if (!workspace_overview_is_active() || wsov.closing || c->mon != wsov.mon)
 		return;
-	struct wlr_surface *surface = client_surface(c);
-	if (surface && surface->current.viewport.has_src)
-		c->wsov_use_scene_clip = true;
 	uint32_t current_layer = client_target_layer(c);
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
