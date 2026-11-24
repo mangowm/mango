@@ -1969,6 +1969,14 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		server.group_bar_drag_pending = false;
 		server.drop_to_group = false;
 		server.group_bar_drag_client = NULL;
+		if (server.session_locked || server.cursor_mode == CurNormal ||
+			server.cursor_mode == CurPressed) {
+			server.cursor_mode = CurNormal;
+			break;
+		}
+
+		wlr_seat_pointer_notify_button(server.seat, event->time_msec,
+									   event->button, event->state);
 		if (server.cursor_mode == CurMove && server.grab_client &&
 			server.grab_client->drag_to_tile) {
 			Client *jc = server.grab_client;
@@ -1989,15 +1997,8 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 				return true;
 			}
 		}
-		/* If you released any buttons, we exit interactive move/resize mode. */
-		if (!server.session_locked && server.cursor_mode != CurNormal &&
-			server.cursor_mode != CurPressed) {
-			pointer_end_grab_client(true);
-			return true;
-		} else {
-			server.cursor_mode = CurNormal;
-		}
-		break;
+		pointer_end_grab_client(true);
+		return true;
 	}
 	/* If the event wasn't handled by the compositor, return false */
 	return false;

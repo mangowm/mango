@@ -2073,6 +2073,28 @@ bool xwayland_scene_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
 	return wlr_surface_point_accepts_input(scene_surface->surface, tx, ty);
 }
 
+static void handle_client_request_move(struct wl_listener *listener,
+									   void *data) {
+	Client *c = wl_container_of(listener, c, move);
+	struct wlr_surface *focus = server.seat->pointer_state.focused_surface;
+
+	if (server.session_locked || !focus ||
+		wlr_surface_get_root_surface(focus) != client_surface(c))
+		return;
+
+	if (c->type == XDGShell) {
+		struct wlr_xdg_toplevel_move_event *event = data;
+		if (!wlr_seat_validate_pointer_grab_serial(event->seat->seat, focus,
+												   event->serial))
+			return;
+	} else if (!server.seat->pointer_state.button_count) {
+		return;
+	}
+
+	pointer_begin_move_resize(c, CurMove, server.cursor->x, server.cursor->y,
+							  0);
+}
+
 void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 	/* This event is raised when wlr_xdg_shell receives a new xdg surface from a
 	 * client, either a toplevel (application window) or popup,
@@ -2099,6 +2121,8 @@ void handle_new_xdg_toplevel(struct wl_listener *listener, void *data) {
 		   handle_client_request_fullscreen);
 	LISTEN(&toplevel->events.request_maximize, &c->maximize,
 		   handle_client_request_maximize);
+	LISTEN(&toplevel->events.request_move, &c->move,
+		   handle_client_request_move);
 	LISTEN(&toplevel->events.request_minimize, &c->minimize,
 		   handle_client_request_minimize);
 	LISTEN(&toplevel->events.set_title, &c->set_title, handle_client_set_title);
@@ -2744,6 +2768,7 @@ void handle_client_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&c->set_title.link);
 	wl_list_remove(&c->fullscreen.link);
 	wl_list_remove(&c->maximize.link);
+	wl_list_remove(&c->move.link);
 	wl_list_remove(&c->minimize.link);
 #ifdef XWAYLAND
 	if (c->type != XDGShell) {
@@ -5020,6 +5045,8 @@ void handle_new_xwayland_surface(struct wl_listener *listener, void *data) {
 	LISTEN(&xsurface->events.set_title, &c->set_title, handle_client_set_title);
 	LISTEN(&xsurface->events.request_maximize, &c->maximize,
 		   handle_client_request_maximize);
+	LISTEN(&xsurface->events.request_move, &c->move,
+		   handle_client_request_move);
 	LISTEN(&xsurface->events.request_minimize, &c->minimize,
 		   handle_client_request_minimize);
 }
