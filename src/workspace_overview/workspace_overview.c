@@ -247,6 +247,7 @@ static struct {
 	struct timespec layout_animation_start;
 	double layout_animation_duration_ms;
 	uint32_t camera_tag;
+	uint32_t retained_tags;
 	uint32_t close_tag;
 	Client *close_client;
 	bool close_focus_explicit;
@@ -513,7 +514,10 @@ static uint32_t wsov_collect_workspace_tags(Monitor *m, int *count) {
 	}
 
 	for (int tag = 1; tag <= config.tag_num; tag++) {
-		if (wsov_tag_has_normal_client((uint32_t)tag)) {
+		uint32_t bit = wsov_tag_bit((uint32_t)tag);
+		if (wsov_tag_has_normal_client((uint32_t)tag) ||
+			(config.workspace_overview_occupied_keep_seen_tags &&
+			 (wsov.retained_tags & bit))) {
 			mask |= wsov_tag_bit((uint32_t)tag);
 			n++;
 		}
@@ -4575,6 +4579,14 @@ static bool wsov_open(Monitor *m, WorkspaceOverviewLayout layout) {
 	memset(&wsov, 0, sizeof(wsov));
 	wsov.mon = m;
 	wsov.layout = layout;
+	if (m->workspace_overview_scope == OCCUPIED_WORKSPACE &&
+		config.workspace_overview_occupied_keep_seen_tags) {
+		for (int tag = 1; tag <= config.tag_num; tag++) {
+			if (wsov_tag_has_normal_client((uint32_t)tag))
+				wsov.retained_tags |= wsov_tag_bit((uint32_t)tag);
+		}
+		wsov.retained_tags |= wsov_tag_bit(get_mon_curtag(m));
+	}
 	int count = 0;
 	wsov_collect_workspace_tags(m, &count);
 	if (count <= 0) {
@@ -5364,37 +5376,33 @@ void workspace_overview_layout_changed(Monitor *m) {
 		return;
 	uint32_t tags = wsov_layout_affected_tags(m);
 	uint32_t previous_target = wsov.target_tag;
-	uint32_t view_tag = wsov_active_camera_tag();
+	uint32_t current_view_tag = get_mon_curtag(m);
+	uint32_t current_view_bit = wsov_tag_bit(current_view_tag);
+	bool keep_view_tag = m->workspace_overview_scope == OCCUPIED_WORKSPACE &&
+						 config.workspace_overview_occupied_keep_seen_tags &&
+						 current_view_bit;
+	if (keep_view_tag)
+		wsov.retained_tags |= current_view_bit;
+	bool view_target_available =
+		current_view_tag &&
+		(wsov_cell_for_tag(current_view_tag) || keep_view_tag);
 	bool target_changed =
-		view_tag && view_tag != previous_target && wsov_cell_for_tag(view_tag);
-	if (view_tag && wsov_cell_for_tag(view_tag)) {
-		wsov.target_tag = view_tag;
-		wsov.camera_tag = view_tag;
-		/*
-		 * Pointer hover changes target_tag before activating the view. That
-		 * internal view change must not overwrite the independent scroll
-		 * anchor; only a dispatcher-driven view change should recenter it.
-		 */
+		view_target_available && current_view_tag != previous_target;
+	if (view_target_available) {
+		wsov.target_tag = current_view_tag;
+		wsov.camera_tag = current_view_tag;
 		if (target_changed)
-			wsov.scroll_center_tag = view_tag;
+			wsov.scroll_center_tag = current_view_tag;
 	}
-	/* A dispatcher-driven view switch must not play tag-in/tag-out animations
-	 * inside the overview. Other layout arrangements retain the original
-	 * animation scope so regular client animations continue normally. */
 	wsov_settle_tag_animations(m, tags);
-	/*
-	 * arrange() skips clients hidden by the overview, so its normal pass cannot
-	 * produce a complete workspace layout. Re-run it with the affected
-	 * workspace exposed and capture the result. This is the single reflow
-	 * entry for layout, membership and client lifecycle changes.
-	 */
 	wsov_capture_workspace_tags(tags);
 	wsov_refresh_workspace_or_rebuild(tags);
+	if (!workspace_overview_is_active() || wsov.closing)
+		return;
+
 	if (target_changed) {
 		if (wsov.layout == WORKSPACE_OVERVIEW_SCROLL)
 			wsov_animate_scroll_to_target();
-		/* The view was already switched by the dispatcher. Only move the
-		 * overview target, selection and live projection to match it. */
 		wsov_apply_target_selection(false);
 	}
 }

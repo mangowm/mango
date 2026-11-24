@@ -124,9 +124,11 @@ list.
 The workspace overview is independent from the standard overview. Its scope is
 selected when opening it: `all` creates one preview for every tag up to
 `tag_num`, including empty workspaces, while `occupied` shows only tags that
-contain windows. The default `all` and `occupied` modes use a fitted preview
-grid. The `scroll_all` and `scroll_occupied` modes arrange workspaces as a
-scrolling strip, similar to the scroller layout with workspaces as its items.
+contain windows. In `occupied` mode, tags seen at open or selected later with a
+`view_*` dispatch remain as previews even after their workspaces become empty.
+The default `all` and `occupied` modes use a fitted preview grid. The
+`scroll_all` and `scroll_occupied` modes arrange workspaces as a scrolling strip,
+similar to the scroller layout with workspaces as its items.
 The strip can scroll horizontally or vertically according to
 `workspace_overview_scroll_direction`; the selected workspace is centered when
 possible. Scrolling and workspace-selection movement use
@@ -203,9 +205,8 @@ source tag. Holding Ctrl replaces all of the window's tags with the destination
 tag. A plain drag removes only the tag represented by the preview that the drag
 started from.
 
-With `occupied` scope, the workspace overview closes automatically when every
-workspace becomes empty. With `all` scope, empty workspace previews remain
-available.
+With `occupied` scope, kept previews remain empty; otherwise the overview closes
+when every workspace becomes empty. `all` scope keeps all previews.
 
 ### Configuration
 
@@ -214,6 +215,7 @@ available.
 | `workspace_overview_border_width` | integer | `2` | Width of each workspace preview border and its inset around the preview texture. Range: 0–100. |
 | `workspace_overview_gap` | integer | `5` | Gap between workspace preview cards. Range: 0–1000. |
 | `workspace_overview_drag_threshold` | integer | `5` | Pointer distance required before a click becomes a window drag. Range: 0–1000. |
+| `workspace_overview_occupied_keep_seen_tags` | integer | `1` | Keep tags seen at open or through `view_*` while the overview is open. Kept previews remain even if empty. Range: 0–1. |
 | `workspace_overview_scroll_direction` | string | `vertical` | Scrolling workspace strip direction: `horizontal` or `vertical`. |
 | `workspace_overview_scroll_ratio` | float | `0.8` | Maximum workspace preview size relative to the monitor in scrolling mode. Range: 0.1–1.0. |
 | `workspace_overview_drag_scroll_speed` | float | `1.5` | Automatic edge-scroll speed while dragging a window, in workspace strides per second. Range: 0.1–10.0. |
@@ -230,6 +232,7 @@ available.
 workspace_overview_border_width=2
 workspace_overview_gap=5
 workspace_overview_drag_threshold=5
+workspace_overview_occupied_keep_seen_tags=1
 workspace_overview_scroll_direction=vertical
 workspace_overview_scroll_ratio=0.8
 workspace_overview_drag_scroll_speed=1.5

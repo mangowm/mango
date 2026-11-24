@@ -629,6 +629,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->workspace_overview_gap = atoi(value);
 	} else if (strcmp(key, "workspace_overview_drag_threshold") == 0) {
 		config->workspace_overview_drag_threshold = atoi(value);
+	} else if (strcmp(key, "workspace_overview_occupied_keep_seen_tags") == 0) {
+		config->workspace_overview_occupied_keep_seen_tags = atoi(value);
 	} else if (strcmp(key, "workspace_overview_scroll_direction") == 0) {
 		config->workspace_overview_scroll_direction =
 			strcmp(value, "vertical") == 0
@@ -638,8 +640,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->workspace_overview_scroll_ratio = atof(value);
 	} else if (strcmp(key, "workspace_overview_drag_scroll_speed") == 0) {
 		config->workspace_overview_drag_scroll_speed = atof(value);
-	} else if (strcmp(
-				   key, "workspace_overview_scroll_decel_start_interval") == 0) {
+	} else if (strcmp(key, "workspace_overview_scroll_decel_start_interval") ==
+			   0) {
 		config->workspace_overview_scroll_decel_start_interval = atoi(value);
 	} else if (strcmp(key, "workspace_overview_scroll_decel_gain") == 0) {
 		config->workspace_overview_scroll_decel_gain = atof(value);
@@ -2660,6 +2662,7 @@ void set_value_default() {
 	config.workspace_overview_border_width = 2;
 	config.workspace_overview_gap = 5;
 	config.workspace_overview_drag_threshold = 5;
+	config.workspace_overview_occupied_keep_seen_tags = 1;
 	config.workspace_overview_scroll_direction =
 		WORKSPACE_OVERVIEW_SCROLL_VERTICAL;
 	config.workspace_overview_scroll_ratio = 0.8f;
@@ -2961,14 +2964,16 @@ void override_config(void) {
 		CLAMP_INT(config.workspace_overview_gap, 0, 1000);
 	config.workspace_overview_drag_threshold =
 		CLAMP_INT(config.workspace_overview_drag_threshold, 0, 1000);
+	config.workspace_overview_occupied_keep_seen_tags =
+		CLAMP_INT(config.workspace_overview_occupied_keep_seen_tags, 0, 1);
 	config.workspace_overview_scroll_ratio =
 		CLAMP_FLOAT(config.workspace_overview_scroll_ratio, 0.1f, 1.0f);
 	config.workspace_overview_drag_scroll_speed =
 		CLAMP_FLOAT(config.workspace_overview_drag_scroll_speed, 0.1f, 10.0f);
 	config.workspace_overview_scroll_decel_start_interval = CLAMP_INT(
 		config.workspace_overview_scroll_decel_start_interval, 1, 1000);
-	config.workspace_overview_scroll_decel_gain = CLAMP_FLOAT(
-		config.workspace_overview_scroll_decel_gain, 0.0f, 1.0f);
+	config.workspace_overview_scroll_decel_gain =
+		CLAMP_FLOAT(config.workspace_overview_scroll_decel_gain, 0.0f, 1.0f);
 	config.overcircle_center_ratio =
 		CLAMP_FLOAT(config.overcircle_center_ratio, 0.1f, 0.9f);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);

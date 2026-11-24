@@ -99,6 +99,7 @@ title_message_bar_gap = 20
 workspace_overview_border_width = 2
 workspace_overview_gap = 5
 workspace_overview_drag_threshold = 5
+workspace_overview_occupied_keep_seen_tags = 1
 workspace_overview_scroll_direction = "vertical"
 workspace_overview_scroll_ratio = 0.8
 workspace_overview_drag_scroll_speed = 1.5

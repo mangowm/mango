@@ -460,6 +460,7 @@ typedef struct {
 	int32_t workspace_overview_border_width;
 	int32_t workspace_overview_gap;
 	int32_t workspace_overview_drag_threshold;
+	int32_t workspace_overview_occupied_keep_seen_tags;
 	float workspace_overview_scroll_ratio;
 	WorkspaceOverviewScrollDirection workspace_overview_scroll_direction;
 	float workspace_overview_drag_scroll_speed;
