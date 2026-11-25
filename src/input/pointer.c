@@ -383,7 +383,7 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 	}
 
 	// Computes different hot-area coordinates for each hot corner.
-	unsigned hx, hy;
+	int32_t hx, hy;
 
 	switch (config.hotarea_corner) {
 	case BOTTOM_RIGHT: // Bottom-right corner
