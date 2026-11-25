@@ -4633,6 +4633,12 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 			wsov_finish_client_geometry(c);
 	}
 	wsov_hide_clients(false);
+	Client *fadeout;
+	wl_list_for_each(fadeout, &server.fadeout_clients, fadeout_link) {
+		if (fadeout->mon == m && fadeout->scene) {
+			wlr_scene_node_set_enabled(&fadeout->scene->node, true);
+		}
+	}
 	memset(&wsov, 0, sizeof(wsov));
 	pointer_cursor_activity();
 
