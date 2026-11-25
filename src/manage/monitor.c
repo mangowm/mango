@@ -445,7 +445,6 @@ bool mango_scene_output_commit(struct wlr_scene_output *scene_output,
 		state->tearing_page_flip = false;
 		committed = wlr_output_commit_state(wlr_output, state);
 	}
-
 	if (committed) {
 		if (state == &m->pending) {
 			wlr_output_state_finish(&m->pending);
@@ -1429,7 +1428,6 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 			need_more_frames = layer_draw_frame(l) || need_more_frames;
 		}
 	}
-
 	wl_list_for_each_safe(c, tmp, &server.fadeout_clients, fadeout_link) {
 		need_more_frames = client_draw_fadeout_frame(c) || need_more_frames;
 	}
@@ -1437,7 +1435,6 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 	wl_list_for_each_safe(l, tmpl, &server.fadeout_layers, fadeout_link) {
 		need_more_frames = layer_draw_fadeout_frame(l) || need_more_frames;
 	}
-
 	wl_list_for_each(c, &server.clients, link) {
 		need_more_frames = client_draw_frame(c) || need_more_frames;
 
@@ -1445,6 +1442,8 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 			client_is_rendered_on_mon(c, m))
 			resizing_on_this_mon = true;
 	}
+	if (m->is_ws_overview)
+		workspace_overview_prepare_output_frame(m);
 
 	if (!config.animations && !server.grab_client && !need_more_frames &&
 		resizing_on_this_mon) {

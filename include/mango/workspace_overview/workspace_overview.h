@@ -37,5 +37,6 @@ void workspace_overview_client_unmapped(Client *c, bool activate_target);
 void workspace_overview_monitor_destroy(Monitor *m);
 void workspace_overview_monitor_changed(Monitor *m);
 void workspace_overview_reload(void);
+void workspace_overview_prepare_output_frame(Monitor *m);
 
 #endif
