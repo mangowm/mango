@@ -9,6 +9,7 @@
 #include <math.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct wsov_background_effects {
 	struct wlr_scene_blur *blur;
@@ -19,6 +20,16 @@ struct wsov_live_effects {
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_blur *blur;
 	struct wlr_scene_rect *border;
+	bool layout_valid;
+	bool layout_hidden;
+	struct wlr_box window_box;
+	struct wlr_box monitor_clip;
+	double scale;
+	int32_t border_width;
+	bool has_shadow;
+	bool has_blur;
+	struct fx_corner_radii corners;
+	float color[4];
 };
 
 struct wsov_background_effects *
@@ -85,6 +96,55 @@ static bool wsov_client_has_shadow(const Client *client) {
 		   (!config.shadow_only_floating || client->isfloating);
 }
 
+static bool wsov_corners_equal(struct fx_corner_radii a,
+							   struct fx_corner_radii b) {
+	return a.top_left == b.top_left && a.top_right == b.top_right &&
+		   a.bottom_right == b.bottom_right &&
+		   a.bottom_left == b.bottom_left;
+}
+
+static bool wsov_live_effects_layout_unchanged(
+	struct wsov_live_effects *effects, const struct wlr_box *window_box,
+	const struct wlr_box *monitor_clip, double scale,
+	struct fx_corner_radii corners, bool has_shadow, bool has_blur,
+	const float color[4]) {
+	if (!effects->layout_valid)
+		return false;
+	if (!window_box || !monitor_clip)
+		return effects->layout_hidden;
+	if (effects->layout_hidden)
+		return false;
+
+	return wlr_box_equal(&effects->window_box, window_box) &&
+		   wlr_box_equal(&effects->monitor_clip, monitor_clip) &&
+		   effects->scale == scale &&
+		   effects->border_width == effects->client->bw &&
+		   effects->has_shadow == has_shadow &&
+		   effects->has_blur == has_blur &&
+		   wsov_corners_equal(effects->corners, corners) &&
+		   memcmp(effects->color, color, sizeof(effects->color)) == 0;
+}
+
+static void wsov_live_effects_cache_layout(
+	struct wsov_live_effects *effects, const struct wlr_box *window_box,
+	const struct wlr_box *monitor_clip, double scale,
+	struct fx_corner_radii corners, bool has_shadow, bool has_blur,
+	const float color[4]) {
+	effects->layout_valid = true;
+	effects->layout_hidden = !window_box || !monitor_clip;
+	if (effects->layout_hidden)
+		return;
+
+	effects->window_box = *window_box;
+	effects->monitor_clip = *monitor_clip;
+	effects->scale = scale;
+	effects->border_width = effects->client->bw;
+	effects->has_shadow = has_shadow;
+	effects->has_blur = has_blur;
+	effects->corners = corners;
+	memcpy(effects->color, color, sizeof(effects->color));
+}
+
 struct wsov_live_effects *
 wsov_live_effects_create(struct wlr_scene_tree *parent, struct Client *client) {
 	if (!parent || !client)
@@ -127,10 +187,9 @@ void wsov_live_effects_apply_surface(struct wsov_live_effects *effects,
 		buffer, wsov_live_client_corners(effects->client, scale));
 }
 
-void wsov_live_effects_update(struct wsov_live_effects *effects,
-							  const struct wlr_box *window_box,
-							  const struct wlr_box *monitor_clip,
-							  double scale) {
+static void wsov_live_effects_update_impl(
+	struct wsov_live_effects *effects, const struct wlr_box *window_box,
+	const struct wlr_box *monitor_clip, double scale) {
 	if (!effects)
 		return;
 	if (effects->shadow)
@@ -261,6 +320,29 @@ void wsov_live_effects_update(struct wsov_live_effects *effects,
 		}
 		wlr_scene_node_set_enabled(&effects->border->node, enabled);
 	}
+}
+
+void wsov_live_effects_update(struct wsov_live_effects *effects,
+							  const struct wlr_box *window_box,
+							  const struct wlr_box *monitor_clip,
+							  double scale) {
+	if (!effects) {
+		wsov_live_effects_update_impl(NULL, window_box, monitor_clip, scale);
+		return;
+	}
+
+	struct fx_corner_radii corners =
+		wsov_live_client_corners(effects->client, scale);
+	bool has_shadow = wsov_client_has_shadow(effects->client);
+	bool has_blur = config.blur && !effects->client->no_blur;
+	const float *color = get_border_color(effects->client);
+	if (wsov_live_effects_layout_unchanged(
+			effects, window_box, monitor_clip, scale, corners, has_shadow,
+			has_blur, color))
+		return;
+	wsov_live_effects_update_impl(effects, window_box, monitor_clip, scale);
+	wsov_live_effects_cache_layout(effects, window_box, monitor_clip, scale,
+								   corners, has_shadow, has_blur, color);
 }
 
 void wsov_live_effects_destroy(struct wsov_live_effects *effects) {

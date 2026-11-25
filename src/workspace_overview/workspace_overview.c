@@ -72,6 +72,7 @@ struct wsov_live_surface {
 	struct wlr_scene_surface *scene_surface;
 	int sx;
 	int sy;
+	uint64_t effect_frame_serial;
 	struct wl_listener commit;
 	struct wl_listener destroy;
 	struct wl_listener frame_done;
@@ -238,6 +239,9 @@ static struct {
 	bool capturing_layout;
 	bool client_animating;
 	bool layout_animating;
+	bool live_layout_dirty;
+	bool live_layout_flushing;
+	bool frame_active;
 	double progress;
 	double animation_from;
 	double animation_to;
@@ -328,6 +332,8 @@ static bool wsov_create_cell_live_trees(struct wsov_cell *cell);
 static void wsov_destroy_cell_live_trees(struct wsov_cell *cell);
 static void wsov_rebuild_live_projection(void);
 static void wsov_layout_live_projection(void);
+static void wsov_mark_live_layout_dirty(void);
+static void wsov_flush_live_layout(void);
 static void wsov_order_live_projection(struct wsov_cell *cell);
 static void wsov_order_live_projections(void);
 static struct wsov_cell *wsov_hit_cell_at(double x, double y);
@@ -906,7 +912,7 @@ static double wsov_output_scale(void) {
 			   : 1.0;
 }
 
-static void wsov_handle_frame(struct wl_listener *listener, void *data) {
+static void wsov_process_frame(void) {
 	if (!workspace_overview_is_active())
 		return;
 
@@ -921,7 +927,7 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	bool client_animating = wsov_refresh_animated_cells();
 	bool client_animation_finished = wsov.client_animating && !client_animating;
 	wsov.client_animating = client_animating;
-	wsov_layout_live_projection();
+	wsov_flush_live_layout();
 	if (client_animation_finished) {
 		for (int i = 0; i < wsov.cell_count; i++) {
 			struct wsov_cell *cell = &wsov.cells[i];
@@ -1000,17 +1006,25 @@ static void wsov_handle_frame(struct wl_listener *listener, void *data) {
 	}
 }
 
+static void wsov_handle_frame(struct wl_listener *listener, void *data) {
+	if (wsov.closing)
+		return;
+	wsov_process_frame();
+}
+
 static void wsov_attach_frame_listener(void) {
 	if (!wsov.mon)
 		return;
-	if (wsov.frame.link.prev && wsov.frame.link.next &&
-		wsov.frame.link.prev != &wsov.frame.link)
+	if (wsov.frame_active)
 		return;
+	wsov.frame_active = true;
 	wsov.frame.notify = wsov_handle_frame;
 	wl_signal_add(&wsov.mon->wlr_output->events.frame, &wsov.frame);
+	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
 
 static void wsov_detach_frame_listener(void) {
+	wsov.frame_active = false;
 	if (!wsov.frame.link.prev || !wsov.frame.link.next ||
 		wsov.frame.link.prev == &wsov.frame.link)
 		return;
@@ -1357,7 +1371,7 @@ static void wsov_live_surface_commit(struct wl_listener *listener, void *data) {
 	struct wsov_live_surface *entry = wl_container_of(listener, entry, commit);
 	if (entry->client == wsov.drag_client && wsov.moved)
 		return;
-	wsov_layout_live_projection();
+	wsov_mark_live_layout_dirty();
 }
 
 static void wsov_live_surface_destroy(struct wl_listener *listener,
@@ -1455,6 +1469,8 @@ static void wsov_live_surface_add(struct wlr_surface *surface, int sx, int sy,
 	wlr_scene_buffer_set_filter_mode(scene_surface->buffer,
 									 WLR_SCALE_FILTER_BILINEAR);
 	wsov_live_effects_apply_surface(live->effects, scene_surface->buffer, 1.0);
+	entry->effect_frame_serial =
+		cell->live_lower_tree && wsov.mon ? wsov.mon->frame_serial : 0;
 	entry->commit.notify = wsov_live_surface_commit;
 	wl_signal_add(&surface->events.commit, &entry->commit);
 	entry->frame_done.notify = wsov_live_surface_frame_done;
@@ -2253,7 +2269,7 @@ static void wsov_live_client_clip(Client *c, struct wlr_box *clip) {
 	clip->height = geometry.height;
 }
 
-static void wsov_layout_live_projection(void) {
+static void wsov_layout_live_projection_impl(void) {
 	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
 
@@ -2331,8 +2347,13 @@ static void wsov_layout_live_projection(void) {
 			effect_scale =
 				fmin(item->render_scale_x * item_scale_x * view.scale_x,
 					 item->render_scale_y * item_scale_y * view.scale_y);
-			wsov_live_effects_apply_surface(entry->effects, buffer,
-											effect_scale);
+			if (!wsov.mon ||
+				entry->effect_frame_serial != wsov.mon->frame_serial) {
+				wsov_live_effects_apply_surface(entry->effects, buffer,
+												effect_scale);
+				entry->effect_frame_serial =
+					wsov.mon ? wsov.mon->frame_serial : 0;
+			}
 
 			struct wlr_box geo = item->workspace_geom;
 			if (geo.width <= 0 || geo.height <= 0)
@@ -2506,6 +2527,40 @@ static void wsov_layout_live_projection(void) {
 			wlr_scene_buffer_set_source_box(buffer, &src);
 		}
 	}
+}
+
+static void wsov_layout_live_projection(void) {
+	if (wsov.live_layout_flushing)
+		return;
+	wsov.live_layout_dirty = false;
+	wsov.live_layout_flushing = true;
+	wsov_layout_live_projection_impl();
+	wsov.live_layout_flushing = false;
+}
+
+static void wsov_mark_live_layout_dirty(void) {
+	if (!workspace_overview_is_active() || wsov.closing)
+		return;
+	wsov.live_layout_dirty = true;
+	if (wsov.mon)
+		wlr_output_schedule_frame(wsov.mon->wlr_output);
+}
+
+static void wsov_flush_live_layout(void) {
+	if (!wsov.live_layout_dirty || wsov.live_layout_flushing ||
+		!workspace_overview_is_active() || wsov.closing)
+		return;
+	wsov_layout_live_projection();
+}
+
+void workspace_overview_prepare_output_frame(Monitor *m) {
+	if (!workspace_overview_is_active_on(m))
+		return;
+	if (wsov.frame_active && wsov.closing) {
+		wsov_process_frame();
+		return;
+	}
+	wsov_flush_live_layout();
 }
 
 static void wsov_settle_tag_animations(Monitor *m, uint32_t tags) {
@@ -5302,7 +5357,7 @@ void workspace_overview_client_commit(Client *c) {
 			cell->foreground_dirty = true;
 		}
 	}
-	wsov_layout_live_projection();
+	wsov_mark_live_layout_dirty();
 	wsov_schedule_dirty_render();
 	if (c->is_pending_open_animation || c->need_output_flush ||
 		c->animation.running || c->opacity_animation.running) {
@@ -5315,7 +5370,7 @@ void workspace_overview_client_frame(Client *c) {
 	if (!workspace_overview_is_active() || wsov.closing || !c ||
 		c->mon != wsov.mon)
 		return;
-	wsov_layout_live_projection();
+	wsov_mark_live_layout_dirty();
 }
 
 void workspace_overview_layers_changed(LayerSurface *layer) {
