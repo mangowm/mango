@@ -124,6 +124,19 @@ void reapply_property(void) {
 			}
 			client_set_group_config(c);
 			client_set_tab_bar_config(c);
+
+			const char *appid = client_get_appid(c);
+			const char *title = client_get_title(c);
+			if (!appid) appid = "broken";
+			if (!title) title = "broken";
+
+			reset_fixed_rule_properties(c);
+			for (int32_t i = 0; i < config.window_rules_count; i++) {
+				ConfigWinRule *r = &config.window_rules[i];
+				if (is_window_rule_matches(r, appid, title)) {
+					apply_fixed_rule_properties(c, r);
+				}
+			}
 		}
 	}
 }
