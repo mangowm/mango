@@ -16,7 +16,6 @@
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/workspace_overview/live_effects.h"
-#include "mango/workspace_overview/live_projection.h"
 #include <GLES2/gl2.h>
 #include <drm_fourcc.h>
 #include <limits.h>
@@ -1569,6 +1568,55 @@ static void wsov_order_live_projections(void) {
 		wsov_order_live_projection(&wsov.cells[i]);
 }
 
+static void wsov_order_live_clients(struct wsov_cell *cell) {
+	if (!cell)
+		return;
+
+	/*
+	 * Items are sorted bottom-to-top. Raising each live tree in that order
+	 * restores the same stack after a client changes scene layers.
+	 */
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot || !item->client || item->layer >= NUM_LAYERS)
+			continue;
+		struct wsov_live_client *live =
+			wsov_cell_live_client_for(cell, item->client);
+		if (live && live->tree &&
+			live->tree->node.parent == cell->live_layer_trees[item->layer]) {
+			wlr_scene_node_raise_to_top(&live->tree->node);
+		}
+	}
+}
+
+static bool wsov_sync_live_client_layers(struct wsov_cell *cell) {
+	if (!cell)
+		return false;
+
+	bool changed = false;
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		if (item->is_snapshot || !item->client ||
+			item->layer >= NUM_LAYERS ||
+			wsov_live_owner_for_client(item->client) != cell)
+			continue;
+
+		struct wsov_live_client *live =
+			wsov_cell_live_client_for(cell, item->client);
+		if (!live || !live->tree || !cell->live_layer_trees[item->layer])
+			continue;
+
+		struct wlr_scene_tree *target = cell->live_layer_trees[item->layer];
+		if (live->tree->node.parent != target) {
+			wlr_scene_node_reparent(&live->tree->node, target);
+			changed = true;
+		}
+	}
+	if (changed)
+		wsov_order_live_clients(cell);
+	return changed;
+}
+
 static bool wsov_cell_live_projection_matches(const struct wsov_cell *cell) {
 	if (cell->live_enabled != cell->live_desired)
 		return false;
@@ -1587,15 +1635,13 @@ static bool wsov_cell_live_projection_matches(const struct wsov_cell *cell) {
 			struct wsov_live_client *live =
 				wsov_cell_live_client_for(cell, item->client);
 			/*
-			 * A floating transition changes the client's scene layer without
-			 * changing its workspace membership. Treat a stale projected layer
-			 * as a cache miss so the live tree moves from LyrTile to LyrFloat
-			 * (or back) instead of remaining below tiled siblings.
+			 * Floating and maximize transitions change the target layer. The
+			 * live client tree is reparented in place before this cache check,
+			 * so this only falls back to a full rebuild if reconciliation could
+			 * not preserve the projected tree.
 			 */
 			if (!live || !live->tree ||
-				!wsov_live_projection_layer_matches(&live->tree->node,
-													cell->live_layer_trees,
-													item->layer, NUM_LAYERS))
+				live->tree->node.parent != cell->live_layer_trees[item->layer])
 				return false;
 		}
 	}
@@ -1699,6 +1745,8 @@ static bool wsov_sync_live_projection(const struct wsov_camera_view *view) {
 	bool changed = false;
 	for (int i = 0; i < wsov.cell_count; i++) {
 		struct wsov_cell *cell = &wsov.cells[i];
+		if (wsov_sync_live_client_layers(cell))
+			changed = true;
 		if (wsov_cell_live_projection_matches(cell))
 			continue;
 		/*
@@ -2189,6 +2237,30 @@ static void wsov_position_cell_items(struct wsov_cell *cell) {
 	}
 }
 
+static void wsov_live_client_clip(Client *c, struct wlr_box *clip) {
+	client_get_clip(c, clip);
+#ifdef XWAYLAND
+	if (client_is_x11(c))
+		return;
+#endif
+
+	/*
+	 * client_get_clip uses c->geom, which already contains the final target
+	 * size when a maximize animation starts. Live previews follow
+	 * animation.current and can still be displaying the pre-configure surface,
+	 * so use the current XDG geometry for the content extent instead.
+	 */
+	struct wlr_box geometry;
+	client_get_geometry(c, &geometry);
+	if (geometry.width <= 0 || geometry.height <= 0)
+		return;
+
+	clip->x = geometry.x;
+	clip->y = geometry.y;
+	clip->width = geometry.width;
+	clip->height = geometry.height;
+}
+
 static void wsov_layout_live_projection(void) {
 	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
@@ -2282,7 +2354,7 @@ static void wsov_layout_live_projection(void) {
 			}
 
 			struct wlr_box clip;
-			client_get_clip(entry->client, &clip);
+			wsov_live_client_clip(entry->client, &clip);
 			bool use_clip_source = false;
 			struct wlr_fbox clip_src = {0};
 
