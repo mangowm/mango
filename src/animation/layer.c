@@ -361,8 +361,7 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	double opacity = MANGO_MAX(percent, 0.0f);
 
 	if (config.animation_fade_out)
-		wlr_scene_node_for_each_buffer(&l->scene->node,
-									   scene_buffer_apply_opacity, &opacity);
+		scene_snapshot_apply_opacity(l->scene, opacity);
 
 	if (animation_passed >= 1.0) {
 		wl_list_remove(&l->fadeout_link);

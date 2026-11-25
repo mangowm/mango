@@ -88,5 +88,7 @@ struct wlr_scene_tree *wlr_scene_tree_snapshot(struct wlr_scene_node *node,
 void scene_snapshot_clip_to_box(struct wlr_scene_tree *snapshot,
 								const struct wlr_box *bounds, bool scale,
 								int32_t width, int32_t height);
+void scene_snapshot_apply_opacity(struct wlr_scene_tree *snapshot,
+								  double opacity);
 void request_fresh_all_monitors(void);
 #endif
