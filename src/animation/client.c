@@ -756,6 +756,19 @@ int32_t client_drop_zone(const Layout *layout, bool ismaster,
 	return drop_direction;
 }
 
+void client_set_drop_area_color(Client *c) {
+	if (!c || !c->droparea)
+		return;
+
+	float premultiplied[4] = {
+		config.dropcolor[0] * config.dropcolor[3],
+		config.dropcolor[1] * config.dropcolor[3],
+		config.dropcolor[2] * config.dropcolor[3],
+		config.dropcolor[3],
+	};
+	wlr_scene_rect_set_color(c->droparea, premultiplied);
+}
+
 void client_set_drop_area(Client *c) {
 	bool first_draw = false;
 

@@ -275,7 +275,6 @@ static struct {
 	int drag_height;
 	int drag_bar_height;
 	struct wlr_scene_rect *drop_fill;
-	struct wlr_scene_rect *drop_border[4];
 	bool drop_indicator_visible;
 	bool drag_floating_changed;
 	bool drag_was_floating;
@@ -550,19 +549,10 @@ static bool wsov_create_drop_indicator(void) {
 	if (!wsov.root)
 		return false;
 
-	float border[4] = {config.dropcolor[0], config.dropcolor[1],
-					   config.dropcolor[2], 1.0f};
-	wsov.drop_fill = wlr_scene_rect_create(wsov.root, 1, 1, config.dropcolor);
-	for (int i = 0; i < 4; i++) {
-		wsov.drop_border[i] = wlr_scene_rect_create(wsov.root, 1, 1, border);
-		if (!wsov.drop_border[i])
-			return false;
-	}
+	wsov.drop_fill = wlr_scene_rect_create(wsov.root, 1, 1, (float[4]){0});
 	if (!wsov.drop_fill)
 		return false;
 	wsov_set_rect_color(wsov.drop_fill, config.dropcolor);
-	for (int i = 0; i < 4; i++)
-		wsov_set_rect_color(wsov.drop_border[i], border);
 	wsov_hide_drop_indicator();
 	return true;
 }
@@ -3390,16 +3380,9 @@ static void wsov_update_styles_tags(uint32_t tags) {
 		}
 	}
 	if (wsov.drop_fill) {
-		float border[4] = {config.dropcolor[0], config.dropcolor[1],
-						   config.dropcolor[2], 1.0f};
 		wsov_set_rect_color(wsov.drop_fill, config.dropcolor);
-		for (int i = 0; i < 4; i++)
-			wsov_set_rect_color(wsov.drop_border[i], border);
-		if (wsov.drop_indicator_visible) {
+		if (wsov.drop_indicator_visible)
 			wlr_scene_node_raise_to_top(&wsov.drop_fill->node);
-			for (int i = 0; i < 4; i++)
-				wlr_scene_node_raise_to_top(&wsov.drop_border[i]->node);
-		}
 	}
 	if (wsov.drag_buffer)
 		wlr_scene_node_raise_to_top(&wsov.drag_buffer->node);
@@ -5077,10 +5060,6 @@ static void wsov_hide_drop_indicator(void) {
 	wsov.drop_indicator_visible = false;
 	if (wsov.drop_fill)
 		wlr_scene_node_set_enabled(&wsov.drop_fill->node, false);
-	for (int i = 0; i < 4; i++) {
-		if (wsov.drop_border[i])
-			wlr_scene_node_set_enabled(&wsov.drop_border[i]->node, false);
-	}
 }
 
 static void wsov_update_drop_indicator(double x, double y) {
@@ -5105,21 +5084,9 @@ static void wsov_update_drop_indicator(double x, double y) {
 	if (!wsov.drop_fill)
 		return;
 
-	int32_t bw = MANGO_MIN(4, MANGO_MAX(2, MANGO_MIN(width, height) / 8));
-	bw = MANGO_MIN(bw, MANGO_MAX(1, MANGO_MIN(width, height) / 2));
-	wsov_place_rect_clipped(wsov.drop_border[0], zone.x, zone.y, width, bw,
-							true);
-	wsov_place_rect_clipped(wsov.drop_border[1], zone.x, zone.y + height - bw,
-							width, bw, true);
-	wsov_place_rect_clipped(wsov.drop_border[2], zone.x, zone.y, bw, height,
-							true);
-	wsov_place_rect_clipped(wsov.drop_border[3], zone.x + width - bw, zone.y,
-							bw, height, true);
 	wsov.drop_indicator_visible = true;
 
 	wlr_scene_node_raise_to_top(&wsov.drop_fill->node);
-	for (int i = 0; i < 4; i++)
-		wlr_scene_node_raise_to_top(&wsov.drop_border[i]->node);
 	if (wsov.drag_buffer)
 		wlr_scene_node_raise_to_top(&wsov.drag_buffer->node);
 }

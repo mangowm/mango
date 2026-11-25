@@ -37,6 +37,7 @@ int32_t client_drop_zone(const Layout *layout, bool ismaster,
 						 int32_t visible_tiling_clients, double rel_x,
 						 double rel_y, int32_t width, int32_t height,
 						 struct wlr_box *zone);
+void client_set_drop_area_color(Client *c);
 void client_set_drop_area(Client *c);
 
 /* ---------- central rendering entry point ---------- */
