@@ -2405,10 +2405,11 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 	client_add_jump_label_node(c);
 	client_add_dim_node(c);
 
-	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, config.dropcolor);
+	c->droparea = wlr_scene_rect_create(c->scene, 0, 0, (float[4]){0});
 	wlr_scene_node_lower_to_bottom(&c->droparea->node);
 	wlr_scene_node_set_position(&c->droparea->node, 0, 0);
 	wlr_scene_node_set_enabled(&c->droparea->node, false);
+	client_set_drop_area_color(c);
 
 	c->border = wlr_scene_rect_create(
 		c->scene, 0, 0, c->isurgent ? config.urgentcolor : config.bordercolor);
@@ -4664,7 +4665,7 @@ void client_set_group_config(Client *c) {
 	while (cur) {
 		mango_jump_label_node_apply_config(cur->jump_label_node,
 										   &config.jumplabeldata);
-		wlr_scene_rect_set_color(cur->droparea, config.dropcolor);
+		client_set_drop_area_color(cur);
 		wlr_scene_rect_set_color(cur->splitindicator[0], config.splitcolor);
 		wlr_scene_rect_set_color(cur->splitindicator[1], config.splitcolor);
 		client_set_group_bar_config(cur);

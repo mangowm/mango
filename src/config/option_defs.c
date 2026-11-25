@@ -2846,10 +2846,10 @@ void set_value_default() {
 	config.bordercolor[1] = 0x44 / 255.0f;
 	config.bordercolor[2] = 0x44 / 255.0f;
 	config.bordercolor[3] = 1.0f;
-	config.dropcolor[0] = 0xd5 / 255.0f;
-	config.dropcolor[1] = 0x89 / 255.0f;
-	config.dropcolor[2] = 0x9d / 255.0f;
-	config.dropcolor[3] = 0.5f;
+	config.dropcolor[0] = 0x8f / 255.0f;
+	config.dropcolor[1] = 0xba / 255.0f;
+	config.dropcolor[2] = 0x7c / 255.0f;
+	config.dropcolor[3] = 0x55 / 255.0f;
 	config.splitcolor[0] = 0xeb / 255.0f;
 	config.splitcolor[1] = 0x44 / 255.0f;
 	config.splitcolor[2] = 0x1e / 255.0f;

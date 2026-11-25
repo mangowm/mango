@@ -182,7 +182,8 @@ Pointer interaction:
 
 When a dragged window is over a tiled target, the preview shows the same
 mouse-position-based insert zone used by ordinary drag-to-tile. Dropping uses
-that zone's layout-specific insertion rule. The indicator uses `drop_color`.
+that zone's layout-specific insertion rule. The borderless indicator uses the
+same `drop_color` style as normal layouts.
 
 While dragging a window in scrolling mode, entering the edge in the configured
 scroll direction starts a slow automatic scroll. Horizontal mode uses the left
