@@ -2547,7 +2547,7 @@ static void wsov_layout_live_projection(void) {
 }
 
 static void wsov_mark_live_layout_dirty(void) {
-	if (!workspace_overview_is_active() || wsov.closing)
+	if (!workspace_overview_is_active())
 		return;
 	wsov.live_layout_dirty = true;
 	if (wsov.mon)
@@ -2556,7 +2556,7 @@ static void wsov_mark_live_layout_dirty(void) {
 
 static void wsov_flush_live_layout(void) {
 	if (!wsov.live_layout_dirty || wsov.live_layout_flushing ||
-		!workspace_overview_is_active() || wsov.closing)
+		!workspace_overview_is_active())
 		return;
 	wsov_layout_live_projection();
 }
@@ -3229,7 +3229,7 @@ static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
 }
 
 static bool wsov_refresh_animated_cells(void) {
-	if (!workspace_overview_is_active() || wsov.closing)
+	if (!workspace_overview_is_active())
 		return false;
 
 	bool any_animated = false;
@@ -4599,6 +4599,19 @@ static void wsov_close(uint32_t focus_tag, Client *focus_client) {
 	wsov_start_animation(true, 0.0);
 }
 
+static void wsov_finish_client_geometry(Client *c) {
+	if (!c || !c->scene)
+		return;
+
+	if (c->animation.running && c->animation.action == MOVE) {
+		wlr_scene_node_set_position(&c->scene->node, c->animation.current.x,
+									c->animation.current.y);
+		c->need_output_flush = true;
+		return;
+	}
+	client_set_finish_geometry(c);
+}
+
 static void wsov_finalize_close(uint32_t focus_tag) {
 	if (!workspace_overview_is_active())
 		return;
@@ -4643,7 +4656,7 @@ static void wsov_finalize_close(uint32_t focus_tag) {
 	Client *c;
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->mon == m && !client_is_unmanaged(c))
-			client_set_finish_geometry(c);
+			wsov_finish_client_geometry(c);
 	}
 	wsov_hide_clients(false);
 	Client *fadeout;
@@ -5345,7 +5358,7 @@ bool workspace_overview_handle_axis(
 }
 
 void workspace_overview_client_commit(Client *c) {
-	if (!workspace_overview_is_active() || wsov.closing || c->mon != wsov.mon)
+	if (!workspace_overview_is_active() || c->mon != wsov.mon)
 		return;
 	uint32_t current_layer = client_target_layer(c);
 	for (int i = 0; i < wsov.cell_count; i++) {
@@ -5382,8 +5395,7 @@ void workspace_overview_client_commit(Client *c) {
 }
 
 void workspace_overview_client_frame(Client *c) {
-	if (!workspace_overview_is_active() || wsov.closing || !c ||
-		c->mon != wsov.mon)
+	if (!workspace_overview_is_active() || !c || c->mon != wsov.mon)
 		return;
 	wsov_mark_live_layout_dirty();
 }
