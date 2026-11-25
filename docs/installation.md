@@ -305,7 +305,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    ```bash
    git clone -b 0.20.2 https://gitlab.freedesktop.org/wlroots/wlroots.git
    cd wlroots
-   meson build -Dprefix=/usr
+   meson setup build -Dprefix=/usr
    sudo ninja -C build install
    ```
 
@@ -315,7 +315,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    ```bash
    git clone -b 0.5 https://github.com/wlrfx/scenefx.git
    cd scenefx
-   meson build -Dprefix=/usr
+   meson setup build -Dprefix=/usr
    sudo ninja -C build install
    ```
 
@@ -324,6 +324,6 @@ You will need to build `wlroots` and `scenefx` manually as well.
    ```bash
    git clone https://github.com/mangowm/mango.git
    cd mango
-   meson build -Dprefix=/usr
+   meson setup build -Dprefix=/usr
    sudo ninja -C build install
    ```
