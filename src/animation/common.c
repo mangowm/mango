@@ -464,6 +464,40 @@ static void scene_snapshot_enable_buffers(struct wlr_scene_node *node) {
 	}
 }
 
+static void scene_snapshot_for_each_buffer_node(
+	struct wlr_scene_node *node, int32_t sx, int32_t sy,
+	wlr_scene_buffer_iterator_func_t iterator, void *data) {
+	if (!node)
+		return;
+	if (node->type == WLR_SCENE_NODE_BUFFER) {
+		iterator(wlr_scene_buffer_from_node(node), sx, sy, data);
+		return;
+	}
+	if (node->type != WLR_SCENE_NODE_TREE)
+		return;
+
+	struct wlr_scene_tree *tree = wlr_scene_tree_from_node(node);
+	struct wlr_scene_node *child;
+	wl_list_for_each(child, &tree->children, link) {
+		scene_snapshot_for_each_buffer_node(child, sx + child->x, sy + child->y,
+											iterator, data);
+	}
+}
+
+/*
+ * Snapshot trees can be disabled while still being composed manually. The
+ * wlroots iterator skips disabled subtrees, so walk the snapshot children
+ * directly to keep their geometry and opacity in sync.
+ */
+static void
+scene_snapshot_for_each_buffer(struct wlr_scene_tree *snapshot,
+							   wlr_scene_buffer_iterator_func_t iterator,
+							   void *data) {
+	if (!snapshot)
+		return;
+	scene_snapshot_for_each_buffer_node(&snapshot->node, 0, 0, iterator, data);
+}
+
 static void scene_snapshot_clip_buffer(struct wlr_scene_buffer *buffer,
 									   int32_t sx, int32_t sy, void *data) {
 	struct SnapshotClipData *clip = data;
@@ -569,15 +603,27 @@ void scene_snapshot_clip_to_box(struct wlr_scene_tree *snapshot,
 		return;
 	}
 
+	/*
+	 * The snapshot iterator reports child coordinates relative to the snapshot
+	 * root. Translate the monitor bounds into the same coordinate space.
+	 */
+	struct wlr_box local_bounds = *bounds;
+	local_bounds.x -= snapshot->node.x;
+	local_bounds.y -= snapshot->node.y;
 	struct SnapshotClipData clip = {
-		.bounds = *bounds,
+		.bounds = local_bounds,
 		.width = width,
 		.height = height,
 		.scale = scale,
 	};
 	scene_snapshot_enable_buffers(&snapshot->node);
-	wlr_scene_node_for_each_buffer(&snapshot->node, scene_snapshot_clip_buffer,
-								   &clip);
+	scene_snapshot_for_each_buffer(snapshot, scene_snapshot_clip_buffer, &clip);
+}
+
+void scene_snapshot_apply_opacity(struct wlr_scene_tree *snapshot,
+								  double opacity) {
+	scene_snapshot_for_each_buffer(snapshot, scene_buffer_apply_opacity,
+								   &opacity);
 }
 
 void request_fresh_all_monitors(void) {

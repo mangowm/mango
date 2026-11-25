@@ -150,6 +150,11 @@ struct wsov_cell {
 	struct wlr_scene_buffer *foreground;
 	struct wlr_buffer *contents_buffers[2];
 	struct wlr_buffer *foreground_buffers[2];
+	uint64_t contents_render_frame;
+	uint64_t foreground_render_frame;
+	uint64_t content_revision;
+	uint64_t contents_render_revision;
+	uint64_t foreground_render_revision;
 	int pool_width;
 	int pool_height;
 	struct wlr_scene_tree *live_lower_tree;
@@ -460,12 +465,12 @@ void wsov_render_cell_layer_range(struct wlr_render_pass *pass,
 								  double buffer_scale);
 bool wsov_cell_has_layer_range(const struct wsov_cell *cell,
 							   uint32_t first_layer, uint32_t end_layer);
-void wsov_render_cell_part(struct wsov_cell *cell,
+bool wsov_render_cell_part(struct wsov_cell *cell,
 						   struct wlr_scene_buffer *target,
 						   uint32_t first_layer, uint32_t end_layer,
 						   double buffer_scale);
 void wsov_prepare_cell_for_render(struct wsov_cell *cell);
-void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale);
+bool wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale);
 bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale);
 bool wsov_refresh_animated_cells(void);
 bool wsov_render_dirty_cells(bool apply_camera);

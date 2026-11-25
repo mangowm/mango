@@ -613,6 +613,9 @@ void wsov_layout_live_projection_impl(void) {
 					 item->render_scale_y * item_scale_y * view.scale_y);
 			if (!wsov.mon ||
 				entry->effect_frame_serial != wsov.mon->frame_serial) {
+				double opacity = CLAMP_FLOAT(
+					entry->client->opacity_animation.current_opacity, 0.0, 1.0);
+				wlr_scene_buffer_set_opacity(buffer, opacity);
 				wsov_live_effects_apply_surface(entry->effects, buffer,
 												effect_scale);
 				entry->effect_frame_serial =
