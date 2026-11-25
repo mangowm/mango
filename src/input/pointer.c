@@ -42,6 +42,7 @@
 
 static struct LastCursor last_cursor;
 static bool wsov_direct_layer_pointer_pressed;
+static bool wsov_binding_pointer_pressed;
 
 static bool pointer_wsov_direct_layer_at(double x, double y,
 										 struct wlr_surface **surface,
@@ -472,10 +473,6 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 	}
 
 	mods = keyboard_hard_modifiers();
-	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
-		return;
-	}
-
 	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
 		adir = event->delta > 0 ? AxisDown : AxisUp;
 	else
@@ -506,6 +503,10 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 		}
 	}
 
+	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
+		return;
+	}
+
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
 							   ? config.trackpad_scroll_factor
 							   : config.axis_scroll_factor;
@@ -517,6 +518,21 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 		event->delta * target_scroll_factor,
 		roundf(event->delta_discrete * target_scroll_factor), event->source,
 		event->relative_direction);
+}
+
+static const MouseBinding *pointer_find_mouse_binding(uint32_t button,
+													  uint32_t mods) {
+	for (int32_t ji = 0; ji < config.mouse_bindings_count; ji++) {
+		const MouseBinding *binding = &config.mouse_bindings[ji];
+		if ((binding->iscommonmode ||
+			 (binding->isdefaultmode && server.key_mode.isdefault) ||
+			 (strcmp(server.key_mode.mode, binding->mode) == 0)) &&
+			CLEANMASK(mods) == CLEANMASK(binding->mod) &&
+			button == binding->button && binding->func) {
+			return binding;
+		}
+	}
+	return NULL;
 }
 
 void // Mouse button event
@@ -1800,8 +1816,8 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	double wsov_layer_sx = 0, wsov_layer_sy = 0;
 	bool wsov_layer_hit;
 	bool route_to_wsov_layer;
-	int32_t ji;
-	const MouseBinding *m;
+	bool consume_wsov_release = false;
+	const MouseBinding *mouse_binding = NULL;
 	struct wlr_surface *old_pointer_focus_surface =
 		server.seat->pointer_state.focused_surface;
 
@@ -1821,6 +1837,19 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
 		server.cursor_mode = CurPressed;
+		mods = keyboard_hard_modifiers();
+		mouse_binding = pointer_find_mouse_binding(event->button, mods);
+		if (!server.session_locked && workspace_overview_is_active() &&
+			mouse_binding) {
+			wsov_direct_layer_pointer_pressed = false;
+			wsov_binding_pointer_pressed = true;
+			pointer_focus(NULL, NULL, 0, 0, 0);
+			set_selected_monitor(
+				monitor_at_point(server.cursor->x, server.cursor->y));
+			mouse_binding->func(&mouse_binding->arg);
+			return true;
+		}
+
 		wsov_layer_hit = pointer_wsov_direct_layer_at(
 			server.cursor->x, server.cursor->y, &wsov_layer_surface,
 			&wsov_layer_sx, &wsov_layer_sy);
@@ -1929,18 +1958,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		client_handle_decorate_click(bar);
 
 		mods = keyboard_hard_modifiers();
-
-		for (ji = 0; ji < config.mouse_bindings_count; ji++) {
-			m = &config.mouse_bindings[ji];
-
-			if ((m->iscommonmode ||
-				 (m->isdefaultmode && server.key_mode.isdefault) ||
-				 (strcmp(server.key_mode.mode, m->mode) == 0)) &&
-				CLEANMASK(mods) == CLEANMASK(m->mod) &&
-				event->button == m->button && m->func) {
-				m->func(&m->arg);
-				return true;
-			}
+		mouse_binding = pointer_find_mouse_binding(event->button, mods);
+		if (mouse_binding) {
+			mouse_binding->func(&mouse_binding->arg);
+			return true;
 		}
 
 		/* Don't send the press to the surface that a bar/tab click switched
@@ -1962,8 +1983,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	case WL_POINTER_BUTTON_STATE_RELEASED:
 		route_to_wsov_layer = wsov_direct_layer_pointer_pressed;
 		wsov_direct_layer_pointer_pressed = false;
+		consume_wsov_release = wsov_binding_pointer_pressed;
+		wsov_binding_pointer_pressed = false;
 		if (!server.session_locked && workspace_overview_is_active() &&
-			!route_to_wsov_layer)
+			!route_to_wsov_layer && !consume_wsov_release)
 			return workspace_overview_handle_button(event);
 
 		server.group_bar_drag_pending = false;
@@ -2000,5 +2023,5 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		break;
 	}
 	/* If the event wasn't handled by the compositor, return false */
-	return false;
+	return consume_wsov_release;
 }
