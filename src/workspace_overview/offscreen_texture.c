@@ -870,28 +870,40 @@ bool wsov_cell_has_layer_range(const struct wsov_cell *cell,
 	return false;
 }
 
-void wsov_render_cell_part(struct wsov_cell *cell,
+bool wsov_render_cell_part(struct wsov_cell *cell,
 						   struct wlr_scene_buffer *target,
 						   uint32_t first_layer, uint32_t end_layer,
 						   double buffer_scale) {
 	if (!target)
-		return;
+		return false;
 	if (!wsov_cell_has_layer_range(cell, first_layer, end_layer)) {
 		wlr_scene_buffer_set_buffer(target, NULL);
-		return;
+		return true;
 	}
 
 	int buffer_w = MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
 	int buffer_h = MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
+	uint64_t *render_frame = target == cell->contents
+								 ? &cell->contents_render_frame
+								 : &cell->foreground_render_frame;
+	/*
+	 * One client close can trigger several content refreshes while processing
+	 * the same output frame. Replacing the offscreen buffer repeatedly leaves
+	 * stale intermediate buffers in the presentation pipeline.
+	 */
+	if (target->buffer && *render_frame == wsov.mon->frame_serial) {
+		wlr_output_schedule_frame(wsov.mon->wlr_output);
+		return false;
+	}
 	struct wlr_buffer *buffer =
 		wsov_acquire_cell_buffer(cell, target, buffer_w, buffer_h);
 	if (!buffer)
-		return;
+		return false;
 
 	struct wlr_render_pass *pass =
 		wlr_renderer_begin_buffer_pass(server.renderer, buffer, NULL);
 	if (!pass) {
-		return;
+		return false;
 	}
 
 	float background[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -904,13 +916,34 @@ void wsov_render_cell_part(struct wsov_cell *cell,
 
 	if (!wlr_render_pass_submit(pass)) {
 		wsov_release_textures(&resources);
-		return;
+		return false;
 	}
 	wsov_release_textures(&resources);
 
 	wlr_scene_buffer_set_buffer(target, buffer);
 	wlr_scene_buffer_set_source_box(target, NULL);
 	wlr_scene_buffer_set_filter_mode(target, WLR_SCALE_FILTER_BILINEAR);
+	*render_frame = wsov.mon->frame_serial;
+
+	struct wsov_camera_view view;
+	if (wsov.mon && wsov_get_camera_view(wsov.progress, &view)) {
+		struct wlr_box cell_box = wsov_cell_layout_box(cell);
+		int content_x = (int)lround(
+			(cell_box.x + wsov_border_width() - view.x) * view.scale_x);
+		int content_y = (int)lround(
+			(cell_box.y + wsov_border_width() - view.y) * view.scale_y);
+		int content_w = MANGO_MAX(
+			1,
+			(int)lround(MANGO_MAX(1, cell_box.width - 2 * wsov_border_width()) *
+						view.scale_x));
+		int content_h =
+			MANGO_MAX(1, (int)lround(MANGO_MAX(1, cell_box.height -
+													  2 * wsov_border_width()) *
+									 view.scale_y));
+		wsov_place_buffer_clipped(target, NULL, content_x, content_y, content_w,
+								  content_h);
+	}
+	return true;
 }
 
 void wsov_prepare_cell_for_render(struct wsov_cell *cell) {
@@ -927,16 +960,20 @@ void wsov_prepare_cell_for_render(struct wsov_cell *cell) {
 	cell->foreground_dirty = true;
 }
 
-void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
+bool wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
 	if (!cell || !cell->contents || !cell->foreground || cell->buffer_w <= 0 ||
 		cell->buffer_h <= 0)
-		return;
+		return false;
 
-	wsov_render_cell_part(cell, cell->contents, 0, LyrTop, buffer_scale);
-	wsov_render_cell_part(cell, cell->foreground, LyrTop, NUM_LAYERS,
-						  buffer_scale);
-	cell->contents_dirty = false;
-	cell->foreground_dirty = false;
+	bool contents_rendered =
+		wsov_render_cell_part(cell, cell->contents, 0, LyrTop, buffer_scale);
+	bool foreground_rendered = wsov_render_cell_part(
+		cell, cell->foreground, LyrTop, NUM_LAYERS, buffer_scale);
+	if (contents_rendered)
+		cell->contents_dirty = false;
+	if (foreground_rendered)
+		cell->foreground_dirty = false;
+	return contents_rendered || foreground_rendered;
 }
 
 bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
@@ -948,8 +985,7 @@ bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
 		return false;
 	}
 	wsov_prepare_cell_for_render(cell);
-	wsov_render_cell_raw(cell, buffer_scale);
-	return true;
+	return wsov_render_cell_raw(cell, buffer_scale);
 }
 
 bool wsov_refresh_animated_cells(void) {
@@ -1010,15 +1046,16 @@ bool wsov_render_dirty_cells(bool apply_camera) {
 			continue;
 		wsov_prepare_cell_for_render(cell);
 
-		if (cell->contents_dirty)
+		if (cell->contents_dirty &&
 			wsov_render_cell_part(cell, cell->contents, 0, LyrTop,
-								  wsov_output_scale());
-		if (cell->foreground_dirty)
+								  wsov_output_scale()))
+			cell->contents_dirty = false;
+		if (cell->foreground_dirty &&
 			wsov_render_cell_part(cell, cell->foreground, LyrTop, NUM_LAYERS,
-								  wsov_output_scale());
-		cell->contents_dirty = false;
-		cell->foreground_dirty = false;
-		rendered = true;
+								  wsov_output_scale()))
+			cell->foreground_dirty = false;
+		if (!cell->contents_dirty || !cell->foreground_dirty)
+			rendered = true;
 	}
 
 	if (rendered && apply_camera)
