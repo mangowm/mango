@@ -31,6 +31,11 @@ You can install it using the `pacman` package manager:
 ```bash
 sudo pacman -S mangowm
 ```
+The `wl-only` version of mangowm is also available in the AUR, which removes eye candies.
+
+```bash
+yay -S mangowm-wlonly
+```
 
 You can also install it using an AUR helper like `yay` or `paru`:
 
@@ -39,6 +44,12 @@ yay -S mangowm-git
 ```
 
 > **Tip:** This package pulls the latest git version, ensuring you have the newest features and fixes.
+
+The `wl-only` version of mangowm is also available in the AUR, which removes eye candies. Add `-git` at the end of the package name if you want the latest git version.
+
+```bash
+yay -S mangowm-wlonly
+```
 
 ---
 
@@ -277,7 +288,7 @@ xbps-install mangowc
 
 ## Building from Source
 
-If your distribution isn't listed above, or you want the latest unreleased changes, you can build mangowm from source.
+If your distribution isn't listed above, or you want the latest unreleased changes, you can build mangowm from source. Building from source is also a way to get the [wl-only](https://github.com/mangowm/mango/tree/wl-only) version of mangowm, which is mangowm without eye candies.
 
 > **Info:** Ensure the following dependencies are installed before proceeding:
 >
@@ -297,7 +308,7 @@ If your distribution isn't listed above, or you want the latest unreleased chang
 > - `xorg-xwayland`
 > - `libxcb`
 
-You will need to build `wlroots` and `scenefx` manually as well.
+You will need to build `wlroots` and `scenefx` (if you want eye candies) manually as well.
 
 1. **Build wlroots**
    Clone and install the specific version required (check README for latest version).
@@ -310,7 +321,7 @@ You will need to build `wlroots` and `scenefx` manually as well.
    ```
 
 2. **Build scenefx**
-   This library handles the visual effects.
+   This library handles the visual effects. You do not need this library if you plan to use wl-only.
 
    ```bash
    git clone -b 0.5 https://github.com/wlrfx/scenefx.git
@@ -320,9 +331,9 @@ You will need to build `wlroots` and `scenefx` manually as well.
    ```
 
 3. **Build mangowm**
-   Finally, compile the compositor itself.
+   Finally, compile the compositor itself. Add the `-b wl-only` flag if you want to use wl-only.
    ```bash
-   git clone https://github.com/mangowm/mango.git
+   git clone [-b wl-only] https://github.com/mangowm/mango.git
    cd mango
    meson setup build -Dprefix=/usr
    sudo ninja -C build install
