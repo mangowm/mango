@@ -172,6 +172,11 @@ struct wsov_cell {
 	struct wlr_scene_buffer *foreground;
 	struct wlr_buffer *contents_buffers[2];
 	struct wlr_buffer *foreground_buffers[2];
+	uint64_t contents_render_frame;
+	uint64_t foreground_render_frame;
+	uint64_t content_revision;
+	uint64_t contents_render_revision;
+	uint64_t foreground_render_revision;
 	int pool_width;
 	int pool_height;
 	struct wlr_scene_tree *live_lower_tree;
@@ -1262,6 +1267,37 @@ static int wsov_item_stack_compare(const void *left, const void *right) {
 	return a_index < b_index ? -1 : 1;
 }
 
+static uint64_t wsov_cell_content_revision(const struct wsov_cell *cell) {
+	uint64_t revision = 1469598103934665603ull;
+	for (int i = 0; i < cell->item_count; i++) {
+		const struct wsov_item *item = &cell->items[i];
+		uint64_t values[] = {
+			(uintptr_t)item->client,
+			(uintptr_t)item->scene,
+			(uint64_t)item->layer,
+			(uint64_t)item->border_width,
+			(uint64_t)item->is_snapshot,
+			(uint32_t)item->workspace_geom.x,
+			(uint32_t)item->workspace_geom.y,
+			(uint32_t)item->workspace_geom.width,
+			(uint32_t)item->workspace_geom.height,
+		};
+		for (size_t j = 0; j < sizeof(values) / sizeof(values[0]); j++) {
+			revision ^= values[j];
+			revision *= 1099511628211ull;
+		}
+	}
+	return revision;
+}
+
+static bool wsov_cell_has_snapshot(const struct wsov_cell *cell) {
+	for (int i = 0; i < cell->item_count; i++) {
+		if (cell->items[i].is_snapshot)
+			return true;
+	}
+	return false;
+}
+
 static bool wsov_item_is_live(const struct wsov_cell *cell,
 							  const struct wsov_item *item) {
 	if (!cell || !item || item->is_snapshot || !item->client)
@@ -1593,8 +1629,7 @@ static bool wsov_sync_live_client_layers(struct wsov_cell *cell) {
 	bool changed = false;
 	for (int i = 0; i < cell->item_count; i++) {
 		const struct wsov_item *item = &cell->items[i];
-		if (item->is_snapshot || !item->client ||
-			item->layer >= NUM_LAYERS ||
+		if (item->is_snapshot || !item->client || item->layer >= NUM_LAYERS ||
 			wsov_live_owner_for_client(item->client) != cell)
 			continue;
 
@@ -2048,6 +2083,8 @@ static void wsov_capture_cell_items(struct wsov_cell *cell) {
 	if (cell->item_count > 1)
 		qsort(cell->items, cell->item_count, sizeof(*cell->items),
 			  wsov_item_stack_compare);
+	cell->content_revision =
+		wsov_cell_has_snapshot(cell) ? wsov_cell_content_revision(cell) : 0;
 }
 
 static void wsov_capture_bar_rect(struct wsov_bar_item *item,
@@ -2339,6 +2376,9 @@ static void wsov_layout_live_projection_impl(void) {
 					 item->render_scale_y * item_scale_y * view.scale_y);
 			if (!wsov.mon ||
 				entry->effect_frame_serial != wsov.mon->frame_serial) {
+				double opacity = CLAMP_FLOAT(
+					entry->client->opacity_animation.current_opacity, 0.0, 1.0);
+				wlr_scene_buffer_set_opacity(buffer, opacity);
 				wsov_live_effects_apply_surface(entry->effects, buffer,
 												effect_scale);
 				entry->effect_frame_serial =
@@ -3127,28 +3167,45 @@ static bool wsov_cell_has_layer_range(const struct wsov_cell *cell,
 	return false;
 }
 
-static void wsov_render_cell_part(struct wsov_cell *cell,
+static bool wsov_render_cell_part(struct wsov_cell *cell,
 								  struct wlr_scene_buffer *target,
 								  uint32_t first_layer, uint32_t end_layer,
 								  double buffer_scale) {
 	if (!target)
-		return;
+		return false;
 	if (!wsov_cell_has_layer_range(cell, first_layer, end_layer)) {
 		wlr_scene_buffer_set_buffer(target, NULL);
-		return;
+		return true;
 	}
 
 	int buffer_w = MANGO_MAX(1, (int)lround(cell->buffer_w * buffer_scale));
 	int buffer_h = MANGO_MAX(1, (int)lround(cell->buffer_h * buffer_scale));
+	bool contents = target == cell->contents;
+	bool has_snapshot = wsov_cell_has_snapshot(cell);
+	uint64_t *render_frame = contents ? &cell->contents_render_frame
+									  : &cell->foreground_render_frame;
+	uint64_t *render_revision = contents ? &cell->contents_render_revision
+										 : &cell->foreground_render_revision;
+	/*
+	 * One client close can trigger several content refreshes while processing
+	 * the same output frame. Replacing the offscreen buffer repeatedly leaves
+	 * stale intermediate buffers in the presentation pipeline.
+	 */
+	if (has_snapshot && target->buffer &&
+		*render_frame == wsov.mon->frame_serial &&
+		*render_revision == cell->content_revision) {
+		wlr_output_schedule_frame(wsov.mon->wlr_output);
+		return false;
+	}
 	struct wlr_buffer *buffer =
 		wsov_acquire_cell_buffer(cell, target, buffer_w, buffer_h);
 	if (!buffer)
-		return;
+		return false;
 
 	struct wlr_render_pass *pass =
 		wlr_renderer_begin_buffer_pass(server.renderer, buffer, NULL);
 	if (!pass) {
-		return;
+		return false;
 	}
 
 	float background[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -3161,13 +3218,36 @@ static void wsov_render_cell_part(struct wsov_cell *cell,
 
 	if (!wlr_render_pass_submit(pass)) {
 		wsov_release_textures(&resources);
-		return;
+		return false;
 	}
 	wsov_release_textures(&resources);
 
+	bool had_buffer = target->buffer != NULL;
 	wlr_scene_buffer_set_buffer(target, buffer);
 	wlr_scene_buffer_set_source_box(target, NULL);
 	wlr_scene_buffer_set_filter_mode(target, WLR_SCALE_FILTER_BILINEAR);
+	*render_frame = wsov.mon->frame_serial;
+	*render_revision = cell->content_revision;
+
+	struct wsov_camera_view view;
+	if (!had_buffer && wsov.mon && wsov_get_camera_view(wsov.progress, &view)) {
+		struct wlr_box cell_box = wsov_cell_layout_box(cell);
+		int content_x = (int)lround(
+			(cell_box.x + wsov_border_width() - view.x) * view.scale_x);
+		int content_y = (int)lround(
+			(cell_box.y + wsov_border_width() - view.y) * view.scale_y);
+		int content_w = MANGO_MAX(
+			1,
+			(int)lround(MANGO_MAX(1, cell_box.width - 2 * wsov_border_width()) *
+						view.scale_x));
+		int content_h =
+			MANGO_MAX(1, (int)lround(MANGO_MAX(1, cell_box.height -
+													  2 * wsov_border_width()) *
+									 view.scale_y));
+		wsov_place_buffer_clipped(target, NULL, content_x, content_y, content_w,
+								  content_h);
+	}
+	return true;
 }
 
 static void wsov_prepare_cell_for_render(struct wsov_cell *cell) {
@@ -3184,16 +3264,20 @@ static void wsov_prepare_cell_for_render(struct wsov_cell *cell) {
 	cell->foreground_dirty = true;
 }
 
-static void wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
+static bool wsov_render_cell_raw(struct wsov_cell *cell, double buffer_scale) {
 	if (!cell || !cell->contents || !cell->foreground || cell->buffer_w <= 0 ||
 		cell->buffer_h <= 0)
-		return;
+		return false;
 
-	wsov_render_cell_part(cell, cell->contents, 0, LyrTop, buffer_scale);
-	wsov_render_cell_part(cell, cell->foreground, LyrTop, NUM_LAYERS,
-						  buffer_scale);
-	cell->contents_dirty = false;
-	cell->foreground_dirty = false;
+	bool contents_rendered =
+		wsov_render_cell_part(cell, cell->contents, 0, LyrTop, buffer_scale);
+	bool foreground_rendered = wsov_render_cell_part(
+		cell, cell->foreground, LyrTop, NUM_LAYERS, buffer_scale);
+	if (contents_rendered)
+		cell->contents_dirty = false;
+	if (foreground_rendered)
+		cell->foreground_dirty = false;
+	return contents_rendered || foreground_rendered;
 }
 
 static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
@@ -3205,8 +3289,7 @@ static bool wsov_render_cell(struct wsov_cell *cell, double buffer_scale) {
 		return false;
 	}
 	wsov_prepare_cell_for_render(cell);
-	wsov_render_cell_raw(cell, buffer_scale);
-	return true;
+	return wsov_render_cell_raw(cell, buffer_scale);
 }
 
 static bool wsov_refresh_animated_cells(void) {
@@ -3267,15 +3350,16 @@ static bool wsov_render_dirty_cells(bool apply_camera) {
 			continue;
 		wsov_prepare_cell_for_render(cell);
 
-		if (cell->contents_dirty)
+		if (cell->contents_dirty &&
 			wsov_render_cell_part(cell, cell->contents, 0, LyrTop,
-								  wsov_output_scale());
-		if (cell->foreground_dirty)
+								  wsov_output_scale()))
+			cell->contents_dirty = false;
+		if (cell->foreground_dirty &&
 			wsov_render_cell_part(cell, cell->foreground, LyrTop, NUM_LAYERS,
-								  wsov_output_scale());
-		cell->contents_dirty = false;
-		cell->foreground_dirty = false;
-		rendered = true;
+								  wsov_output_scale()))
+			cell->foreground_dirty = false;
+		if (!cell->contents_dirty || !cell->foreground_dirty)
+			rendered = true;
 	}
 
 	if (rendered && apply_camera)
