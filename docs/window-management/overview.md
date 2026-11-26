@@ -103,6 +103,32 @@ bind=SUPER+ALT,Tab,togglejump,
 | :--- | :--- | :--- |
 | `togglejump` | - | Enter the overview in jump mode; if an overview is already open, close it. |
 
+### Jump Mode Bindings
+
+While jump mode is on, the `bind`, `mousebind`, `axisbind` and `gesturebind`
+lines in `key_mode=jump` run before all other binds and before the hint keys.
+
+One `bind` in `key_mode=jump` turns off the built-in `Escape`. The hint keys
+stay. This bind does the same as the built-in `Escape`:
+
+```ini
+key_mode=jump
+bind=NONE,Escape,togglejump
+key_mode=default
+```
+
+This example leaves jump mode with `q` or the middle button. `Escape` does
+nothing:
+
+```ini
+key_mode=jump
+bind=NONE,q,togglejump
+mousebind=NONE,btn_middle,togglejump
+key_mode=default
+```
+
+Do not use a hint key for such a bind, because the bind runs first.
+
 ### Configuration
 
 | Setting | Type | Default | Description |
