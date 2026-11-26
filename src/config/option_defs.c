@@ -1224,6 +1224,18 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		} else {
 			convert_hex_to_rgba(config->scratchpadcolor, color);
 		}
+	} else if (strcmp(key, "float_color") == 0) {
+		int64_t color = parse_color(value);
+		if (color == -1) {
+			mango_error(false, WLR_ERROR,
+						"Invalid floatcolor "
+						"format: \033[1m\033[31m%s\033[0m\n",
+						value);
+			return false;
+		} else {
+			convert_hex_to_rgba(config->floatcolor, color);
+			config->floatcolor_set = true;
+		}
 	} else if (strcmp(key, "global_color") == 0) {
 		int64_t color = parse_color(value);
 		if (color == -1) {
@@ -2875,6 +2887,8 @@ void set_value_default() {
 	config.overlaycolor[1] = 0xa5 / 255.0f;
 	config.overlaycolor[2] = 0x7c / 255.0f;
 	config.overlaycolor[3] = 1.0f;
+	/* Unset by default: a focused floating window keeps focus_color. */
+	config.floatcolor_set = false;
 }
 
 void override_config(void) {
