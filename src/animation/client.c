@@ -20,18 +20,10 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/edges.h>
+#include <wlr/util/transform.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
 #endif
-
-/*
- * TODO: Remove this validation once wlroots MR !5513 is released.
- * https://gitlab.freedesktop.org/wlroots/wlroots/-/merge_requests/5513
- */
-struct source_box_validation_data {
-	const struct wlr_box *clip;
-	bool valid;
-};
 
 static int32_t client_open_animation_type(const Client *c) {
 	return c->animation_type_open != ANIM_TYPE_UNSET
@@ -212,76 +204,168 @@ void set_client_open_animation(Client *c, struct wlr_box geo) {
 	}
 }
 
+struct client_buffer_effect_data {
+	Client *client;
+	BufferData buffer;
+	int32_t origin_x;
+	int32_t origin_y;
+	struct wlr_box window_clip;
+	struct wlr_box monitor_clip;
+};
+
+static bool client_scene_buffer_get_box(struct wlr_scene_buffer *buffer,
+										int32_t sx, int32_t sy,
+										struct wlr_box *box) {
+	int32_t width = buffer->dst_width;
+	int32_t height = buffer->dst_height;
+	if (width <= 0 || height <= 0) {
+		if (!buffer->buffer)
+			return false;
+		width = buffer->buffer->width;
+		height = buffer->buffer->height;
+		switch (buffer->transform) {
+		case WL_OUTPUT_TRANSFORM_90:
+		case WL_OUTPUT_TRANSFORM_270:
+		case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+		case WL_OUTPUT_TRANSFORM_FLIPPED_270: {
+			int32_t tmp = width;
+			width = height;
+			height = tmp;
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	*box = (struct wlr_box){
+		.x = sx,
+		.y = sy,
+		.width = width,
+		.height = height,
+	};
+	return width > 0 && height > 0;
+}
+
+static void client_scene_buffer_crop(struct wlr_scene_buffer *buffer,
+									 const struct wlr_box *natural_box,
+									 const struct wlr_box *scaled_box,
+									 const struct wlr_box *visible) {
+	struct wlr_fbox src = buffer->src_box;
+	if (wlr_fbox_empty(&src)) {
+		if (!buffer->buffer)
+			return;
+		src = (struct wlr_fbox){
+			.x = 0,
+			.y = 0,
+			.width = buffer->buffer->width,
+			.height = buffer->buffer->height,
+		};
+	}
+
+	if (buffer->transform == WL_OUTPUT_TRANSFORM_NORMAL) {
+		src.x +=
+			src.width * (visible->x - scaled_box->x) / scaled_box->width;
+		src.y +=
+			src.height * (visible->y - scaled_box->y) / scaled_box->height;
+		src.width *= (double)visible->width / scaled_box->width;
+		src.height *= (double)visible->height / scaled_box->height;
+	} else {
+		int32_t buffer_w = buffer->buffer->width;
+		int32_t buffer_h = buffer->buffer->height;
+		struct wlr_fbox oriented;
+		wlr_fbox_transform(&oriented, &src, buffer->transform, buffer_w,
+						   buffer_h);
+		oriented.x += oriented.width * (visible->x - scaled_box->x) /
+					  scaled_box->width;
+		oriented.y += oriented.height * (visible->y - scaled_box->y) /
+					  scaled_box->height;
+		oriented.width *= (double)visible->width / scaled_box->width;
+		oriented.height *= (double)visible->height / scaled_box->height;
+		bool swapped = buffer->transform == WL_OUTPUT_TRANSFORM_90 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_270 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_270;
+		int32_t oriented_w = swapped ? buffer_h : buffer_w;
+		int32_t oriented_h = swapped ? buffer_w : buffer_h;
+		wlr_fbox_transform(&src, &oriented,
+						   wlr_output_transform_invert(buffer->transform),
+						   oriented_w, oriented_h);
+	}
+
+	wlr_scene_node_set_position(
+		&buffer->node,
+		buffer->node.x + visible->x - natural_box->x,
+		buffer->node.y + visible->y - natural_box->y);
+	wlr_scene_buffer_set_dest_size(buffer, visible->width, visible->height);
+	wlr_scene_buffer_set_source_box(buffer, &src);
+}
+
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data) {
-	BufferData *buffer_data = (BufferData *)data;
-
-	if (buffer_data->should_scale && buffer_data->height_scale < 1 &&
-		buffer_data->width_scale < 1)
-		buffer_data->should_scale = false;
-
-	if (buffer_data->should_scale && buffer_data->height_scale == 1 &&
-		buffer_data->width_scale < 1)
-		buffer_data->should_scale = false;
-
-	if (buffer_data->should_scale && buffer_data->height_scale < 1 &&
-		buffer_data->width_scale == 1)
-		buffer_data->should_scale = false;
-
+	struct client_buffer_effect_data *effect_data = data;
+	BufferData *buffer_data = &effect_data->buffer;
 	struct wlr_scene_surface *scene_surface =
 		wlr_scene_surface_try_from_buffer(buffer);
-	if (scene_surface == NULL)
+	if (!scene_surface)
 		return;
 
 	struct wlr_surface *surface = scene_surface->surface;
-
-	if (buffer_data->should_scale
-#ifdef XWAYLAND
-		&& !wlr_xwayland_surface_try_from_wlr_surface(surface)
-#endif
-	) {
-		int32_t surface_width = surface->current.width;
-		int32_t surface_height = surface->current.height;
-
-		surface_width = buffer_data->width_scale < 1
-							? surface_width
-							: buffer_data->width_scale * surface_width;
-		surface_height = buffer_data->height_scale < 1
-							 ? surface_height
-							 : buffer_data->height_scale * surface_height;
-
-		if (surface_width > buffer_data->width &&
-			wlr_subsurface_try_from_wlr_surface(surface) == NULL)
-			surface_width = buffer_data->width;
-
-		if (surface_height > buffer_data->height &&
-			wlr_subsurface_try_from_wlr_surface(surface) == NULL)
-			surface_height = buffer_data->height;
-
-		if (surface_width > buffer_data->width &&
-			wlr_subsurface_try_from_wlr_surface(surface) != NULL)
-			return;
-
-		if (surface_height > buffer_data->height &&
-			wlr_subsurface_try_from_wlr_surface(surface) != NULL)
-			return;
-
-		if (surface_height > 0 && surface_width > 0)
-			wlr_scene_buffer_set_dest_size(buffer, surface_width,
-										   surface_height);
-	}
-
 	if (wlr_xdg_popup_try_from_wlr_surface(surface) != NULL)
 		return;
-}
 
-void buffer_set_effect(Client *c, BufferData data) {
-	if (!c || c->iskilling)
+#ifdef XWAYLAND
+	if (client_is_x11(effect_data->client))
+		return;
+#endif
+
+	struct wlr_box natural_box;
+	if (!client_scene_buffer_get_box(buffer, sx, sy, &natural_box))
 		return;
 
-	if (c->animation.tagouting || c->animation.tagouted ||
-		c->animation.tagining)
-		data.should_scale = false;
+	struct wlr_box scaled_box = natural_box;
+	if (buffer_data->should_scale) {
+		float scale_x =
+			buffer_data->width_scale > 1.0f ? buffer_data->width_scale : 1.0f;
+		float scale_y =
+			buffer_data->height_scale > 1.0f ? buffer_data->height_scale : 1.0f;
+		scaled_box.x =
+			effect_data->origin_x +
+			(int32_t)lround((natural_box.x - effect_data->origin_x) *
+							scale_x);
+		scaled_box.y =
+			effect_data->origin_y +
+			(int32_t)lround((natural_box.y - effect_data->origin_y) *
+							scale_y);
+		scaled_box.width =
+			MANGO_MAX(1, (int32_t)lround(natural_box.width *
+										scale_x));
+		scaled_box.height =
+			MANGO_MAX(1, (int32_t)lround(natural_box.height *
+										scale_y));
+	}
+
+	struct wlr_box visible_in_window;
+	if (!wlr_box_intersection(&visible_in_window, &scaled_box,
+							  &effect_data->window_clip)) {
+		wlr_scene_node_set_enabled(&buffer->node, false);
+		return;
+	}
+
+	struct wlr_box visible;
+	if (!wlr_box_intersection(&visible, &visible_in_window,
+							  &effect_data->monitor_clip)) {
+		wlr_scene_node_set_enabled(&buffer->node, false);
+		return;
+	}
+
+	wlr_scene_node_set_enabled(&buffer->node, true);
+	client_scene_buffer_crop(buffer, &natural_box, &scaled_box, &visible);
+}
+
+void buffer_set_effect(Client *c, BufferData data,
+					   const struct wlr_box *window_clip) {
+	if (!c || c->iskilling)
+		return;
 
 	if (c == server.grab_client)
 		data.should_scale = false;
@@ -291,8 +375,30 @@ void buffer_set_effect(Client *c, BufferData data) {
 	if (c->ov_card_tree)
 		return;
 
+	int32_t scene_x = c->animation.current.x;
+	int32_t scene_y = c->animation.current.y;
+	wlr_scene_node_coords(&c->scene->node, &scene_x, &scene_y);
+
+	struct client_buffer_effect_data effect_data = {
+		.client = c,
+		.buffer = data,
+		.origin_x = c->scene_surface->node.x,
+		.origin_y = c->scene_surface->node.y,
+		.window_clip = {
+			.x = c->scene_surface->node.x + window_clip->x,
+			.y = c->scene_surface->node.y + window_clip->y,
+			.width = window_clip->width,
+			.height = window_clip->height,
+		},
+		.monitor_clip = {
+			.x = c->mon->m.x - scene_x,
+			.y = c->mon->m.y - scene_y,
+			.width = c->mon->m.width,
+			.height = c->mon->m.height,
+		},
+	};
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
-								   scene_buffer_apply_effect, &data);
+								   scene_buffer_apply_effect, &effect_data);
 }
 
 void client_draw_group_bar(Client *c, struct ivec2 offsets) {
@@ -824,52 +930,26 @@ void client_set_drop_area(Client *c) {
 	wlr_scene_rect_set_size(c->droparea, drop_box.width, drop_box.height);
 }
 
-static void validate_surface_source_box(struct wlr_surface *surface, int sx,
-										int sy, void *data) {
-	struct source_box_validation_data *validation = data;
-	if (!validation->valid)
-		return;
-
-	struct wlr_box surface_box = {
-		.x = sx,
-		.y = sy,
-		.width = surface->current.width,
-		.height = surface->current.height,
+static void client_reset_surface_clip(Client *c) {
+	struct wlr_box force_reconfigure = {
+		.x = 0,
+		.y = 0,
+		.width = INT32_MAX,
+		.height = INT32_MAX,
 	};
-	struct wlr_box intersection;
-	if (!wlr_box_intersection(&intersection, validation->clip, &surface_box))
-		return;
-
-	struct wlr_fbox surface_clip = {
-		.x = intersection.x - sx,
-		.y = intersection.y - sy,
-		.width = intersection.width,
-		.height = intersection.height,
-	};
-	struct wlr_fbox source_box;
-	client_surface_get_source_box(surface, &surface_clip, &source_box);
-
-	if (source_box.x < 0 || source_box.y < 0 || source_box.width < 0 ||
-		source_box.height < 0) {
-		validation->valid = false;
-	}
+	/*
+	 * set_clip(NULL) is a no-op when the tree is already unclipped. Since the
+	 * animation path rewrites buffer node positions directly, force one
+	 * reconfigure before clearing the clip so every frame starts from the
+	 * original surface-tree geometry.
+	 */
+	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node,
+									   &force_reconfigure);
+	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, NULL);
 }
 
-static bool client_clip_source_boxes_valid(Client *c,
-										   const struct wlr_box *clip) {
-	struct source_box_validation_data validation = {
-		.clip = clip,
-		.valid = true,
-	};
-	wlr_surface_for_each_surface(client_surface(c), validate_surface_source_box,
-								 &validation);
-	return validation.valid;
-}
-
-static void client_set_surface_clip(Client *c, const struct wlr_box *clip) {
-	if (!client_clip_source_boxes_valid(c, clip))
-		return;
-
+static void client_apply_surface_clip(Client *c, const struct wlr_box *clip) {
+	client_reset_surface_clip(c);
 	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, clip);
 }
 
@@ -948,10 +1028,11 @@ void client_set_clip(Client *c, float factor) {
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip_box);
 		else if (!c->overview_scene_surface)
-			client_set_surface_clip(c, &clip_box);
+			client_reset_surface_clip(c);
 
-		buffer_set_effect(
-			c, (BufferData){1.0f, 1.0f, clip_box.width, clip_box.height, true});
+		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
+										  clip_box.height, false},
+						   &clip_box);
 		return;
 	}
 
@@ -1000,17 +1081,17 @@ void client_set_clip(Client *c, float factor) {
 	 * and cannot be used for X11.
 	 */
 	if (!c->overview_scene_surface && !client_is_x11(c))
-		client_set_surface_clip(c, &clip_box);
+		client_reset_surface_clip(c);
 
 	int32_t actual_surface_width =
 		geometry.width - surface_clip_offset.x - surface_clip_offset.width;
 	int32_t actual_surface_height =
 		geometry.height - surface_clip_offset.y - surface_clip_offset.height;
 
-	if (actual_surface_width <= 0 || actual_surface_height <= 0)
+	if (actual_surface_width <= 0 || actual_surface_height <= 0 || width <= 0 ||
+		height <= 0)
 		return;
 
-	buffer_data.should_scale = true;
 	buffer_data.width = clip_box.width;
 	buffer_data.height = clip_box.height;
 
@@ -1019,12 +1100,21 @@ void client_set_clip(Client *c, float factor) {
 		buffer_data.height_scale = 1.0;
 	} else {
 		buffer_data.width_scale =
-			(float)buffer_data.width / actual_surface_width;
+			(float)clip_box.width / (float)actual_surface_width;
 		buffer_data.height_scale =
-			(float)buffer_data.height / actual_surface_height;
+			(float)clip_box.height / (float)actual_surface_height;
 	}
 
-	buffer_set_effect(c, buffer_data);
+	/*
+	 * Clipping must not enter the buffer scaling path by itself. Slide and fade
+	 * keep the same window size, so their computed scale is 1 and the
+	 * subsurface tree's clipped source/dest geometry must remain untouched.
+	 */
+	buffer_data.should_scale =
+		buffer_data.width_scale > 1.0f + 1e-4f ||
+		buffer_data.height_scale > 1.0f + 1e-4f;
+
+	buffer_set_effect(c, buffer_data, &clip_box);
 }
 
 void fadeout_client_animation_next_tick(Client *c) {
@@ -1508,7 +1598,7 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip);
 		else
-			client_set_surface_clip(c, &clip);
+			client_apply_surface_clip(c, &clip);
 		return;
 	}
 
