@@ -224,7 +224,13 @@ bool wsov_set_target_from_point(double x, double y) {
 		return false;
 
 	wsov.target_tag = cell->tag;
-	wsov.camera_tag = cell->tag;
+	/*
+	 * Keep the opening camera anchored to the card it started from. The target
+	 * and focus may still follow pointer motion, but changing camera_tag while
+	 * the zoom is in progress makes the camera jump to another card.
+	 */
+	if (!wsov.animating)
+		wsov.camera_tag = cell->tag;
 	return true;
 }
 

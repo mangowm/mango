@@ -316,7 +316,13 @@ void workspace_overview_layout_changed(Monitor *m) {
 		view_target_available && current_view_tag != previous_target;
 	if (view_target_available) {
 		wsov.target_tag = current_view_tag;
-		wsov.camera_tag = current_view_tag;
+		/*
+		 * Pointer hover may update the target and focus while the opening
+		 * animation runs, but the camera must stay anchored to the card whose
+		 * zoom originated the animation.
+		 */
+		if (!wsov.animating)
+			wsov.camera_tag = current_view_tag;
 		if (target_changed)
 			wsov.scroll_center_tag = current_view_tag;
 	}
