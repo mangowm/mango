@@ -240,6 +240,9 @@ struct wsov_state {
 	bool pressed;
 	bool moved;
 	bool has_drag_client;
+	uint32_t press_button; /* 0: started by a key, any release ends it */
+	uint32_t event_button; /* button of the event that runs the binds */
+	WorkspaceOverviewDropMode drop_mode;
 	uint32_t source_tag;
 	uint32_t target_tag;
 	uint32_t scroll_center_tag;

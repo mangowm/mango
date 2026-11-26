@@ -423,12 +423,18 @@ void wsov_finish_drop(double x, double y) {
 	uint32_t source_bit = wsov_tag_bit(wsov.source_tag);
 	uint32_t target_bit = wsov_tag_bit(target->tag);
 	uint32_t old_tags = c->isglobal ? 0 : c->tags;
+	WorkspaceOverviewDropMode mode = wsov.drop_mode;
 	uint32_t mods = keyboard_hard_modifiers();
 
+	if (mode == WORKSPACE_OVERVIEW_DROP_AUTO)
+		mode = (mods & WLR_MODIFIER_CTRL)	 ? WORKSPACE_OVERVIEW_DROP_MOVE
+			   : (mods & WLR_MODIFIER_SHIFT) ? WORKSPACE_OVERVIEW_DROP_ADD
+											 : WORKSPACE_OVERVIEW_DROP_REPLACE;
+
 	if (!c->isglobal && target->tag != wsov.source_tag) {
-		if (mods & WLR_MODIFIER_CTRL)
+		if (mode == WORKSPACE_OVERVIEW_DROP_MOVE)
 			c->tags = target_bit;
-		else if (mods & WLR_MODIFIER_SHIFT)
+		else if (mode == WORKSPACE_OVERVIEW_DROP_ADD)
 			c->tags |= target_bit;
 		else
 			c->tags = (c->tags & ~source_bit) | target_bit;

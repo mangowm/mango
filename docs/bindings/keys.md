@@ -64,6 +64,19 @@ You can divide key bindings into named modes. Rules:
 
 > **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `key_mode` rules as `bind`.
 
+### View Key Modes
+
+While one of these views is open, Mango tries the `bind`, `mousebind`, `axisbind` and `gesturebind` lines of the key_mode with the same name first:
+
+| key_mode | Active while |
+| :--- | :--- |
+| `switcher` | The window switcher is open. |
+| `workspace_overview` | The workspace overview is open. |
+| `jump` | Jump mode is on. |
+| `overview` | The overview is open and jump mode is off. |
+
+If no bind of that key_mode matches, the binds of the current key_mode run as usual. You do not use `setkeymode` for these key modes.
+
 Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini
@@ -207,6 +220,10 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `toggleworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Toggle the draggable workspace overview. `all` includes empty tags, `occupied` shows only occupied tags, and the `scroll_*` variants use the scrolling layout. |
 | `enterworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Enter the draggable workspace overview with the selected scope and layout. |
 | `leaveworkspaceoverview` | - | Leave the draggable workspace overview. |
+| `workspace_overview_close` | - | Switch to the selected workspace and leave the workspace overview. |
+| `workspace_overview_select` | `left\|right\|up\|down` | Select the adjacent workspace preview in the workspace overview. |
+| `workspace_overview_kill` | - | Close the window whose preview is under the pointer in the workspace overview. |
+| `workspace_overview_drag` | `[replace\|move\|add]` | Start a click or a drag at the pointer in the workspace overview. See [custom bindings](/docs/window-management/overview#workspace-overview-bindings). |
 | `togglejump` | - | Toggle overview with jump mode. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |

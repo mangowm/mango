@@ -601,6 +601,23 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		}
 	} else if (strcmp(func_name, "leaveworkspaceoverview") == 0) {
 		func = leave_workspace_overview;
+	} else if (strcmp(func_name, "workspace_overview_close") == 0) {
+		func = workspace_overview_close;
+	} else if (strcmp(func_name, "workspace_overview_select") == 0) {
+		func = workspace_overview_select;
+		(*arg).i = parse_direction(arg_value);
+	} else if (strcmp(func_name, "workspace_overview_kill") == 0) {
+		func = workspace_overview_kill;
+	} else if (strcmp(func_name, "workspace_overview_drag") == 0) {
+		func = workspace_overview_drag;
+		if (strcmp(arg_value, "replace") == 0)
+			(*arg).i = WORKSPACE_OVERVIEW_DROP_REPLACE;
+		else if (strcmp(arg_value, "move") == 0)
+			(*arg).i = WORKSPACE_OVERVIEW_DROP_MOVE;
+		else if (strcmp(arg_value, "add") == 0)
+			(*arg).i = WORKSPACE_OVERVIEW_DROP_ADD;
+		else
+			(*arg).i = WORKSPACE_OVERVIEW_DROP_AUTO;
 	} else if (strcmp(func_name, "togglejump") == 0) {
 		func = toggle_jump;
 	} else if (strcmp(func_name, "set_proportion") == 0) {
