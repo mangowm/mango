@@ -6,8 +6,8 @@
 #include "mango/manage/monitor.h"
 #include <wlr/types/wlr_cursor.h>
 
-static DwindleNode *locked_horizontal_node = NULL;
-static DwindleNode *locked_vertical_node = NULL;
+static DwindleNode *locked_horizontal_resize_node = NULL;
+static DwindleNode *locked_vertical_resize_node = NULL;
 
 // Counts nodes in the same direction (N_old).
 int count_block_items(DwindleNode *node, bool split_h) {
@@ -51,10 +51,14 @@ void dwindle_remove(DwindleNode **root, Client *c) {
 
 	DwindleNode *parent = leaf->parent;
 
-	if (locked_horizontal_node == leaf || locked_horizontal_node == parent)
-		locked_horizontal_node = NULL;
-	if (locked_vertical_node == leaf || locked_vertical_node == parent)
-		locked_vertical_node = NULL;
+	if (locked_horizontal_resize_node == leaf ||
+		locked_horizontal_resize_node == parent) {
+		locked_horizontal_resize_node = NULL;
+	}
+	if (locked_vertical_resize_node == leaf ||
+		locked_vertical_resize_node == parent) {
+		locked_vertical_resize_node = NULL;
+	}
 
 	if (!parent) {
 		free(leaf);
@@ -411,6 +415,23 @@ void dwindle_swap_clients(Client *c1, Client *c2) {
 	finish_exchange_arrange_and_focus(c1, c2, m1, m2);
 }
 
+static DwindleNode *dwindle_resize_node_for_edge(DwindleNode *leaf, Client *c,
+												 int32_t edge) {
+	bool split_h = edge == LEFT || edge == RIGHT;
+	bool first_branch = edge == RIGHT || edge == DOWN;
+
+	/* A movable edge is backed by the nearest split where the leaf is on the
+	 * matching branch. Screen-attached edges have no such ancestor. */
+	for (DwindleNode *node = leaf->parent; node; node = node->parent) {
+		if (node->split_h != split_h)
+			continue;
+		DwindleNode *branch = first_branch ? node->first : node->second;
+		if (dwindle_find_leaf(branch, c))
+			return node;
+	}
+	return NULL;
+}
+
 void dwindle_resize_client(Monitor *m, Client *c) {
 	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
@@ -419,60 +440,70 @@ void dwindle_resize_client(Monitor *m, Client *c) {
 
 	if (!server.start_drag_window) {
 		server.start_drag_window = true;
-		locked_horizontal_node = NULL;
-		locked_vertical_node = NULL;
-		server.drag_begin_cursor_x = server.cursor->x;
-		server.drag_begin_cursor_y = server.cursor->y;
-		DwindleNode *node = leaf->parent;
-		while (node) {
-			if (node->split_h && !locked_horizontal_node) {
-				locked_horizontal_node = node;
-				node->drag_init_ratio = node->ratio;
+		locked_horizontal_resize_node = NULL;
+		locked_vertical_resize_node = NULL;
+
+		server.drag_begin_cursor_x = server.grab_pointer_x;
+		server.drag_begin_cursor_y = server.grab_pointer_y;
+
+		double cursor_x = server.grab_pointer_x;
+		double cursor_y = server.grab_pointer_y;
+		double distance[4] = {
+			cursor_x - c->geom.x,
+			c->geom.x + c->geom.width - cursor_x,
+			cursor_y - c->geom.y,
+			c->geom.y + c->geom.height - cursor_y,
+		};
+		const int32_t edges[4] = {LEFT, RIGHT, UP, DOWN};
+		double horizontal_distance = 0.0;
+		double vertical_distance = 0.0;
+		for (int32_t i = 0; i < 4; i++) {
+			DwindleNode *node = dwindle_resize_node_for_edge(leaf, c, edges[i]);
+			if (!node)
+				continue;
+
+			if (edges[i] == LEFT || edges[i] == RIGHT) {
+				if (!locked_horizontal_resize_node ||
+					distance[i] < horizontal_distance) {
+					locked_horizontal_resize_node = node;
+					horizontal_distance = distance[i];
+				}
+			} else if (!locked_vertical_resize_node ||
+					   distance[i] < vertical_distance) {
+				locked_vertical_resize_node = node;
+				vertical_distance = distance[i];
 			}
-			if (!node->split_h && !locked_vertical_node) {
-				locked_vertical_node = node;
-				node->drag_init_ratio = node->ratio;
-			}
-			if (locked_horizontal_node && locked_vertical_node)
-				break;
-			node = node->parent;
 		}
+
+		if (locked_horizontal_resize_node)
+			locked_horizontal_resize_node->drag_init_ratio =
+				locked_horizontal_resize_node->ratio;
+		if (locked_vertical_resize_node)
+			locked_vertical_resize_node->drag_init_ratio =
+				locked_vertical_resize_node->ratio;
 	}
 
-	if (!locked_horizontal_node && !locked_vertical_node)
+	if (!locked_horizontal_resize_node && !locked_vertical_resize_node)
 		return;
 
-	if (locked_horizontal_node) {
-		float cw = (float)MANGO_MAX(1, locked_horizontal_node->container_w);
-		float ox = (float)(server.cursor->x - server.drag_begin_cursor_x);
-		if (config.dwindle_smart_resize) {
-			/* Move the boundary toward the cursor: invert direction when
-			 * the drag started on the right side of the split line. */
-			float split_x = locked_horizontal_node->container_x +
-							cw * locked_horizontal_node->drag_init_ratio;
-			if (server.drag_begin_cursor_x >= split_x)
-				ox = -ox;
-		}
-		locked_horizontal_node->ratio =
-			locked_horizontal_node->drag_init_ratio + ox / cw;
-		locked_horizontal_node->ratio =
-			CLAMP_FLOAT(locked_horizontal_node->ratio, 0.05f, 0.95f);
+	if (locked_horizontal_resize_node) {
+		float size =
+			(float)MANGO_MAX(1, locked_horizontal_resize_node->container_w);
+		float offset = (float)(server.cursor->x - server.drag_begin_cursor_x);
+		locked_horizontal_resize_node->ratio =
+			locked_horizontal_resize_node->drag_init_ratio + offset / size;
+		locked_horizontal_resize_node->ratio =
+			CLAMP_FLOAT(locked_horizontal_resize_node->ratio, 0.05f, 0.95f);
 	}
 
-	if (locked_vertical_node) {
-		float ch = (float)MANGO_MAX(1, locked_vertical_node->container_h);
-		float oy = (float)(server.cursor->y - server.drag_begin_cursor_y);
-		if (config.dwindle_smart_resize) {
-			/* Same logic for the vertical split line. */
-			float split_y = locked_vertical_node->container_y +
-							ch * locked_vertical_node->drag_init_ratio;
-			if (server.drag_begin_cursor_y >= split_y)
-				oy = -oy;
-		}
-		locked_vertical_node->ratio =
-			locked_vertical_node->drag_init_ratio + oy / ch;
-		locked_vertical_node->ratio =
-			CLAMP_FLOAT(locked_vertical_node->ratio, 0.05f, 0.95f);
+	if (locked_vertical_resize_node) {
+		float size =
+			(float)MANGO_MAX(1, locked_vertical_resize_node->container_h);
+		float offset = (float)(server.cursor->y - server.drag_begin_cursor_y);
+		locked_vertical_resize_node->ratio =
+			locked_vertical_resize_node->drag_init_ratio + offset / size;
+		locked_vertical_resize_node->ratio =
+			CLAMP_FLOAT(locked_vertical_resize_node->ratio, 0.05f, 0.95f);
 	}
 
 	int32_t n = m->visible_tiling_clients;
