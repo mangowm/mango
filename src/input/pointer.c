@@ -452,40 +452,15 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 	}
 }
 
-void // Mouse scroll wheel event
-handle_cursor_axis(struct wl_listener *listener, void *data) {
-	/* This event is forwarded by the cursor when a pointer emits an axis event,
-	 * for example when you move the scroll wheel. */
-	struct wlr_pointer_axis_event *event = data;
-	ipc_notify_device_event(&event->pointer->base);
-	uint32_t mods;
-	AxisBinding *a;
+static bool pointer_run_axisbinds(struct wlr_pointer_axis_event *event,
+								  uint32_t mods, uint32_t adir, bool modal) {
+	const AxisBinding *a;
 	int32_t ji;
-	uint32_t adir;
-	double target_scroll_factor;
-	// IDLE_NOTIFY_ACTIVITY;
-	pointer_cursor_activity();
-	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
-
-	if (check_trackpad_disabled(event->pointer)) {
-		return;
-	}
-
-	mods = keyboard_hard_modifiers();
-	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
-		return;
-	}
-
-	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
-		adir = event->delta > 0 ? AxisDown : AxisUp;
-	else
-		adir = event->delta > 0 ? AxisRight : AxisLeft;
 
 	for (ji = 0; ji < config.axis_bindings_count; ji++) {
 		a = &config.axis_bindings[ji];
-		if ((a->iscommonmode ||
-			 (a->isdefaultmode && server.key_mode.isdefault) ||
-			 (strcmp(server.key_mode.mode, a->mode) == 0)) &&
+		if (binding_mode_matches(a->mode, a->iscommonmode, a->isdefaultmode,
+								 modal) &&
 			CLEANMASK(mods) == CLEANMASK(a->mod) && // Same modifier set
 			(a->dir == ALLDIR || adir == a->dir) &&
 			a->func) { // Wheel direction matches and a handler exists
@@ -501,10 +476,44 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
 				server.axis_apply_time = event->time_msec;
 			}
-			return; // If matched, do not forward this scroll event to the
-					// client.
+			return true; // If matched, do not forward this scroll event to
+						 // the client.
 		}
 	}
+	return false;
+}
+
+void // Mouse scroll wheel event
+handle_cursor_axis(struct wl_listener *listener, void *data) {
+	/* This event is forwarded by the cursor when a pointer emits an axis event,
+	 * for example when you move the scroll wheel. */
+	struct wlr_pointer_axis_event *event = data;
+	ipc_notify_device_event(&event->pointer->base);
+	uint32_t mods;
+	uint32_t adir;
+	double target_scroll_factor;
+	// IDLE_NOTIFY_ACTIVITY;
+	pointer_cursor_activity();
+	wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
+
+	if (check_trackpad_disabled(event->pointer)) {
+		return;
+	}
+
+	mods = keyboard_hard_modifiers();
+	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
+		adir = event->delta > 0 ? AxisDown : AxisUp;
+	else
+		adir = event->delta > 0 ? AxisRight : AxisLeft;
+
+	/* Binds in the key_mode of an open view run before all other binds. */
+	if (pointer_run_axisbinds(event, mods, adir, true))
+		return;
+	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
+		return;
+	}
+	if (pointer_run_axisbinds(event, mods, adir, false))
+		return;
 
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
 							   ? config.trackpad_scroll_factor
@@ -1790,8 +1799,26 @@ void pointer_place_drag_tile(Client *c) {
 	pointer_place_drag_tile_on(c, find_closest_tiled_client(c));
 }
 
+bool pointer_run_mousebinds(uint32_t button, bool modal) {
+	uint32_t mods = keyboard_hard_modifiers();
+	const MouseBinding *m;
+	int32_t ji;
+
+	for (ji = 0; ji < config.mouse_bindings_count; ji++) {
+		m = &config.mouse_bindings[ji];
+
+		if (binding_mode_matches(m->mode, m->iscommonmode, m->isdefaultmode,
+								 modal) &&
+			CLEANMASK(mods) == CLEANMASK(m->mod) && button == m->button &&
+			m->func) {
+			m->func(&m->arg);
+			return true;
+		}
+	}
+	return false;
+}
+
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
-	uint32_t mods;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
 	MangoBarDecoration *bar = NULL;
@@ -1800,8 +1827,6 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	double wsov_layer_sx = 0, wsov_layer_sy = 0;
 	bool wsov_layer_hit;
 	bool route_to_wsov_layer;
-	int32_t ji;
-	const MouseBinding *m;
 	struct wlr_surface *old_pointer_focus_surface =
 		server.seat->pointer_state.focused_surface;
 
@@ -1838,6 +1863,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 			monitor_at_point(server.cursor->x, server.cursor->y));
 		if (server.session_locked)
 			break;
+
+		/* Binds in the key_mode of an open view run before all other binds. */
+		if (!wsov_layer_hit && pointer_run_mousebinds(event->button, true))
+			return true;
 
 		if (switcher_is_active() &&
 			(event->button == BTN_LEFT || event->button == BTN_RIGHT)) {
@@ -1883,15 +1912,15 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 
 		// In overview mode, left click jumps and right click closes windows.
+		// A mousebind in key_mode=overview (or key_mode=jump) replaces this.
 		if (server.selected_monitor && server.selected_monitor->isoverview &&
-			event->button == BTN_LEFT && c) {
-			toggle_overview(&(Arg){.tc = c});
-			return true;
-		}
-
-		if (server.selected_monitor && server.selected_monitor->isoverview &&
-			event->button == BTN_RIGHT && c) {
-			pending_kill_client(c);
+			(event->button == BTN_LEFT || event->button == BTN_RIGHT) && c) {
+			if (input_modal_has_binds(MODAL_BIND_MOUSE))
+				return true;
+			if (event->button == BTN_LEFT)
+				toggle_overview(&(Arg){.tc = c});
+			else
+				pending_kill_client(c);
 			return true;
 		}
 
@@ -1928,20 +1957,8 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		// handle click on tile node
 		client_handle_decorate_click(bar);
 
-		mods = keyboard_hard_modifiers();
-
-		for (ji = 0; ji < config.mouse_bindings_count; ji++) {
-			m = &config.mouse_bindings[ji];
-
-			if ((m->iscommonmode ||
-				 (m->isdefaultmode && server.key_mode.isdefault) ||
-				 (strcmp(server.key_mode.mode, m->mode) == 0)) &&
-				CLEANMASK(mods) == CLEANMASK(m->mod) &&
-				event->button == m->button && m->func) {
-				m->func(&m->arg);
-				return true;
-			}
-		}
+		if (pointer_run_mousebinds(event->button, false))
+			return true;
 
 		/* Don't send the press to the surface that a bar/tab click switched
 		 * to. The seat drops its release too, so the client never sees a

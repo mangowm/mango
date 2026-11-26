@@ -71,6 +71,12 @@ int32_t keyboard_check_keybinding(uint32_t state, bool locked, uint32_t mods,
 
 void keyboard_cancel_pending_release_bind(void);
 
+enum modal_bind_kind { MODAL_BIND_KEY, MODAL_BIND_MOUSE, MODAL_BIND_AXIS };
+const char *input_modal_keymode(void);
+bool binding_mode_matches(const char *mode, bool iscommonmode,
+						  bool isdefaultmode, bool modal);
+bool input_modal_has_binds(enum modal_bind_kind kind);
+
 void keyboard_mark_bound_key(uint32_t keycode);
 void keyboard_unmark_bound_key(uint32_t keycode);
 bool keyboard_is_bound_key(uint32_t keycode);

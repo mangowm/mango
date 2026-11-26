@@ -583,22 +583,66 @@ void keyboard_unmark_bound_key(uint32_t keycode) {
 	bound_keycodes[i] = bound_keycodes[--bound_keycode_count];
 }
 
-int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
-								  xkb_keysym_t sym, uint32_t keycode,
-								  bool is_repeat) {
-	/*
-	 * Here we handle compositor keybindings. This is when the compositor is
-	 * processing keys, rather than passing them on to the client for its
-	 * own processing.
-	 */
+/* The key_mode whose binds run first while a view grabs the input. */
+const char *input_modal_keymode(void) {
+	Monitor *m = server.selected_monitor;
+
+	if (switcher_is_active())
+		return "switcher";
+	if (workspace_overview_is_active())
+		return "workspace_overview";
+	/* Jump mode also sets isoverview, so test it first. */
+	if (m && m->is_jump_mode)
+		return "jump";
+	if (m && m->isoverview)
+		return "overview";
+	return NULL;
+}
+
+/* modal: match only the binds of input_modal_keymode(). */
+bool binding_mode_matches(const char *mode, bool iscommonmode,
+						  bool isdefaultmode, bool modal) {
+	const char *modal_mode;
+
+	if (modal) {
+		modal_mode = input_modal_keymode();
+		return modal_mode && strcmp(mode, modal_mode) == 0;
+	}
+	return iscommonmode || (isdefaultmode && server.key_mode.isdefault) ||
+		   strcmp(server.key_mode.mode, mode) == 0;
+}
+
+/* A bind of this kind in the key_mode of the open view replaces the
+ * built-in handling of that kind of input in the view. */
+bool input_modal_has_binds(enum modal_bind_kind kind) {
+	const char *mode = input_modal_keymode();
+	int32_t i;
+
+	if (!mode)
+		return false;
+	if (kind == MODAL_BIND_KEY) {
+		for (i = 0; i < config.key_bindings_count; i++)
+			if (strcmp(config.key_bindings[i].mode, mode) == 0)
+				return true;
+	} else if (kind == MODAL_BIND_MOUSE) {
+		for (i = 0; i < config.mouse_bindings_count; i++)
+			if (strcmp(config.mouse_bindings[i].mode, mode) == 0)
+				return true;
+	} else {
+		for (i = 0; i < config.axis_bindings_count; i++)
+			if (strcmp(config.axis_bindings[i].mode, mode) == 0)
+				return true;
+	}
+	return false;
+}
+
+static int32_t keyboard_run_keybindings(uint32_t state, bool is_locked,
+										uint32_t mods, xkb_keysym_t sym,
+										uint32_t keycode, bool is_repeat,
+										bool modal, bool *matched) {
 	int32_t handled = 0;
 	const KeyBinding *k;
 	int32_t ji;
-
-	if (is_keyboard_shortcut_inhibitor(
-			server.seat->keyboard_state.focused_surface)) {
-		return false;
-	}
 
 	for (ji = 0; ji < config.key_bindings_count; ji++) {
 		if (is_locked && config.key_bindings[ji].islockapply == false)
@@ -622,9 +666,8 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 		}
 
 		k = &config.key_bindings[ji];
-		if ((k->iscommonmode ||
-			 (k->isdefaultmode && server.key_mode.isdefault) ||
-			 (strcmp(server.key_mode.mode, k->mode) == 0)) &&
+		if (binding_mode_matches(k->mode, k->iscommonmode, k->isdefaultmode,
+								 modal) &&
 			CLEANMASK(mods) == CLEANMASK(k->mod) &&
 			((k->keysymcode.type == KEY_TYPE_SYM &&
 			  xkb_keysym_to_lower(sym) ==
@@ -634,6 +677,7 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 			   keycode == k->keysymcode.keycode.keycode2 ||
 			   keycode == k->keysymcode.keycode.keycode3))) &&
 			k->func) {
+			*matched = true;
 
 			/* A "n" binding fires once per press: ignore key repeat events.
 			 * Stop here so a repeat never falls through to another binding. */
@@ -658,6 +702,31 @@ int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
 		}
 	}
 	return handled;
+}
+
+int32_t keyboard_check_keybinding(uint32_t state, bool is_locked, uint32_t mods,
+								  xkb_keysym_t sym, uint32_t keycode,
+								  bool is_repeat) {
+	/*
+	 * Here we handle compositor keybindings. This is when the compositor is
+	 * processing keys, rather than passing them on to the client for its
+	 * own processing.
+	 */
+	bool matched = false;
+	int32_t handled;
+
+	if (is_keyboard_shortcut_inhibitor(
+			server.seat->keyboard_state.focused_surface)) {
+		return false;
+	}
+
+	/* Binds in the key_mode of an open view run before all other binds. */
+	handled = keyboard_run_keybindings(state, is_locked, mods, sym, keycode,
+									   is_repeat, true, &matched);
+	if (matched)
+		return handled;
+	return keyboard_run_keybindings(state, is_locked, mods, sym, keycode,
+									is_repeat, false, &matched);
 }
 
 void keyboard_cancel_pending_release_bind(void) {

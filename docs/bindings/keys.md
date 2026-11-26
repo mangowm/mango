@@ -64,6 +64,19 @@ You can divide key bindings into named modes. Rules:
 
 > **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `key_mode` rules as `bind`.
 
+### View Key Modes
+
+While one of these views is open, Mango tries the `bind`, `mousebind`, `axisbind` and `gesturebind` lines of the key_mode with the same name first:
+
+| key_mode | Active while |
+| :--- | :--- |
+| `switcher` | The window switcher is open. |
+| `workspace_overview` | The workspace overview is open. |
+| `jump` | Jump mode is on. |
+| `overview` | The overview is open and jump mode is off. |
+
+If no bind of that key_mode matches, the binds of the current key_mode run as usual. You do not use `setkeymode` for these key modes.
+
 Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini
@@ -204,6 +217,8 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `toggleoverview` | `[1]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. |
 | `enteroverview` | - | Enter overview mode. |
 | `leaveoverview` | - | Leave overview mode. |
+| `overview_jump` | - | In the overview, focus the window under the pointer and leave the overview. |
+| `overview_kill` | - | In the overview, close the window under the pointer. |
 | `toggleworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Toggle the draggable workspace overview. `all` includes empty tags, `occupied` shows only occupied tags, and the `scroll_*` variants use the scrolling layout. |
 | `enterworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Enter the draggable workspace overview with the selected scope and layout. |
 | `leaveworkspaceoverview` | - | Leave the draggable workspace overview. |

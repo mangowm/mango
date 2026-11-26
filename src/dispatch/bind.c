@@ -2496,6 +2496,34 @@ int32_t leave_overview(const Arg *arg) {
 	return 0;
 }
 
+static Client *overview_client_at_pointer(void) {
+	struct wlr_surface *surface = NULL;
+	Client *c = NULL;
+
+	if (!server.selected_monitor || !server.selected_monitor->isoverview)
+		return NULL;
+	node_at_point(server.cursor->x, server.cursor->y, &surface, NULL, NULL,
+				  NULL, NULL, NULL);
+	toplevel_from_wlr_surface(surface, &c, NULL);
+	return c;
+}
+
+int32_t overview_jump(const Arg *arg) {
+	Client *c = overview_client_at_pointer();
+	if (!c)
+		return 0;
+	client_focus(c, 1);
+	toggle_overview(&(Arg){.tc = c});
+	return 0;
+}
+
+int32_t overview_kill(const Arg *arg) {
+	Client *c = overview_client_at_pointer();
+	if (c)
+		pending_kill_client(c);
+	return 0;
+}
+
 int32_t toggle_jump(const Arg *arg) {
 	if (!server.selected_monitor)
 		return 0;

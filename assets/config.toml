@@ -308,6 +308,11 @@ overlay_color = 0x14a57cff
 "none+left+4" = "viewnext_have_client"
 "none+up+4" = "enteroverview"
 "none+down+4" = "leaveoverview"
+# Binds in the overview mode run first while the overview is open.
+# One mousebind there replaces the built-in overview clicks. Example:
+# [mousebind.overview]
+# "none+btn_left" = "overview_jump"
+# "none+btn_middle" = "overview_kill"
 
 # layout support:
 # tile,scroller,grid,deck,monocle,center_tile,vertical_tile,vertical_scroller
