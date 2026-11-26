@@ -290,6 +290,10 @@ overlay_color = 0x14a57cff
 "SUPER+btn_left" = "moveresize,curmove"
 "btn_middle" = "togglemaximizescreen,0"
 "SUPER+btn_right" = "moveresize,curresize"
+# Binds in the switcher mode run first while the switcher is open.
+# One mousebind there replaces the built-in switcher clicks. Example:
+# [mousebind.switcher]
+# "ALT+btn_middle" = "switcher_pick,pointer"
 
 [axisbind.default]
 

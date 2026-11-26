@@ -59,11 +59,15 @@ static bool fire_gesture_motion(uint32_t motion, uint32_t fingers) {
 	bool handled = false;
 	uint32_t mods = keyboard_hard_modifiers();
 
-	for (int32_t ji = 0; ji < config.gesture_bindings_count; ji++) {
-		const GestureBinding *g = &config.gesture_bindings[ji];
-		if ((g->iscommonmode ||
-			 (g->isdefaultmode && server.key_mode.isdefault) ||
-			 (strcmp(server.key_mode.mode, g->mode) == 0)) &&
+	int32_t n = config.gesture_bindings_count;
+
+	/* First pass: binds in the key_mode of an open view. */
+	for (int32_t ji = 0; ji < 2 * n; ji++) {
+		if (ji == n && handled)
+			break;
+		const GestureBinding *g = &config.gesture_bindings[ji % n];
+		if (binding_mode_matches(g->mode, g->iscommonmode, g->isdefaultmode,
+								 ji < n) &&
 			CLEANMASK(mods) == CLEANMASK(g->mod) &&
 			fingers == g->fingers_count && g->func &&
 			(g->motion == ALLDIR || motion == g->motion)) {
@@ -209,11 +213,13 @@ static bool swipe_find_binding(uint32_t motion, uint32_t fingers,
 							   const GestureBinding **out) {
 	uint32_t mods = keyboard_hard_modifiers();
 
-	for (int32_t ji = 0; ji < config.gesture_bindings_count; ji++) {
-		const GestureBinding *g = &config.gesture_bindings[ji];
-		if ((g->iscommonmode ||
-			 (g->isdefaultmode && server.key_mode.isdefault) ||
-			 (strcmp(server.key_mode.mode, g->mode) == 0)) &&
+	int32_t n = config.gesture_bindings_count;
+
+	/* First pass: binds in the key_mode of an open view. */
+	for (int32_t ji = 0; ji < 2 * n; ji++) {
+		const GestureBinding *g = &config.gesture_bindings[ji % n];
+		if (binding_mode_matches(g->mode, g->iscommonmode, g->isdefaultmode,
+								 ji < n) &&
 			CLEANMASK(mods) == CLEANMASK(g->mod) &&
 			fingers == g->fingers_count && g->func &&
 			(g->motion == ALLDIR || motion == g->motion)) {

@@ -64,6 +64,19 @@ You can divide key bindings into named modes. Rules:
 
 > **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `key_mode` rules as `bind`.
 
+### View Key Modes
+
+While one of these views is open, Mango tries the `bind`, `mousebind`, `axisbind` and `gesturebind` lines of the key_mode with the same name first:
+
+| key_mode | Active while |
+| :--- | :--- |
+| `switcher` | The window switcher is open. |
+| `workspace_overview` | The workspace overview is open. |
+| `jump` | Jump mode is on. |
+| `overview` | The overview is open and jump mode is off. |
+
+If no bind of that key_mode matches, the binds of the current key_mode run as usual. You do not use `setkeymode` for these key modes.
+
 Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini
@@ -130,6 +143,9 @@ bindr=Super,Super_L,spawn,rofi -show run
 | `overcircle` | `next/prev/current_next/current_prev` | Open overview when closed; while it is open, cycle focus to the next/previous window on the current monitor. `current_next`/`current_prev` only show the current tagset's windows in the overview instead of all tags. |
 | `focuslast` | - | Focus the previously active window. |
 | `switcher` | `next/prev`, `all_tag_next/all_tag_prev`, `all_next/all_prev` | Open or cycle the thumbnail switcher. `next`/`prev` list the current tag's windows, `all_tag_next`/`all_tag_prev` list all tags on the current monitor, `all_next`/`all_prev` list all monitors and tags. Releasing any modifier key selects. |
+| `switcher_pick` | `[pointer]` | Focus the highlighted switcher window and close the switcher. `pointer` uses the thumbnail under the pointer. If no thumbnail is under the pointer, the switcher closes. |
+| `switcher_kill` | `[pointer]` | Close the highlighted switcher window. `pointer` uses the thumbnail under the pointer. If no thumbnail is under the pointer, the switcher closes. |
+| `switcher_close` | - | Close the switcher and keep the current focus. |
 | `exchange_client` | `left/right/up/down` | Swap the focused window with its neighbor in direction. Both windows change place, and with `exchange_cross_monitor` enabled they also swap monitors. |
 | `exchange_stack_client` | `next/prev` | Exchange window position in stack. |
 | `move_client` | `left/right/up/down` | Move the focused window one step in direction. On the same monitor `dwindle` re-inserts it next to the neighbor keeping the row/column it came from, every other layout swaps it with the neighbor like `exchange_client`. When the neighbor lies on another monitor the window moves onto that monitor and is inserted in front of or behind the neighbor on the side it comes from; without a neighbor in that direction it moves onto the monitor lying there. Crossing monitors needs `exchange_cross_monitor`. |

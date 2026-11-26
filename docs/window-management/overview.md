@@ -337,6 +337,50 @@ bind=SUPER+CTRL+ALT+SHIFT,grave,switcher,all_prev
 | `switcher` | `all_tag_next` / `all_tag_prev` | Open or cycle through every window on the current monitor. |
 | `switcher` | `all_next` / `all_prev` | Open or cycle through every window on every monitor. |
 
+### Switcher Bindings
+
+While the switcher is open, the `bind`, `mousebind`, `axisbind` and
+`gesturebind` lines in `key_mode=switcher` run before all other binds.
+
+| Command | Parameter | Description |
+| :--- | :--- | :--- |
+| `switcher_pick` | `[pointer]` | Focus the highlighted window and close the switcher. |
+| `switcher_kill` | `[pointer]` | Close the highlighted window. The switcher stays open. |
+| `switcher_close` | - | Close the switcher and keep the current focus. |
+
+With `pointer`, `switcher_pick` and `switcher_kill` use the thumbnail under the
+pointer. If no thumbnail is under the pointer, the switcher closes.
+
+One `mousebind` in `key_mode=switcher` turns off the built-in left and right
+clicks. Other clicks on the switcher do nothing. Releasing the modifier keys
+still commits the highlighted window. These binds do the same as the built-in
+clicks:
+
+```ini
+key_mode=switcher
+mousebind=NONE,btn_left,switcher_pick,pointer
+mousebind=NONE,btn_right,switcher_kill,pointer
+key_mode=default
+```
+
+The switcher is open while you hold its modifier key. Thus a bind in
+`key_mode=switcher` usually includes that modifier:
+
+```ini
+key_mode=switcher
+# Close the switcher with Escape
+bind=ALT,Escape,switcher_close
+# Close the highlighted window with q
+bind=ALT,q,switcher_kill
+# Pick with the middle button, close the window with the side button
+mousebind=ALT,btn_middle,switcher_pick,pointer
+mousebind=ALT,btn_side,switcher_kill,pointer
+# Cycle with the wheel
+axisbind=ALT,DOWN,switcher,next
+axisbind=ALT,UP,switcher,prev
+key_mode=default
+```
+
 ### Configuration
 
 The switcher has no dedicated size or layout options. Its focused thumbnail
@@ -366,3 +410,5 @@ The overview-based modes and the switcher accept direct pointer input:
 | Overview, jump mode, overcircle | Focus the clicked window and leave the overview. | Close the clicked window. |
 | Switcher | Commit the clicked thumbnail. | Close the clicked window. |
 | Switcher panel background | Close the switcher. | Close the switcher. |
+
+To change the switcher clicks, see [Switcher Bindings](#switcher-bindings).
