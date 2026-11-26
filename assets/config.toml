@@ -191,6 +191,11 @@ overlay_color = 0x14a57cff
 
 # workspace overview
 "SUPER+Tab" = "toggleworkspaceoverview,all"
+# Binds in the workspace_overview mode run first while it is open.
+# Each bind type replaces the built-in input of that type. Example:
+# [mousebind.workspace_overview]
+# "NONE+btn_left" = "workspace_overview_drag"
+# "SUPER+btn_right" = "workspace_overview_drag,move"
 "ALT+Tab" = "overcircle,next"
 
 # switch window focus

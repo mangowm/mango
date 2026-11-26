@@ -1,7 +1,9 @@
 #include "mango/workspace_overview/workspace_overview_internal.h"
 
 bool workspace_overview_handle_key(uint32_t sym) {
-	if (!workspace_overview_is_active())
+	/* A bind in key_mode=workspace_overview replaces the built-in keys. */
+	if (!workspace_overview_is_active() ||
+		input_modal_has_binds(MODAL_BIND_KEY))
 		return false;
 
 	switch (sym) {
@@ -124,8 +126,55 @@ void workspace_overview_handle_motion(double x, double y) {
 	wlr_output_schedule_frame(wsov.mon->wlr_output);
 }
 
+/* Close the window whose preview is under the pointer. */
+static void wsov_kill_at_pointer(void) {
+	struct wsov_cell *cell =
+		wsov_hit_cell_at(server.cursor->x, server.cursor->y);
+	struct wsov_item *item =
+		wsov_item_at(cell, server.cursor->x, server.cursor->y);
+
+	if (item && !item->is_snapshot && item->client)
+		pending_kill_client(item->client);
+}
+
+/* Press on the workspace under the pointer: a release without motion
+ * switches to it, a drag moves the window preview under the pointer. */
+static void wsov_begin_press(uint32_t button,
+							 WorkspaceOverviewDropMode drop_mode) {
+	struct wsov_cell *cell =
+		wsov_hit_cell_at(server.cursor->x, server.cursor->y);
+	struct wsov_item *item =
+		wsov_item_at(cell, server.cursor->x, server.cursor->y);
+
+	wsov.press_button = button;
+	wsov.drop_mode = drop_mode;
+	wsov_hide_drop_indicator();
+	wsov.pressed = true;
+	wsov.moved = false;
+	wsov.drag_scroll_direction = 0;
+	wsov.drag_scroll_frame_valid = false;
+	wsov.drag_start_x = (int)lround(server.cursor->x);
+	wsov.drag_start_y = (int)lround(server.cursor->y);
+	wsov.source_tag = cell ? cell->tag : 0;
+	wsov.target_tag = cell ? cell->tag : 0;
+	wsov.drag_return_tag = wsov.target_tag;
+	wsov_refresh_target_selection();
+	wsov.has_drag_client = item != NULL;
+	wsov.drag_client = item ? item->client : NULL;
+	if (item) {
+		struct wlr_box item_box = wsov_item_display_box(cell, item);
+		wsov.drag_grab_x =
+			(int)lround(server.cursor->x - wsov.mon->m.x - item_box.x);
+		wsov.drag_grab_y =
+			(int)lround(server.cursor->y - wsov.mon->m.y - item_box.y);
+	}
+	wsov_update_styles();
+}
+
 bool workspace_overview_handle_button(
 	const struct wlr_pointer_button_event *event) {
+	bool ran;
+
 	if (!workspace_overview_is_active())
 		return false;
 	if (wsov.closing) {
@@ -136,45 +185,33 @@ bool workspace_overview_handle_button(
 
 	if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
 		server.cursor_mode = CurPressed;
-		struct wsov_cell *cell =
-			wsov_hit_cell_at(server.cursor->x, server.cursor->y);
-		struct wsov_item *item =
-			wsov_item_at(cell, server.cursor->x, server.cursor->y);
-
-		if (event->button == BTN_RIGHT && item && !item->is_snapshot &&
-			item->client) {
-			pending_kill_client(item->client);
-			return true;
-		}
-		if (event->button != BTN_LEFT)
+		/* A press started by a key ends on the next release. */
+		if (wsov.pressed && !wsov.press_button)
 			return true;
 
-		wsov_hide_drop_indicator();
-		wsov.pressed = true;
-		wsov.moved = false;
-		wsov.drag_scroll_direction = 0;
-		wsov.drag_scroll_frame_valid = false;
-		wsov.drag_start_x = (int)lround(server.cursor->x);
-		wsov.drag_start_y = (int)lround(server.cursor->y);
-		wsov.source_tag = cell ? cell->tag : 0;
-		wsov.target_tag = cell ? cell->tag : 0;
-		wsov.drag_return_tag = wsov.target_tag;
-		wsov_refresh_target_selection();
-		wsov.has_drag_client = item != NULL;
-		wsov.drag_client = item ? item->client : NULL;
-		if (item) {
-			struct wlr_box item_box = wsov_item_display_box(cell, item);
-			wsov.drag_grab_x =
-				(int)lround(server.cursor->x - wsov.mon->m.x - item_box.x);
-			wsov.drag_grab_y =
-				(int)lround(server.cursor->y - wsov.mon->m.y - item_box.y);
-		}
-		wsov_update_styles();
+		/* Binds in key_mode=workspace_overview run first. Any mousebind
+		 * there replaces the built-in buttons. */
+		wsov.event_button = event->button;
+		ran = pointer_run_mousebinds(event->button, true);
+		wsov.event_button = 0;
+		if (ran || input_modal_has_binds(MODAL_BIND_MOUSE))
+			return true;
+
+		if (event->button == BTN_RIGHT)
+			wsov_kill_at_pointer();
+		else if (event->button == BTN_LEFT)
+			wsov_begin_press(BTN_LEFT, WORKSPACE_OVERVIEW_DROP_AUTO);
 		return true;
 	}
 
 	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
-		if (event->button != BTN_LEFT) {
+		bool ends_press =
+			wsov.pressed
+				? !wsov.press_button || event->button == wsov.press_button
+				: event->button == BTN_LEFT &&
+					  !input_modal_has_binds(MODAL_BIND_MOUSE);
+
+		if (!ends_press) {
 			server.cursor_mode = CurNormal;
 			return true;
 		}
@@ -202,7 +239,9 @@ bool workspace_overview_handle_axis(
 		return false;
 	if (wsov.closing || !event)
 		return true;
-	if (wsov.layout != WORKSPACE_OVERVIEW_SCROLL)
+	/* An axisbind in key_mode=workspace_overview replaces the wheel. */
+	if (wsov.layout != WORKSPACE_OVERVIEW_SCROLL ||
+		input_modal_has_binds(MODAL_BIND_AXIS))
 		return true;
 	if (wsov.pressed && wsov.has_drag_client)
 		return true;
@@ -221,4 +260,38 @@ bool workspace_overview_handle_axis(
 
 	wsov_apply_scroll_wheel(notches, now);
 	return true;
+}
+
+/* The dispatchers below do nothing while the workspace overview is closed. */
+int32_t workspace_overview_close(const Arg *arg) {
+	if (workspace_overview_is_active() && !wsov.closing)
+		wsov_close(wsov.target_tag, NULL);
+	return 0;
+}
+
+int32_t workspace_overview_select(const Arg *arg) {
+	if (!workspace_overview_is_active() || wsov.closing)
+		return 0;
+	if (arg->i == LEFT)
+		wsov_select_direction(-1, 0);
+	else if (arg->i == RIGHT)
+		wsov_select_direction(1, 0);
+	else if (arg->i == UP)
+		wsov_select_direction(0, -1);
+	else if (arg->i == DOWN)
+		wsov_select_direction(0, 1);
+	return 0;
+}
+
+int32_t workspace_overview_kill(const Arg *arg) {
+	if (workspace_overview_is_active() && !wsov.closing)
+		wsov_kill_at_pointer();
+	return 0;
+}
+
+/* From a mousebind, the release of that button ends the press. */
+int32_t workspace_overview_drag(const Arg *arg) {
+	if (workspace_overview_is_active() && !wsov.closing)
+		wsov_begin_press(wsov.event_button, arg->i);
+	return 0;
 }

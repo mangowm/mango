@@ -40,6 +40,14 @@ typedef enum WorkspaceOverviewLayout {
 	WORKSPACE_OVERVIEW_SCROLL,
 } WorkspaceOverviewLayout;
 
+/* How a window dragged to another workspace changes its tags. */
+typedef enum WorkspaceOverviewDropMode {
+	WORKSPACE_OVERVIEW_DROP_AUTO, /* Ctrl: move, Shift: add, else replace */
+	WORKSPACE_OVERVIEW_DROP_REPLACE,
+	WORKSPACE_OVERVIEW_DROP_MOVE,
+	WORKSPACE_OVERVIEW_DROP_ADD,
+} WorkspaceOverviewDropMode;
+
 typedef enum WorkspaceOverviewScrollDirection {
 	WORKSPACE_OVERVIEW_SCROLL_HORIZONTAL,
 	WORKSPACE_OVERVIEW_SCROLL_VERTICAL,

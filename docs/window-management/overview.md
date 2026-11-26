@@ -206,6 +206,74 @@ source tag. Holding Ctrl replaces all of the window's tags with the destination
 tag. A plain drag removes only the tag represented by the preview that the drag
 started from.
 
+### Workspace Overview Bindings
+
+You can change the input of the workspace overview with binds in
+`key_mode=workspace_overview`. These binds run before all other binds while
+the workspace overview is open. They can be `bind`, `mousebind`, `axisbind` or
+`gesturebind` lines.
+
+A bind in this key_mode replaces the built-in input of the same type. One
+`bind` turns off the built-in keys. One `mousebind` turns off the built-in
+buttons. One `axisbind` turns off the built-in wheel. The built-in input of the
+other types stays on. Input that no bind uses does nothing in the workspace
+overview.
+
+| Command | Description |
+| :--- | :--- |
+| `workspace_overview_close` | Switch to the selected workspace and leave the overview. |
+| `workspace_overview_select,<left\|right\|up\|down>` | Select the adjacent workspace preview. |
+| `workspace_overview_kill` | Close the window whose preview is under the pointer. |
+| `workspace_overview_drag[,replace\|move\|add]` | Start a press at the pointer. A release without motion switches to the workspace under the pointer. A drag moves the window preview under the pointer. |
+
+`workspace_overview_drag` sets what a drop to another workspace does to the tags
+of the window:
+
+- `replace`: remove the source tag and add the destination tag.
+- `move`: set the destination tag as the only tag.
+- `add`: add the destination tag and keep all other tags.
+- No argument: Ctrl at the drop does `move`, Shift does `add`, and other drops
+  do `replace`.
+
+The release of the button that started the press ends it. If a key, a wheel
+or a gesture started the press, the next button release ends it.
+
+These binds do the same as the built-in input. The built-in buttons also
+accept modifiers, but a `mousebind` needs the exact modifiers. In the scrolling
+layout, the built-in wheel scrolls the strip smoothly.
+
+```ini
+key_mode=workspace_overview
+bind=NONE,Escape,workspace_overview_close
+bind=NONE,Return,workspace_overview_close
+bind=NONE,KP_Enter,workspace_overview_close
+bind=NONE,Left,workspace_overview_select,left
+bind=NONE,Right,workspace_overview_select,right
+bind=NONE,Up,workspace_overview_select,up
+bind=NONE,Down,workspace_overview_select,down
+bind=NONE,h,workspace_overview_select,left
+bind=NONE,l,workspace_overview_select,right
+bind=NONE,k,workspace_overview_select,up
+bind=NONE,j,workspace_overview_select,down
+mousebind=NONE,btn_left,workspace_overview_drag
+mousebind=NONE,btn_right,workspace_overview_kill
+key_mode=default
+```
+
+This example moves windows only with SUPER and the right button. A plain right
+click does not close windows. The wheel selects workspaces and the middle
+button leaves the overview:
+
+```ini
+key_mode=workspace_overview
+mousebind=NONE,btn_left,workspace_overview_drag
+mousebind=SUPER,btn_right,workspace_overview_drag,move
+mousebind=NONE,btn_middle,workspace_overview_close
+axisbind=NONE,UP,workspace_overview_select,up
+axisbind=NONE,DOWN,workspace_overview_select,down
+key_mode=default
+```
+
 With `occupied` scope, kept previews remain empty; otherwise the overview closes
 when every workspace becomes empty. `all` scope keeps all previews.
 
