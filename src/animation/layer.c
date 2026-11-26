@@ -5,6 +5,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output.h>
@@ -360,8 +361,7 @@ void fadeout_layer_animation_next_tick(LayerSurface *l) {
 	double opacity = MANGO_MAX(percent, 0.0f);
 
 	if (config.animation_fade_out)
-		wlr_scene_node_for_each_buffer(&l->scene->node,
-									   scene_buffer_apply_opacity, &opacity);
+		scene_snapshot_apply_opacity(l->scene, opacity);
 
 	if (animation_passed >= 1.0) {
 		wl_list_remove(&l->fadeout_link);
@@ -532,9 +532,14 @@ void init_fadeout_layers(LayerSurface *l) {
 	struct wlr_box usable_area;
 	get_layer_area_bound(l, &usable_area);
 
+	struct wlr_scene_tree *fadeout_parent =
+		workspace_overview_layer_fadeout_parent(l);
+	if (!fadeout_parent)
+		fadeout_parent = server.layers[LyrFadeOut];
+
 	wlr_scene_node_set_enabled(&l->scene->node, true);
 	fadeout_layer->scene =
-		wlr_scene_tree_snapshot(&l->scene->node, server.layers[LyrFadeOut]);
+		wlr_scene_tree_snapshot(&l->scene->node, fadeout_parent);
 	wlr_scene_node_set_enabled(&l->scene->node, false);
 
 	if (!fadeout_layer->scene) {
@@ -542,7 +547,8 @@ void init_fadeout_layers(LayerSurface *l) {
 		return;
 	}
 
-	fadeout_layer->animation.duration = config.animation_duration_close;
+	fadeout_layer->animation.duration =
+		animation_duration_for_type(CLOSE, config.animation_duration_close);
 	fadeout_layer->geom = fadeout_layer->current =
 		fadeout_layer->animainit_geom = fadeout_layer->animation.initial =
 			l->animation.current;

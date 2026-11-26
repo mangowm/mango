@@ -628,6 +628,29 @@ static cJSON *build_all_clients_array(void) {
 	return arr;
 }
 
+static const char *transform_to_str(enum wl_output_transform t) {
+	switch (t) {
+	case WL_OUTPUT_TRANSFORM_NORMAL:
+		return "normal";
+	case WL_OUTPUT_TRANSFORM_90:
+		return "90";
+	case WL_OUTPUT_TRANSFORM_180:
+		return "180";
+	case WL_OUTPUT_TRANSFORM_270:
+		return "270";
+	case WL_OUTPUT_TRANSFORM_FLIPPED:
+		return "flipped";
+	case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+		return "flipped-90";
+	case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+		return "flipped-180";
+	case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+		return "flipped-270";
+	default:
+		return "unknown";
+	}
+}
+
 cJSON *build_monitor_json(Monitor *m) {
 	cJSON *resp = cJSON_CreateObject();
 	cJSON_AddStringToObject(resp, "name", m->wlr_output->name);
@@ -639,6 +662,8 @@ cJSON *build_monitor_json(Monitor *m) {
 	cJSON_AddNumberToObject(resp, "width", m->m.width);
 	cJSON_AddNumberToObject(resp, "height", m->m.height);
 	cJSON_AddNumberToObject(resp, "scale", m->wlr_output->scale);
+	cJSON_AddStringToObject(resp, "transform",
+							transform_to_str(m->wlr_output->transform));
 	cJSON_AddNumberToObject(resp, "layout_index",
 							m->pertag->ltidxs[get_mon_curtag(m)] - layouts);
 	cJSON_AddStringToObject(resp, "layout_symbol",

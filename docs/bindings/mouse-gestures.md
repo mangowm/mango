@@ -45,6 +45,9 @@ axisbind=MODIFIERS,DIRECTION,COMMAND,PARAMETERS
 
 - **Direction**: `UP`, `DOWN`, `LEFT`, `RIGHT`
 
+Matched wheel actions use `axis_bind_apply_timeout`. Lower values apply the
+binding more often; higher values apply it less often.
+
 ### Examples
 
 ```ini
@@ -108,15 +111,31 @@ gesturebind=none,down,4,toggleoverview
 
 ## Switch Bindings
 
-Trigger actions on hardware events like laptop lid open/close.
+Trigger actions on hardware switch events such as lid open/close, tablet mode,
+and keypad slide.
 
 ### Syntax
 
 ```ini
-switchbind=FOLD_STATE,COMMAND,PARAMETERS
+switchbind=SWITCH_STATE,COMMAND[,PARAMETERS]
 ```
 
-- **Fold State**: `fold` (lid closed), `unfold` (lid opened)
+`PARAMETERS` is optional for commands that do not require an argument.
+
+| Switch state | Meaning |
+| :--- | :--- |
+| `lid_on` | Lid closed |
+| `lid_off` | Lid opened |
+| `tablet_on` | Convertible switched to tablet mode |
+| `tablet_off` | Convertible left tablet mode |
+| `keypad_slide_on` | Sliding keypad exposed |
+| `keypad_slide_off` | Sliding keypad hidden |
+
+The Sway-style spellings `lid:on`, `lid:off`, `tablet:on`, `tablet:off`,
+`keypad_slide:on`, and `keypad_slide:off` are also accepted.
+
+Each binding matches both the switch type and its state. In particular, a
+`lid_on` action is not run when a convertible enters tablet mode.
 
 > **Warning:** Disable system lid handling in `/etc/systemd/logind.conf`:
 >
@@ -129,6 +148,8 @@ switchbind=FOLD_STATE,COMMAND,PARAMETERS
 ### Examples
 
 ```ini
-switchbind=fold,spawn,swaylock -f -c 000000
-switchbind=unfold,spawn,wlr-dpms on
+switchbind=lid_on,spawn,swaylock -f -c 000000
+switchbind=lid_off,spawn,wlr-dpms on
+switchbind=tablet_on,spawn,on-screen-keyboard
+switchbind=tablet_off,spawn,killall on-screen-keyboard
 ```

@@ -69,6 +69,11 @@ When a named scratchpad rule does not specify `width` or `height`, its floating
 window uses these ratios. An explicit `width` or `height` in the rule takes
 precedence.
 
+Setting either ratio to `0` disables forcing that dimension: the window keeps
+whatever width or height the application requested (or the size it had before
+being sent to the scratchpad). Setting both to `0` leaves the scratchpad size
+entirely untouched.
+
 ```ini
 scratchpad_width_ratio=0.8
 scratchpad_height_ratio=0.9
@@ -120,4 +125,12 @@ special_gap_inner_horizontal=10
 special_gap_inner_vertical=10
 special_gap_outer_horizontal=20
 special_gap_outer_vertical=20
+
+# Gather special tag windows from all monitors on the active monitor
+special_tag_cross_monitor=0
 ```
+
+With `special_tag_cross_monitor=1`, opening the special workspace or moving a
+window into it also migrates special-tag windows from other monitors and copies
+their special-tag layout. Floating windows are rescaled and centered for the
+target monitor.

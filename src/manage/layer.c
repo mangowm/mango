@@ -1,4 +1,5 @@
 #include "mango/manage/layer.h"
+#include "mango/animation/common.h"
 #include "mango/animation/layer.h"
 #include "mango/common/log.h"
 #include "mango/common/scene_node.h"
@@ -10,6 +11,7 @@
 #include "mango/layout/arrange.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
@@ -258,7 +260,8 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 
 	// Initializes the animation.
 	if (config.animations && config.layer_animations && !l->no_animation) {
-		l->animation.duration = config.animation_duration_open;
+		l->animation.duration =
+			animation_duration_for_type(OPEN, config.animation_duration_open);
 		l->animation.action = OPEN;
 		layer_set_pending_state(l);
 	} else {
@@ -270,6 +273,7 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 	// exclusive surface.
 	arrange_layers(l->mon);
 	reset_exclusive_layers_focus(l->mon);
+	workspace_overview_layers_changed(l);
 	printstatus(IPC_WATCH_LAST_OPEN_SURFACE);
 }
 
@@ -312,6 +316,7 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 	// Empty buffer: only hides; the mapped state is unchanged.
 	if (l->mapped && !layer_surface->surface->buffer) {
 		wlr_scene_node_set_enabled(&l->scene->node, false);
+		workspace_overview_layers_changed(l);
 		return;
 	} else {
 		wlr_scene_node_set_enabled(&l->scene->node, true);
@@ -331,7 +336,8 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 			layer_surface->current.layer !=
 				ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND) {
 			l->animation.action = MOVE;
-			l->animation.duration = config.animation_duration_move;
+			l->animation.duration = animation_duration_for_type(
+				MOVE, config.animation_duration_move);
 			l->need_output_flush = true;
 			layer_set_pending_state(l);
 		} else {
@@ -356,8 +362,12 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 
 	layer_flush_blur_background(l);
 
-	if (layer_surface->current.committed == 0 && !mapped_changed)
+	if (layer_surface->current.committed == 0 && !mapped_changed) {
+		/* Buffer-only commits do not change the layer state, but they still
+		 * need to refresh workspace previews. */
+		workspace_overview_layers_changed(l);
 		return;
+	}
 	l->mapped = layer_surface->surface->mapped;
 
 	if (layer_surface->current.committed & WLR_LAYER_SURFACE_V1_STATE_LAYER) {
@@ -380,6 +390,8 @@ void handle_layer_surface_commit(struct wl_listener *listener, void *data) {
 		WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY) {
 		reset_exclusive_layers_focus(l->mon);
 	}
+
+	workspace_overview_layers_changed(l);
 
 	if (mapped_changed) {
 		pointer_process_motion(0, NULL, 0, 0, 0, 0);
@@ -408,7 +420,10 @@ bool popup_unconstrain(Popup *popup) {
 		return true;
 	}
 
-	struct wlr_box usable = type == LayerShell ? l->mon->m : c->mon->w;
+	// a fullscreen client's popups can legitimately cover an exclusive panel
+	struct wlr_box usable = type == LayerShell
+								? l->mon->m
+								: (c->isfullscreen ? c->mon->m : c->mon->w);
 
 	int lx, ly;
 	struct wlr_box constraint_box;
@@ -429,6 +444,10 @@ bool popup_unconstrain(Popup *popup) {
 	}
 
 	wlr_xdg_popup_unconstrain_from_box(wlr_popup, &constraint_box);
+	if (type == XDGShell && wlr_popup->parent == client_surface(c)) {
+		wlr_popup->scheduled.geometry.x += c->bw;
+		wlr_popup->scheduled.geometry.y += c->bw;
+	}
 	return false;
 }
 
@@ -456,7 +475,14 @@ void handle_popup_commit(struct wl_listener *listener, void *data) {
 	if (!wlr_popup->base->initial_commit)
 		return;
 
-	if (!wlr_popup->parent || !wlr_popup->parent->data) {
+	/*
+	 * Popups may commit before their parent surface is mapped. In that case
+	 * the parent has no scene tree yet, and its data pointer may still hold a
+	 * tree from an earlier scene lifetime. Touching it here trips wlroots'
+	 * scene-node assertions, so reject the popup instead.
+	 */
+	if (!wlr_popup->parent || !wlr_popup->parent->mapped ||
+		!wlr_popup->parent->data) {
 		should_destroy = true;
 		goto cleanup_popup_commit;
 	}
@@ -578,6 +604,7 @@ void handle_layer_surface_unmap(struct wl_listener *listener, void *data) {
 
 	if (l->layer_surface->output && (l->mon = l->layer_surface->output->data))
 		arrange_layers(l->mon);
+	workspace_overview_layers_changed(l);
 
 	reset_exclusive_layers_focus(l->mon);
 

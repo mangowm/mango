@@ -26,7 +26,7 @@ parsed with the reader that matches its own extension, so the two can be mixed.
 | `mousebind=mod,btn,func,args` | `[mousebind.<key_mode>]` + `"mod+btn" = "func,args"` |
 | `axisbind=mod,dir,func,args` | `[axisbind.<key_mode>]` + `"mod+dir" = "func,args"` |
 | `gesturebind=mod,dir,fingers,func,args` | `[gesturebind.<key_mode>]` + `"mod+dir+fingers" = "func,args"` |
-| `switchbind=fold,func,args` | `[switchbind.<key_mode>]` + `"fold" = "func,args"` |
+| `switchbind=lid_on,func,args` | `[switchbind.<key_mode>]` + `"lid_on" = "func,args"` |
 | `monitor_rule=k:v,k:v` | `[[rule.monitor_rule]]` + `k = v` |
 | `tag_rule=k:v,k:v` | `[[rule.tag_rule]]` + `k = v` |
 | `layer_rule=k:v,k:v` | `[[rule.layer_rule]]` + `k = v` |
@@ -117,6 +117,7 @@ The bind flag (the letters in `bindl` / `bindc` / ...) becomes a further suffix:
 | `bindr` | `.release` |
 | `bindp` | `.pass` |
 | `bindc` | `.conflict` |
+| `bindn` | `.norepeat` |
 
 ```ini
 bindc=SUPER,a,resizewin,+10,0
@@ -143,7 +144,7 @@ The other binding kinds follow the same pattern:
 mousebind=SUPER,btn_left,moveresize,curmove
 axisbind=SUPER,UP,viewtoleft_have_client
 gesturebind=none,left,3,focusdir,left
-switchbind=fold,spawn,external-monitor on
+switchbind=lid_on,spawn,external-monitor on
 ```
 
 ```toml
@@ -157,7 +158,7 @@ switchbind=fold,spawn,external-monitor on
 "none+left+3" = "focusdir,left"
 
 [switchbind.default]
-"fold" = "spawn,external-monitor on"
+"lid_on" = "spawn,external-monitor on"
 ```
 
 ## Rules

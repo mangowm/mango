@@ -317,8 +317,15 @@ void handle_cursor_touch_cancel(struct wl_listener *listener, void *data) {
 			continue;
 
 		if (point->touch_protocol && point->surface) {
-			// NULL clears all touch focus on the seat.
-			wlr_seat_touch_notify_cancel(server.seat, NULL);
+			// wlr_seat_touch_notify_cancel() needs the seat client that owns
+			// the touch point; passing NULL dereferences it in
+			// wlr_seat_touch_send_cancel(). The cancel ends the whole touch
+			// sequence for that client, so later cancels for its other
+			// points find no seat point and are skipped.
+			struct wlr_touch_point *seat_point =
+				wlr_seat_touch_get_point(server.seat, event->touch_id);
+			if (seat_point && seat_point->client)
+				wlr_seat_touch_notify_cancel(server.seat, seat_point->client);
 			wl_list_remove(&point->surface_destroy.link);
 		} else if (config.touch_enable_mouse_emulation &&
 				   simulating_pointer_from_touch &&

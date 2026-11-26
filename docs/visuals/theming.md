@@ -26,7 +26,6 @@ root_color=0x323232ff
 # Inactive window border
 border_color=0x444444ff
 
-# Drop shadow when dragging windows
 drop_color=0x8FBA7C55
 
 # Split window border color in manual dwindle layout

@@ -2,13 +2,12 @@
 #include "mango/common/server.h"
 #include "mango/common/util.h"
 #include "mango/layout/arrange.h"
-#include "mango/layout/layout.h"
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <wlr/types/wlr_cursor.h>
 
-static DwindleNode *locked_horizontal_node = NULL;
-static DwindleNode *locked_vertical_node = NULL;
+static DwindleNode *locked_horizontal_resize_node = NULL;
+static DwindleNode *locked_vertical_resize_node = NULL;
 
 // Counts nodes in the same direction (N_old).
 int count_block_items(DwindleNode *node, bool split_h) {
@@ -52,10 +51,14 @@ void dwindle_remove(DwindleNode **root, Client *c) {
 
 	DwindleNode *parent = leaf->parent;
 
-	if (locked_horizontal_node == leaf || locked_horizontal_node == parent)
-		locked_horizontal_node = NULL;
-	if (locked_vertical_node == leaf || locked_vertical_node == parent)
-		locked_vertical_node = NULL;
+	if (locked_horizontal_resize_node == leaf ||
+		locked_horizontal_resize_node == parent) {
+		locked_horizontal_resize_node = NULL;
+	}
+	if (locked_vertical_resize_node == leaf ||
+		locked_vertical_resize_node == parent) {
+		locked_vertical_resize_node = NULL;
+	}
 
 	if (!parent) {
 		free(leaf);
@@ -163,8 +166,7 @@ void dwindle_remove(DwindleNode **root, Client *c) {
 }
 
 void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
-					int32_t ah, int32_t gap_h, int32_t gap_v,
-					const LayoutContext *ctx) {
+					int32_t ah, int32_t gap_h, int32_t gap_v) {
 	if (!node)
 		return;
 
@@ -174,12 +176,7 @@ void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
 				!node->client->ismaximizescreen) {
 				struct wlr_box box = {ax, ay, MANGO_MAX(1, aw),
 									  MANGO_MAX(1, ah)};
-				if (ctx && ctx->probe) {
-					if (node->client == ctx->probe && ctx->out)
-						*ctx->out = box;
-				} else {
-					client_tile_resize(node->client, box, 0, NULL);
-				}
+				client_tile_resize(node->client, box, 0);
 			}
 		}
 		return;
@@ -193,14 +190,14 @@ void dwindle_assign(DwindleNode *node, int32_t ax, int32_t ay, int32_t aw,
 	node->container_h = ah;
 	if (node->split_h) {
 		int32_t w1 = MANGO_MAX(1, (int32_t)(aw * node->ratio) - gap_h / 2);
-		dwindle_assign(node->first, ax, ay, w1, ah, gap_h, gap_v, ctx);
+		dwindle_assign(node->first, ax, ay, w1, ah, gap_h, gap_v);
 		dwindle_assign(node->second, ax + w1 + gap_h, ay, aw - w1 - gap_h, ah,
-					   gap_h, gap_v, ctx);
+					   gap_h, gap_v);
 	} else {
 		int32_t h1 = MANGO_MAX(1, (int32_t)(ah * node->ratio) - gap_v / 2);
-		dwindle_assign(node->first, ax, ay, aw, h1, gap_h, gap_v, ctx);
+		dwindle_assign(node->first, ax, ay, aw, h1, gap_h, gap_v);
 		dwindle_assign(node->second, ax, ay + h1 + gap_v, aw, ah - h1 - gap_v,
-					   gap_h, gap_v, ctx);
+					   gap_h, gap_v);
 	}
 }
 
@@ -418,6 +415,23 @@ void dwindle_swap_clients(Client *c1, Client *c2) {
 	finish_exchange_arrange_and_focus(c1, c2, m1, m2);
 }
 
+static DwindleNode *dwindle_resize_node_for_edge(DwindleNode *leaf, Client *c,
+												 int32_t edge) {
+	bool split_h = edge == LEFT || edge == RIGHT;
+	bool first_branch = edge == RIGHT || edge == DOWN;
+
+	/* A movable edge is backed by the nearest split where the leaf is on the
+	 * matching branch. Screen-attached edges have no such ancestor. */
+	for (DwindleNode *node = leaf->parent; node; node = node->parent) {
+		if (node->split_h != split_h)
+			continue;
+		DwindleNode *branch = first_branch ? node->first : node->second;
+		if (dwindle_find_leaf(branch, c))
+			return node;
+	}
+	return NULL;
+}
+
 void dwindle_resize_client(Monitor *m, Client *c) {
 	uint32_t tag = get_mon_curtag(m);
 	DwindleNode *leaf = dwindle_find_leaf(m->pertag->dwindle_root[tag], c);
@@ -426,60 +440,70 @@ void dwindle_resize_client(Monitor *m, Client *c) {
 
 	if (!server.start_drag_window) {
 		server.start_drag_window = true;
-		locked_horizontal_node = NULL;
-		locked_vertical_node = NULL;
-		server.drag_begin_cursor_x = server.cursor->x;
-		server.drag_begin_cursor_y = server.cursor->y;
-		DwindleNode *node = leaf->parent;
-		while (node) {
-			if (node->split_h && !locked_horizontal_node) {
-				locked_horizontal_node = node;
-				node->drag_init_ratio = node->ratio;
+		locked_horizontal_resize_node = NULL;
+		locked_vertical_resize_node = NULL;
+
+		server.drag_begin_cursor_x = server.grab_pointer_x;
+		server.drag_begin_cursor_y = server.grab_pointer_y;
+
+		double cursor_x = server.grab_pointer_x;
+		double cursor_y = server.grab_pointer_y;
+		double distance[4] = {
+			cursor_x - c->geom.x,
+			c->geom.x + c->geom.width - cursor_x,
+			cursor_y - c->geom.y,
+			c->geom.y + c->geom.height - cursor_y,
+		};
+		const int32_t edges[4] = {LEFT, RIGHT, UP, DOWN};
+		double horizontal_distance = 0.0;
+		double vertical_distance = 0.0;
+		for (int32_t i = 0; i < 4; i++) {
+			DwindleNode *node = dwindle_resize_node_for_edge(leaf, c, edges[i]);
+			if (!node)
+				continue;
+
+			if (edges[i] == LEFT || edges[i] == RIGHT) {
+				if (!locked_horizontal_resize_node ||
+					distance[i] < horizontal_distance) {
+					locked_horizontal_resize_node = node;
+					horizontal_distance = distance[i];
+				}
+			} else if (!locked_vertical_resize_node ||
+					   distance[i] < vertical_distance) {
+				locked_vertical_resize_node = node;
+				vertical_distance = distance[i];
 			}
-			if (!node->split_h && !locked_vertical_node) {
-				locked_vertical_node = node;
-				node->drag_init_ratio = node->ratio;
-			}
-			if (locked_horizontal_node && locked_vertical_node)
-				break;
-			node = node->parent;
 		}
+
+		if (locked_horizontal_resize_node)
+			locked_horizontal_resize_node->drag_init_ratio =
+				locked_horizontal_resize_node->ratio;
+		if (locked_vertical_resize_node)
+			locked_vertical_resize_node->drag_init_ratio =
+				locked_vertical_resize_node->ratio;
 	}
 
-	if (!locked_horizontal_node && !locked_vertical_node)
+	if (!locked_horizontal_resize_node && !locked_vertical_resize_node)
 		return;
 
-	if (locked_horizontal_node) {
-		float cw = (float)MANGO_MAX(1, locked_horizontal_node->container_w);
-		float ox = (float)(server.cursor->x - server.drag_begin_cursor_x);
-		if (config.dwindle_smart_resize) {
-			/* Move the boundary toward the cursor: invert direction when
-			 * the drag started on the right side of the split line. */
-			float split_x = locked_horizontal_node->container_x +
-							cw * locked_horizontal_node->drag_init_ratio;
-			if (server.drag_begin_cursor_x >= split_x)
-				ox = -ox;
-		}
-		locked_horizontal_node->ratio =
-			locked_horizontal_node->drag_init_ratio + ox / cw;
-		locked_horizontal_node->ratio =
-			CLAMP_FLOAT(locked_horizontal_node->ratio, 0.05f, 0.95f);
+	if (locked_horizontal_resize_node) {
+		float size =
+			(float)MANGO_MAX(1, locked_horizontal_resize_node->container_w);
+		float offset = (float)(server.cursor->x - server.drag_begin_cursor_x);
+		locked_horizontal_resize_node->ratio =
+			locked_horizontal_resize_node->drag_init_ratio + offset / size;
+		locked_horizontal_resize_node->ratio =
+			CLAMP_FLOAT(locked_horizontal_resize_node->ratio, 0.05f, 0.95f);
 	}
 
-	if (locked_vertical_node) {
-		float ch = (float)MANGO_MAX(1, locked_vertical_node->container_h);
-		float oy = (float)(server.cursor->y - server.drag_begin_cursor_y);
-		if (config.dwindle_smart_resize) {
-			/* Same logic for the vertical split line. */
-			float split_y = locked_vertical_node->container_y +
-							ch * locked_vertical_node->drag_init_ratio;
-			if (server.drag_begin_cursor_y >= split_y)
-				oy = -oy;
-		}
-		locked_vertical_node->ratio =
-			locked_vertical_node->drag_init_ratio + oy / ch;
-		locked_vertical_node->ratio =
-			CLAMP_FLOAT(locked_vertical_node->ratio, 0.05f, 0.95f);
+	if (locked_vertical_resize_node) {
+		float size =
+			(float)MANGO_MAX(1, locked_vertical_resize_node->container_h);
+		float offset = (float)(server.cursor->y - server.drag_begin_cursor_y);
+		locked_vertical_resize_node->ratio =
+			locked_vertical_resize_node->drag_init_ratio + offset / size;
+		locked_vertical_resize_node->ratio =
+			CLAMP_FLOAT(locked_vertical_resize_node->ratio, 0.05f, 0.95f);
 	}
 
 	int32_t n = m->visible_tiling_clients;
@@ -492,7 +516,7 @@ void dwindle_resize_client(Monitor *m, Client *c) {
 
 	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
 				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv, NULL);
+				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
 }
 
 void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
@@ -540,15 +564,23 @@ void dwindle_resize_client_step(Monitor *m, Client *c, int32_t dx, int32_t dy) {
 
 	dwindle_assign(m->pertag->dwindle_root[tag], m->w.x + gap_oh,
 				   m->w.y + gap_ov, m->w.width - 2 * gap_oh,
-				   m->w.height - 2 * gap_ov, gap_ih, gap_iv, NULL);
+				   m->w.height - 2 * gap_ov, gap_ih, gap_iv);
 }
 
-void dwindle_remove_client(Client *c) {
-	Monitor *m;
-	wl_list_for_each(m, &server.monitors, link) {
-		for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
-			dwindle_remove(&m->pertag->dwindle_root[t], c);
-	}
+void dwindle_remove_client_in_tag(Monitor *m, uint32_t tag, Client *c) {
+	dwindle_remove(&m->pertag->dwindle_root[tag], c);
+}
+
+void dwindle_replace_client_in_tag(Monitor *m, uint32_t tag, Client *old,
+								   Client *new) {
+	if (!old || !new || old == new)
+		return;
+	DwindleNode **root = &m->pertag->dwindle_root[tag];
+	DwindleNode *node = dwindle_find_leaf(*root, old);
+	if (!node)
+		return;
+	dwindle_remove(root, new);
+	node->client = new;
 }
 
 /* Insert a new client respecting dwindle_vsplit, dwindle_hsplit, and
@@ -643,7 +675,7 @@ void dwindle_insert_with_config(DwindleNode **root, Client *new_c,
 	dwindle_insert(root, new_c, focused, ratio, as_first, split_h, lock);
 }
 
-static void dwindle_core(Monitor *m, const LayoutContext *ctx) {
+void dwindle(Monitor *m) {
 	int32_t n = m->visible_tiling_clients;
 	if (n == 0)
 		return;
@@ -731,7 +763,7 @@ static void dwindle_core(Monitor *m, const LayoutContext *ctx) {
 
 	dwindle_assign(*root, m->w.x + gap_oh, m->w.y + gap_ov,
 				   m->w.width - 2 * gap_oh, m->w.height - 2 * gap_ov, gap_ih,
-				   gap_iv, ctx);
+				   gap_iv);
 
 	free(vis);
 	free(leaves);
@@ -741,18 +773,4 @@ static void dwindle_core(Monitor *m, const LayoutContext *ctx) {
 void cleanup_monitor_dwindle(Monitor *m) {
 	for (uint32_t t = 0; t < PERTAG_SLOTS; t++)
 		dwindle_free_tree(m->pertag->dwindle_root[t]);
-}
-
-void dwindle(Monitor *m) { dwindle_core(m, NULL); }
-
-bool dwindle_predict(Monitor *m, Client *c, struct wlr_box *out) {
-	uint32_t tag = get_mon_curtag(m);
-	DwindleNode **root = &m->pertag->dwindle_root[tag];
-
-	layout_predict_box(dwindle_core, m, c, out);
-
-	if (dwindle_find_leaf(*root, c))
-		dwindle_remove(root, c);
-
-	return out->width > 0 && out->height > 0;
 }

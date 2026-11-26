@@ -21,6 +21,7 @@
 #include "mango/manage/tab.h"
 #include "mango/switcher/switcher.h"
 #include <libinput.h>
+#include "mango/workspace_overview/workspace_overview.h"
 #include <scenefx/types/wlr_scene.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/types/wlr_cursor.h>
@@ -41,6 +42,33 @@
 #include <wlr/xcursor.h>
 
 static struct LastCursor last_cursor;
+static bool wsov_direct_layer_pointer_pressed;
+
+static bool pointer_wsov_direct_layer_at(double x, double y,
+										 struct wlr_surface **surface,
+										 double *sx, double *sy) {
+	LayerSurface *layer = NULL;
+	struct wlr_surface *hit_surface = NULL;
+	double hit_x = 0, hit_y = 0;
+
+	if (!workspace_overview_is_active())
+		return false;
+
+	node_at_point(x, y, &hit_surface, NULL, &layer, NULL, &hit_x, &hit_y);
+	if (!layer || !hit_surface ||
+		!workspace_overview_is_active_on(layer->mon) ||
+		layer->layer_surface->current.layer < ZWLR_LAYER_SHELL_V1_LAYER_TOP) {
+		return false;
+	}
+
+	if (surface)
+		*surface = hit_surface;
+	if (sx)
+		*sx = hit_x;
+	if (sy)
+		*sy = hit_y;
+	return true;
+}
 
 static double pointer_surface_scale(Client *c) {
 #ifdef XWAYLAND
@@ -217,6 +245,29 @@ void pointer_client_destroyed(Client *c) {
 	}
 }
 
+void pointer_client_replaced(Client *old, Client *new) {
+	if (!old || !new || old == new)
+		return;
+
+	if (server.grab_client == old)
+		server.grab_client = new;
+
+	if (server.drop_client == old) {
+		bool draw = old->enable_drop_area_draw;
+		old->enable_drop_area_draw = false;
+		new->enable_drop_area_draw = draw;
+		server.drop_client = new;
+	}
+
+	if (server.group_bar_drag_client == old)
+		server.group_bar_drag_client = new;
+
+	if (server.group_bar_hover && server.group_bar_hover == old->group_bar) {
+		mango_bar_decoration_set_close_hover(server.group_bar_hover, false);
+		server.group_bar_hover = NULL;
+	}
+}
+
 static bool pointer_constraint_surface_visible(
 	struct wlr_pointer_constraint_v1 *constraint) {
 	Client *c = NULL;
@@ -333,7 +384,7 @@ void toggle_hotarea(int32_t x_root, int32_t y_root) {
 	}
 
 	// Computes different hot-area coordinates for each hot corner.
-	unsigned hx, hy;
+	int32_t hx, hy;
 
 	switch (config.hotarea_corner) {
 	case BOTTOM_RIGHT: // Bottom-right corner
@@ -422,6 +473,9 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 	}
 
 	mods = keyboard_hard_modifiers();
+	if (CLEANMASK(mods) == 0 && workspace_overview_handle_axis(event)) {
+		return;
+	}
 
 	if (event->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
 		adir = event->delta > 0 ? AxisDown : AxisUp;
@@ -438,27 +492,20 @@ handle_cursor_axis(struct wl_listener *listener, void *data) {
 			a->func) { // Wheel direction matches and a handler exists
 
 			keyboard_cancel_pending_release_bind();
-
 			if (event->time_msec - server.axis_apply_time >
 					config.axis_bind_apply_timeout ||
 				server.axis_apply_dir * event->delta < 0) {
 				a->func(&a->arg);
 				server.axis_apply_time = event->time_msec;
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
-				return; // If matched, do not forward this scroll event to the
-						// client.
 			} else {
 				server.axis_apply_dir = event->delta > 0 ? 1 : -1;
 				server.axis_apply_time = event->time_msec;
-				return;
 			}
+			return; // If matched, do not forward this scroll event to the
+					// client.
 		}
 	}
-
-	/* TODO: allow usage of scroll whell for mousebindings, it can be
-	 * implemented checking the event's orientation and the delta of the event
-	 */
-	/* Notify the client with pointer focus of the axis event. */
 
 	target_scroll_factor = pointer_is_trackpad(event->pointer)
 							   ? config.trackpad_scroll_factor
@@ -1021,7 +1068,7 @@ void pointer_resize_floating_window(Client *gc, double x, double y) {
 static void client_begin_drag_float(Client *c) {
 	c->drag_to_tile = true;
 	exit_scroller_stack(c);
-	client_set_floating(c, 1);
+	client_set_floating(c, 1, false);
 	c->drag_tile_float_backup_geom = c->float_geom;
 	c->old_stack_inner_per = 0.0f;
 	c->old_master_inner_per = 0.0f;
@@ -1162,7 +1209,6 @@ void pointer_end_grab_client(bool follow_pointer) {
 	server.selected_monitor->sel = gc;
 	server.grab_client = NULL;
 	server.start_drag_window = false;
-	server.last_apply_drag_time = 0;
 	if (gc->drag_to_tile && config.drag_tile_to_tile) {
 		pointer_place_drag_tile(gc);
 		gc->float_geom = gc->drag_tile_float_backup_geom;
@@ -1211,6 +1257,33 @@ static Client *group_bar_target_at(double x, double y, Client *ignore) {
 void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 							double dx, double dy, double dx_unaccel,
 							double dy_unaccel) {
+	if (workspace_overview_is_active()) {
+		if (time) {
+			wlr_relative_pointer_manager_v1_send_relative_motion(
+				server.relative_pointer_manager, server.seat,
+				(uint64_t)time * 1000, dx, dy, dx_unaccel, dy_unaccel);
+			wlr_cursor_move(server.cursor, device, dx, dy);
+			pointer_cursor_activity();
+			wlr_idle_notifier_v1_notify_activity(server.idle_notifier,
+												 server.seat);
+			struct wlr_surface *surface = NULL;
+			double sx = 0, sy = 0;
+			if (pointer_wsov_direct_layer_at(server.cursor->x, server.cursor->y,
+											 &surface, &sx, &sy)) {
+				pointer_focus(NULL, surface, sx, sy, time);
+				if (workspace_overview_pointer_is_pressed()) {
+					workspace_overview_handle_motion(server.cursor->x,
+													 server.cursor->y);
+				}
+			} else {
+				pointer_focus(NULL, NULL, 0, 0, time);
+				workspace_overview_handle_motion(server.cursor->x,
+												 server.cursor->y);
+			}
+		}
+		return;
+	}
+
 	double sx = 0, sy = 0, sx_confined, sy_confined;
 	Client *c = NULL, *w = NULL;
 	Client *closet_drop_client = NULL;
@@ -1400,16 +1473,15 @@ void pointer_process_motion(uint32_t time, struct wlr_input_device *device,
 	} else if (server.cursor_mode == CurResize) {
 		if (server.grab_client->isfloating) {
 			server.grab_client->iscustomsize = 1;
-			if (server.last_apply_drag_time == 0 ||
-				time - server.last_apply_drag_time >=
-					drag_refresh_interval_ms(server.grab_client->mon)) {
+			Monitor *m = server.grab_client->mon;
+			if (m && m->last_resize_frame != m->frame_serial) {
+				m->last_resize_frame = m->frame_serial;
 				pointer_resize_floating_window(
 					server.grab_client, server.cursor->x, server.cursor->y);
-				server.last_apply_drag_time = time;
 			}
 			return;
 		} else {
-			resize_tile_client(server.grab_client, true, 0, 0, time);
+			resize_tile_client(server.grab_client, true, 0, 0);
 			return;
 		}
 	}
@@ -1487,7 +1559,7 @@ void pointer_focus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		c && time && c->scene && c->scene->node.enabled &&
 		(!c->mon || !is_overcircle_mode(c->mon)) && !c->animation.tagining &&
 		(surface != server.seat->pointer_state.focused_surface ||
-		 (server.selected_monitor && server.selected_monitor->isoverview &&
+		 (server.selected_monitor && server.selected_monitor->sel &&
 		  server.selected_monitor->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		client_focus(c, 0);
@@ -1689,15 +1761,13 @@ Client *find_closest_tiled_client(Client *c) {
 	return closest;
 }
 
-void pointer_place_drag_tile(Client *c) {
-	Client *closest = find_closest_tiled_client(c);
-
+void pointer_place_drag_tile_on(Client *c, Client *closest) {
 	if (closest && closest->mon) {
 		const Layout *layout =
 			closest->mon->pertag->ltidxs[get_client_tag_idx(closest)];
 
 		if (closest->drop_direction == UNDIR) {
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			wl_list_safe_reinsert_prev(&closest->link, &c->link);
 			arrange(closest->mon, false, false);
 			return;
@@ -1720,7 +1790,7 @@ void pointer_place_drag_tile(Client *c) {
 			dwindle_insert(&c->mon->pertag->dwindle_root[tag], c, closest,
 						   config.dwindle_split_ratio, insert_before, split_h,
 						   !config.dwindle_drop_simple_split);
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			return;
 		}
 
@@ -1734,7 +1804,7 @@ void pointer_place_drag_tile(Client *c) {
 			} else {
 				wl_list_safe_reinsert_next(&closest->link, &c->link);
 			}
-			client_set_floating(c, 0);
+			client_set_floating(c, 0, false);
 			return;
 		}
 
@@ -1745,7 +1815,11 @@ void pointer_place_drag_tile(Client *c) {
 		}
 	}
 
-	client_set_floating(c, 0);
+	client_set_floating(c, 0, false);
+}
+
+void pointer_place_drag_tile(Client *c) {
+	pointer_place_drag_tile_on(c, find_closest_tiled_client(c));
 }
 
 bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
@@ -1754,6 +1828,10 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	LayerSurface *l = NULL;
 	MangoBarDecoration *bar = NULL;
 	struct wlr_surface *surface;
+	struct wlr_surface *wsov_layer_surface = NULL;
+	double wsov_layer_sx = 0, wsov_layer_sy = 0;
+	bool wsov_layer_hit;
+	bool route_to_wsov_layer;
 	int32_t ji;
 	const MouseBinding *m;
 	struct wlr_surface *old_pointer_focus_surface =
@@ -1775,6 +1853,19 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 	switch (event->state) {
 	case WL_POINTER_BUTTON_STATE_PRESSED:
 		server.cursor_mode = CurPressed;
+		wsov_layer_hit = pointer_wsov_direct_layer_at(
+			server.cursor->x, server.cursor->y, &wsov_layer_surface,
+			&wsov_layer_sx, &wsov_layer_sy);
+		wsov_direct_layer_pointer_pressed = wsov_layer_hit;
+		if (!server.session_locked && workspace_overview_is_active() &&
+			!wsov_layer_hit) {
+			pointer_focus(NULL, NULL, 0, 0, 0);
+			return workspace_overview_handle_button(event);
+		}
+		if (wsov_layer_hit)
+			pointer_focus(NULL, wsov_layer_surface, wsov_layer_sx,
+						  wsov_layer_sy, 0);
+
 		set_selected_monitor(
 			monitor_at_point(server.cursor->x, server.cursor->y));
 		if (server.session_locked)
@@ -1809,9 +1900,16 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 
 			// Focuses the layer that requests interactive focus, but must not
 			// steal focus from an exclusive-focus layer.
+			// Skip it when the layer surface already has keyboard focus:
+			// layer_focus() clears the keyboard focus first, so the client
+			// would get wl_keyboard.leave + enter for the same surface on
+			// every click. GTK3 treats that leave as a lost grab and closes
+			// its popovers (a popover over a popover never gets the click).
 			if (l && !server.exclusive_focus &&
 				l->layer_surface->current.keyboard_interactive ==
-					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND) {
+					ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND &&
+				server.seat->keyboard_state.focused_surface !=
+					l->layer_surface->surface) {
 				layer_focus(l);
 			}
 		}
@@ -1894,6 +1992,12 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 		}
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		route_to_wsov_layer = wsov_direct_layer_pointer_pressed;
+		wsov_direct_layer_pointer_pressed = false;
+		if (!server.session_locked && workspace_overview_is_active() &&
+			!route_to_wsov_layer)
+			return workspace_overview_handle_button(event);
+
 		server.group_bar_drag_pending = false;
 		server.drop_to_group = false;
 		server.group_bar_drag_client = NULL;
@@ -1906,7 +2010,6 @@ bool pointer_process_button_press(struct wlr_pointer_button_event *event) {
 				server.grab_client = NULL;
 				server.cursor_mode = CurNormal;
 				server.start_drag_window = false;
-				server.last_apply_drag_time = 0;
 				jc->drag_to_tile = false;
 				if (server.drop_client) {
 					server.drop_client->enable_drop_area_draw = false;

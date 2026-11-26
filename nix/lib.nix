@@ -45,10 +45,6 @@ let
       : A list of prefixes that define **bottom** commands. Any key starting with one of these
         prefixes will be placed at the end of the configuration.
 
-    Value:
-
-    : The attribute set to be converted to Hyprland configuration format.
-
     # Type
 
     ```

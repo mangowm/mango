@@ -22,37 +22,6 @@ void free_circle_layout(Config *config) {
 	config->circle_layout_count = 0; // Resets the count.
 }
 
-void free_baked_points(void) {
-	if (server.baked_points_move) {
-		free(server.baked_points_move);
-		server.baked_points_move = NULL;
-	}
-	if (server.baked_points_open) {
-		free(server.baked_points_open);
-		server.baked_points_open = NULL;
-	}
-	if (server.baked_points_close) {
-		free(server.baked_points_close);
-		server.baked_points_close = NULL;
-	}
-	if (server.baked_points_tag) {
-		free(server.baked_points_tag);
-		server.baked_points_tag = NULL;
-	}
-	if (server.baked_points_focus) {
-		free(server.baked_points_focus);
-		server.baked_points_focus = NULL;
-	}
-	if (server.baked_points_opafadein) {
-		free(server.baked_points_opafadein);
-		server.baked_points_opafadein = NULL;
-	}
-	if (server.baked_points_opafadeout) {
-		free(server.baked_points_opafadeout);
-		server.baked_points_opafadeout = NULL;
-	}
-}
-
 void free_config(void) {
 	// Frees memory.
 	int32_t i;
@@ -339,7 +308,6 @@ void free_config(void) {
 	free_circle_layout(&config);
 
 	// Frees animation resources.
-	free_baked_points();
 
 	// Cleans up the keymap used for key parsing.
 	cleanup_config_keymap();

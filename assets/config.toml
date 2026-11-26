@@ -96,11 +96,28 @@ overview_gap_outer = 30
 overcircle_center_ratio = 0.5
 title_message_bar_height = 52
 title_message_bar_gap = 20
+workspace_overview_border_width = 2
+workspace_overview_gap = 5
+workspace_overview_drag_threshold = 5
+workspace_overview_occupied_keep_seen_tags = 1
+workspace_overview_scroll_direction = "vertical"
+workspace_overview_scroll_ratio = 0.8
+workspace_overview_drag_scroll_speed = 1.5
+workspace_overview_scroll_decel_start_interval = 50
+workspace_overview_scroll_decel_gain = 0.5
+workspace_overview_focused_dim_opacity = 0.0
+workspace_overview_unfocused_dim_opacity = 0.2
+animation_duration_workspace_overview_open = 260
+animation_duration_workspace_overview_close = 260
+animation_duration_workspace_overview_move = 382
+animation_curve_workspace_overview_open = [0.333333, 1.0, 0.666667, 1.0]
+animation_curve_workspace_overview_close = [0.333333, 1.0, 0.666667, 1.0]
+animation_curve_workspace_overview_move = [0.26, 0.99, 0.26, 1.0]
 
 # Misc
 no_border_when_single = 0
-axis_bind_apply_timeout = 100
 focus_on_activate = 1
+axis_bind_apply_timeout = 100
 idle_inhibit_ignore_visible = 0
 idle_inhibit_when_fullscreen = 0
 sloppy_focus = 1
@@ -172,8 +189,11 @@ overlay_color = 0x14a57cff
 "SUPER+m" = "quit"
 "ALT+q" = "killclient,"
 
+# workspace overview
+"SUPER+Tab" = "toggleworkspaceoverview,all"
+"ALT+Tab" = "overcircle,next"
+
 # switch window focus
-"SUPER+Tab" = "focusstack,next"
 "ALT+Left" = "focusdir,left"
 "ALT+Right" = "focusdir,right"
 "ALT+Up" = "focusdir,up"
@@ -187,7 +207,6 @@ overlay_color = 0x14a57cff
 
 # switch window status
 "SUPER+g" = "toggleglobal,"
-"ALT+Tab" = "togglejump,"
 "ALT+backslash" = "togglefloating,"
 "ALT+a" = "togglemaximizescreen,"
 "ALT+f" = "togglefullscreen,"

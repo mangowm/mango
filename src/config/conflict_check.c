@@ -53,7 +53,8 @@ bool same_axisbind_key(const void *a, const void *b) {
 bool same_switchbind_key(const void *a, const void *b) {
 	const SwitchBinding *sa = (const SwitchBinding *)a;
 	const SwitchBinding *sb = (const SwitchBinding *)b;
-	return sa->fold == sb->fold;
+	return sa->switch_action.type == sb->switch_action.type &&
+		   sa->switch_action.state == sb->switch_action.state;
 }
 
 bool same_gesturebind_key(const void *a, const void *b) {

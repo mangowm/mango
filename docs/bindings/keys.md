@@ -23,6 +23,7 @@ bind[flags]=MODIFIERS,KEY,COMMAND,PARAMETERS
 - `r`: Triggers on key release instead of press.
 - `p`: Pass key event to client.
 - `c`: allow keybind conflict(need set in all conflict key).
+- `n`: Fire once per press and ignore key repeat while the key is held (other binds keep repeating at `repeat_rate` / `repeat_delay`).
 
 > **Info:** `c` has no effect on the `reload_config` and `load_config_file` dispatches, which always stop the current key event.
 
@@ -48,6 +49,9 @@ bind=alt,shift_l,switch_keyboard_layout
 # Allow keybind conflict
 bindc=SUPER,a,resizewin,+10,0
 bindc=SUPER,a,centerwin
+
+# Fire once per press, ignore key repeat
+bindn=SUPER,Return,spawn,foot
 ```
 
 ## Key Modes (Submaps)
@@ -120,7 +124,7 @@ bindr=Super,Super_L,spawn,rofi -show run
 | Command | Param | Description |
 | :--- | :--- | :--- |
 | `focusid` | - | Focus window (can target any window via IPC: `mmsg dispatch focusid client,<id>`) |
-| `focusdir` | `left/right/up/down` | Focus window in direction. |
+| `focusdir` | `left/right/up/down` | Focus window in direction. In the monocle layout with tabs enabled, left/right cycle the tab chain when `focus_cross_monitor` is disabled; otherwise they cycle the focus stack. |
 | `focus_window_or_workspace` | `left/right/up/down` | Focus window in direction; otherwise jump to the nearest adjacent tag that has clients, falling back to the next/previous tag if none. |
 | `focusstack` | `next/prev` | Cycle focus within the stack. |
 | `overcircle` | `next/prev/current_next/current_prev` | Open overview when closed; while it is open, cycle focus to the next/previous window on the current monitor. `current_next`/`current_prev` only show the current tagset's windows in the overview instead of all tags. |
@@ -200,6 +204,9 @@ It is formed by tag numbers `1`–`9`, optionally combined with `|`.
 | `toggleoverview` | `[1]` | Toggle overview mode. Passing `1` only shows the current tagset's windows in the overview instead of all tags. |
 | `enteroverview` | - | Enter overview mode. |
 | `leaveoverview` | - | Leave overview mode. |
+| `toggleworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Toggle the draggable workspace overview. `all` includes empty tags, `occupied` shows only occupied tags, and the `scroll_*` variants use the scrolling layout. |
+| `enterworkspaceoverview` | `[all\|occupied\|scroll_all\|scroll_occupied]` | Enter the draggable workspace overview with the selected scope and layout. |
+| `leaveworkspaceoverview` | - | Leave the draggable workspace overview. |
 | `togglejump` | - | Toggle overview with jump mode. |
 | `create_virtual_output` | - | Create a headless monitor (for VNC/Sunshine). |
 | `destroy_all_virtual_output` | - | Destroy all virtual monitors. |

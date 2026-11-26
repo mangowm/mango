@@ -17,11 +17,13 @@
 #include "mango/layout/layout.h"
 #include "mango/layout/overview.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
 #include "mango/overview/overview.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <wlr/backend.h>
@@ -249,8 +251,16 @@ int32_t focus_direction(const Arg *arg) {
 		return 0;
 
 	Client *sel = server.selected_monitor->sel;
-	if (is_monocle_layout(server.selected_monitor) && sel && !sel->isfloating &&
+	if (!config.focus_cross_monitor &&
+		is_monocle_layout(server.selected_monitor) && sel && !sel->isfloating &&
 		(arg->i == LEFT || arg->i == RIGHT)) {
+		Client *tab_target = tab_get_adjacent_member(sel, arg->i == RIGHT);
+		if (tab_target) {
+			client_focus(tab_target, 1);
+			if (config.warpcursor)
+				pointer_warp_to_client(tab_target);
+			return 0;
+		}
 		Arg a = *arg;
 		a.i = (arg->i == LEFT) ? PREV : NEXT;
 		return focus_stack(&a);
@@ -685,7 +695,6 @@ int32_t increase_outer_vertical_gap(const Arg *arg) {
 
 int32_t set_master_factor(const Arg *arg) {
 	float f;
-	Client *c = NULL;
 
 	if (!arg || !server.selected_monitor ||
 		!server.selected_monitor->pertag
@@ -699,13 +708,8 @@ int32_t set_master_factor(const Arg *arg) {
 	if (f < 0.1 || f > 0.9)
 		return 0;
 
-	server.selected_monitor->pertag
-		->mfacts[get_mon_curtag(server.selected_monitor)] = f;
-	wl_list_for_each(c, &server.clients, link) {
-		if (VISIBLEON(c, server.selected_monitor) && ISTILED(c)) {
-			c->master_mfact_per = f;
-		}
-	}
+	tag_ratio_state_set_master_mfact(
+		server.selected_monitor, get_mon_curtag(server.selected_monitor), f);
 	arrange(server.selected_monitor, false, false);
 	return 0;
 }
@@ -749,6 +753,7 @@ int32_t smart_kill_client(const Arg *arg) {
 	client_reparent_group(c);
 	client_focus(client_focus_top(server.selected_monitor), 1);
 	arrange(c->mon, false, false);
+	workspace_overview_client_tags_changed(c);
 	return 0;
 }
 
@@ -776,7 +781,7 @@ int32_t move_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, 1);
+		client_set_floating(c, 1, false);
 
 	switch (arg->ui) {
 	case NUM_TYPE_MINUS:
@@ -851,7 +856,7 @@ int32_t resize_window(const Arg *arg) {
 			offsety = arg->i2;
 			break;
 		}
-		resize_tile_client(c, false, offsetx, offsety, 0);
+		resize_tile_client(c, false, offsetx, offsety);
 		config.animations = animations_state_backup;
 		return 0;
 	}
@@ -925,8 +930,11 @@ int32_t restore_minimized(const Arg *arg) {
 	if (!c)
 		return 0;
 
+	bool isfloating_before_scratchpad = c->isfloating_before_scratchpad;
+
 	/* Clear scratchpad & minimized state */
 	c->is_in_scratchpad = 0;
+	c->isfloating_before_scratchpad = 0;
 	c->isnamedscratchpad = 0;
 	client_pending_minimized_state(c, 0);
 	c->iscustomsize = 0;
@@ -939,10 +947,11 @@ int32_t restore_minimized(const Arg *arg) {
 	c->oldtags = c->tags;
 	c->mon = server.selected_monitor;
 
-	client_set_floating(c, 0);
+	c->is_pending_open_animation = true;
+	client_set_floating(c, isfloating_before_scratchpad, true);
 	client_update_border_color(c);
-	arrange(c->mon, false, false);
 	client_focus(c, 1);
+	workspace_overview_client_tags_changed(c);
 	pointer_warp_to_client(c);
 	return 0;
 }
@@ -1092,7 +1101,7 @@ int32_t smart_move_window(const Arg *arg) {
 	if (!c || c->isfullscreen || !c->mon)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nx = c->geom.x;
 	ny = c->geom.y;
 
@@ -1199,7 +1208,7 @@ int32_t smart_resize_window(const Arg *arg) {
 	if (!c || c->isfullscreen)
 		return 0;
 	if (!c->isfloating)
-		client_set_floating(c, true);
+		client_set_floating(c, true, false);
 	nw = c->geom.width;
 	nh = c->geom.height;
 
@@ -1430,8 +1439,6 @@ int32_t switch_keyboard_layout(const Arg *arg) {
 
 		wlr_keyboard_notify_modifiers(tkb, depressed, latched, locked_mods,
 									  next);
-		wlr_seat_set_keyboard(server.seat, tkb);
-		wlr_seat_keyboard_notify_modifiers(server.seat, &tkb->modifiers);
 	}
 
 	printstatus(IPC_WATCH_KB_LAYOUT);
@@ -1508,15 +1515,13 @@ int32_t tag(const Arg *arg) {
 }
 
 int32_t tag_monitor(const Arg *arg) {
-	Monitor *m = NULL, *cm = NULL, *oldmon = NULL;
+	Monitor *m = NULL, *cm = NULL;
 	if (!server.selected_monitor)
 		return 0;
 	Client *c = arg->tc ? arg->tc : client_focus_top(server.selected_monitor);
 
 	if (!c)
 		return 0;
-
-	oldmon = c->mon;
 
 	if (arg->i == MON_NEXT || arg->i == MON_PREV) {
 		m = monitor_from_cycle(arg->i);
@@ -1547,33 +1552,17 @@ int32_t tag_monitor(const Arg *arg) {
 		return 0;
 	}
 
-	if (c == oldmon->sel) {
-		oldmon->sel = NULL;
-	}
+	if (!client_set_monitor_adapted(c, m, newtags, true))
+		return 0;
 
-	client_set_monitor(c, m, newtags, true);
-	client_update_oldmonname_record(c, m);
-
-	reset_foreign_tolevel(c, oldmon, c->mon);
-
-	c->float_geom.width =
-		(int32_t)(c->float_geom.width * c->mon->w.width / oldmon->w.width);
-	c->float_geom.height =
-		(int32_t)(c->float_geom.height * c->mon->w.height / oldmon->w.height);
 	set_selected_monitor(c->mon);
-	c->float_geom = client_center_geometry(c, c->mon, c->float_geom, 0, 0);
+	target = get_tags_first_tag(c->tags);
 
+	client_switch_view(&(Arg){.ui = target}, true);
+	client_focus(c, 1);
 	if (c->isfloating) {
-		c->geom = c->float_geom;
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		resize(c, c->geom, (ResizeOpts){.interact = 1});
 	} else {
-		set_selected_monitor(c->mon);
-		target = get_tags_first_tag(c->tags);
-		client_switch_view(&(Arg){.ui = target}, true);
-		client_focus(c, 1);
 		arrange(server.selected_monitor, false, false);
 	}
 	if (config.warpcursor) {
@@ -1691,7 +1680,8 @@ int32_t toggle_render_border(const Arg *arg) {
 
 int32_t toggle_scratchpad(const Arg *arg) {
 	Client *c = NULL;
-	bool hit = false;
+	Client *shown = NULL;
+	Client *hidden = NULL;
 	Client *tmp = NULL;
 
 	if (server.selected_monitor && server.selected_monitor->isoverview)
@@ -1712,29 +1702,76 @@ int32_t toggle_scratchpad(const Arg *arg) {
 		if (c->isnamedscratchpad)
 			continue;
 
-		if (hit)
-			continue;
-
-		hit = switch_scratchpad_client_state(c);
+		if (!shown && SCRATCHPAD_SHOWN(c))
+			shown = c;
+		else if (c->is_in_scratchpad)
+			hidden = c; // LIFO insertion puts the oldest scratchpad last.
 	}
+
+	if (shown)
+		switch_scratchpad_client_state(shown);
+	else if (hidden)
+		switch_scratchpad_client_state(hidden);
 	return 0;
+}
+
+static void special_tag_migrate_clients(Monitor *target) {
+	bool layout_copied = false;
+	Client *c;
+
+	wl_list_for_each(c, &server.clients, link) {
+		if (!c->mon || !c->mon->wlr_output || c->mon == target ||
+			c->iskilling || !(c->tags & TAG0_MASK)) {
+			continue;
+		}
+
+		Monitor *oldmon = c->mon;
+		if (!layout_copied) {
+			monitor_copy_tag_layout(target, oldmon, 0);
+			layout_copied = true;
+		}
+		client_set_monitor_adapted(c, target, TAG0_MASK, false);
+	}
+}
+
+static uint32_t special_tag_previous_tagset(const Monitor *m) {
+	uint32_t previous = m->tagset[m->seltags ^ 1] & TAGMASK;
+	return previous
+			   ? previous
+			   : (m->pertag->prevtag ? (1U << (m->pertag->prevtag - 1)) : 1);
+}
+
+static void special_tag_prepare_target(Monitor *target) {
+	if (!config.special_tag_cross_monitor || !target || !target->wlr_output ||
+		!target->wlr_output->enabled) {
+		return;
+	}
+
+	Monitor *m;
+	wl_list_for_each(m, &server.monitors, link) {
+		if (m == target || !m->wlr_output || !m->wlr_output->enabled ||
+			m->isoverview || !is_special_active(m)) {
+			continue;
+		}
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, false);
+	}
+
+	special_tag_migrate_clients(target);
 }
 
 // toggle the special workspace view on a given monitor
 void toggle_special_tag_mon(Monitor *m) {
-	if (!m || m->isoverview)
+	if (!m || m->isoverview || workspace_overview_is_active())
 		return;
 
 	set_selected_monitor(m);
 	if (is_special_active(m)) {
 		/* Toggle back to previous tagset (supports multi-tag views) */
-		uint32_t prev_set = m->tagset[m->seltags ^ 1] & TAGMASK;
-		uint32_t target =
-			prev_set
-				? prev_set
-				: (m->pertag->prevtag ? (1 << (m->pertag->prevtag - 1)) : 1);
-		client_switch_view(&(Arg){.ui = target}, true);
+		client_view_on_monitor(&(Arg){.ui = special_tag_previous_tagset(m)},
+							   true, m, true);
 	} else {
+		special_tag_prepare_target(m);
 		/* Switch to tag 0 */
 		client_switch_view(&(Arg){.ui = TAG0_MASK}, true);
 	}
@@ -1748,7 +1785,7 @@ int32_t toggle_special_tag(const Arg *arg) {
 }
 
 static void tag_special_tag_internal(const Arg *arg, bool silent) {
-	if (!server.selected_monitor)
+	if (!server.selected_monitor || workspace_overview_is_active())
 		return;
 	Client *c = arg->tc ? arg->tc : server.selected_monitor->sel;
 	if (!c)
@@ -1769,6 +1806,7 @@ static void tag_special_tag_internal(const Arg *arg, bool silent) {
 
 	} else {
 		/* Send window to tag 0 */
+		special_tag_prepare_target(m);
 		if (silent)
 			tag_silent(&(Arg){.ui = TAG0_MASK, .tc = c});
 		else {
@@ -1820,7 +1858,7 @@ int32_t toggle_floating(const Arg *arg) {
 		isfloating = !sel->isfloating;
 	}
 
-	client_set_floating(sel, isfloating);
+	client_set_floating(sel, isfloating, false);
 	return 0;
 }
 
@@ -1836,9 +1874,9 @@ int32_t toggle_fullscreen(const Arg *arg) {
 	sel->isnamedscratchpad = 0;
 
 	if (sel->isfullscreen)
-		client_apply_fullscreen(sel, 0, true);
+		client_set_fullscreen(sel, 0, true);
 	else
-		client_apply_fullscreen(sel, 1, true);
+		client_set_fullscreen(sel, 1, true);
 	return 0;
 }
 
@@ -1856,6 +1894,8 @@ int32_t toggle_global(const Arg *arg) {
 	}
 	c->isglobal ^= 1;
 	client_update_border_color(c);
+	if (workspace_overview_is_active_on(c->mon))
+		arrange(c->mon, false, false);
 	return 0;
 }
 
@@ -1912,6 +1952,8 @@ int32_t toggle_overlay(const Arg *arg) {
 
 	client_reparent_group(c);
 	client_update_border_color(c);
+	if (workspace_overview_is_active_on(c->mon))
+		arrange(c->mon, false, false);
 	return 0;
 }
 
@@ -1948,39 +1990,37 @@ int32_t toggle_tag(const Arg *arg) {
 		client_reparent_group(sel);
 		client_focus(client_focus_top(server.selected_monitor), 1);
 		arrange(server.selected_monitor, false, false);
+		workspace_overview_client_tags_changed(sel);
 	}
 	printstatus(IPC_WATCH_ARRANGGE);
 	return 0;
 }
 
-int32_t toggle_view(const Arg *arg) {
-	if (!server.selected_monitor)
-		return 0;
-	if (server.selected_monitor->isoverview)
-		return 0;
-
+void toggle_view_on_monitor(const Arg *arg, Monitor *m) {
 	uint32_t newtagset;
 	uint32_t target;
-	Client *c = NULL;
+
+	if (!m || m->isoverview)
+		return;
 
 	target = arg->ui == 0 ? ~0 & TAGMASK : arg->ui;
 
-	newtagset =
-		server.selected_monitor->tagset[server.selected_monitor->seltags] ^
-		(target & TAGMASK);
+	newtagset = m->tagset[m->seltags] ^ (target & TAGMASK);
 
 	if (newtagset) {
-		server.selected_monitor->tagset[server.selected_monitor->seltags] =
-			newtagset;
-		client_focus(client_focus_top(server.selected_monitor), 1);
-		wl_list_for_each(c, &server.clients, link) {
-			if (VISIBLEON(c, server.selected_monitor) && ISTILED(c)) {
-				set_size_per(server.selected_monitor, c, true);
-			}
-		}
-		arrange(server.selected_monitor, false, false);
+		uint32_t oldtag = m->pertag->curtag;
+		m->tagset[m->seltags] = newtagset;
+		m->pertag->curtag = get_tags_first_tag_num(newtagset);
+		if (oldtag != m->pertag->curtag)
+			m->pertag->prevtag = oldtag;
+		client_focus(client_focus_top(m), 1);
+		arrange(m, false, true);
 	}
 	printstatus(IPC_WATCH_ARRANGGE);
+}
+
+int32_t toggle_view(const Arg *arg) {
+	toggle_view_on_monitor(arg, server.selected_monitor);
 	return 0;
 }
 
@@ -2310,30 +2350,33 @@ static bool overview_client_on_current_tags(Client *c, bool only_current,
 	return !only_current || c->isglobal || (c->tags & current_tags);
 }
 
-/* Enter or leave overview mode on the selected monitor. */
-static void set_overview(const Arg *arg, bool enter) {
+/* Enter or leave overview mode on the given monitor. */
+void set_overview(const Arg *arg, bool enter, Monitor *m) {
 	Client *c = NULL;
-	Client *sel = arg->tc ? arg->tc : server.selected_monitor->sel;
+	Client *sel = NULL;
 	uint32_t target = 0;
 	uint32_t visible_client_number = 0;
-	bool only_current = arg->i == 1;
+	bool only_current = false;
 	uint32_t current_tags = 0;
 
-	server.selected_monitor->isoverview = enter;
+	if (!arg || !m || m->is_ws_overview)
+		return;
+
+	only_current = arg->i == 1;
+	sel = arg->tc ? arg->tc : m->sel;
+	m->isoverview = enter;
 
 	if (!enter) {
-		server.selected_monitor->ov_tab_layout = 0;
-		title_message_bar_hide(server.selected_monitor);
-		if (server.selected_monitor->is_jump_mode)
-			finish_jump_mode(server.selected_monitor);
+		m->ov_tab_layout = 0;
+		title_message_bar_hide(m);
+		if (m->is_jump_mode)
+			finish_jump_mode(m);
 	}
 
 	if (enter) {
-		current_tags =
-			server.selected_monitor->tagset[server.selected_monitor->seltags] &
-			TAGMASK;
+		current_tags = m->tagset[m->seltags] & TAGMASK;
 		wl_list_for_each(c, &server.clients, link) {
-			if (!c || c->mon != server.selected_monitor)
+			if (!c || c->mon != m)
 				continue;
 			if (!client_is_unmanaged(c) && !client_is_x11_popup(c) &&
 				!c->isminimized && !c->isunglobal && !(c->tags & TAG0_MASK) &&
@@ -2341,28 +2384,22 @@ static void set_overview(const Arg *arg, bool enter) {
 				visible_client_number++;
 		}
 		if (visible_client_number > 0) {
-			server.selected_monitor->ovbk_current_tagset =
-				server.selected_monitor
-					->tagset[server.selected_monitor->seltags];
-			server.selected_monitor->ovbk_prev_tagset =
-				server.selected_monitor
-					->tagset[server.selected_monitor->seltags ^ 1];
+			m->ovbk_current_tagset = m->tagset[m->seltags];
+			m->ovbk_prev_tagset = m->tagset[m->seltags ^ 1];
 			target = only_current ? current_tags : (~0 & TAGMASK);
 		} else {
-			server.selected_monitor->isoverview = false;
-			server.selected_monitor->ov_tab_layout = 0;
-			title_message_bar_hide(server.selected_monitor);
+			m->isoverview = false;
+			m->ov_tab_layout = 0;
+			title_message_bar_hide(m);
 			return;
 		}
 	} else if (sel && (sel->tags & TAGMASK) != 0) {
 		target = get_tags_first_tag(sel->tags);
 	} else {
 		target =
-			server.selected_monitor->ovbk_current_tagset
-				? (server.selected_monitor->ovbk_current_tagset & TAGMASK)
-				: (server.selected_monitor->pertag->prevtag
-					   ? (1 << (server.selected_monitor->pertag->prevtag - 1))
-					   : 1);
+			m->ovbk_current_tagset
+				? (m->ovbk_current_tagset & TAGMASK)
+				: (m->pertag->prevtag ? (1 << (m->pertag->prevtag - 1)) : 1);
 		if (!target)
 			target = 1;
 	}
@@ -2378,7 +2415,7 @@ static void set_overview(const Arg *arg, bool enter) {
 		}
 
 		wl_list_for_each(c, &server.clients, link) {
-			if (!c || c->mon != server.selected_monitor)
+			if (!c || c->mon != m)
 				continue;
 			if (client_is_unmanaged(c) || client_is_x11_popup(c) ||
 				c->isunglobal || c->isminimized || (c->tags & TAG0_MASK) ||
@@ -2386,8 +2423,7 @@ static void set_overview(const Arg *arg, bool enter) {
 				!overview_client_on_current_tags(c, only_current, current_tags))
 				continue;
 			c->animation.overining = true;
-			if (!server.selected_monitor->is_jump_mode &&
-				!server.selected_monitor->ov_normal_mode)
+			if (!m->is_jump_mode && !m->ov_normal_mode)
 				/* Tab layout: skip view arrangement first; set it when the
 				 * unified rearrange runs after entering. */
 				c->animation.overview_enter_anim_set = true;
@@ -2397,38 +2433,34 @@ static void set_overview(const Arg *arg, bool enter) {
 			overview_backup(c);
 		}
 	} else {
-		server.selected_monitor->ov_normal_mode =
+		m->ov_normal_mode =
 			0; /* Clears hot-area normal mode when exiting overview. */
 
-		server.selected_monitor->tagset[server.selected_monitor->seltags] =
-			target;
+		m->tagset[m->seltags] = target;
 		wl_list_for_each(c, &server.clients, link) {
-			if (c && c->mon == server.selected_monitor && !c->iskilling &&
-				!client_is_unmanaged(c) && !c->isunglobal && !c->isminimized &&
-				!client_is_x11_popup(c) && client_surface(c)->mapped &&
-				!(c->tags & TAG0_MASK)) {
+			if (c && c->mon == m && !c->iskilling && !client_is_unmanaged(c) &&
+				!c->isunglobal && !c->isminimized && !client_is_x11_popup(c) &&
+				client_surface(c)->mapped && !(c->tags & TAG0_MASK)) {
 				overview_restore(c, &(Arg){.ui = target});
 			}
 		}
 	}
 
-	client_switch_view(&(Arg){.ui = target}, false);
+	client_view_on_monitor(&(Arg){.ui = target}, false, m, true);
 
 	/* Tab layout: rearrange after entering. */
-	if (enter && !server.selected_monitor->is_jump_mode &&
-		!server.selected_monitor->ov_normal_mode) {
+	if (enter && !m->is_jump_mode && !m->ov_normal_mode) {
 
 		Client *cc = NULL;
 		wl_list_for_each(cc, &server.clients, link) {
-			if (cc && cc->mon == server.selected_monitor &&
-				!client_is_unmanaged(cc) && !client_is_x11_popup(cc) &&
-				!(cc->tags & TAG0_MASK))
+			if (cc && cc->mon == m && !client_is_unmanaged(cc) &&
+				!client_is_x11_popup(cc) && !(cc->tags & TAG0_MASK))
 				cc->animation.overview_enter_anim_set = false;
 		}
-		arrange(server.selected_monitor, true, false);
+		arrange(m, true, false);
 	}
-	fix_mon_tagset_from_overview(server.selected_monitor);
-	refresh_monitors_workspaces_status(server.selected_monitor);
+	fix_mon_tagset_from_overview(m);
+	refresh_monitors_workspaces_status(m);
 
 	if (!enter && sel && (sel->tags & target)) {
 		client_focus(sel, 1);
@@ -2441,7 +2473,8 @@ int32_t toggle_overview(const Arg *arg) {
 	if (!server.selected_monitor || server.grab_client)
 		return 0;
 
-	set_overview(arg, !server.selected_monitor->isoverview);
+	set_overview(arg, !server.selected_monitor->isoverview,
+				 server.selected_monitor);
 	return 0;
 }
 
@@ -2450,7 +2483,7 @@ int32_t enter_overview(const Arg *arg) {
 		server.selected_monitor->isoverview)
 		return 0;
 
-	set_overview(arg, true);
+	set_overview(arg, true, server.selected_monitor);
 	return 0;
 }
 
@@ -2459,12 +2492,15 @@ int32_t leave_overview(const Arg *arg) {
 		!server.selected_monitor->isoverview)
 		return 0;
 
-	set_overview(arg, false);
+	set_overview(arg, false, server.selected_monitor);
 	return 0;
 }
 
 int32_t toggle_jump(const Arg *arg) {
 	if (!server.selected_monitor)
+		return 0;
+
+	if (server.selected_monitor->is_ws_overview)
 		return 0;
 
 	if (!server.selected_monitor->isoverview) {
@@ -2671,7 +2707,7 @@ int32_t toggle_all_floating(const Arg *arg) {
 			}
 
 			if (c->isfloating != should_floating) {
-				client_set_floating(c, should_floating);
+				client_set_floating(c, should_floating, false);
 			}
 		}
 	}

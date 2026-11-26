@@ -12,6 +12,9 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/util/box.h>
 
+struct TagTabState;
+struct TagRatioState;
+
 #define INSIDEMON(A)                                                           \
 	(A->geom.x >= A->mon->m.x && A->geom.y >= A->mon->m.y &&                   \
 	 A->geom.x + A->geom.width <= A->mon->m.x + A->mon->m.width &&             \
@@ -33,6 +36,8 @@ struct Monitor {
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
+	uint64_t frame_serial;		/* Incremented for every output frame. */
+	uint64_t last_resize_frame; /* Last frame that applied a resize. */
 	struct wl_listener destroy_lock_surface;
 	struct wl_listener commit_lock_surface;
 	struct wlr_session_lock_surface_v1 *lock_surface;
@@ -60,6 +65,8 @@ struct Monitor {
 	uint32_t ovbk_prev_tagset;
 	Client *sel, *prevsel;
 	int32_t isoverview;
+	bool is_ws_overview;
+	WorkspaceOverviewScope workspace_overview_scope;
 	int32_t is_jump_mode;
 	int32_t is_in_hotarea;
 	int32_t ov_normal_mode; /* Uses the normal grid layout when entering via the
@@ -111,6 +118,8 @@ struct Pertag {
 	const Layout *config_ltidxs[PERTAG_SLOTS];
 	const Layout *ltidxs[PERTAG_SLOTS];
 	struct TagScrollerState *scroller_state[PERTAG_SLOTS];
+	struct TagTabState *tab_state[PERTAG_SLOTS];
+	struct TagRatioState *tag_ratio_state[PERTAG_SLOTS];
 };
 
 bool is_special_active(const Monitor *m);
@@ -128,6 +137,8 @@ void special_sync_top_layer(bool special_active);
 uint32_t get_tag_status(uint32_t tag, Monitor *m);
 uint32_t get_tags_first_tag_num(uint32_t source_tags);
 uint32_t get_tags_first_tag(uint32_t source_tags);
+void monitor_copy_tag_layout(Monitor *target, const Monitor *source,
+							 uint32_t tag);
 Monitor *monitor_at_point(double x, double y);
 Monitor *get_monitor_nearest_to(int32_t lx, int32_t ly);
 bool match_monitor_spec(char *spec, Monitor *m);

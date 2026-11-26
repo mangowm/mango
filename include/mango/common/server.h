@@ -139,7 +139,6 @@ struct MangoServer {
 	double grab_pointer_x, grab_pointer_y; /* pointer at grab start */
 	int32_t drag_begin_cursor_x, drag_begin_cursor_y; /* client-relative */
 	bool start_drag_window;
-	int32_t last_apply_drag_time;
 
 	bool group_bar_drag_pending;
 	Client *group_bar_drag_client;
@@ -187,15 +186,6 @@ struct MangoServer {
 	uint32_t locked_modifiers;
 	void *exclusive_focus;
 	pid_t child_pid;
-
-	/* Pre-baked animation curves */
-	struct dvec2 *baked_points_move;
-	struct dvec2 *baked_points_open;
-	struct dvec2 *baked_points_tag;
-	struct dvec2 *baked_points_close;
-	struct dvec2 *baked_points_focus;
-	struct dvec2 *baked_points_opafadein;
-	struct dvec2 *baked_points_opafadeout;
 
 	/* Cursor hiding / input keep-alive */
 	struct wl_event_source *hide_cursor_source;

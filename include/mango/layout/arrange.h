@@ -7,26 +7,23 @@
 
 void set_size_per(Monitor *m, Client *c, bool reset_proportion);
 
-uint32_t drag_refresh_interval_ms(const Monitor *m);
-
 void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
-								   int32_t offsety, uint32_t time,
-								   int32_t type);
+								   int32_t offsety, int32_t type);
 
 void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
-								 int32_t offsety, uint32_t time, int32_t type);
+								 int32_t offsety, int32_t type);
 
 void resize_tile_dwindle(Client *gc, bool isdrag, int32_t offsetx,
-						 int32_t offsety, uint32_t time, bool isvertical);
+						 int32_t offsety, bool isvertical);
 
 void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
-						   int32_t offsety, uint32_t time);
+						   int32_t offsety);
 
 void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
-						  int32_t offsety, uint32_t time, bool isvertical);
+						  int32_t offsety, bool isvertical);
 
 void resize_tile_client(Client *gc, bool isdrag, int32_t offsetx,
-						int32_t offsety, uint32_t time);
+						int32_t offsety);
 
 void check_size_per_valid(Client *c);
 /* If there are no calculation omissions,

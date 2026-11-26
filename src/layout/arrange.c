@@ -7,23 +7,15 @@
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
 #include "mango/layout/scroll.h"
+#include "mango/layout/tag_ratio.h"
 #include "mango/layout/vertical.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
 #include "mango/manage/tab.h"
+#include "mango/workspace_overview/workspace_overview.h"
 #include <assert.h>
 #include <wlr/types/wlr_cursor.h>
-
-/* Minimum interval between drag layout updates: one per presented frame. */
-uint32_t drag_refresh_interval_ms(const Monitor *m) {
-	int32_t refresh_mhz = (m && m->wlr_output) ? m->wlr_output->refresh : 0;
-	if (refresh_mhz <= 0)
-		refresh_mhz = 60000;
-
-	int32_t ms = (int32_t)(1000.0 / ((double)refresh_mhz / 1000.0));
-	return ms > 0 ? (uint32_t)ms : 1;
-}
 
 void set_size_per(Monitor *m, Client *c, bool reset_proportion) {
 	Client *fc = NULL;
@@ -107,8 +99,7 @@ static void persist_tile_size_weights(Monitor *m) {
 }
 
 void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
-								   int32_t offsety, uint32_t time,
-								   int32_t type) {
+								   int32_t offsety, int32_t type) {
 	Client *tc = NULL;
 	float delta_x, delta_y;
 	Client *next = NULL;
@@ -323,30 +314,17 @@ void resize_tile_master_horizontal(Client *gc, bool isdrag, int32_t offsetx,
 		gc->master_inner_per = new_master_inner_per;
 		gc->stack_inner_per = new_stack_inner_per;
 
-		/* Broadcasts master_mfact_per to all tiled windows. */
-		wl_list_for_each(tc, &server.clients, link) {
-			if (VISIBLEON(tc, gc->mon) && ISTILED(tc))
-				tc->master_mfact_per = new_master_mfact_per;
-		}
+		tag_ratio_state_set_master_mfact(gc->mon, get_mon_curtag(gc->mon),
+										 new_master_mfact_per);
 
 		persist_tile_size_weights(gc->mon);
 
-		if (!isdrag) {
-			arrange(gc->mon, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(gc->mon)) {
-			arrange(gc->mon, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(gc->mon, false, false);
 	}
 }
 
 void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
-								 int32_t offsety, uint32_t time, int32_t type) {
+								 int32_t offsety, int32_t type) {
 	Client *tc = NULL;
 	float delta_x, delta_y;
 	Client *next = NULL;
@@ -506,46 +484,28 @@ void resize_tile_master_vertical(Client *gc, bool isdrag, int32_t offsetx,
 		gc->master_inner_per = new_master_inner_per;
 		gc->stack_inner_per = new_stack_inner_per;
 
-		/* Broadcasts master_mfact_per. */
-		wl_list_for_each(tc, &server.clients, link) {
-			if (VISIBLEON(tc, gc->mon) && ISTILED(tc))
-				tc->master_mfact_per = new_master_mfact_per;
-		}
+		tag_ratio_state_set_master_mfact(gc->mon, get_mon_curtag(gc->mon),
+										 new_master_mfact_per);
 
 		persist_tile_size_weights(gc->mon);
 
-		if (!isdrag) {
-			arrange(gc->mon, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >=
-				drag_refresh_interval_ms(gc->mon)) {
-			arrange(gc->mon, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(gc->mon, false, false);
 	}
 }
 
 void resize_tile_dwindle(Client *gc, bool isdrag, int32_t offsetx,
-						 int32_t offsety, uint32_t time, bool isvertical) {
+						 int32_t offsety, bool isvertical) {
 
 	if (!isdrag) {
 		dwindle_resize_client_step(gc->mon, gc, offsetx, offsety);
 		return;
 	}
 
-	if (server.last_apply_drag_time == 0 ||
-		time - server.last_apply_drag_time >=
-			drag_refresh_interval_ms(gc->mon)) {
-		dwindle_resize_client(gc->mon, gc);
-		server.last_apply_drag_time = time;
-	}
+	dwindle_resize_client(gc->mon, gc);
 }
 
 void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
-						   int32_t offsety, uint32_t time) {
+						   int32_t offsety) {
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen)
 		return;
 	Monitor *m = gc->mon;
@@ -829,21 +789,12 @@ void resize_tile_grid_fair(Client *gc, bool isdrag, int32_t offsetx,
 			}
 		}
 
-		if (!isdrag) {
-			arrange(m, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
-			arrange(m, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(m, false, false);
 	}
 }
 
 void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
-						  int32_t offsety, uint32_t time, bool isvertical) {
+						  int32_t offsety, bool isvertical) {
 
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen || !gc->mon)
 		return;
@@ -1046,21 +997,12 @@ void resize_tile_scroller(Client *gc, bool isdrag, int32_t offsetx,
 		/* Syncs back to the global fields. */
 		sync_scroller_state_to_clients(m, tag);
 
-		if (!isdrag) {
-			arrange(m, false, false);
-			return;
-		}
-
-		if (server.last_apply_drag_time == 0 ||
-			time - server.last_apply_drag_time >= drag_refresh_interval_ms(m)) {
-			arrange(m, false, false);
-			server.last_apply_drag_time = time;
-		}
+		arrange(m, false, false);
 	}
 }
 
 void resize_tile_client(Client *gc, bool isdrag, int32_t offsetx,
-						int32_t offsety, uint32_t time) {
+						int32_t offsety) {
 
 	if (!gc || gc->isfullscreen || gc->ismaximizescreen || !gc->mon)
 		return;
@@ -1068,29 +1010,34 @@ void resize_tile_client(Client *gc, bool isdrag, int32_t offsetx,
 	if (gc->mon->isoverview)
 		return;
 
+	/* Coalesce keyboard repeats and pointer motion to once per output frame. */
+	if (gc->mon->last_resize_frame == gc->mon->frame_serial)
+		return;
+	gc->mon->last_resize_frame = gc->mon->frame_serial;
+
 	const Layout *current_layout =
 		gc->mon->pertag->ltidxs[get_client_tag_idx(gc)];
 	if (current_layout->id == TILE || current_layout->id == DECK ||
 		current_layout->id == CENTER_TILE || current_layout->id == RIGHT_TILE
 
 	) {
-		resize_tile_master_horizontal(gc, isdrag, offsetx, offsety, time,
+		resize_tile_master_horizontal(gc, isdrag, offsetx, offsety,
 									  current_layout->id);
 	} else if (current_layout->id == VERTICAL_TILE ||
 			   current_layout->id == VERTICAL_DECK) {
-		resize_tile_master_vertical(gc, isdrag, offsetx, offsety, time,
+		resize_tile_master_vertical(gc, isdrag, offsetx, offsety,
 									current_layout->id);
 	} else if (current_layout->id == SCROLLER) {
-		resize_tile_scroller(gc, isdrag, offsetx, offsety, time, false);
+		resize_tile_scroller(gc, isdrag, offsetx, offsety, false);
 	} else if (current_layout->id == VERTICAL_SCROLLER) {
-		resize_tile_scroller(gc, isdrag, offsetx, offsety, time, true);
+		resize_tile_scroller(gc, isdrag, offsetx, offsety, true);
 	} else if (current_layout->id == DWINDLE) {
-		resize_tile_dwindle(gc, isdrag, offsetx, offsety, time, true);
+		resize_tile_dwindle(gc, isdrag, offsetx, offsety, true);
 	} else if (current_layout->id == GRID ||
 			   current_layout->id == VERTICAL_GRID ||
 			   current_layout->id == FAIR ||
 			   current_layout->id == VERTICAL_FAIR) {
-		resize_tile_grid_fair(gc, isdrag, offsetx, offsety, time);
+		resize_tile_grid_fair(gc, isdrag, offsetx, offsety);
 	}
 }
 
@@ -1123,6 +1070,9 @@ void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
 	bool centered = m->pertag->ltidxs[tag]->id == CENTER_TILE;
 
 	wl_list_for_each(c, &server.clients, link) {
+		if (m->is_ws_overview && c->wsov_hidden &&
+			!workspace_overview_is_closing_on(m))
+			continue;
 		if (!VISIBLEON(c, m) || !ISFAKETILED(c))
 			continue;
 
@@ -1163,6 +1113,11 @@ void reset_size_per_mon(Monitor *m, double total_left_stack_weight,
 	}
 }
 
+static bool wsov_hidden_from_arrange(Monitor *m, Client *c) {
+	return m->is_ws_overview && c->wsov_hidden &&
+		   !workspace_overview_is_closing_on(m);
+}
+
 void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 								  bool from_view, bool only_calculate) {
 	Client *c = NULL;
@@ -1183,18 +1138,18 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 	m->hide_clients = 0;
 
 	uint32_t tag = get_mon_curtag(m);
-	struct TagScrollerState *st = m->pertag->scroller_state[tag];
-
 	const Layout *cur_layout = m->pertag->ltidxs[tag];
+	if (layout_uses_tag_ratios(cur_layout))
+		tag_ratio_state_begin(m, tag, from_view);
+
+	struct TagScrollerState *st = m->pertag->scroller_state[tag];
 	if (cur_layout->id == SCROLLER || cur_layout->id == VERTICAL_SCROLLER) {
 		update_scroller_state(m);
 	}
 
 	wl_list_for_each(c, &server.clients, link) {
-		if (from_view && (c->isglobal || c->isunglobal)) {
-			set_size_per(m, c, true);
-		}
-
+		if (wsov_hidden_from_arrange(m, c))
+			continue;
 		if (c->group_bar && c->group_bar->scene->node.enabled) {
 			client_check_tab_node_visible(c);
 		}
@@ -1212,10 +1167,6 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 		}
 
 		if (VISIBLEON(c, m)) {
-			if (from_view && !client_only_in_one_tag(c)) {
-				set_size_per(m, c, true);
-			}
-
 			if (!c->isunglobal)
 				m->visible_clients++;
 
@@ -1242,6 +1193,8 @@ void pre_calculate_before_arrange(Monitor *m, bool want_animation,
 
 	wl_list_for_each(c, &server.clients, link) {
 		if (c->iskilling)
+			continue;
+		if (wsov_hidden_from_arrange(m, c))
 			continue;
 
 		if (c->mon == m) {
@@ -1323,6 +1276,8 @@ void tag_gather_reset_slot(Monitor *m, uint32_t tag) {
 	m->pertag->open_as_floating[tag] = 0;
 	m->pertag->dwindle_root[tag] = NULL;
 	m->pertag->scroller_state[tag] = NULL;
+	m->pertag->tab_state[tag] = NULL;
+	tag_ratio_state_reset(m, tag);
 
 	for (i = 0; i < config.tag_rules_count; i++) {
 		const ConfigTagRule *tr = &config.tag_rules[i];
@@ -1351,6 +1306,8 @@ void tag_gather_move_pertag(Monitor *m, uint32_t dst, uint32_t src) {
 	m->pertag->config_ltidxs[dst] = m->pertag->config_ltidxs[src];
 	m->pertag->ltidxs[dst] = m->pertag->ltidxs[src];
 	m->pertag->scroller_state[dst] = m->pertag->scroller_state[src];
+	m->pertag->tab_state[dst] = m->pertag->tab_state[src];
+	tag_ratio_state_move(m, dst, src);
 	tag_gather_reset_slot(m, src);
 }
 
@@ -1420,32 +1377,29 @@ void tag_gather_apply(Monitor *m) {
 		tag_gather_reset_slot(m, i);
 }
 
-Layout overviewlayout = {"󰃇", overview, NULL, "overview"};
+Layout overviewlayout = {"󰃇", overview, "overview"};
 
 Layout layouts[] = {
 	// At least two are required; fewer than two cannot be removed.
 	/* symbol     arrange function   name */
-	{"T", tile, tile_predict, "tile", TILE},				 // Tiled layout
-	{"S", scroller, scroller_predict, "scroller", SCROLLER}, // Scroll layout
-	{"G", grid, grid_predict, "grid", GRID},				 // Grid layout
-	{"M", monocle, monocle_predict, "monocle", MONOCLE},	 // Single layout
-	{"K", deck, deck_predict, "deck", DECK},				 // Card layout
-	{"CT", center_tile, center_tile_predict, "center_tile",
-	 CENTER_TILE}, // Centered layout
-	{"RT", right_tile, right_tile_predict, "right_tile",
-	 RIGHT_TILE}, // Right layout
-	{"VS", vertical_scroller, vertical_scroller_predict, "vertical_scroller",
+	{"T", tile, "tile", TILE},						 // Tiled layout
+	{"S", scroller, "scroller", SCROLLER},			 // Scroll layout
+	{"G", grid, "grid", GRID},						 // Grid layout
+	{"M", monocle, "monocle", MONOCLE},				 // Single layout
+	{"K", deck, "deck", DECK},						 // Card layout
+	{"CT", center_tile, "center_tile", CENTER_TILE}, // Centered layout
+	{"RT", right_tile, "right_tile", RIGHT_TILE},	 // Right layout
+	{"VS", vertical_scroller, "vertical_scroller",
 	 VERTICAL_SCROLLER}, // Vertical scroll layout
-	{"VT", vertical_tile, vertical_tile_predict, "vertical_tile",
+	{"VT", vertical_tile, "vertical_tile",
 	 VERTICAL_TILE}, // Vertical tiled layout
-	{"VG", vertical_grid, vertical_grid_predict, "vertical_grid",
+	{"VG", vertical_grid, "vertical_grid",
 	 VERTICAL_GRID}, // Vertical grid layout
-	{"VK", vertical_deck, vertical_deck_predict, "vertical_deck",
+	{"VK", vertical_deck, "vertical_deck",
 	 VERTICAL_DECK}, // Vertical card layout
-	{"DW", dwindle, dwindle_predict, "dwindle", DWINDLE},
-	{"F", fair, fair_predict, "fair", FAIR},
-	{"VF", vertical_fair, vertical_fair_predict, "vertical_fair",
-	 VERTICAL_FAIR},
+	{"DW", dwindle, "dwindle", DWINDLE},
+	{"F", fair, "fair", FAIR},
+	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
 };
 
 bool special_handle_empty_view(Monitor *m, bool from_view) {
@@ -1502,7 +1456,11 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	if (m->isoverview) {
 		overviewlayout.arrange(m);
 	} else {
-		m->pertag->ltidxs[get_mon_curtag(m)]->arrange(m);
+		uint32_t tag = get_mon_curtag(m);
+		const Layout *layout = m->pertag->ltidxs[tag];
+		layout->arrange(m);
+		if (layout_uses_tag_ratios(layout))
+			sync_tag_ratio_state_from_clients(m, tag);
 	}
 
 	if (is_tag0) {
@@ -1523,4 +1481,5 @@ void arrange(Monitor *m, bool want_animation, bool from_view) {
 	}
 
 	printstatus(IPC_WATCH_ARRANGGE);
+	workspace_overview_layout_changed(m);
 }

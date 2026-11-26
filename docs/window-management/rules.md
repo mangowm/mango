@@ -26,6 +26,7 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 | `app_id` | string | Any | Match by application ID, supports regex |
 | `title` | string | Any | Match by window title, supports regex |
 | `is_floating` | integer | `0` / `1` | Force floating state |
+| `stay_focused` | integer | `0` / `1` | Prevent new windows and XDG/XWayland activation requests from stealing focus while this window remains visible |
 | `is_fullscreen` | integer | `0` / `1` | Force fullscreen state |
 | `is_fake_fullscreen` | integer | `0` / `1` | Force fake-fullscreen state (window stays constrained) |
 | `is_global` | integer | `0` / `1` | Open as global window (sticky across tags) |
@@ -127,6 +128,9 @@ window_rule=width:1000,height:900,app_id:yesplaymusic,title:Demons
 window_rule=global_key_binding:ctrl+alt-o,app_id:com.obsproject.Studio
 window_rule=global_key_binding:ctrl+alt-n,app_id:com.obsproject.Studio
 window_rule=is_open_silent:1,app_id:com.obsproject.Studio
+
+# Keep the focused password manager window from yielding focus automatically
+window_rule=stay_focused:1,app_id:org.keepassxc.KeePassXC
 
 # Force tearing for games
 window_rule=force_tearing:1,title:vkcube

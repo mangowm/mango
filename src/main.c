@@ -261,11 +261,12 @@ void cleanup(void) {
 
 	keyboard_group_destroy(&server.keyboard_group->destroy, NULL);
 
-	mango_im_relay_finish(server.input_method_relay);
-
 	/* If it's not destroyed manually it will cause a use-after-free of
 	 * wlr_seat. Destroy it until it's fixed in the wlroots side */
 	wlr_backend_destroy(server.backend);
+	/* Backend teardown destroys outputs and may still focus a client. Keep the
+	 * relay alive until all output destroy callbacks have completed. */
+	mango_im_relay_finish(server.input_method_relay);
 
 	wl_display_destroy(server.display);
 	/* Destroy after the wayland display (when the monitors are already
@@ -434,10 +435,6 @@ void run(char *startup_cmd, int readiness_fd) {
 	 */
 	set_selected_monitor(monitor_at_point(server.cursor->x, server.cursor->y));
 
-	/* TODO hack to get cursor to display in its initial location (100, 100)
-	 * instead of (0, 0) and then jumping. still may not be fully
-	 * initialized, as the image/coordinates are not transformed for the
-	 * monitor when displayed here */
 	wlr_cursor_warp_closest(server.cursor, NULL, server.cursor->x,
 							server.cursor->y);
 	wlr_cursor_set_xcursor(server.cursor, server.cursor_manager, "left_ptr");
@@ -473,7 +470,6 @@ void setup(void) {
 	if (server.cli_debug_log) {
 		config.log_level = WLR_DEBUG;
 	}
-	init_baked_points();
 
 	set_env_without_display();
 

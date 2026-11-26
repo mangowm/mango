@@ -22,7 +22,8 @@ void set_client_open_animation(Client *c, struct wlr_box geo);
 
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data);
-void buffer_set_effect(Client *c, BufferData data);
+void buffer_set_effect(Client *c, BufferData data,
+					   const struct wlr_box *window_clip);
 
 void client_draw_shadow(Client *c, struct ivec2 offsets);
 void client_draw_group_bar(Client *c, struct ivec2 offsets);
@@ -36,10 +37,15 @@ void client_draw_split_border(Client *c, bool hit_no_border,
 void client_draw_border(Client *c, struct ivec2 offsets);
 struct ivec2 clip_to_hide(Client *c, struct wlr_box *clip_box,
 						  struct ivec2 offsets);
+int32_t client_drop_zone(const Layout *layout, bool ismaster,
+						 int32_t visible_tiling_clients, double rel_x,
+						 double rel_y, int32_t width, int32_t height,
+						 struct wlr_box *zone);
+void client_set_drop_area_color(Client *c);
 void client_set_drop_area(Client *c);
 
 /* ---------- central rendering entry point ---------- */
-void client_apply_clip(Client *c, float factor);
+void client_set_clip(Client *c, float factor);
 void client_animation_set_progress(Client *c, double p);
 void client_animation_resume(Client *c, double remaining);
 void fadeout_client_animation_next_tick(Client *c);
@@ -49,7 +55,7 @@ bool client_animations_enabled(const Client *c);
 
 /* Applies the final window state when animation is disabled: position,
  * clipping/visibility, and geometry state are synchronized. */
-void client_apply_finish_geometry(Client *c);
+void client_set_finish_geometry(Client *c);
 void client_commit(Client *c);
 void client_set_pending_state(Client *c);
 
@@ -57,6 +63,7 @@ typedef struct ResizeOpts {
 	bool interact; // Interactive resize (window resized by mouse drag).
 	bool skip_ov_enter_anim; // Pre-arrangement stage: skip the overview enter
 							 // zoom.
+	bool skip_animation;  // Commit the final geometry without a move animation.
 	bool force_configure; // Must be sent even if the box did not change (client
 						  // ConfigureRequest).
 	uint32_t drag_edge;
@@ -68,7 +75,7 @@ void client_set_focused_opacity_animation(Client *c);
 void client_set_unfocused_opacity_animation(Client *c);
 void client_start_focus_animation(Client *c, bool focused);
 bool client_step_focus_animation(Client *c, double linear_progress);
-bool client_apply_focus_opacity(Client *c);
+bool client_set_focus_opacity(Client *c);
 bool client_draw_frame(Client *c);
 
 #endif

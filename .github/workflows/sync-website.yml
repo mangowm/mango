@@ -5,25 +5,32 @@ on:
     branches: [main]
     paths:
       - docs/**
+  release:
+    types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: sync-website
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   sync-website:
     if: github.repository == 'mangowm/mango'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ github.token }}
+          ref: main
 
       - name: Fetch tags for versioned docs
         run: git fetch origin --tags --depth=1
 
       - name: Checkout website
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: mangowm/mangowm.github.io
           path: website
