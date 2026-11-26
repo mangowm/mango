@@ -443,7 +443,6 @@ typedef struct {
 	int32_t dwindle_hsplit;
 	int32_t dwindle_preserve_split;
 	int32_t dwindle_smart_split;
-	int32_t dwindle_smart_resize;
 	int32_t dwindle_drop_simple_split;
 	int32_t dwindle_manual_split;
 	float dwindle_split_ratio;

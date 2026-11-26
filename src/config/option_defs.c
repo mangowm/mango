@@ -599,8 +599,6 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->dwindle_preserve_split = atoi(value);
 	} else if (strcmp(key, "dwindle_smart_split") == 0) {
 		config->dwindle_smart_split = atoi(value);
-	} else if (strcmp(key, "dwindle_smart_resize") == 0) {
-		config->dwindle_smart_resize = atoi(value);
 	} else if (strcmp(key, "dwindle_drop_simple_split") == 0) {
 		config->dwindle_drop_simple_split = atoi(value);
 	} else if (strcmp(key, "dwindle_manual_split") == 0) {
@@ -2565,7 +2563,6 @@ void set_value_default() {
 	config.dwindle_hsplit = 1;
 	config.dwindle_preserve_split = 0;
 	config.dwindle_smart_split = 0;
-	config.dwindle_smart_resize = 0;
 	config.dwindle_drop_simple_split = 1;
 	config.dwindle_manual_split = 0;
 	config.dwindle_split_ratio = 0.5f;
@@ -2941,7 +2938,6 @@ void override_config(void) {
 	config.dwindle_preserve_split =
 		CLAMP_INT(config.dwindle_preserve_split, 0, 1);
 	config.dwindle_smart_split = CLAMP_INT(config.dwindle_smart_split, 0, 1);
-	config.dwindle_smart_resize = CLAMP_INT(config.dwindle_smart_resize, 0, 1);
 	config.dwindle_drop_simple_split =
 		CLAMP_INT(config.dwindle_drop_simple_split, 0, 1);
 	config.dwindle_manual_split = CLAMP_INT(config.dwindle_manual_split, 0, 1);
