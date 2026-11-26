@@ -1442,9 +1442,6 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 			client_is_rendered_on_mon(c, m))
 			resizing_on_this_mon = true;
 	}
-	if (m->is_ws_overview)
-		workspace_overview_prepare_output_frame(m);
-
 	if (!config.animations && !server.grab_client && !need_more_frames &&
 		resizing_on_this_mon) {
 		monitor_check_skip_frame_timeout(m);
@@ -1454,6 +1451,9 @@ void handle_output_frame(struct wl_listener *listener, void *data) {
 	if (m->skiping_frame) {
 		monitor_stop_skip_frame_timer(m);
 	}
+
+	if (workspace_overview_is_active())
+		workspace_overview_prepare_output_frame(m);
 
 	mango_scene_output_commit(m->scene_output, &m->pending);
 

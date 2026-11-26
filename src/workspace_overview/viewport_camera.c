@@ -34,8 +34,10 @@ struct wlr_box wsov_live_overflow_clip(const struct wlr_box *workspace,
 		clip.x = workspace->x;
 		clip.width = workspace->width;
 	} else {
-		/* Grid workspace overview keeps every preview inside its frame. */
-		return *workspace;
+		/* Grid previews are clipped to their frame and the output it belongs
+		 * to. The frame itself can be partially outside the output while the
+		 * camera zooms toward a card near an edge. */
+		clip = *workspace;
 	}
 
 	struct wlr_box visible;
