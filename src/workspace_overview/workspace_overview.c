@@ -1126,7 +1126,13 @@ static bool wsov_set_target_from_point(double x, double y) {
 		return false;
 
 	wsov.target_tag = cell->tag;
-	wsov.camera_tag = cell->tag;
+	/*
+	 * Keep the opening camera anchored to the card it started from. The target
+	 * and focus may still follow pointer motion, but changing camera_tag while
+	 * the zoom is in progress makes the camera jump to another card.
+	 */
+	if (!wsov.animating)
+		wsov.camera_tag = cell->tag;
 	return true;
 }
 
@@ -5679,7 +5685,13 @@ void workspace_overview_layout_changed(Monitor *m) {
 		view_target_available && current_view_tag != previous_target;
 	if (view_target_available) {
 		wsov.target_tag = current_view_tag;
-		wsov.camera_tag = current_view_tag;
+		/*
+		 * Pointer hover may update the target and focus while the opening
+		 * animation runs, but the camera must stay anchored to the card whose
+		 * zoom originated the animation.
+		 */
+		if (!wsov.animating)
+			wsov.camera_tag = current_view_tag;
 		if (target_changed)
 			wsov.scroll_center_tag = current_view_tag;
 	}
