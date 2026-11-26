@@ -257,6 +257,9 @@ struct client_buffer_effect_data {
 	struct wlr_box monitor_clip;
 };
 
+static void client_reset_surface_clip(Client *c);
+static void client_apply_surface_clip(Client *c, const struct wlr_box *clip);
+
 static bool client_scene_buffer_get_box(struct wlr_scene_buffer *buffer,
 										int32_t sx, int32_t sy,
 										struct wlr_box *box) {
@@ -411,6 +414,21 @@ void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 	wlr_scene_buffer_set_corner_radii(buffer, buffer_data->corner_location);
 }
 
+static void scene_buffer_apply_corner_radii(struct wlr_scene_buffer *buffer,
+											int32_t sx, int32_t sy,
+											void *data) {
+	(void)sx;
+	(void)sy;
+	struct wlr_scene_surface *scene_surface =
+		wlr_scene_surface_try_from_buffer(buffer);
+	if (!scene_surface ||
+		wlr_xdg_popup_try_from_wlr_surface(scene_surface->surface) != NULL)
+		return;
+
+	wlr_scene_buffer_set_corner_radii(buffer,
+									  *(struct fx_corner_radii *)data);
+}
+
 void buffer_set_effect(Client *c, BufferData data,
 					   const struct wlr_box *window_clip) {
 	if (!c || c->iskilling)
@@ -435,23 +453,66 @@ void buffer_set_effect(Client *c, BufferData data,
 	int32_t scene_y = c->animation.current.y;
 	wlr_scene_node_coords(&c->scene->node, &scene_x, &scene_y);
 
+	struct wlr_box monitor_clip = {
+		.x = c->mon->m.x - scene_x,
+		.y = c->mon->m.y - scene_y,
+		.width = c->mon->m.width,
+		.height = c->mon->m.height,
+	};
+
+	/*
+	 * window_clip is expressed in the xdg surface's buffer coordinates, where
+	 * geometry.x/y is the logical window origin inside the CSD surface. The
+	 * scene buffer iterator already includes the xdg scene tree's
+	 * (-geometry.x, -geometry.y) offset, so translate the logical origin back
+	 * to the client scene tree before using it as the visible origin.
+	 */
+	struct wlr_box geometry = {0};
+	client_get_geometry(c, &geometry);
+
+	if (!client_is_x11(c) && !data.should_scale) {
+		/*
+		 * Without scaling, keep the clip in wlroots' subsurface tree. It then
+		 * survives later client commits, which otherwise rewrite each buffer's
+		 * source box and destination size back to the natural surface geometry.
+		 */
+		struct wlr_box monitor_in_surface = {
+			.x = monitor_clip.x - c->scene_surface->node.x + geometry.x,
+			.y = monitor_clip.y - c->scene_surface->node.y + geometry.y,
+			.width = monitor_clip.width,
+			.height = monitor_clip.height,
+		};
+		struct wlr_box visible;
+		if (!wlr_box_intersection(&visible, window_clip, &monitor_in_surface)) {
+			wlr_scene_node_set_enabled(&c->scene_surface->node, false);
+			return;
+		}
+
+		client_apply_surface_clip(c, &visible);
+		wlr_scene_node_for_each_buffer(&c->scene_surface->node,
+									   scene_buffer_apply_corner_radii,
+									   &data.corner_location);
+		return;
+	}
+
+	/*
+	 * Scaling needs per-buffer geometry. Reset the tree clip first because the
+	 * previous frame may have rewritten buffer positions and source boxes.
+	 */
+	client_reset_surface_clip(c);
+
 	struct client_buffer_effect_data effect_data = {
 		.client = c,
 		.buffer = data,
 		.origin_x = c->scene_surface->node.x,
 		.origin_y = c->scene_surface->node.y,
 		.window_clip = {
-			.x = c->scene_surface->node.x + window_clip->x,
-			.y = c->scene_surface->node.y + window_clip->y,
+			.x = c->scene_surface->node.x + window_clip->x - geometry.x,
+			.y = c->scene_surface->node.y + window_clip->y - geometry.y,
 			.width = window_clip->width,
 			.height = window_clip->height,
 		},
-		.monitor_clip = {
-			.x = c->mon->m.x - scene_x,
-			.y = c->mon->m.y - scene_y,
-			.width = c->mon->m.width,
-			.height = c->mon->m.height,
-		},
+		.monitor_clip = monitor_clip,
 	};
 	wlr_scene_node_for_each_buffer(&c->scene_surface->node,
 								   scene_buffer_apply_effect, &effect_data);
@@ -1220,8 +1281,6 @@ void client_set_clip(Client *c, float factor) {
 		 */
 		if (client_is_x11(c))
 			client_update_xwayland_clip(c, &clip_box);
-		else if (!c->overview_scene_surface)
-			client_reset_surface_clip(c);
 
 		buffer_set_effect(c, (BufferData){1.0f, 1.0f, clip_box.width,
 										  clip_box.height,
@@ -1271,14 +1330,6 @@ void client_set_clip(Client *c, float factor) {
 
 	if (!should_render_client_surface)
 		return;
-
-	/*
-	 * X11 clipping is already done above by client_update_xwayland_clip with
-	 * source_box; wlr_scene clip would scale the buffer by its physical size
-	 * and cannot be used for X11.
-	 */
-	if (!c->overview_scene_surface && !client_is_x11(c))
-		client_reset_surface_clip(c);
 
 	int32_t actual_surface_width =
 		geometry.width - surface_clip_offset.x - surface_clip_offset.width;
