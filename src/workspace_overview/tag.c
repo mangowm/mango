@@ -425,7 +425,8 @@ void wsov_select_direction(int dir_x, int dir_y) {
 
 	wsov.target_tag = target->tag;
 	wsov.scroll_center_tag = target->tag;
-	wsov.camera_tag = wsov.target_tag;
+	if (!wsov.animating)
+		wsov.camera_tag = wsov.target_tag;
 	wsov_animate_scroll_to_target();
 	wsov_refresh_target_selection();
 }

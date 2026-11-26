@@ -138,7 +138,8 @@ bool wsov_step_scroll_workspaces(int32_t direction, uint32_t count) {
 	struct wsov_cell *target = &wsov.cells[next];
 	wsov.target_tag = target->tag;
 	wsov.scroll_center_tag = target->tag;
-	wsov.camera_tag = target->tag;
+	if (!wsov.animating)
+		wsov.camera_tag = target->tag;
 	wsov_animate_scroll_to_target();
 	wsov_refresh_target_selection();
 	return true;
