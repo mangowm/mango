@@ -378,6 +378,16 @@ void buffer_set_effect(Client *c, BufferData data,
 	if (c->ov_card_tree)
 		return;
 
+#ifdef XWAYLAND
+	/*
+	 * XWayland already applies its own physical-buffer clip through
+	 * client_update_xwayland_clip(). It must not enter the Wayland subsurface
+	 * tree path below, which would reset its source_box and dest_size.
+	 */
+	if (client_is_x11(c))
+		return;
+#endif
+
 	int32_t scene_x = c->animation.current.x;
 	int32_t scene_y = c->animation.current.y;
 	wlr_scene_node_coords(&c->scene->node, &scene_x, &scene_y);
