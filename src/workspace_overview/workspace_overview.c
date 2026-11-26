@@ -622,8 +622,10 @@ static struct wlr_box wsov_live_overflow_clip(const struct wlr_box *workspace,
 		clip.x = workspace->x;
 		clip.width = workspace->width;
 	} else {
-		/* Grid workspace overview keeps every preview inside its frame. */
-		return *workspace;
+		/* Grid previews are clipped to their frame and the output it belongs
+		 * to. The frame itself can be partially outside the output while the
+		 * camera zooms toward a card near an edge. */
+		clip = *workspace;
 	}
 
 	struct wlr_box visible;
@@ -2296,6 +2298,104 @@ static void wsov_live_client_clip(Client *c, struct wlr_box *clip) {
 	clip->height = geometry.height;
 }
 
+struct wsov_live_clip_data {
+	struct wlr_box clip;
+};
+
+static void wsov_clip_live_card_buffer(struct wlr_scene_buffer *buffer, int sx,
+									   int sy, void *data) {
+	struct wsov_live_clip_data *clip = data;
+	if (!buffer || !buffer->buffer || !buffer->node.enabled || !wsov.mon)
+		return;
+
+	int width = buffer->dst_width;
+	int height = buffer->dst_height;
+	if (width <= 0 || height <= 0) {
+		width = buffer->buffer->width;
+		height = buffer->buffer->height;
+		if (buffer->transform == WL_OUTPUT_TRANSFORM_90 ||
+			buffer->transform == WL_OUTPUT_TRANSFORM_270 ||
+			buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 ||
+			buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_270) {
+			int tmp = width;
+			width = height;
+			height = tmp;
+		}
+	}
+
+	struct wlr_box clip_box = clip->clip;
+	struct wlr_box box = {
+		.x = sx,
+		.y = sy,
+		.width = width,
+		.height = height,
+	};
+	struct wlr_box visible;
+	if (!wlr_box_intersection(&visible, &box, &clip_box)) {
+		wlr_scene_node_set_enabled(&buffer->node, false);
+		return;
+	}
+	if (wlr_box_equal(&visible, &box))
+		return;
+
+	struct wlr_fbox src = buffer->src_box;
+	if (wlr_fbox_empty(&src)) {
+		src = (struct wlr_fbox){0, 0, buffer->buffer->width,
+								buffer->buffer->height};
+	}
+	if (buffer->transform == WL_OUTPUT_TRANSFORM_NORMAL) {
+		src.x += src.width * (visible.x - box.x) / box.width;
+		src.y += src.height * (visible.y - box.y) / box.height;
+		src.width *= (double)visible.width / box.width;
+		src.height *= (double)visible.height / box.height;
+	} else {
+		int buffer_w = buffer->buffer->width;
+		int buffer_h = buffer->buffer->height;
+		struct wlr_fbox oriented;
+		wlr_fbox_transform(&oriented, &src, buffer->transform, buffer_w,
+						   buffer_h);
+		oriented.x += oriented.width * (visible.x - box.x) / box.width;
+		oriented.y += oriented.height * (visible.y - box.y) / box.height;
+		oriented.width *= (double)visible.width / box.width;
+		oriented.height *= (double)visible.height / box.height;
+		bool swapped = buffer->transform == WL_OUTPUT_TRANSFORM_90 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_270 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 ||
+					   buffer->transform == WL_OUTPUT_TRANSFORM_FLIPPED_270;
+		int oriented_w = swapped ? buffer_h : buffer_w;
+		int oriented_h = swapped ? buffer_w : buffer_h;
+		wlr_fbox_transform(&src, &oriented,
+						   wlr_output_transform_invert(buffer->transform),
+						   oriented_w, oriented_h);
+	}
+
+	wlr_scene_node_set_enabled(&buffer->node, true);
+	wlr_scene_node_set_position(&buffer->node,
+								buffer->node.x + visible.x - box.x,
+								buffer->node.y + visible.y - box.y);
+	wlr_scene_buffer_set_dest_size(buffer, visible.width, visible.height);
+	wlr_scene_buffer_set_source_box(buffer, &src);
+}
+
+/*
+ * The live card is a scene tree instead of one texture. Apply the card's
+ * output-space clip to every buffer in that tree, including buffers for
+ * sub-surfaces and transient surface animations, so no child buffer can paint
+ * past the workspace preview or the monitor it belongs to.
+ */
+static void wsov_clip_live_card(struct wsov_cell *cell,
+								const struct wlr_box *clip) {
+	if (!cell || !clip)
+		return;
+	struct wsov_live_clip_data data = {.clip = *clip};
+	if (cell->live_lower_tree)
+		wlr_scene_node_for_each_buffer(&cell->live_lower_tree->node,
+									   wsov_clip_live_card_buffer, &data);
+	if (cell->live_upper_tree)
+		wlr_scene_node_for_each_buffer(&cell->live_upper_tree->node,
+									   wsov_clip_live_card_buffer, &data);
+}
+
 static void wsov_layout_live_projection_impl(void) {
 	if (!wsov.mon || wsov.cell_count <= 0)
 		return;
@@ -2556,6 +2656,7 @@ static void wsov_layout_live_projection_impl(void) {
 										   visible.height);
 			wlr_scene_buffer_set_source_box(buffer, &src);
 		}
+		wsov_clip_live_card(cell, &overflow_clip);
 	}
 }
 
@@ -2584,9 +2685,16 @@ static void wsov_flush_live_layout(void) {
 }
 
 void workspace_overview_prepare_output_frame(Monitor *m) {
-	if (!workspace_overview_is_active_on(m))
+	if (!workspace_overview_is_active())
 		return;
-	if (wsov.frame_active && wsov.closing) {
+	/*
+	 * Live card nodes are shared scene nodes. Any output can commit them, not
+	 * just the monitor showing WSOV, so flush the common clip before every
+	 * output frame. Otherwise an inner scroller commit can be presented on
+	 * another monitor for one frame before the WSOV output refreshes it.
+	 */
+	if (wsov.frame_active && (wsov.closing || wsov.animating ||
+							  wsov.layout_animating || wsov.scroll_animating)) {
 		wsov_process_frame();
 		return;
 	}
