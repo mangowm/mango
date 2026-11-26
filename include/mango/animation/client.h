@@ -22,7 +22,8 @@ void set_client_open_animation(Client *c, struct wlr_box geo);
 
 void scene_buffer_apply_effect(struct wlr_scene_buffer *buffer, int32_t sx,
 							   int32_t sy, void *data);
-void buffer_set_effect(Client *c, BufferData data);
+void buffer_set_effect(Client *c, BufferData data,
+					   const struct wlr_box *window_clip);
 
 void client_draw_shadow(Client *c, struct ivec2 offsets);
 void client_draw_group_bar(Client *c, struct ivec2 offsets);
