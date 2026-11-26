@@ -1527,7 +1527,7 @@ void pointer_focus(Client *c, struct wlr_surface *surface, double sx, double sy,
 		c && time && c->scene && c->scene->node.enabled &&
 		(!c->mon || !is_overcircle_mode(c->mon)) && !c->animation.tagining &&
 		(surface != server.seat->pointer_state.focused_surface ||
-		 (server.selected_monitor && server.selected_monitor->isoverview &&
+		 (server.selected_monitor && server.selected_monitor->sel &&
 		  server.selected_monitor->sel != c)) &&
 		!client_is_unmanaged(c) && VISIBLEON(c, c->mon))
 		client_focus(c, 0);
