@@ -10,11 +10,7 @@ let
   selflib = import ./lib.nix lib;
   variables = lib.concatStringsSep " " cfg.systemd.variables;
   extraCommands = lib.concatStringsSep " && " cfg.systemd.extraCommands;
-  systemdActivation = "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd ${variables}; ${extraCommands}";
-  autostart_sh = pkgs.writeShellScript "autostart.sh" ''
-    ${lib.optionalString cfg.systemd.enable systemdActivation}
-    ${cfg.autostart_sh}
-  '';
+  systemdActivation = pkgs.writeScript "mango-systemd-activation" "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd ${variables}; ${extraCommands}";
 in
 {
   options = {
@@ -55,6 +51,7 @@ in
             "WAYLAND_DISPLAY"
             "XDG_CURRENT_DESKTOP"
             "XDG_SESSION_TYPE"
+            "XDG_SESSION_ID"
             "NIXOS_OZONE_WL"
             "XCURSOR_THEME"
             "XCURSOR_SIZE"
@@ -228,6 +225,7 @@ in
             )
         )
         + lib.optionalString (cfg.extraConfig != "") cfg.extraConfig
+        + lib.optionalString cfg.systemd.enable "\nexec_once=${systemdActivation}"
         + lib.optionalString (cfg.autostart_sh != "") "\nexec_once=~/.config/mango/autostart.sh\n";
 
       validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
@@ -247,12 +245,12 @@ in
       home.packages = [ cfg.package ];
       xdg.configFile = {
         "mango/config.conf" =
-          lib.mkIf (cfg.settings != { } || cfg.extraConfig != "" || cfg.autostart_sh != "")
+          lib.mkIf (validatedConfig != "")
             {
               source = validatedConfig;
             };
         "mango/autostart.sh" = lib.mkIf (cfg.autostart_sh != "") {
-          source = autostart_sh;
+          source = cfg.autostart_sh;
           executable = true;
         };
       };
