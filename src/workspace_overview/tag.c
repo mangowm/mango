@@ -279,9 +279,11 @@ void wsov_apply_target_selection(bool activate_view) {
 	if (!wsov.mon || wsov.closing)
 		return;
 	Client *previous = wsov.mon->sel;
-	struct wsov_cell *previous_live_cell = wsov.live_cell;
+	uint32_t previous_live_tag = wsov.live_cell ? wsov.live_cell->tag : 0;
 	if (activate_view)
 		wsov_activate_target_tag();
+	struct wsov_cell *previous_live_cell =
+		previous_live_tag ? wsov_cell_for_tag(previous_live_tag) : NULL;
 	wsov_sync_monitor_selection();
 	if (!wsov.live_cell || wsov.live_cell->tag != wsov.target_tag)
 		wsov_rebuild_live_projection();

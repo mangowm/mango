@@ -159,9 +159,19 @@ bool workspace_overview_handle_button(
 		wsov.source_tag = cell ? cell->tag : 0;
 		wsov.target_tag = cell ? cell->tag : 0;
 		wsov.drag_return_tag = wsov.target_tag;
+
+		Client *drag_client = item ? item->client : NULL;
+		bool has_drag_client = item != NULL;
+
 		wsov_refresh_target_selection();
-		wsov.has_drag_client = item != NULL;
-		wsov.drag_client = item ? item->client : NULL;
+		if (!workspace_overview_is_active() || wsov.closing)
+			return true;
+
+		cell = wsov_cell_for_tag(wsov.source_tag);
+		item = wsov_cell_item_for_client(cell, drag_client);
+
+		wsov.has_drag_client = has_drag_client;
+		wsov.drag_client = drag_client;
 		if (item) {
 			struct wlr_box item_box = wsov_item_display_box(cell, item);
 			wsov.drag_grab_x =

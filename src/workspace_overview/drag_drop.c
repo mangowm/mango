@@ -421,11 +421,13 @@ void wsov_finish_drop(double x, double y) {
 	bool was_floating = wsov.drag_was_floating;
 
 	uint32_t source_bit = wsov_tag_bit(wsov.source_tag);
-	uint32_t target_bit = wsov_tag_bit(target->tag);
+	uint32_t target_tag = target->tag;
+	uint32_t target_bit = wsov_tag_bit(target_tag);
 	uint32_t old_tags = c->isglobal ? 0 : c->tags;
 	uint32_t mods = keyboard_hard_modifiers();
+	Client *over_client = over ? over->client : NULL;
 
-	if (!c->isglobal && target->tag != wsov.source_tag) {
+	if (!c->isglobal && target_tag != wsov.source_tag) {
 		if (mods & WLR_MODIFIER_CTRL)
 			c->tags = target_bit;
 		else if (mods & WLR_MODIFIER_SHIFT)
@@ -441,10 +443,13 @@ void wsov_finish_drop(double x, double y) {
 	clear_fullscreen_for_incoming_tiled_client(c);
 
 	client_view_on_monitor(&(Arg){.ui = target_bit}, false, wsov.mon, false);
-	if (over)
-		pointer_place_drag_tile_on(c, over->client);
-	if (was_floating)
-		wsov_place_floating(c, target);
+	if (over_client)
+		pointer_place_drag_tile_on(c, over_client);
+	if (was_floating) {
+		struct wsov_cell *current_target = wsov_cell_for_tag(target_tag);
+		if (current_target)
+			wsov_place_floating(c, current_target);
+	}
 
 	wsov_restore_drag_floating();
 	client_focus(c, 1);
@@ -458,9 +463,9 @@ void wsov_finish_drop(double x, double y) {
 	wsov.drag_scroll_frame_valid = false;
 	wsov.drag_client = NULL;
 	wsov.source_tag = 0;
-	wsov.target_tag = target->tag;
-	wsov.scroll_center_tag = target->tag;
-	wsov.camera_tag = target->tag;
+	wsov.target_tag = target_tag;
+	wsov.scroll_center_tag = target_tag;
+	wsov.camera_tag = target_tag;
 	wsov_animate_scroll_to_target();
 	wsov.drag_return_tag = 0;
 	wsov_destroy_drag_buffer();
