@@ -604,7 +604,9 @@ void handle_layer_surface_unmap(struct wl_listener *listener, void *data) {
 
 	pointer_process_motion(0, NULL, 0, 0, 0, 0);
 	layer_flush_blur_background(l);
-	wlr_scene_node_destroy(&l->shadow->node);
-	l->shadow = NULL;
+	if (l->shadow) {
+		wlr_scene_node_destroy(&l->shadow->node);
+		l->shadow = NULL;
+	}
 	l->being_unmapped = false;
 }
