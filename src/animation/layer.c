@@ -222,34 +222,6 @@ void set_layer_dir_animaiton(LayerSurface *l, struct wlr_box *geo) {
 		geo->y = 0 - l->geom.height;
 	}
 }
-void layer_draw_shield(LayerSurface *l) {
-	int32_t width, height;
-
-	if (!l->mapped)
-		return;
-
-	if (server.active_capture_count > 0 && l->shield_when_capture) {
-
-		layer_actual_size(l, &width, &height);
-
-		if (width <= 0 || height <= 0) {
-			wlr_scene_node_set_enabled(&l->shield->node, false);
-			return;
-		}
-
-		wlr_scene_node_raise_to_top(&l->shield->node);
-		wlr_scene_node_set_position(&l->shield->node, 0, 0);
-		wlr_scene_rect_set_size(l->shield, width, height);
-		wlr_scene_node_set_enabled(&l->shield->node, true);
-	} else {
-		if (l->shield->node.enabled) {
-			wlr_scene_node_lower_to_bottom(&l->shield->node);
-			wlr_scene_node_set_position(&l->shield->node, 0, 0);
-			wlr_scene_node_set_enabled(&l->shield->node, false);
-		}
-	}
-}
-
 void layer_scene_buffer_apply_effect(struct wlr_scene_buffer *buffer,
 									 int32_t sx, int32_t sy, void *data) {
 	BufferData *buffer_data = (BufferData *)data;
@@ -650,7 +622,6 @@ bool layer_draw_frame(LayerSurface *l) {
 		!l->no_animation) {
 		layer_animation_next_tick(l);
 	} else {
-		layer_draw_shield(l);
 		l->need_output_flush = false;
 	}
 	return true;

@@ -27,7 +27,6 @@ void client_draw_shadow(Client *c, struct ivec2 offsets);
 void client_draw_group_bar(Client *c, struct ivec2 offsets);
 void global_draw_group_bar(Client *c, int32_t x, int32_t y, int32_t width,
 						   int32_t height);
-void client_draw_shield(Client *c, struct ivec2 clip_box);
 void client_draw_dim(Client *c, struct ivec2 clip_box);
 void client_draw_split_border(Client *c, bool hit_no_border,
 							  struct ivec2 offsets);

@@ -6,6 +6,7 @@
 #include "mango/data/static_keymap.h"
 #include "mango/input/pointer.h"
 #include "mango/layout/arrange.h"
+#include "mango/shield/capture_shield.h"
 #include "mango/manage/client.h"
 #include "mango/manage/layer.h"
 #include "mango/manage/monitor.h"
@@ -560,6 +561,10 @@ void handle_new_foreign_toplevel_capture_request(struct wl_listener *listener,
 	struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request
 		*request = data;
 	Client *c = request->toplevel_handle->data;
+	if (!c || !c->image_capture_scene)
+		return;
+
+	client_update_capture_shield(c);
 
 	if (c->image_capture_source == NULL) {
 		c->image_capture_source =
@@ -647,6 +652,9 @@ static void capture_session_announce_bgr_shm_formats(
 
 	struct wlr_output *output =
 		wlr_output_try_from_ext_image_capture_source_v1(source);
+	if (output == NULL) {
+		output = capture_shield_output_from_source(source);
+	}
 	struct wlr_renderer *renderer = output != NULL && output->renderer != NULL
 										? output->renderer
 										: server.renderer;

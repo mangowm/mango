@@ -25,8 +25,10 @@
 #include "mango/input/trackpad.h"
 #include "mango/ipc/ipc.h"
 #include "mango/layout/arrange.h"
+#include "mango/shield/capture_shield.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
+#include "mango/shield/output_capture_source.h"
 #include "wlr/util/box.h"
 #include <fcntl.h>
 #include <getopt.h>
@@ -617,7 +619,17 @@ void setup(void) {
 		wlr_compositor_create(server.display, 6, server.renderer);
 	wlr_export_dmabuf_manager_v1_create(server.display);
 	wlr_screencopy_manager_v1_create(server.display);
-	wlr_ext_output_image_capture_source_manager_v1_create(server.display, 1);
+	struct wlr_ext_output_image_capture_source_manager_v1
+		*output_capture_source_manager =
+			wlr_ext_output_image_capture_source_manager_v1_create(
+				server.display, 1);
+	if (output_capture_source_manager) {
+		server.output_capture_request_listener.notify =
+			handle_output_capture_request;
+		wl_signal_add(
+			&output_capture_source_manager->events.capture_request,
+			&server.output_capture_request_listener);
+	}
 	wlr_data_control_manager_v1_create(server.display);
 	wlr_data_device_manager_create(server.display);
 	wlr_primary_selection_v1_device_manager_create(server.display);

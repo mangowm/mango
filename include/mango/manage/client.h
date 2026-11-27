@@ -72,7 +72,6 @@ struct Client {
 	Monitor *mon;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_rect *border[4]; /* top, bottom, left, right */
-	struct wlr_scene_rect *shield;
 	struct wlr_scene_rect *droparea;
 	struct wlr_scene_rect *splitindicator[4];
 	struct wlr_scene_tree *scene_surface;
@@ -80,6 +79,7 @@ struct Client {
 	struct wlr_scene *image_capture_scene;
 	struct wlr_ext_image_capture_source_v1 *image_capture_source;
 	struct wlr_scene_surface *image_capture_scene_surface;
+	struct wlr_scene_rect *image_capture_shield;
 	struct wlr_scene_tree *overview_scene_surface;
 	MangoJumpLabel *jump_label_node;
 	MangoDimNode *dim_node;
