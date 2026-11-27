@@ -2288,6 +2288,7 @@ void init_client_properties(Client *c) {
 	c->image_capture_scene_surface = NULL;
 	c->image_capture_tree = NULL;
 	c->image_capture_source = NULL;
+	c->image_capture_shield = NULL;
 
 	wl_list_init(&c->link);
 	wl_list_init(&c->flink);
@@ -2386,6 +2387,10 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 			&c->image_capture_scene->tree, c->surface.xdg);
 	}
 
+	c->image_capture_shield = wlr_scene_rect_create(
+		&c->image_capture_scene->tree, 0, 0, (float[4]){0, 0, 0, 0xff});
+	wlr_scene_node_set_enabled(&c->image_capture_shield->node, false);
+
 	/* Handle unmanaged clients first so we can return prior create borders
 	 */
 	if (client_init_unmanaged(c))
@@ -2428,11 +2433,6 @@ void handle_client_map(struct wl_listener *listener, void *data) {
 
 	wlr_scene_node_lower_to_bottom(&c->shadow->node);
 	wlr_scene_node_set_enabled(&c->shadow->node, true);
-
-	c->shield =
-		wlr_scene_rect_create(c->scene, 0, 0, (float[4]){0, 0, 0, 0xff});
-	wlr_scene_node_lower_to_bottom(&c->shield->node);
-	wlr_scene_node_set_enabled(&c->shield->node, false);
 
 	client_insert_tiling_order(c);
 
@@ -2773,6 +2773,10 @@ void handle_client_unmap(struct wl_listener *listener, void *data) {
 	if (c->image_capture_scene) {
 		wlr_scene_node_destroy(&c->image_capture_scene->tree.node);
 		c->image_capture_scene = NULL;
+		c->image_capture_tree = NULL;
+		c->image_capture_scene_surface = NULL;
+		c->image_capture_source = NULL;
+		c->image_capture_shield = NULL;
 	}
 
 	init_client_properties(c);

@@ -231,6 +231,7 @@ struct MangoServer {
 	struct wl_listener last_cursor_surface_destroy_listener;
 
 	/* External image capture */
+	struct wl_listener output_capture_request_listener;
 	struct wlr_ext_foreign_toplevel_image_capture_source_manager_v1
 		*ext_foreign_toplevel_image_capture_source_manager;
 	struct wl_listener new_foreign_toplevel_capture_listener;

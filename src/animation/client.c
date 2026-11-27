@@ -5,6 +5,7 @@
 #include "mango/draw/title-message-bar.h"
 #include "mango/layout/dwindle.h"
 #include "mango/layout/layout.h"
+#include "mango/shield/capture_shield.h"
 #include "mango/manage/client.h"
 #include "mango/manage/misc.h"
 #include "mango/manage/monitor.h"
@@ -735,49 +736,6 @@ void client_draw_group_bar(Client *c, struct ivec2 offsets) {
 		cur = cur->group_next;
 	}
 }
-void client_draw_shield(Client *c, struct ivec2 clip_box) {
-
-	int32_t shield_x = 0;
-	int32_t shield_y = 0;
-	int32_t shield_width = 0;
-	int32_t shield_height = 0;
-
-	if (server.active_capture_count <= 0 || !c->shield_when_capture) {
-		if (c->shield->node.enabled) {
-			wlr_scene_node_lower_to_bottom(&c->shield->node);
-			wlr_scene_node_set_position(&c->shield->node, 0, 0);
-			wlr_scene_rect_set_size(c->shield, c->animation.current.width,
-									c->animation.current.height);
-			wlr_scene_node_set_enabled(&c->shield->node, false);
-		}
-		return;
-	}
-
-	if (client_is_ignore_output_clip(c)) {
-		shield_x = c->bw;
-		shield_y = c->bw;
-		shield_width = c->animation.current.width - 2 * (int32_t)c->bw;
-		shield_height = c->animation.current.height - 2 * (int32_t)c->bw;
-	} else {
-		shield_x = clip_box.x + (int32_t)c->bw;
-		shield_y = clip_box.y + (int32_t)c->bw;
-		shield_width = c->animation.current.width - 2 * (int32_t)c->bw -
-					   clip_box.width - clip_box.x;
-		shield_height = c->animation.current.height - 2 * (int32_t)c->bw -
-						clip_box.height - clip_box.y;
-	}
-
-	if (shield_width <= 0 || shield_height <= 0) {
-		wlr_scene_node_set_enabled(&c->shield->node, false);
-		return;
-	}
-
-	wlr_scene_node_raise_to_top(&c->shield->node);
-	wlr_scene_node_set_position(&c->shield->node, shield_x, shield_y);
-	wlr_scene_rect_set_size(c->shield, shield_width, shield_height);
-	wlr_scene_node_set_enabled(&c->shield->node, true);
-}
-
 void client_draw_dim(Client *c, struct ivec2 clip_box) {
 	if (!c || !c->dim_node) {
 		return;
@@ -1257,6 +1215,7 @@ static void client_apply_surface_clip(Client *c, const struct wlr_box *clip) {
 void client_set_clip(Client *c, float factor) {
 	if (c->iskilling || !client_surface(c)->mapped)
 		return;
+	client_update_capture_shield(c);
 	workspace_overview_client_frame(c);
 
 	/*
@@ -1281,7 +1240,6 @@ void client_set_clip(Client *c, float factor) {
 		client_draw_group_bar(c, offsets);
 		client_draw_tabbar(c, offsets);
 		client_draw_blur(c, surface_clip_offset);
-		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
 
 		overview_layout_card(c);
@@ -1318,7 +1276,6 @@ void client_set_clip(Client *c, float factor) {
 		client_draw_group_bar(c, offsets);
 		client_draw_tabbar(c, offsets);
 		client_draw_blur(c, surface_clip_offset);
-		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
 
 		should_render_client_surface =
@@ -1367,7 +1324,6 @@ void client_set_clip(Client *c, float factor) {
 	client_draw_shadow(c, offsets);
 	client_draw_group_bar(c, offsets);
 	client_draw_tabbar(c, offsets);
-	client_draw_shield(c, surface_clip_offset);
 	client_draw_dim(c, surface_clip_offset);
 	client_draw_blur(c, surface_clip_offset);
 	/*
@@ -1897,7 +1853,6 @@ void resize(Client *c, struct wlr_box geo, ResizeOpts opts) {
 		client_draw_shadow(c, offsets);
 
 		struct ivec2 surface_clip_offset = clip_to_hide(c, &clip, offsets);
-		client_draw_shield(c, surface_clip_offset);
 		client_draw_dim(c, surface_clip_offset);
 		client_draw_blur(c, surface_clip_offset);
 

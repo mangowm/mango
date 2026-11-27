@@ -15,7 +15,6 @@ typedef struct LayerSurface {
 	Monitor *mon;
 	struct wlr_scene_tree *scene;
 	struct wlr_scene_tree *popups;
-	struct wlr_scene_rect *shield;
 	struct wlr_scene_shadow *shadow;
 	struct wlr_scene_blur *blur;
 	struct wlr_scene_layer_surface_v1 *scene_layer;

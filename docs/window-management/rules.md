@@ -41,7 +41,7 @@ window_rule_once=Parameter:Values,Parameter:Values,app_id:Values,title:Values
 | `allow_shortcuts_inhibit` | integer | `0` / `1` (default 1) | Allow shortcuts to be inhibited by clients |
 | `idle_inhibit_when_focus` | integer | `0` / `1` (default 0) | Automatically keep idle inhibit active when this window is focused |
 | `vrr_only_fullscreen` | integer | `0` / `1` (default 0) | VRR only fullscreen,you need to turn `vrr` to `0` in monitor rule first |
-| `shield_when_capture` | integer | `0` / `1` | Shield window when captured |
+| `shield_when_capture` | integer | `0` / `1` | Present a black capture surface to window-capture clients while keeping the on-screen window visible |
 | `force_render` | integer | `0` / `1` | Force render frame even if the window is not visible |
 | `activation_bypass` | integer | `0` / `1` | Bypass xdg-activation authentication: activation requests for this window are treated as authenticated, so the normal activation behavior applies regardless of token validity |
 
@@ -255,7 +255,7 @@ layer_rule=layer_name:Values,Parameter:Values,Parameter:Values
 | `no_blur` | integer | `0` / `1` | Disable blur |
 | `no_animation` | integer | `0` / `1` | Disable layer animation |
 | `no_shadow` | integer | `0` / `1` | Disable layer shadow |
-| `shield_when_capture`| integer | `0` / `1` | Shield layer when captured.(it is better to combination with `no_animation:1`) |
+| `shield_when_capture`| integer | `0` / `1` | Present this layer as black to output-capture clients while keeping it visible on screen |
 
 > **Tip:** For animation types, see [Animations](/docs/visuals/animations#animation-types). For visual effects, see [Window Effects](/docs/visuals/effects).
 
