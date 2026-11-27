@@ -3619,9 +3619,11 @@ static void wsov_apply_target_selection(bool activate_view) {
 	if (!wsov.mon || wsov.closing)
 		return;
 	Client *previous = wsov.mon->sel;
-	struct wsov_cell *previous_live_cell = wsov.live_cell;
+	uint32_t previous_live_tag = wsov.live_cell ? wsov.live_cell->tag : 0;
 	if (activate_view)
 		wsov_activate_target_tag();
+	struct wsov_cell *previous_live_cell =
+		previous_live_tag ? wsov_cell_for_tag(previous_live_tag) : NULL;
 	wsov_sync_monitor_selection();
 	if (!wsov.live_cell || wsov.live_cell->tag != wsov.target_tag)
 		wsov_rebuild_live_projection();
@@ -5363,11 +5365,13 @@ static void wsov_finish_drop(double x, double y) {
 	bool was_floating = wsov.drag_was_floating;
 
 	uint32_t source_bit = wsov_tag_bit(wsov.source_tag);
-	uint32_t target_bit = wsov_tag_bit(target->tag);
+	uint32_t target_tag = target->tag;
+	uint32_t target_bit = wsov_tag_bit(target_tag);
 	uint32_t old_tags = c->isglobal ? 0 : c->tags;
 	uint32_t mods = keyboard_hard_modifiers();
+	Client *over_client = over ? over->client : NULL;
 
-	if (!c->isglobal && target->tag != wsov.source_tag) {
+	if (!c->isglobal && target_tag != wsov.source_tag) {
 		if (mods & WLR_MODIFIER_CTRL)
 			c->tags = target_bit;
 		else if (mods & WLR_MODIFIER_SHIFT)
@@ -5383,10 +5387,13 @@ static void wsov_finish_drop(double x, double y) {
 	clear_fullscreen_for_incoming_tiled_client(c);
 
 	client_view_on_monitor(&(Arg){.ui = target_bit}, false, wsov.mon, false);
-	if (over)
-		pointer_place_drag_tile_on(c, over->client);
-	if (was_floating)
-		wsov_place_floating(c, target);
+	if (over_client)
+		pointer_place_drag_tile_on(c, over_client);
+	if (was_floating) {
+		struct wsov_cell *current_target = wsov_cell_for_tag(target_tag);
+		if (current_target)
+			wsov_place_floating(c, current_target);
+	}
 
 	wsov_restore_drag_floating();
 	client_focus(c, 1);
@@ -5400,9 +5407,9 @@ static void wsov_finish_drop(double x, double y) {
 	wsov.drag_scroll_frame_valid = false;
 	wsov.drag_client = NULL;
 	wsov.source_tag = 0;
-	wsov.target_tag = target->tag;
-	wsov.scroll_center_tag = target->tag;
-	wsov.camera_tag = target->tag;
+	wsov.target_tag = target_tag;
+	wsov.scroll_center_tag = target_tag;
+	wsov.camera_tag = target_tag;
 	wsov_animate_scroll_to_target();
 	wsov.drag_return_tag = 0;
 	wsov_destroy_drag_buffer();
@@ -5451,9 +5458,19 @@ bool workspace_overview_handle_button(
 		wsov.source_tag = cell ? cell->tag : 0;
 		wsov.target_tag = cell ? cell->tag : 0;
 		wsov.drag_return_tag = wsov.target_tag;
+
+		Client *drag_client = item ? item->client : NULL;
+		bool has_drag_client = item != NULL;
+
 		wsov_refresh_target_selection();
-		wsov.has_drag_client = item != NULL;
-		wsov.drag_client = item ? item->client : NULL;
+		if (!workspace_overview_is_active() || wsov.closing)
+			return true;
+
+		cell = wsov_cell_for_tag(wsov.source_tag);
+		item = wsov_cell_item_for_client(cell, drag_client);
+
+		wsov.has_drag_client = has_drag_client;
+		wsov.drag_client = drag_client;
 		if (item) {
 			struct wlr_box item_box = wsov_item_display_box(cell, item);
 			wsov.drag_grab_x =
