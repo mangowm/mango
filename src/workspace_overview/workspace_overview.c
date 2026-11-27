@@ -5626,6 +5626,13 @@ void workspace_overview_client_removed(Client *c) {
 	if (c == wsov.drag_client)
 		wsov_cancel_drag();
 	c->wsov_hidden = false;
+	if (wsov.closing) {
+		/* Prevent a freed client from being rendered while the overview
+		 * close animation is still running. */
+		for (int i = 0; i < wsov.cell_count; i++)
+			wsov_capture_cell_items(&wsov.cells[i]);
+		return;
+	}
 	wsov_refresh_workspace_or_rebuild(wsov_client_tags(c));
 	if (!wsov.closing && workspace_overview_is_active()) {
 		wsov_rebuild_live_projection();
