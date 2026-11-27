@@ -1183,21 +1183,21 @@ void client_set_clip(Client *c, float factor) {
 	if (factor == 1.0 && !c->overview_scene_surface) {
 		buffer_data.width_scale = 1.0;
 		buffer_data.height_scale = 1.0;
+		buffer_data.should_scale = false;
 	} else {
 		buffer_data.width_scale =
 			(float)clip_box.width / (float)actual_surface_width;
 		buffer_data.height_scale =
 			(float)clip_box.height / (float)actual_surface_height;
+		/*
+		 * Clipping applies to both the animated and committed sizes, so compare
+		 * the integer dimensions directly. This keeps slide and fade animations
+		 * out of the buffer scaling path without a resolution-dependent epsilon.
+		 */
+		buffer_data.should_scale =
+			clip_box.width > actual_surface_width ||
+			clip_box.height > actual_surface_height;
 	}
-
-	/*
-	 * Clipping must not enter the buffer scaling path by itself. Slide and fade
-	 * keep the same window size, so their computed scale is 1 and the
-	 * subsurface tree's clipped source/dest geometry must remain untouched.
-	 */
-	buffer_data.should_scale =
-		buffer_data.width_scale > 1.0f + 1e-4f ||
-		buffer_data.height_scale > 1.0f + 1e-4f;
 
 	buffer_set_effect(c, buffer_data, &clip_box);
 }
