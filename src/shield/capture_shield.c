@@ -1,5 +1,4 @@
 #include "mango/shield/capture_shield.h"
-#include "mango/animation/layer.h"
 #include "mango/common/log.h"
 #include "mango/common/server.h"
 #include "mango/manage/client.h"
@@ -150,6 +149,11 @@ static bool output_has_shield_surfaces(struct wlr_output *output) {
 	return false;
 }
 
+static const struct wlr_box *
+capture_shield_layer_current_box(const LayerSurface *l) {
+	return l->animation.running ? &l->animation.current : &l->geom;
+}
+
 static bool capture_shield_scene_box(struct wlr_scene_node *node,
 									 const struct wlr_box *current, Monitor *m,
 									 struct wlr_output *output,
@@ -277,12 +281,10 @@ capture_shield_build_mask(struct protected_output_source *protected_source,
 				continue;
 			}
 
-			struct wlr_box current;
-			layer_actual_size(l, &current.width, &current.height);
 			struct wlr_box box;
-			if (!capture_shield_scene_box(&l->scene->node, &current, m,
-										  protected_source->output, buffer,
-										  &box)) {
+			if (!capture_shield_scene_box(
+					&l->scene->node, capture_shield_layer_current_box(l), m,
+					protected_source->output, buffer, &box)) {
 				continue;
 			}
 
@@ -450,12 +452,10 @@ capture_shield_copy_shm(struct protected_output_source *protected_source,
 			LayerSurface *l;
 			wl_list_for_each(l, &m->layers[i], link) {
 				struct wlr_box box;
-				struct wlr_box current;
-				layer_actual_size(l, &current.width, &current.height);
 				if (!l->shield_when_capture || !l->mapped || !l->scene ||
-					!capture_shield_scene_box(&l->scene->node, &current, m,
-											  protected_source->output,
-											  dst_buffer, &box)) {
+					!capture_shield_scene_box(
+						&l->scene->node, capture_shield_layer_current_box(l), m,
+						protected_source->output, dst_buffer, &box)) {
 					continue;
 				}
 
@@ -530,12 +530,10 @@ capture_shield_copy_dmabuf(struct protected_output_source *protected_source,
 		LayerSurface *l;
 		wl_list_for_each(l, &m->layers[i], link) {
 			struct wlr_box box;
-			struct wlr_box current;
-			layer_actual_size(l, &current.width, &current.height);
 			if (!l->shield_when_capture || !l->mapped || !l->scene ||
-				!capture_shield_scene_box(&l->scene->node, &current, m,
-										  protected_source->output, dst_buffer,
-										  &box)) {
+				!capture_shield_scene_box(
+					&l->scene->node, capture_shield_layer_current_box(l), m,
+					protected_source->output, dst_buffer, &box)) {
 				continue;
 			}
 
