@@ -10,9 +10,8 @@ let
   selflib = import ./lib.nix lib;
   variables = lib.concatStringsSep " " cfg.systemd.variables;
   extraCommands = lib.concatStringsSep " && " cfg.systemd.extraCommands;
-  systemdActivation = "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd ${variables}; ${extraCommands}";
+  systemdActivation = pkgs.writeShellScript "systemd-activation.sh" "${pkgs.dbus}/bin/dbus-update-activation-environment --systemd ${variables}; ${extraCommands}";
   autostart_sh = pkgs.writeShellScript "autostart.sh" ''
-    ${lib.optionalString cfg.systemd.enable systemdActivation}
     ${cfg.autostart_sh}
   '';
 in
@@ -228,6 +227,7 @@ in
             )
         )
         + lib.optionalString (cfg.extraConfig != "") cfg.extraConfig
+        + lib.optionalString cfg.systemd.enable "\nexec_once=${systemdActivation}\n"
         + lib.optionalString (cfg.autostart_sh != "") "\nexec_once=~/.config/mango/autostart.sh\n";
 
       validatedConfig = pkgs.runCommand "mango-config.conf" { } ''
