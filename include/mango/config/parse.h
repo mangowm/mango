@@ -579,6 +579,8 @@ typedef struct {
 	float scratchpadcolor[4];
 	float globalcolor[4];
 	float overlaycolor[4];
+	float floatcolor[4];
+	bool floatcolor_set;
 
 	int32_t log_level;
 	uint32_t capslock;
