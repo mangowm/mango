@@ -1,6 +1,7 @@
 #undef _POSIX_C_SOURCE
 #define _XOPEN_SOURCE 700
 #include "mango/config/error_nag.h"
+#include "mango/config/parse.h"
 
 #include "mango/common/server.h"
 #include "mango/common/util.h"
@@ -246,7 +247,7 @@ static void nag_pipe_text(int fd) {
 }
 
 static void nag_spawn(void) {
-	if (!server.display)
+	if (!server.display || !config.mangonag_enabled)
 		return;
 
 	nag_kill();
@@ -347,6 +348,10 @@ void config_error_nag_update(void) {
 	if (!server.event_loop)
 		return;
 
+	nag_kill();
+	if (!config.mangonag_enabled)
+		return;
+
 	FILE *file = fopen(config_error_store_path(), "r");
 	bool has_error = false;
 	if (file) {
@@ -356,7 +361,6 @@ void config_error_nag_update(void) {
 		fclose(file);
 	}
 
-	nag_kill();
 	if (has_error)
 		nag_spawn();
 }

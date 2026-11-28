@@ -368,6 +368,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->allow_lock_transparent = atoi(value);
 	} else if (strcmp(key, "auto_reload_config") == 0) {
 		config->auto_reload_config = atoi(value);
+	} else if (strcmp(key, "mangonag_enabled") == 0) {
+		config->mangonag_enabled = atoi(value);
 	} else if (strcmp(key, "no_border_when_single") == 0) {
 		config->no_border_when_single = atoi(value);
 	} else if (strcmp(key, "no_radius_when_single") == 0) {
@@ -2620,6 +2622,7 @@ void set_value_default() {
 	config.disable_middle_paste = 0;
 	config.allow_lock_transparent = 0;
 	config.auto_reload_config = 1;
+	config.mangonag_enabled=1;
 	config.no_border_when_single = 0;
 	config.no_radius_when_single = 0;
 	config.monocle_no_border = 0;
@@ -2986,6 +2989,7 @@ void override_config(void) {
 	config.allow_lock_transparent =
 		CLAMP_INT(config.allow_lock_transparent, 0, 1);
 	config.auto_reload_config = CLAMP_INT(config.auto_reload_config, 0, 1);
+	config.mangonag_enabled = CLAMP_INT(config.mangonag_enabled, 0, 1);
 	config.focus_on_activate = CLAMP_INT(config.focus_on_activate, 0, 1);
 	config.idleinhibit_ignore_visible =
 		CLAMP_INT(config.idleinhibit_ignore_visible, 0, 1);
