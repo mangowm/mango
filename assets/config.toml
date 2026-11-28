@@ -94,6 +94,7 @@ hotarea_disable_on_fullscreen = 1
 overview_gap_inner = 5
 overview_gap_outer = 30
 overcircle_center_ratio = 0.5
+switcher_preview_delay=150
 title_message_bar_height = 52
 title_message_bar_gap = 20
 workspace_overview_border_width = 2

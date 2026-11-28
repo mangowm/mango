@@ -645,6 +645,8 @@ bool parse_option(Config *config, char *key, char *value, int line_number) {
 		config->workspace_overview_scroll_decel_gain = atof(value);
 	} else if (strcmp(key, "overcircle_center_ratio") == 0) {
 		config->overcircle_center_ratio = atof(value);
+	} else if (strcmp(key, "switcher_preview_delay") == 0) {
+		config->switcher_preview_delay = atoi(value);
 	} else if (strcmp(key, "jump_labels") == 0) {
 		if (config->jump_labels)
 			free(config->jump_labels);
@@ -2667,6 +2669,7 @@ void set_value_default() {
 	config.workspace_overview_scroll_decel_start_interval = 50;
 	config.workspace_overview_scroll_decel_gain = 0.5f;
 	config.overcircle_center_ratio = 0.5f;
+	config.switcher_preview_delay = 150;
 	config.cursor_hide_timeout = 0;
 	config.cursor_hide_on_keypress = 0;
 	config.axis_bind_apply_timeout = 100;
@@ -2972,6 +2975,8 @@ void override_config(void) {
 		CLAMP_FLOAT(config.workspace_overview_scroll_decel_gain, 0.0f, 1.0f);
 	config.overcircle_center_ratio =
 		CLAMP_FLOAT(config.overcircle_center_ratio, 0.1f, 0.9f);
+	config.switcher_preview_delay =
+		CLAMP_INT(config.switcher_preview_delay, 0, 36000);
 	config.xwayland_persistence = CLAMP_INT(config.xwayland_persistence, 0, 1);
 	config.xwayland_ignore_scale =
 		CLAMP_INT(config.xwayland_ignore_scale, 0, 1);

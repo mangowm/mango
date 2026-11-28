@@ -339,6 +339,10 @@ bind=SUPER+CTRL+ALT+SHIFT,grave,switcher,all_prev
 
 ### Configuration
 
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `switcher_delay` | `150` | Milliseconds to wait before the panel and title bar appear (`0` shows immediately). Quick taps that commit sooner never show the panel. |
+
 The switcher has no dedicated size or layout options. Its focused thumbnail
 frame uses `focus_color`, other thumbnail frames use `border_color`, and it
 shares the title message bar with overcircle.

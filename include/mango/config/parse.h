@@ -466,6 +466,7 @@ typedef struct {
 	uint32_t workspace_overview_scroll_decel_start_interval;
 	float workspace_overview_scroll_decel_gain;
 	float overcircle_center_ratio;
+	int32_t switcher_preview_delay;
 	char *jump_labels;
 	uint32_t cursor_hide_timeout;
 	uint32_t cursor_hide_on_keypress;

@@ -5,6 +5,7 @@
 #include "mango/manage/client.h"
 #include "mango/manage/monitor.h"
 #include <scenefx/types/wlr_scene.h>
+#include <stdbool.h>
 #include <wlr/types/wlr_alpha_modifier_v1.h>
 #include <wlr/types/wlr_color_management_v1.h>
 #include <wlr/types/wlr_color_representation_v1.h>
@@ -393,8 +394,9 @@ Client *switcher_client_at(double lx, double ly) {
 
 bool switcher_title_message_bar_geometry(Monitor *m, Client **client,
 										 struct wlr_box *box) {
-	if (!switcher_is_active() || !m || m != switcher_state.mon ||
-		switcher_state.count <= 0 || switcher_state.index < 0 ||
+	if (!switcher_is_active() || !switcher_state.visible || !m ||
+		m != switcher_state.mon || switcher_state.count <= 0 ||
+		switcher_state.index < 0 ||
 		switcher_state.index >= switcher_state.count)
 		return false;
 
@@ -410,6 +412,20 @@ bool switcher_title_message_bar_geometry(Monitor *m, Client **client,
 		};
 	}
 	return true;
+}
+
+static int switcher_reveal(void *data) {
+	if (switcher_state.visible || !switcher_is_active()) {
+		return 0;
+	}
+	switcher_state.visible = true;
+	if (switcher_state.show_timer) {
+		wl_event_source_remove(switcher_state.show_timer);
+		switcher_state.show_timer = NULL;
+	}
+	wlr_scene_node_set_enabled(&switcher_state.tree->node, true);
+	title_message_bar_update(switcher_state.mon);
+	return 0;
 }
 
 void switcher_open(int scope, int dir) {
@@ -472,6 +488,17 @@ void switcher_open(int scope, int dir) {
 		switcher_state.index = dir < 0 ? switcher_state.count - 1 : 1;
 	else
 		switcher_state.index = 0;
+
+	if (config.switcher_preview_delay == 0) {
+		switcher_state.visible = true;
+	} else {
+		wlr_scene_node_set_enabled(&switcher_state.tree->node, false);
+		switcher_state.show_timer =
+			wl_event_loop_add_timer(server.event_loop, switcher_reveal, NULL);
+		wl_event_source_timer_update(switcher_state.show_timer,
+									 config.switcher_preview_delay);
+	}
+
 	switcher_layout();
 	switcher_apply_highlight();
 
