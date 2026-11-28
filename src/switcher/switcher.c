@@ -9,6 +9,7 @@
 #include <wlr/types/wlr_color_management_v1.h>
 #include <wlr/types/wlr_color_representation_v1.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
 #include <wlr/types/wlr_linux_drm_syncobj_v1.h>
 #include <wlr/types/wlr_output.h>
@@ -508,6 +509,39 @@ int32_t switcher(const Arg *arg) {
 	}
 	return 0;
 }
+
+/* arg->i selects the tile under the pointer instead of the highlighted
+ * tile. With no tile under the pointer, the switcher closes. */
+static Client *switcher_bind_target(const Arg *arg) {
+	if (!switcher_is_active())
+		return NULL;
+	if (!arg->i)
+		return switcher_state.tiles[switcher_state.index]->c;
+	Client *c = switcher_client_at(server.cursor->x, server.cursor->y);
+	if (!c)
+		switcher_close();
+	return c;
+}
+
+int32_t switcher_pick(const Arg *arg) {
+	Client *c = switcher_bind_target(arg);
+	if (c)
+		switcher_commit_client(c);
+	return 0;
+}
+
+int32_t switcher_kill(const Arg *arg) {
+	Client *c = switcher_bind_target(arg);
+	if (c)
+		pending_kill_client(c);
+	return 0;
+}
+
+int32_t switcher_close_bind(const Arg *arg) {
+	switcher_close();
+	return 0;
+}
+
 bool switcher_is_active(void) { return switcher_state.tree != NULL; }
 
 bool switcher_candidate(Client *c) {

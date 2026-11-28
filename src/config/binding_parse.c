@@ -657,6 +657,14 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 			(*arg).i = NEXT;
 			(*arg).i2 = SW_CURRENT_TAG;
 		}
+	} else if (strcmp(func_name, "switcher_pick") == 0) {
+		func = switcher_pick;
+		(*arg).i = strcmp(arg_value, "pointer") == 0;
+	} else if (strcmp(func_name, "switcher_kill") == 0) {
+		func = switcher_kill;
+		(*arg).i = strcmp(arg_value, "pointer") == 0;
+	} else if (strcmp(func_name, "switcher_close") == 0) {
+		func = switcher_close_bind;
 	} else if (strcmp(func_name, "toggle_trackpad_enable") == 0) {
 		func = toggle_trackpad_enable;
 	} else if (strcmp(func_name, "setoption") == 0) {
