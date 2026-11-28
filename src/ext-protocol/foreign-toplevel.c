@@ -22,11 +22,13 @@ void handle_foreign_maximize_request(struct wl_listener *listener, void *data) {
 		return;
 
 	if (c->ismaximizescreen && !event->maximized) {
+		client_clear_fullscreen_maximize_backup(c);
 		client_set_maximize_screen(c, 0, true);
 		return;
 	}
 
 	if (!c->ismaximizescreen && event->maximized) {
+		client_clear_fullscreen_maximize_backup(c);
 		client_set_maximize_screen(c, 1, true);
 		return;
 	}
@@ -66,6 +68,7 @@ void handle_foreign_fullscreen_request(struct wl_listener *listener,
 	}
 
 	if (!c->isfullscreen && event->fullscreen) {
+		client_backup_maximize_for_fullscreen(c);
 		client_set_fullscreen(c, 1, true);
 		return;
 	}
