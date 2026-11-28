@@ -198,6 +198,11 @@ overlay_color = 0x14a57cff
 "ALT+Right" = "focusdir,right"
 "ALT+Up" = "focusdir,up"
 "ALT+Down" = "focusdir,down"
+# jump mode: binds in the jump mode run first while it is on.
+# One bind there replaces the built-in Escape. Example:
+# "SUPER+ALT+j" = "togglejump"
+# [bind.jump]
+# "NONE+q" = "togglejump"
 
 # move window
 "SUPER+SHIFT+Up" = "move_client,up"

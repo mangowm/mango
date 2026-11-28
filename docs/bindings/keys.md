@@ -64,6 +64,19 @@ You can divide key bindings into named modes. Rules:
 
 > **Info:** Key modes also apply to the other input bindings — `mousebind`, `axisbind`, `gesturebind` and `switchbind` — which share the exact same `key_mode` rules as `bind`.
 
+### View Key Modes
+
+While one of these views is open, Mango tries the `bind`, `mousebind`, `axisbind` and `gesturebind` lines of the key_mode with the same name first:
+
+| key_mode | Active while |
+| :--- | :--- |
+| `switcher` | The window switcher is open. |
+| `workspace_overview` | The workspace overview is open. |
+| `jump` | Jump mode is on. |
+| `overview` | The overview is open and jump mode is off. |
+
+If no bind of that key_mode matches, the binds of the current key_mode run as usual. You do not use `setkeymode` for these key modes.
+
 Use `setkeymode` to switch modes, and `mmsg get keymode` to query the current mode.
 
 ```ini

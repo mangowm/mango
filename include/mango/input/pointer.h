@@ -42,6 +42,7 @@ void pointer_place_drag_tile_on(Client *c, Client *target);
 void // Mouse button event
 handle_cursor_button(struct wl_listener *listener, void *data);
 bool pointer_process_button_press(struct wlr_pointer_button_event *event);
+bool pointer_run_mousebinds(uint32_t button, bool modal);
 void handle_last_cursor_surface_destroy(struct wl_listener *listener,
 										void *data);
 void handle_request_set_cursor_shape(struct wl_listener *listener, void *data);
