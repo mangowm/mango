@@ -58,6 +58,44 @@ gesturebind=none,up,4,enteroverview
 gesturebind=none,down,4,leaveoverview
 ```
 
+### Overview Bindings
+
+In the overview, a left click on a window focuses it and leaves the overview.
+A right click on a window closes it. You can change these clicks.
+
+While the overview is open, the `bind`, `mousebind`, `axisbind` and
+`gesturebind` lines in `key_mode=overview` run before all other binds. In jump
+mode, Mango uses `key_mode=jump` and not `key_mode=overview`.
+
+| Command | Parameter | Description |
+| :--- | :--- | :--- |
+| `overview_jump` | - | Focus the window under the pointer and leave the overview. |
+| `overview_kill` | - | Close the window under the pointer. The overview stays open. |
+
+One `mousebind` in `key_mode=overview` turns off the built-in left and right
+clicks in the overview. One `mousebind` in `key_mode=jump` turns them off in
+jump mode. Without modifier keys, these binds do the same as the built-in clicks:
+
+```ini
+key_mode=overview
+mousebind=NONE,btn_left,overview_jump
+mousebind=NONE,btn_right,overview_kill
+key_mode=default
+```
+
+This example keeps the left click and closes windows with the middle button.
+A right click does nothing:
+
+```ini
+key_mode=overview
+mousebind=NONE,btn_left,overview_jump
+mousebind=NONE,btn_middle,overview_kill
+# Leave the overview with Escape or the side button
+bind=NONE,Escape,leaveoverview
+mousebind=NONE,btn_side,leaveoverview
+key_mode=default
+```
+
 ### Configuration
 
 | Setting | Type | Default | Description |

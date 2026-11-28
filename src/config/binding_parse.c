@@ -573,6 +573,10 @@ FuncType parse_func_name(char *func_name, Arg *arg, char *arg_value,
 		func = enter_overview;
 	} else if (strcmp(func_name, "leaveoverview") == 0) {
 		func = leave_overview;
+	} else if (strcmp(func_name, "overview_jump") == 0) {
+		func = overview_jump;
+	} else if (strcmp(func_name, "overview_kill") == 0) {
+		func = overview_kill;
 	} else if (strcmp(func_name, "toggleworkspaceoverview") == 0) {
 		func = toggle_workspace_overview;
 		(*arg).i2 = WORKSPACE_OVERVIEW_GRID;

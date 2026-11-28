@@ -41,6 +41,8 @@ bool client_group_leave(Client *tc);
 int32_t toggle_overview(const Arg *arg);
 int32_t enter_overview(const Arg *arg);
 int32_t leave_overview(const Arg *arg);
+int32_t overview_jump(const Arg *arg);
+int32_t overview_kill(const Arg *arg);
 void set_overview(const Arg *arg, bool enter, Monitor *m);
 int32_t toggle_workspace_overview(const Arg *arg);
 int32_t enter_workspace_overview(const Arg *arg);
