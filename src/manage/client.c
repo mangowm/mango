@@ -938,12 +938,12 @@ bool check_hit_no_border(Client *c) {
 		hit_no_border = true;
 	}
 
-	if (c->mon && !c->mon->isoverview &&
+	if (!c->mon->isoverview &&
 		c->mon->pertag->no_render_border[get_client_tag_idx(c)]) {
 		hit_no_border = true;
 	}
 
-	if (config.no_border_when_single && c && c->mon &&
+	if (config.no_border_when_single && c && !c->isfloating &&
 		((ISSCROLLTILED(c) && c->mon->visible_fake_tiling_clients == 1) ||
 		 c->mon->visible_clients == 1)) {
 		hit_no_border = true;
