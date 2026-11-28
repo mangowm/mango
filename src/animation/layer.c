@@ -565,6 +565,14 @@ void layer_set_pending_state(LayerSurface *l) {
 		}
 	} else {
 		l->animainit_geom = l->animation.current;
+		/* MOVE does not scale the layer buffers unless ZOOM is in use. Match
+		 * their new size immediately so shadows and capture shields do not
+		 * trail the already-resized layer. */
+		if (l->animation.action == MOVE &&
+			layer_open_animation_type(l) != ANIM_TYPE_ZOOM) {
+			l->animainit_geom.width = l->pending.width;
+			l->animainit_geom.height = l->pending.height;
+		}
 	}
 	if (!config.animations || !config.layer_animations || l->no_animation ||
 		l->layer_surface->current.layer ==

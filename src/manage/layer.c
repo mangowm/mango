@@ -174,6 +174,7 @@ void handle_layer_surface_map(struct wl_listener *listener, void *data) {
 
 	// Initializes the geometry position.
 	get_layer_target_geometry(l, &l->geom);
+	l->animation.current = l->geom;
 
 	l->no_animation = 0;
 	l->dirty = false;
